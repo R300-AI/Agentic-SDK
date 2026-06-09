@@ -131,12 +131,13 @@ M0 ──┬──▶ M1 ──┐
 
 | ID | 狀態 | 對外可見成果 | 驗收方式 |
 |----|------|-------------|----------|
-| M5-1 | ⬜ | Langflow fork 起來,預設五節點模板可顯示、可拖曳 | 開啟瀏覽器看到畫布,能改連線 |
-| M5-2 | ⬜ | 屬性面板對接 `NodeSpec.params`;儲存/載入 YAML 雙向通 | 同一份 YAML 經「載入 → 儲存」與 pytest 直接 load 結果一致 |
-| M5-3 | ⬜ | Gateway 接受 `x-agentic-workflow-config` header;Editor「跑一次」按鈕串通 | 在 Editor 改一個節點屬性,按跑一次,Dashboard 出現對應的五節點亮燈 |
-| M5-4 | ⬜ | 整合商客戶不看 README,自己改一個工作流並跑通 | 訪談 ≥ 1 位客戶,完成「拖曳 → 改屬性 → 儲存 → 跑一次」全流程,無口頭協助 |
+| M5-0 | ✅ | 圖形平台 spike(文件證據判決) | Langflow 為 DAG-only、Loop 僅支援 for-each list 而非條件回環 → 走 React Flow 路線 |
+| M5-1 | ⬜ | SDK 改 Plan/Reflect `__init__` + Plan 模板字典 + WorkflowConfig Action backend dispatch | tests/test_workflow_config.py 延伸覆蓋 system_prompt / on_failure / Action backend 切換 |
+| M5-2 | ⬜ | Gateway `POST /v1/workflow/run` + `GET /v1/workflow/{id}/stream` SSE | curl 灌 YAML 跑通;改 Plan prompt 影響回應;SSE 收完整事件序列 |
+| M5-3 | ⬜ | Editor 骨架(Vite + React Flow + shadcn/ui) + 五節點 + 屬性面板 + YAML 下載/載入 | 同一份 YAML 經「載入→下載」與 pytest load 結果一致 |
+| M5-4 | ⬜ | 「跑一次」串通 + 五節點動畫 + 對話框 + Dashboard 跳轉 | 改 Action backend → 送訊息 → 動畫 → 看到回應;Dashboard ?workflow_id 跳轉正確 |
 
-**M5 完成代表**:使用者(整合商 / 客戶現場)可在瀏覽器內設計、儲存、執行自己的五節點工作流,無需碰 Python 或 YAML。
+**M5 完成代表**:使用者(整合商 / 客戶現場)可在瀏覽器內設計、儲存、執行自己的五節點工作流,並即時看到節點動畫與最終回應,無需碰 Python 或 YAML。
 
 ---
 

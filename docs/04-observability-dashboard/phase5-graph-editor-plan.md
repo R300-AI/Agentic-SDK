@@ -1,171 +1,247 @@
 # M5(Phase 5)圖形編排 UI 設計與實作計畫 [R26][R27]
 
-> 受眾:Phase 5 開發者、整合商窗口、客戶現場
-> 目的:把「使用者能拖曳節點、設計屬性、儲存載入、即時跑一次」的視覺化編排 UI 從零交付。本文是**設計與實作計畫**,不是評估;選型結論在 §二已給定。
-> 觸發背景:內部使用者已明確要求拖曳介面;[`WorkflowConfig`](../../agentic_sdk/workflow/config.py) (M4-6) 已交付,UI 與 SDK 的契約面已穩定到可動手做的程度。
+> 受眾:Phase 5 開發者
+> 目的:把「使用者能拖曳節點、設計屬性、儲存載入、即時跑一次」的視覺化編排 UI 從零交付。本文是**實作計畫**,所有設計決策已封閉,不是評估骨架。
+> 觸發背景:內部使用者已明確要求拖曳介面;[`WorkflowConfig`](../../agentic_sdk/workflow/config.py) (M4-6) 已交付,UI 與 SDK 的契約面已穩定。
 > 上游連結:[visualization-ui.md §四](visualization-ui.md) Phase 5 對外承諾在此展開。
 
 ---
 
-## 一、Phase 5 的對外承諾
+## 一、第一版對外承諾(最小能玩)
 
-完成時,使用者(整合商 / 客戶現場 / 內部進階使用者)應能做到下列**全部**:
+完成時,使用者應能在瀏覽器內做到下列**全部**:
 
-1. 在瀏覽器打開 UI,看到一張預設的五節點工作流畫布(Perceive → Plan → Retrieve → Plan → Action → Reflect)
-2. **拖曳節點、連線、刪除邊**,即時看到回環是否合法(Reflect → Plan / Action / END)
-3. 點選節點打開**屬性面板**,改 Action backend(upstream/foundry)、模型、Retrieve store、三道閘門參數
-4. **儲存** → 取得對應的 [`WorkflowConfig`](../../agentic_sdk/workflow/config.py) YAML 檔
-5. **載入**任何符合 schema 的 YAML 還原畫布
-6. **跑一次**:把當前畫布直接送進 Gateway `/v1/chat/completions`,結果在 UI 內顯示,並可一鍵跳到 Dashboard 觀看五節點亮燈
+1. 看到預設五節點工作流畫布(Perceive → Plan → Retrieve/Action → Reflect → Plan/END)
+2. **拖曳節點、改連線、刪邊**;畫布即時擋掉非法連線(例:Perceive 不可直接連 Action)
+3. 點選節點打開**屬性面板**,改三件事:Plan system_prompt(下拉模板 + 自訂)、Reflect on_failure、Action backend
+4. **下載 YAML** / **載入 YAML**;檔案完全存使用者本機,Gateway 不存
+5. 填一句話按「跑一次」→ **五節點即時亮燈動畫**(SSE 推送) + **ChatGPT 樣對話框輸出最終回應**
 
-對外觀感:Agent 平台級,不再是工程風的 Streamlit。
+對外觀感:Agent 平台級。
+
+### 第一版**不做**(留 MVP)
+
+- ❌ 工具調用(function calling / MCP)
+- ❌ 多輪對話與 session 狀態
+- ❌ 自訂節點 Python import(RCE 風險,只允許內建五節點)
+- ❌ 工作流版本控制、團隊共享、雲端儲存
+- ❌ Action backend 自動推薦、Plan 多輪 Thought→Action 迴圈
 
 ---
 
-## 二、選型結論:Langflow 為主、React Flow 為備案
+## 二、選型結論:React Flow(M5-0 spike 已判決)
 
 候選來自 [docs/README §2.8](../README.md):
 
-| 候選 | 性質 | 對 Phase 5 的適配 | 結論 |
-|------|------|-------------------|------|
-| **Langflow** [R26] | 完整 Agent 編排平台(MIT) | 畫布 / 節點調色盤 / 屬性面板 / 序列化 / 內建執行 全套現成 | **主選** |
-| **React Flow** [R27] | 純畫布元件(MIT) | 完全自由,但屬性面板 / 序列化 / 執行整合都要自寫 | **備案**(主選失敗時 fallback) |
-| **LangGraph** [R24] | 圖狀態機框架(MIT) | 不是 UI,是 graph 執行引擎,與 [`Workflow.from_config`](../../agentic_sdk/workflow/config.py) 同層 | **不適用為 UI 候選**;可作為內部執行引擎對齊參考 |
+| 候選 | 性質 | 結論 |
+|------|------|------|
+| **Langflow** [R26] | 完整 Agent 編排平台(MIT) | **淘汰**(M5-0 以文件證據 fail) |
+| **React Flow** [R27] | 純畫布元件(MIT) | **主選** |
+| **LangGraph** [R24] | 圖狀態機框架(MIT) | 不適用為 UI(它是執行引擎,與 [`Workflow`](../../agentic_sdk/workflow/config.py) 同層) |
+| n8n | trigger→action 線性流 | 結構性不符(無原生回環),不列入候選 |
 
-n8n 雖知名,但 trigger→action 線性流不支援 Plan ⇄ Retrieve 回環,結構性不符,不列入候選。
+### M5-0 判決依據
 
-### 為什麼選 Langflow
+[Langflow 官方文件](https://docs.langflow.org/concepts-flows) 明訂:
 
-PoC 階段的目的不是造輪子,是讓使用者**最快看到**可拖曳的工作流 UI。Langflow 已提供:
+> When a flow runs, Langflow builds a **Directed Acyclic Graph (DAG)** object from the nodes (components) and edges (connections).
 
-- React Flow 為底層,畫布交互完整
-- 節點 / 邊 / 屬性面板的 React 組件可直接重用
-- 內建 Python 後端可載入自訂節點類別
-- MIT 授權、活躍維護(2025 年 GitHub 30k+ stars)
+另見 [Loop component 文件](https://docs.langflow.org/loop):
 
-我們需要做的不是「重寫整個編輯器」,是「對 Langflow 做窄面 fork,把五節點與 [`WorkflowConfig`](../../agentic_sdk/workflow/config.py) 接進去」。
+> **The If-Else component isn't compatible with the Loop component.** If you need conditional loop events, redesign your flow to process conditions before the loop.
 
-### fork 邊界(關鍵)
+兩點合組代表:Langflow 本質是 DAG,唯一的 `Loop` 組件是「for-each list item」迭代器(需要輸入是一個列表),**不是「條件決定回不回去」的控制流回環**。我們的 Reflect → Plan 隸屬後者:Reflect 看 `state.last_action_error` 是否為空 → 決定回 Plan 重試或 END。
 
-為避免上游 rebase 痛苦,fork 限定在以下三個面:
+Langflow 的 Agent 組件雖有內建 ReAct loop,但那是 Agent **節點內部**的黑盒回環,**不是畫布層級可見的邊**。這與我們「五節點各自獨立、回環在畫布上可見並由使用者調整」的抽象根本不同。即使 fork Langflow,要把 DAG 核心改為支援 cyclic graph 屬於「深改架構」,遠超出「窗面 fork」的成本上限。
 
-| 面 | Langflow 原物 | 我方覆蓋 |
-|----|---------------|----------|
-| 節點型別註冊 | `langflow/components/` 通用組件 | 新增 `agentic_sdk/editor/components/` 只註冊五節點 + Action 變體;不改 Langflow 內建組件 |
-| 序列化適配 | Langflow 原生 `.flow.json` | 新增 `WorkflowConfigAdapter`,做 `.flow.json` ⇄ `WorkflowConfig` YAML 雙向轉換;不改 Langflow 序列化 |
-| 執行整合 | Langflow 內建 runtime | 新增「跑一次」按鈕,不走 Langflow runtime,直接 POST Gateway `/v1/chat/completions`(我方 SDK 已實作完整工作流) |
+**結論:不裝 Langflow、不進行手動 spike(文件證據已足夠),直接走 React Flow 路線。**
 
-**上游 Langflow 不修改任何檔案**,只在 monorepo 內以 plugin 形式擴充。Rebase 衝突面收斂到 0。
+### React Flow 路線架構
 
-### 風險與止損
+```
+browser
+  ├─ React + Vite 單頁應用
+  ├─ React Flow:畫布、節點、邊、拖曳及連線驗證
+  ├─ shadcn/ui(MIT):屬性面板、對話框、表單元件
+  ├─ js-yaml(MIT):YAML 雙向序列化
+  ├─ EventSource(瀏覽器內建):SSE 接動畫事件
+  └─ 由 Vite dev server 或靜態打包使用
+```
 
-| 風險 | 觸發條件 | 止損動作 |
-|------|----------|----------|
-| Langflow 節點抽象與五節點難對齊 | M5-1 spike 結束時連預設模板都跑不起來 | 立刻轉 React Flow + 自製屬性面板;沉沒成本 ≤ 5 人天 |
-| Langflow 上游大改 API(2.x → 3.x) | 接到上游 breaking change 公告 | 凍結在當前 Langflow 版本,M6 再決定升或自製 |
+**布局位置**:`editor/` (與現有 `dashboard/` 同層的前端專用目錄)。同一套 SDK 兩個前端共存。
+
+**五節點型別**直接在 [`editor/src/nodes/`](../../editor/src/nodes/) 以 React component 實作,與 SDK 端 [`agentic_sdk/workflow/nodes/`](../../agentic_sdk/workflow/nodes/) 一一對應。UI 屬性 ⇄ `NodeSpec.params` 的轉換在 [`editor/src/adapter.ts`](../../editor/src/adapter.ts) 中心化。
 
 ---
 
-## 三、使用者體驗設計
+## 三、節點 × 屬性 × SDK 配套(最小可實施對應表)
 
-### 3.1 主畫布
-
-預設載入「五節點預設模板」,使用者一打開就能看到工作流長什麼樣,不需從零拼:
+### 3.1 邊的合法性(畫布拖曳規則)
 
 ```
-[Perceive] ──► [Plan] ──► [Retrieve] ──► [Plan'] ──► [Action] ──► [Reflect] ──► END
-                  ▲                                                     │
-                  └──────────────── 回環邊(reflect → plan)────────────┘
+Perceive ─► Plan            (固定;Perceive 唯一出口)
+Plan     ─► Retrieve | Action  (使用者可選但實際 next_node 由 LLM 決定)
+Retrieve ─► Plan            (固定)
+Action   ─► Reflect         (固定)
+Reflect  ─► Plan | END      (使用者可調 on_failure 屬性)
 ```
 
-- 節點顏色對應五節點類別:Perceive 紫 / Plan 藍 / Retrieve 橙 / Action 綠 / Reflect 紅
-- 回環邊以虛線標示,與正向邊區分
-- 邊上可加文字標籤(`retry` / `done` / `escalate`),對應 Reflect 的決定依據
+UI 拖曳時即時擋下不在白名單的連線,並 tooltip 解釋原因。
 
-### 3.2 節點調色盤(左側欄)
+### 3.2 節點屬性面板與 SDK 改動
 
-固定列出 SDK 支援的所有節點型別,使用者拖到畫布即可:
+| 節點 | UI 屬性 | SDK 現況 | M5-1 配套改動 |
+|------|---------|----------|---------------|
+| **Perceive** | 唯讀標示「rule_based(無 LLM)」 | [`RuleBasedPerceive`](../../agentic_sdk/workflow/nodes/perceive/rule_based.py) 無 `__init__` 參數 | — |
+| **Plan** | `system_prompt`:下拉模板(`react` / `cot` / `plan_and_solve`)+ 自訂多行 | [`ReActPlan(foundry_client=None)`](../../agentic_sdk/workflow/nodes/plan/react.py) `_SYSTEM_PROMPT` 寫死 | `ReActPlan.__init__(system_prompt: str \| None = None)`;新增 `_SYSTEM_PROMPT_TEMPLATES: dict[str, str]` |
+| **Retrieve** | `backend` 下拉(僅 `stub`)、`corpus` 多行 JSON | [`StubRetrieve(corpus=None)`](../../agentic_sdk/workflow/nodes/retrieve/stub.py) 已支援 corpus | — |
+| **Reflect** | `on_failure` 下拉(`retry_plan` / `end`) | [`RuleBasedReflect`](../../agentic_sdk/workflow/nodes/reflect/rule_based.py) 無 `__init__`,行為寫死 | `RuleBasedReflect.__init__(on_failure: str = "retry_plan")` |
+| **Action** | `backend` 下拉(`upstream` / `foundry`)+ 對應屬性(model、base_url / deployment) | [`UpstreamCompletionAction`](../../agentic_sdk/workflow/nodes/action/upstream_completion.py) 與 [`FoundryCompletionAction`](../../agentic_sdk/workflow/nodes/action/foundry_completion.py) 是不同 class | `WorkflowConfig` 端依 `params["backend"]` dispatch;不在 SDK 端建 unified class(維持單一職責) |
+| **全域 Gates** | `max_node_hops` / `max_revisit` / `timeout_sec` 數字框 | [`GateConfig`](../../agentic_sdk/workflow/config.py) 已支援 | — |
 
-- 五節點基本款:Perceive / Plan / Retrieve / Reflect / Action
-- Action 變體:`upstream_completion` / `foundry_completion`
-- 自訂節點:「+」按鈕填 Python import path,加入後出現在自訂區
+### 3.3 Plan system_prompt 模板(M5-1 新增到 SDK)
 
-### 3.3 屬性面板(右側欄)
+```python
+_SYSTEM_PROMPT_TEMPLATES = {
+    "react":   "...(目前 _SYSTEM_PROMPT 內容,作為預設)",
+    "cot":     "PLAN. 採用 Chain-of-Thought 推理...",
+    "plan_and_solve": "PLAN. 先列出子任務,再決定下一節點...",
+}
+```
 
-對應 [`NodeSpec.params`](../../agentic_sdk/workflow/config.py),點選節點時打開:
+UI 下拉顯示三選一,選後填入文字框讓使用者再改。儲存 YAML 時只存最終文字到 `NodeSpec.params["system_prompt"]`,不存模板名(避免日後改模板使舊 YAML 行為飄移)。
 
-| 節點 | 可調屬性 | UI 元件 |
-|------|----------|---------|
-| **Action(upstream)** | base_url、model | 文字框 + 下拉(從 Gateway `/v1/models` 動態拉) |
-| **Action(foundry)** | deployment、endpoint、api_key | 文字框 + 密碼框(從 `.env` 預填) |
-| **Retrieve** | backend(none/active/archived) | radio |
-| **Plan** | 推理範式(CoT/ToT/Plan-and-Solve) | 下拉(留延伸,先實作 CoT) |
-| **Reflect** | max_retry、reflection_prompt | 數字 + 多行文字 |
+---
 
-**閘門參數(`max_node_hops` / `max_revisit` / `timeout_sec`)** 屬整體工作流,放畫布外的「工作流設定」面板,不掛在單一節點。
+## 四、儲存與傳輸(stateless 設計)
 
-### 3.4 儲存 / 載入
+### 4.1 為什麼是 stateless
+
+對應 Phase 5 範圍「本機開發者工具」:工作流檔案在使用者本機,Gateway 不存任何使用者 workflow。理由:
+
+- 本機工具就該由本機儲存負責
+- 無 multi-user / auth / 同步問題
+- Gateway 重啟、換機器,不影響使用者工作流
+
+### 4.2 儲存 / 載入動作
 
 | 動作 | 行為 |
 |------|------|
-| **儲存(Ctrl+S)** | 透過 `WorkflowConfigAdapter` 轉成 [`WorkflowConfig`](../../agentic_sdk/workflow/config.py) YAML,瀏覽器下載 |
-| **另存(Ctrl+Shift+S)** | 同上,可改檔名 |
-| **載入(Ctrl+O)** | 拖入 YAML 檔或選擇,Adapter 反向轉成畫布節點;schema 不合時跳錯誤對話框並指出哪一行 |
+| **下載(Ctrl+S)** | `WorkflowConfigAdapter` 轉成 YAML → 瀏覽器 `Blob` + `<a download>` |
+| **載入(Ctrl+O)** | 拖入 YAML 或選擇 → Adapter 反向轉成畫布;schema 不合時跳對話框指出行號 |
 | **匯出 JSON** | 同 YAML,給程式化使用者 |
 
-### 3.5 「跑一次」按鈕(畫布右上角)
+### 4.3 「跑一次」傳輸:`POST /v1/workflow/run`
 
-這是 Phase 5 與單純編輯器的關鍵分野:
+Body schema(M5-3 在 [`agentic_sdk/gateway/routes_chat.py`](../../agentic_sdk/gateway/routes_chat.py) 同層新增 `routes_workflow.py`):
 
-1. 使用者在「測試輸入」面板填一句話
-2. 按「跑一次」→ Editor 把當前畫布序列化為 [`WorkflowConfig`](../../agentic_sdk/workflow/config.py),呼叫 Gateway `/v1/chat/completions`(帶 `x-agentic-workflow-config` header)
-3. Gateway 用 `Workflow.from_config()` 跑該次工作流,回傳結果與 `x-agentic-metadata`
-4. Editor 顯示結果、token 用量、`workflow_id`
-5. 旁邊按鈕「在 Dashboard 觀看」→ 開新分頁到 `http://localhost:8501?workflow_id=<id>`,Dashboard 篩出該次工作流的五節點亮燈
+```json
+{
+  "workflow_yaml": "<整包 YAML 字串>",
+  "user_message": "幫我查 2024Q4 銷售報表",
+  "model": "gemma3-4b-npu"
+}
+```
 
-**Gateway 需新增的能力**:接受 `x-agentic-workflow-config` header 內含 YAML,以該 config 覆寫預設 workflow。這是 M5-3 的 SDK 端工作。
+回應:
+```json
+{
+  "workflow_id": "wf-abc123",
+  "stream_url": "/v1/workflow/wf-abc123/stream"
+}
+```
 
-### 3.6 與 Dashboard 的分工
+**為什麼不複用 `/v1/chat/completions`**:
+- OpenAI 端點要保持規格相容(LangChain / AutoGen 不會懂 workflow_yaml)
+- workflow YAML 可能上 KB,HTTP header 塞不下
+- 端點分離才能讓動畫 SSE 自然掛在 `/v1/workflow/{id}/stream`
 
-不重做觀測——Dashboard(M2)已有四個面板。Editor 只負責「設計 + 觸發」,Dashboard 負責「觀看」:
+### 4.4 動畫資料來源:SSE
 
-- 同一個 origin、不同路由(`/editor` / `/dashboard`)
-- 共用 Gateway 為唯一後端
-- `workflow_id` 在兩邊一致,可透過 URL query 跳轉聚焦
+**`GET /v1/workflow/{workflow_id}/stream`**(M5-3 新增):
+
+- 內部讀 telemetry ring buffer,過濾 `workflow_id == path 參數` 的事件
+- 推送格式對齊現有 [`EVENT_NODE_START`](../../agentic_sdk/observability/events.py) / `EVENT_NODE_FINISH`
+- 收到 `workflow.aborted` / `workflow.finish`(最後一個 node finish 且 `next_node = None`)後關閉連線
+
+**為什麼選 SSE 而非 polling**:
+- 連線中斷 → `EventSource.onerror` 立刻觸發 → 前端不會「轉圈而後端已死」
+- 後端主動推送,不會錯過事件
+- 比 WebSocket 簡單(單向就夠)
 
 ---
 
-## 四、交付里程碑
+## 五、互動體驗(對話框 + 動畫)
 
-| 里程 | 對外可見成果 | 完成判準 |
-|------|--------------|----------|
-| **M5-1** Editor 骨架 | Langflow fork 起來,預設五節點模板可顯示、可拖曳;不可儲存、不可跑 | 開啟瀏覽器看到畫布,能改連線 |
-| **M5-2** 屬性面板 + 序列化 | 屬性面板對接 [`NodeSpec.params`](../../agentic_sdk/workflow/config.py);儲存/載入 YAML 雙向通 | 同一份 YAML 經「載入 → 儲存」與 pytest 直接 load 結果一致 |
-| **M5-3** 跑一次整合 | Gateway 接受 `x-agentic-workflow-config` header;Editor「跑一次」按鈕串通 | 在 Editor 改一個節點屬性,按跑一次,Dashboard 出現對應的五節點亮燈 |
-| **M5-4** 使用者體驗驗收 | 整合商客戶不看 README,自己改一個工作流並跑通 | 訪談 ≥ 1 位客戶,完成「拖曳 → 改屬性 → 儲存 → 跑一次」全流程,無口頭協助 |
+### 5.1 畫面布局
 
-每個里程結束輸出:15 秒 demo 影片 + 一份對應的 [`WorkflowConfig`](../../agentic_sdk/workflow/config.py) YAML 範例,存到 `docs/quickstart-runs/`。
+```
+┌─────────────────────────────────────────────────────────────┐
+│  左:節點調色盤(5 種,固定)                                  │
+├─────────────────────┬───────────────────────────────────────┤
+│                     │                                       │
+│  畫布(節點亮燈動畫) │  右:屬性面板(點選節點時開啟)        │
+│                     │                                       │
+├─────────────────────┴───────────────────────────────────────┤
+│  下:對話框(類 OpenWebUI),輸入框 + 訊息流                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 5.2 節點動畫狀態機
+
+每個節點四種視覺狀態,由 SSE 事件驅動:
+
+| 狀態 | 觸發事件 | 視覺 |
+|------|----------|------|
+| `idle` | 預設 | 灰色描邊 |
+| `running` | `workflow.node.start` 對應節點 | 描邊呼吸燈動畫(CSS keyframe) |
+| `ok` | `workflow.node.finish` 且 `workflow_status="ok"` | 綠色實心 |
+| `fail` | `workflow.node.finish` 且 `workflow_status="fallback"/"aborted"` | 紅色實心 + 抖動動畫 |
+
+每次新「跑一次」開始,所有節點重置為 `idle`。
+
+### 5.3 對話框(類 OpenWebUI)
+
+- 輸入框置於畫布下方,送出 = 觸發「跑一次」
+- 訊息流:user message → 「執行中...」placeholder → 替換為 assistant 最終回應
+- 訊息旁 metadata badge:模型名 / token 用量 / elapsed
+- **不做**:歷史訊息保留(每次跑一次都是新 session;多輪對話留 MVP)
+
+### 5.4 與 Dashboard(M2)的分工
+
+| 能力 | 由誰 |
+|------|------|
+| 設計 + 觸發 + 對話框 + 動畫 | **Editor**(Phase 5) |
+| 觀測(歷史節點、降級事件、推論指標) | Dashboard(M2 已交付) |
+
+Editor 內附「在 Dashboard 觀看完整 trace」按鈕,跳到 `http://localhost:8501?workflow_id=<id>`(Dashboard M2 需新增 URL query 過濾,**列為 M5-4 配套小改動**)。
 
 ---
 
-## 五、技術接點清單(給開發者)
+## 六、交付里程碑
 
-開工時最先碰到的接點,集中列在這:
+| 里程 | 內容 | 完成判準 | 上限 |
+|------|------|----------|------|
+| **M5-0** | 圖形平台 spike(文件證據判決) | ✅ 已完成:Langflow 為 DAG-only,不符需求 → 走 React Flow | 已完成 |
+| **M5-1** | SDK 改 Plan/Reflect 兩節點 `__init__` + Plan 模板字典 + `WorkflowConfig` Action backend dispatch | `tests/test_workflow_config.py` 延伸到 14+ 案,覆蓋 system_prompt / on_failure / Action backend 切換 | 1 天 |
+| **M5-2** | Gateway 新 `POST /v1/workflow/run` + `GET /v1/workflow/{id}/stream` SSE | `curl` 灌 YAML 跑通;改 Plan prompt 真的影響回應;SSE 收到完整事件序列 | 1.5 天 |
+| **M5-3** | Editor 骨架(Vite + React Flow + shadcn/ui)+ 五節點 + 屬性面板 + YAML 下載/載入 | 同一份 YAML 經「載入→下載」與 pytest load 結果一致 | 5 天 |
+| **M5-4** | 「跑一次」串通 + 五節點動畫 + 對話框 + Dashboard 跳轉 | 端到端:改 Action backend → 送訊息 → 動畫 → 看到回應;Dashboard 跳轉 URL 正確 | 1.5 天 |
+
+每個里程結束輸出:1 份對應的 YAML 範例 + 1 份簡短 demo 紀錄,放 `docs/quickstart-runs/`。
+
+---
+
+## 七、技術接點清單
 
 | 接點 | 既有檔案 | 需新增 |
 |------|----------|--------|
-| WorkflowConfig 雙向轉 Langflow `.flow.json` | [`agentic_sdk/workflow/config.py`](../../agentic_sdk/workflow/config.py) | `agentic_sdk/editor/adapter.py` |
-| Langflow 五節點 component 註冊 | — | `agentic_sdk/editor/components/{perceive,plan,retrieve,reflect,action}.py` |
-| Gateway 接 workflow config header | [`agentic_sdk/gateway/routes_chat.py`](../../agentic_sdk/gateway/routes_chat.py) | 新增 header 解析 + `Workflow.from_config(...)` 分支 |
-| Editor 啟動腳本 | [`scripts/start.ps1`](../../scripts/start.ps1) | 新增 `scripts/start_editor.ps1`,與 Dashboard 同模式 |
-| 預設五節點模板 YAML | — | `examples/workflows/default.yaml` |
-
----
-
-## 六、不在 Phase 5 範圍
-
-- ❌ 工作流版本控制(Git-like 分支、diff)— 留 MVP
-- ❌ 多使用者協作即時編輯 — 留 MVP
-- ❌ 行動裝置適配 — 留 MVP(Editor 桌面優先)
-- ❌ 自製節點型別的程式碼編輯器(改用 Python 檔案外掛)— 留 MVP
-- ❌ Action backend 自動推薦(看模型大小選 NPU/Foundry)— 留 Phase 6 動態 Offload
+| Plan 模板字典 + system_prompt 參數 | [`agentic_sdk/workflow/nodes/plan/react.py`](../../agentic_sdk/workflow/nodes/plan/react.py) | 同檔擴充 |
+| Reflect on_failure 參數 | [`agentic_sdk/workflow/nodes/reflect/rule_based.py`](../../agentic_sdk/workflow/nodes/reflect/rule_based.py) | 同檔擴充 |
+| Action backend 在 WorkflowConfig 層 dispatch | [`agentic_sdk/workflow/config.py`](../../agentic_sdk/workflow/config.py) `_build_node_instance` | 同檔擴充 |
+| `POST /v1/workflow/run` + SSE | [`agentic_sdk/gateway/app.py`](../../agentic_sdk/gateway/app.py) router 註冊 | 新增 `agentic_sdk/gateway/routes_workflow.py` |
+| Editor 前端專案(Vite + React + React Flow + shadcn/ui) | — | 新增 `editor/` 目錄作為前端 monorepo 兩口 |
+| `WorkflowConfig` ⇄ React Flow 畫布 JSON adapter | — | 新增 `editor/src/adapter.ts` |
+| Editor 啟動腳本 | [`scripts/start.ps1`](../../scripts/start.ps1) | 新增 `scripts/start_editor.ps1`(跑 `npm run dev`) |
+| 預設五節點模板 YAML | — | 新增 `examples/workflows/default.yaml` |
+| Dashboard 接 `?workflow_id=` URL 過濾 | [`dashboard/app.py`](../../dashboard/app.py) | 同檔擴充 |
