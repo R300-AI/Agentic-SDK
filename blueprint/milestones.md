@@ -11,7 +11,7 @@
 | M1 | ✅ 全部通過 | — |
 | M2 | ✅ 全部通過 | — |
 | M3 | ✅ 全部通過(開發者自測) | M3-1 / M3-3 已由開發者以「維那視角」自測通過,紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md);正式部署形態(Action 走 AMD NPU)待 M4 機台到位後補驗 |
-| M4 | 🔵 軟體子軸完成 / 多基台軟體就緒 | M4-6(WorkflowConfig SDK)✅;M4-1~M4-3 軟體側已就緒(`tests/test_multi_backend.py` 5 tests pass、`scripts/demo_multi_backend.py` 可在 Ryzen 端執行),待 Ryzen + Gemma3 + Azure Foundry 端到端 demo 報告回傳;M4-4 / M4-5 等 demo 結果 |
+| M4 | 🔵 Ryzen 已驗 / 待 Foundry .env | M4-6(WorkflowConfig SDK)✅;M4-1 ✅(Ryzen gemma3-4b-npu 實機回應 6.094 s);M4-2/M4-3 待 Ryzen 端填 `.env` 後補跑 Foundry 路徑;M4-4 / M4-5 等 both_ok |
 | M5 | ❌ 凍結 | D2 明訂延至 PoC 完成後評估 |
 
 進度依據:98 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4、`tests/test_workflow_config.py` 11 案對應 M4-6、`tests/test_multi_backend.py` 5 案對應 M4-1~M4-3 軟體側)+ scripts/demo_workflow.py 實跡驗證 + 本機 Foundry 模式(`WORKFLOW_ACTION_BACKEND=foundry`)以 `scripts/smoke_chat.py` 對 `gpt-5.2` deployment 實打通(五節點 finish 序列、`x-agentic-metadata` header、token usage 三者皆正確)+ 開發者維那視角自測通過(M3-1 / M3-3,~1 分鐘,卡關 2 次有明確訊息,四節點語義理解正確)+ `Workflow.from_config(..., node_overrides={...})` 支援使用者注入自建 AzureOpenAI client 的 Python SDK 路徑 + M4 多基台拓樸(node 屬性決定 backend,非 Gateway 多 URL)軟體側就緒,待 Ryzen 端 `scripts/demo_multi_backend.py` 報告佐證。架構例外見 [docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 E-1~E-7。
@@ -113,9 +113,9 @@ M0 ──┬──▶ M1 ──┐
 | # | 狀態 | 條件 | 驗證方式 |
 |---|------|------|----------|
 | M4-6 | ✅ | `WorkflowConfig` dataclass 可從 YAML/JSON 載入,`Workflow.from_config(config, node_overrides={...})` 支援使用者注入已建構好的 node 實例(含自建 AzureOpenAI client),執行結果與原本 `Workflow()` 一致 | `tests/test_workflow_config.py` 11 tests pass |
-| M4-1 | 🔵 軟體就緒 / 待 Ryzen 端跑 | Ryzen 機台上 `python api.py --model gemma-3-...` 啟動成功,`/v1/models` 回傳目標模型 | `scripts/demo_multi_backend.py` 報告中 `ryzen_ok=true` |
-| M4-2 | 🔵 軟體就緒 / 待 Ryzen 端跑 | 同一個 Workflow 內,Action node 可指向 Ryzen Gemma3 上游,**另一個** Action 變體可指向 Azure Foundry deployment;兩者由 `node_overrides` 切換,不需動 Gateway 拓樸 | `tests/test_multi_backend.py` 5 tests pass(本機 mock);Ryzen 端執行 `scripts/demo_multi_backend.py` 兩個 backend 同時 OK |
-| M4-3 | 🔵 軟體就緒 / 待 Ryzen 端跑 | 兩個 backend 跑同一個 user_message,`state.entries` 結構序列一致(`type` 序列相同),驗證跨 backend 上下文 schema 不變 | `tests/test_multi_backend.py::test_workflow_state_is_backend_agnostic` 已驗本機;Ryzen 端 demo 報告 `entry_types` 兩者比對相同 |
+| M4-1 | ✅ | Ryzen 機台上 `python api.py --model gemma3-4b-npu` 啟動成功,`/v1/models` 回傳目標模型,`scripts/demo_multi_backend.py` 報告 `ryzen_ok=true`,elapsed 6.094 s | `docs/quickstart-runs/multi-backend-20260609T093324Z.json` `ryzen_ok=true` |
+| M4-2 | 🔵 Ryzen 側已驗 / 待 Foundry .env 填入 | 同一個 Workflow 內,Action node 可指向 Ryzen Gemma3 上游,**另一個** Action 變體可指向 Azure Foundry deployment;兩者由 `node_overrides` 切換,不需動 Gateway 拓樸 | Ryzen 端 `.env` 填入 `AZURE_FOUNDRY_ENDPOINT` / `AZURE_FOUNDRY_API_KEY` 後重跑,`foundry_ok=true` |
+| M4-3 | 🔵 Ryzen 側已驗 / 待 Foundry .env 填入 | 兩個 backend 跑同一個 user_message,`state.entries` 結構序列一致(`type` 序列相同),驗證跨 backend 上下文 schema 不變 | `tests/test_multi_backend.py::test_workflow_state_is_backend_agnostic` 本機已驗;Ryzen 端 both_ok 後比對 entry_types |
 | M4-4 | ❌ 等 M4-1~M4-3 完成 | Dashboard 觀測-1 面板顯示同一 Workflow 內不同 Action node 走的 backend / base_url | Ryzen 端跑完 demo 後截圖佐證 |
 | M4-5 | ❌ 等 M4-1~M4-3 完成 | [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五 改為「跨實體節點 / 跨 backend」實證紀錄並提 PR | 文件 commit + M4-3 報告連結 |
 
