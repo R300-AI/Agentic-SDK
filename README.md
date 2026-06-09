@@ -30,9 +30,7 @@ git clone https://github.com/<your-org>/Agentic-SDK.git
 cd Agentic-SDK
 git submodule update --init      # 把 .claude/ 拉下來
 
-uv python install 3.12           # uv 自動下載 Python 3.12
-uv venv --python 3.12             # 在 .venv/ 建獨立環境
-uv pip install -e ".[dev]"        # 裝套件與開發依賴
+uv sync --extra dev               # 依 pyproject.toml 裝 Python 3.12 + .venv + 套件與開發依賴
 
 Copy-Item .env.example .env       # UPSTREAM_API_BASE_URL 預設指向 localhost:8000
 ```
@@ -95,7 +93,7 @@ print(response.response.headers["x-agentic-metadata"])
 ### 用 Mock Foundry 跑一次離線 demo
 
 ```powershell
-.\.venv\Scripts\python.exe scripts\demo_workflow.py
+uv run python scripts\demo_workflow.py
 ```
 
 會用 Mock Foundry(無 Azure 配額亦可)與故意不可達的上游,跑完一次五節點工作流並印出節點事件序列,可用來驗證安裝與觀察 `workflow.node.start` / `finish` 事件 schema。
@@ -103,7 +101,7 @@ print(response.response.headers["x-agentic-metadata"])
 ### 跑測試
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+uv run pytest
 ```
 
 Phase 3 完成時測試共 82 項,涵蓋:基礎層(`/healthz`、`/v1/models`、Settings)、觀測層(事件 schema、RingBuffer、`/internal/telemetry/snapshot`)、Dashboard、Workflow 五節點端對端、Workflow 與 Gateway 的整合驗收(M3-2 / M3-4)。

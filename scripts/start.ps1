@@ -7,7 +7,7 @@
     F-04 — 統一啟動入口。在執行前需確認:
       1. 上游 amd-ryzen-ai-benchmark 的 api.py 已於另一個視窗執行(例: localhost:8000)
       2. 已將 .env.example 複製為 .env 並填好實際值
-      3. 已執行過 `uv venv --python 3.12` 與 `uv pip install -e ".[dev]"`
+      3. 已執行過 `uv sync --extra dev`
 
     本指令會在新視窗啟動 Dashboard(預設 8501),
     並於目前視窗前景跑 Gateway(預設 8080)。
@@ -32,11 +32,9 @@ try {
         exit 1
     }
 
-    if (-not (Test-Path ".venv\Scripts\python.exe")) {
-        if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-            Write-Warning "未找到 .venv 且 uv 未裝,請先執行: uv venv --python 3.12; uv pip install -e \".[dev]\""
-            exit 1
-        }
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Write-Warning "uv 未安裝。請依 https://github.com/astral-sh/uv 安裝後重試,並執行: uv sync --extra dev"
+        exit 1
     }
 
     if (-not $GatewayOnly) {
@@ -52,11 +50,7 @@ try {
     }
 
     Write-Host "[Agentic SDK] 啟動 Gateway ..." -ForegroundColor Cyan
-    if (Test-Path ".venv\Scripts\python.exe") {
-        & .\.venv\Scripts\python.exe -m agentic_sdk.gateway
-    } else {
-        uv run python -m agentic_sdk.gateway
-    }
+    uv run python -m agentic_sdk.gateway
 }
 finally {
     Pop-Location

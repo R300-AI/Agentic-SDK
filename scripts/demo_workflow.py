@@ -1,7 +1,7 @@
 r"""Phase 2 demo — 直接執行 Workflow,印出節點事件序列。
 
 執行方式:
-    .\.venv\Scripts\python.exe scripts\demo_workflow.py
+    uv run python scripts\demo_workflow.py
 
 此腳本不啟動 Gateway,單機跑一次工作流並把節點事件列表 dump 出來,
 方便驗證 Phase 2 A-01~A-03 的整合是否符合預期。
