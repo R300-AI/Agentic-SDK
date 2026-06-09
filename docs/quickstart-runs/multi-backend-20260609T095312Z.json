@@ -1,0 +1,63 @@
+{
+  "schema": "multi-backend-run/1",
+  "run_at": "2026-06-09T09:53:12.828857+00:00",
+  "prompt": "請用一句話自我介紹",
+  "results": [
+    {
+      "backend": "ryzen_upstream",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "gemma3-4b-npu",
+      "ok": true,
+      "elapsed_sec": 5.938,
+      "final_message": "我是一個 Agentic SDK 內的 Action 節點，目前正在等待真實向量檢索結果，稍後會用一句話自我介紹。",
+      "abort_reason": null,
+      "last_action_error": null,
+      "entry_types": [
+        "user_input",
+        "perceived",
+        "plan_decision",
+        "retrieved",
+        "plan_decision",
+        "action_result",
+        "reflection"
+      ],
+      "visit_counts": {
+        "perceive": 1,
+        "plan": 2,
+        "retrieve": 1,
+        "action": 1,
+        "reflect": 1
+      }
+    },
+    {
+      "backend": "azure_foundry",
+      "deployment": "gpt-5.2",
+      "endpoint": "https://eosl-r3-general-eastus2-resource.cognitiveservices.azure.com/",
+      "ok": true,
+      "elapsed_sec": 2.031,
+      "final_message": "我是 ChatGPT，一個可以用文字協助你解答問題、整理資訊並完成各種任務的 AI 助手。",
+      "abort_reason": null,
+      "entry_types": [
+        "user_input",
+        "perceived",
+        "plan_decision",
+        "retrieved",
+        "plan_decision",
+        "action_result",
+        "reflection"
+      ],
+      "visit_counts": {
+        "perceive": 1,
+        "plan": 2,
+        "retrieve": 1,
+        "action": 1,
+        "reflect": 1
+      }
+    }
+  ],
+  "summary": {
+    "ryzen_ok": true,
+    "foundry_ok": true,
+    "both_ok": true
+  }
+}

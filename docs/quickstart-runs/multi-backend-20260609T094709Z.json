@@ -1,0 +1,45 @@
+{
+  "schema": "multi-backend-run/1",
+  "run_at": "2026-06-09T09:47:09.221647+00:00",
+  "prompt": "請用一句話自我介紹",
+  "results": [
+    {
+      "backend": "ryzen_upstream",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "gemma3-4b-npu",
+      "ok": true,
+      "elapsed_sec": 5.813,
+      "final_message": "我是一個 Agentic SDK 內的 Action 節點，目前正在等待真實向量檢索結果，稍後會用一句話自我介紹。",
+      "abort_reason": null,
+      "last_action_error": null,
+      "entry_types": [
+        "user_input",
+        "perceived",
+        "plan_decision",
+        "retrieved",
+        "plan_decision",
+        "action_result",
+        "reflection"
+      ],
+      "visit_counts": {
+        "perceive": 1,
+        "plan": 2,
+        "retrieve": 1,
+        "action": 1,
+        "reflect": 1
+      }
+    },
+    {
+      "backend": "azure_foundry",
+      "ok": false,
+      "error_type": "OSError",
+      "error_message": ".env 缺少必填項目: AZURE_FOUNDRY_API_KEY。請複製 .env.example 並填入 Azure Foundry 憑證後重跑。",
+      "traceback": "Traceback (most recent call last):\n  File \"C:\\Users\\eosl1\\OneDrive\\文件\\GitHub\\Agentic-SDK\\scripts\\demo_multi_backend.py\", line 166, in _safe_run\n    return fn(*args)\n           ^^^^^^^^^\n  File \"C:\\Users\\eosl1\\OneDrive\\文件\\GitHub\\Agentic-SDK\\scripts\\demo_multi_backend.py\", line 136, in _run_foundry_action\n    raise EnvironmentError(\nOSError: .env 缺少必填項目: AZURE_FOUNDRY_API_KEY。請複製 .env.example 並填入 Azure Foundry 憑證後重跑。\n"
+    }
+  ],
+  "summary": {
+    "ryzen_ok": true,
+    "foundry_ok": false,
+    "both_ok": false
+  }
+}
