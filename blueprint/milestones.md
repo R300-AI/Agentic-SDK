@@ -1,0 +1,138 @@
+# Milestones — 量化驗收條件
+
+> 受眾:Track Lead、決策層
+> 目的:把每個階段的「完成」定義為可被機械化驗證的條件,避免「感覺差不多了」式的判斷。
+
+## 進度現況(2026-06-09 更新)
+
+| Milestone | 狀態 | 未完成項 |
+|-----------|------|----------|
+| M0 | ✅ 全部通過 | — |
+| M1 | ✅ 全部通過 | — |
+| M2 | ✅ 全部通過(架構面) | M2-5 仍待 Dashboard 與 M1-3/M1-5 連動的端到端驗證(已具備所有底層條件) |
+| M3 | 🟡 架構面通過,待外部受測 | M3-1 / M3-3 須依 [docs/quickstart-usability-check.md](../docs/quickstart-usability-check.md) 找一名未參與開發的工程師實跑;其餘條件已可由自動測試與 demo 腳本驗證 |
+| M4 | ❌ 不阻塞 M3 | TSiP 機器到位後啟動 |
+| M5 | ❌ 凍結 | D2 明訂延至 PoC 完成後評估 |
+
+進度依據:82 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4)+ scripts/demo_workflow.py 實跡驗證(五節點序列、三道閘門中止、context.degraded 三種 reason、Active/Archived 雙層、Gateway 週期性 upstream healthcheck、`POST /internal/workflow/run` 與 `POST /v1/chat/completions` 均可觸發五節點且事件落入 telemetry buffer)。
+
+---
+
+## 依賴關係總覽
+
+```
+M0 ──┬──▶ M1 ──┐
+     │         ├──▶ M3 ──▶ M4(TSiP 延伸) ──▶ M5(圖形編排,延後評估)
+     └──▶ M2 ──┘
+```
+
+- M0 是兩軸的共同前置
+- M1 與 M2 完全獨立,可並行
+- M3 同時依賴 M1 與 M2
+- M4 是 TSiP 到位後的延伸,不阻塞 M3 對外宣告 PoC 完成
+- M5 在 M3 後依 [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四 條件評估,目前不展開
+
+---
+
+## M0 — 共用基礎就緒
+
+**驗收條件**(全部必須通過):
+
+| # | 狀態 | 條件 | 驗證方式 |
+|---|------|------|----------|
+| M0-1 | ✅ | 使用者照上游 README 啟動 `python api.py --model <model-id>`,於 `http://localhost:8000/v1/models` 拿到回應 | `curl http://localhost:8000/v1/models` |
+| M0-2 | ✅ | Gateway 啟動時 healthcheck 通過,並印出當前可用模型清單 | Gateway 啟動 log 顯示「upstream healthy, available models: [...]」 |
+| M0-3 | ✅ | Gateway healthcheck 失敗時,印出明確錯誤訊息並拒絕啟動 | 故意不啟上游,確認 Gateway 不會以「半就緒」狀態運行 |
+| M0-4 | ✅ | `curl POST localhost:8080/v1/chat/completions` 結果與直接呼叫上游一致(Phase 0 此時是 pass-through) | 比對兩端輸出 |
+| M0-5 | ✅ | `.env` 改任一參數,重啟後行為對應變更 | 改 `INFER_REQUEST_TIMEOUT_SEC=5`,發送長請求,驗證 5 秒後逾時 |
+
+**M0 完成代表**:兩軸都有可信賴的執行底座可以開工。
+
+---
+
+## M1 — 上下文管理可運作(Track A)
+
+**驗收條件**:
+
+| # | 狀態 | 條件 | 驗證方式 |
+|---|------|------|----------|
+| M1-1 | ✅ | 五大節點(Perceive / Plan / Retrieve / Reflect / Action)都有最小可跑版本 | 各節點獨立單元測試通過 |
+| M1-2 | ✅ | 完整工作流 `Perceive → Plan → Retrieve → Plan → Action → Reflect → END` 可在單機跑通 | 整合測試腳本回傳 `result.status == "ok"` |
+| M1-3 | ✅ | Active Context 達到 `ACTIVE_CONTEXT_MAX_MB` 時正確降級至 Archived | `tests/test_context_store.py::test_max_mb_demotes_lru_to_archived` 驗 RAM 回落 + emit `context.degraded(reason=max_mb)` |
+| M1-4 | ✅ | 三道閘門皆能在觸發後 P99 < 5 秒中止工作流 | `tests/test_workflow_gates.py`(hops/revisit) + `tests/test_workflow_timeout.py::test_timeout_gate_aborts_when_elapsed_exceeds_limit` |
+| M1-5 | ✅ | 引用 ID 失效時(404 / 410),呼叫端收到結構化降級事件而非 500 錯誤 | `tests/test_routes_context.py::test_get_missing_returns_404_and_emits_degraded` 驗 404 + structured detail + `context.degraded(reason=not_found)` |
+
+**M1 完成代表**:上下文管理在單機驗證完整,可被 Dashboard 觀察。
+
+---
+
+## M2 — 觀測 Dashboard 可看見即時狀態(Track B)
+
+**驗收條件**:
+
+| # | 狀態 | 條件 | 驗證方式 |
+|---|------|------|----------|
+| M2-1 | ✅ | Streamlit Dashboard 可在 PoC 機器以 `streamlit run dashboard/app.py` 啟動,瀏覽器可開 UI | 手動驗證 `http://localhost:8501` |
+| M2-2 | ✅ | 觀測-1(節點存活拓樸)能反映上游 `api.py` 健康變化 | Gateway lifespan 啟動週期性 `_periodic_upstream_health`(預設每 5 秒);`tests/test_gateway_health_polling.py::test_startup_emits_upstream_healthcheck` 驗 startup emit `gateway.upstream.healthcheck` |
+| M2-3 | ✅ | 觀測-2(推論指標時序圖)有 TTFT / tokens/sec 即時資料 | 連續發 10 個請求,圖表顯示對應點 |
+| M2-4 | ✅ | 觀測-3(Workflow 執行進度)能即時亮燈 | `POST /internal/workflow/run` 內部端點觸發五節點;`tests/test_routes_workflow.py::test_workflow_run_endpoint_emits_five_node_sequence` 驗事件依序落入 telemetry buffer |
+| M2-5 | ✅ | 觀測-4(降級事件 log)能即時顯示 M1-3 / M1-4 / M1-5 的事件 | M1-3/M1-5 已 emit `context.degraded`,M1-4 emit `workflow.aborted`;Dashboard 拉取 `/internal/telemetry/snapshot` 即可渲染 |
+
+> M2-4 的「觸發」透過內部端點 `POST /internal/workflow/run` 實現,不透過 OpenAI 相容的 `/v1/chat/completions`。後者是 I-01(Phase 3)的任務,明確保留給兩軸合流階段。
+
+**M2 完成代表**:Dashboard 已可作為 PoC 對外可見的主要載體。
+
+---
+
+## M3 — 整合 demo(對應假設 A5 的 PoC 驗收條件)
+
+**驗收條件**(這是 PoC 對外宣告「跑通」的時點):
+
+| # | 狀態 | 條件 | 驗證方式 |
+|---|------|------|----------|
+| M3-1 | 🟡 待外部受測 | 一個真實使用者(有工程背景但不熟本專案)依 [target-quickstart.md](target-quickstart.md) 三步啟動,30 分鐘內看到 Dashboard 與 Workflow 都能跑 | 依 [docs/quickstart-usability-check.md](../docs/quickstart-usability-check.md) 找一名未參與開發的同事實跑 |
+| M3-2 | ✅ | 單一模型 × 五節點完整工作流在 Dashboard 上即時可見(節點進入/離開、Token 消耗) | `tests/test_m3_acceptance.py::test_openai_compat_call_executes_five_node_workflow` 驗證 `/v1/chat/completions` → 五節點 finish 序列落入同一個 telemetry buffer(Dashboard 同源資料) |
+| M3-3 | 🟡 待外部受測 | M3-1 過程中卡關次數 ≤ 2,且每次卡關都有明確錯誤訊息指引 | 同 M3-1,由觀察員逐筆記錄至 `docs/quickstart-usability-check.md` §六 |
+| M3-4 | ✅ | 故意製造一次失敗(上游不可達),Dashboard 顯示降級事件且工作流回傳部分結果而非 500 | `tests/test_m3_acceptance.py::test_openai_compat_call_returns_200_when_upstream_down` 驗證 200 + `x-agentic-metadata` 透出 `aborted=True` 與 `abort_reason`,Workflow 內部 reflect 反覆要求重試直到 max_revisit 中止 |
+| M3-5 | ✅ | `docs/` 與 `blueprint/` 內容與實際行為一致(無已知漂移) | README 三步啟動已對齊 [target-quickstart.md](target-quickstart.md);[docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 已記錄 PoC 階段允許的潔淨架構例外 E-1~E-6 |
+
+> M3-1 的 30 分鐘是務實調整(原訂 15 分鐘),理由見 [risk-decisions.md](risk-decisions.md) D3。
+
+**M3 完成代表**:PoC 的兩個 Action Item 都已可被外部展示與驗證。架構面在 I-01~I-05 全部交付後即達成;最終「對外宣告」尚需 M3-1 / M3-3 的外部受測完成。
+
+---
+
+## M4 — TSiP 接入(延伸)
+
+**驗收條件**:
+
+| # | 條件 | 驗證方式 |
+|---|------|----------|
+| M4-1 | 上游 `api.py` 在 TSiP 機器上可啟動(若上游已支援 TSiP 後端) | 同 M0-1 但在 TSiP 機器 |
+| M4-2 | Gateway 設定 `UPSTREAM_API_BASE_URL=[ryzen_url, tsip_url]`,可同時連兩個上游 | 啟動 log 顯示兩個上游皆健康 |
+| M4-3 | Active Context 引用 ID 可從 Ryzen 機器的節點傳到 TSiP 機器的節點 | 跨機整合測試 |
+| M4-4 | Dashboard 觀測-1 面板正確顯示兩台機器的拓樸 | 視覺驗證 |
+| M4-5 | [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五 改為「跨實體節點」實證紀錄並提 PR | 文件 commit |
+
+**M4 完成代表**:從「邊緣叢集管理協定」的承諾真正進入「叢集」階段。
+
+---
+
+## M5 — 圖形編排(延後評估)
+
+啟動條件見 [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四「Phase 2 啟動條件」。
+
+未啟動前不展開驗收條件,避免提早消耗認知資源。
+
+---
+
+## 不在任何 Milestone 內的事項
+
+明確記錄以避免日後爭議:
+
+- ❌ Production 級認證、IAM、流量配額 — 留到 MVP
+- ❌ 自訂節點型別擴充機制 — 留到 MVP
+- ❌ 跨資料中心 / 跨地理區域的上下文同步 — 不在路線圖
+- ❌ 動態 Offload(Phase 4 之後評估)
+- ❌ 自製或 fork 圖形編排 UI(延至 M5 啟動條件成立後評估)
+- ❌ Runner 容器化、Model Card SHA 驗證(改由上游 `api.py` 取代,見 [risk-decisions.md](risk-decisions.md) D1)
