@@ -53,15 +53,29 @@ class UpstreamCompletionAction:
                 messages=messages,
             )
         except Exception as exc:
-            logger.warning("action upstream call failed: %s", exc)
+            # 嘗試從 openai.APIStatusError 取得完整 HTTP 回應本體(包含 server 的錯誤 JSON),
+            # 以便日誌中顯示真正原因,而非只有 "Internal Server Error" 文字。
+            try:
+                import openai as _openai
+                if isinstance(exc, _openai.APIStatusError):
+                    try:
+                        body = exc.response.text
+                    except Exception:
+                        body = str(exc.body) if exc.body else str(exc)
+                    detail = f"HTTP {exc.status_code}: {body[:500]}"
+                else:
+                    detail = str(exc)
+            except Exception:
+                detail = str(exc)
+            logger.warning("action upstream call failed: %s", detail)
             state.last_action_error = {
                 "type": type(exc).__name__,
-                "message": str(exc),
+                "message": detail,
             }
             entry = ContextEntry(
                 type=ContextEntryType.ACTION_RESULT,
                 content=f"error:{type(exc).__name__}",
-                metadata={"ok": False, "error": str(exc), "model": model},
+                metadata={"ok": False, "error": detail, "model": model},
             )
             return NodeOutput(
                 next_node="reflect",

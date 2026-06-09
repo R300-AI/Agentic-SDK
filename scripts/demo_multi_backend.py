@@ -33,7 +33,41 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
+def _preflight_ryzen(base_url: str, model: str) -> None:
+    """GET /v1/models 確認 Ryzen 端點存活,且目標 model 已載入。
+
+    若端點不通 → 拋 RuntimeError。
+    若 /v1/models 不支援(4xx)→ 靜默略過。
+    若 model 不在清單 → 拋 RuntimeError 並列出可用清單,方便核對 --model 參數。
+    """
+    import json as _json
+    import urllib.error
+    import urllib.request
+
+    url = base_url.rstrip("/") + "/models"
+    try:
+        with urllib.request.urlopen(url, timeout=5) as resp:
+            data = _json.loads(resp.read())
+        available = [m.get("id", "") for m in data.get("data", [])]
+        if available and model not in available:
+            raise RuntimeError(
+                f"Ryzen 端點有回應,但 model '{model}' 不在可用清單中。\n"
+                f"可用 models: {available}\n"
+                f"請確認 api.py --model 參數與 RYZEN_MODEL 是否一致。"
+            )
+        print(f"[demo_multi_backend] ryzen preflight OK — models: {available or '(api 未列出)'}")
+    except urllib.error.HTTPError:
+        # GET /v1/models 返回 4xx → 端點不支援此 endpoint,略過 preflight
+        pass
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"Ryzen 端點 {base_url} 無法連線: {exc.reason}") from exc
+
+
 def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
+    # Preflight: 確認 Ryzen 端點存活且 model 已載入(失敗就快速失敗,不浪費 3 次重試)
+    _preflight_ryzen(base_url, model)
+
+    from agentic_sdk.context import ContextEntryType
     from agentic_sdk.config import Settings
     from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
     from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction
@@ -59,6 +93,16 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
     result = wf.run(prompt)
     elapsed = time.monotonic() - t0
 
+    # 從 context entries 找最後一個 action 失敗的錯誤訊息,補充 abort_reason 之外的細節
+    last_action_error: str | None = None
+    for entry in reversed(result.entries):
+        if (
+            entry.type == ContextEntryType.ACTION_RESULT
+            and not entry.metadata.get("ok", True)
+        ):
+            last_action_error = entry.metadata.get("error")
+            break
+
     return {
         "backend": "ryzen_upstream",
         "base_url": base_url,
@@ -67,12 +111,26 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
         "elapsed_sec": round(elapsed, 3),
         "final_message": result.final_message,
         "abort_reason": result.abort_reason,
+        "last_action_error": last_action_error,
         "entry_types": [e.type.value for e in result.entries],
         "visit_counts": dict(result.visit_counts),
     }
 
 
 def _run_foundry_action(prompt: str) -> dict:
+    # 在讀取 env 前先確認必填項目已設,給出明確錯誤訊息而非 KeyError
+    _endpoint = os.environ.get("AZURE_FOUNDRY_ENDPOINT")
+    _api_key = os.environ.get("AZURE_FOUNDRY_API_KEY")
+    if not _endpoint or not _api_key:
+        missing = [
+            k for k, v in [("AZURE_FOUNDRY_ENDPOINT", _endpoint), ("AZURE_FOUNDRY_API_KEY", _api_key)]
+            if not v
+        ]
+        raise EnvironmentError(
+            f".env 缺少必填項目: {', '.join(missing)}。"
+            f"請複製 .env.example 並填入 Azure Foundry 憑證後重跑。"
+        )
+
     from agentic_sdk.config import Settings
     from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
     from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
@@ -81,8 +139,8 @@ def _run_foundry_action(prompt: str) -> dict:
         _env_file=None,  # type: ignore[call-arg]
         workflow_force_mock_foundry=True,
         workflow_action_backend="foundry",
-        azure_foundry_endpoint=os.environ["AZURE_FOUNDRY_ENDPOINT"],
-        azure_foundry_api_key=os.environ["AZURE_FOUNDRY_API_KEY"],
+        azure_foundry_endpoint=_endpoint,
+        azure_foundry_api_key=_api_key,
         azure_foundry_deployment=os.environ.get("AZURE_FOUNDRY_DEPLOYMENT", "gpt-4o-mini"),
         upstream_api_base_url="http://placeholder:8000/v1",
         infer_request_timeout_sec=float(os.environ.get("INFER_REQUEST_TIMEOUT_SEC", "60")),
@@ -167,8 +225,12 @@ def main(argv: list[str]) -> int:
         print(f"           reply   : {ryzen_result['final_message']!r}")
         print(f"           elapsed : {ryzen_result['elapsed_sec']} s")
     else:
-        print(f"           error   : {ryzen_result.get('error_type')} {ryzen_result.get('error_message')}")
-        print(f"           abort   : {ryzen_result.get('abort_reason')}")
+        if ryzen_result.get("error_type"):
+            print(f"           error   : {ryzen_result.get('error_type')}: {ryzen_result.get('error_message')}")
+        if ryzen_result.get("last_action_error"):
+            print(f"           upstream: {ryzen_result.get('last_action_error')}")
+        if ryzen_result.get("abort_reason"):
+            print(f"           abort   : {ryzen_result.get('abort_reason')}")
 
     print()
     print(f"  Foundry  backend  : {'OK' if foundry_result.get('ok') else 'FAIL'}")
@@ -176,8 +238,10 @@ def main(argv: list[str]) -> int:
         print(f"           reply   : {foundry_result['final_message']!r}")
         print(f"           elapsed : {foundry_result['elapsed_sec']} s")
     else:
-        print(f"           error   : {foundry_result.get('error_type')} {foundry_result.get('error_message')}")
-        print(f"           abort   : {foundry_result.get('abort_reason')}")
+        if foundry_result.get("error_type"):
+            print(f"           error   : {foundry_result.get('error_type')}: {foundry_result.get('error_message')}")
+        if foundry_result.get("abort_reason"):
+            print(f"           abort   : {foundry_result.get('abort_reason')}")
 
     print("─" * 60)
     print(f"  report saved   -> {out_path.relative_to(Path.cwd()) if out_path.is_relative_to(Path.cwd()) else out_path}")
