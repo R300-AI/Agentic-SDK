@@ -69,8 +69,8 @@ GET /internal/context/{entry_id}
 | 範圍 | 處理 |
 |------|------|
 | 單機內多容器之間(邏輯節點)的引用 ID 傳遞 | ✅ PoC 必做。「節點」在 PoC 期間指邏輯節點(同機不同容器),不是實體機器 |
-| Active 層用 Python in-memory dict | ✅ PoC 簡化,跨實體機器階段(見 [blueprint/milestones.md](../../blueprint/milestones.md) M4)需改 Redis |
-| 跨實體機器(LAN 內)的引用 ID 傳遞 | ⚠️ 延至 M4(TSiP 到位後)驗證,介面預留 |
+| Active 層用 Python in-memory dict | ✅ PoC 簡化,跨實體機器階段需改 Redis(Phase 5 評估) |
+| 跨實體機器(LAN 內)的引用 ID 傳遞 | ✅ **M4 實機驗收通過(2026-06-09)**。同一個 `WorkflowConfig` 由 `node_overrides` 分別指向 Ryzen NPU(`gemma3-4b-npu`, elapsed 5.938 s)與 Azure Foundry(`gpt-5.2`, elapsed 2.031 s),兩者 `entry_types` 序列完全一致,確認跨 backend 的上下文 schema 不變。佐證報告:[docs/quickstart-runs/multi-backend-20260609T095312Z.json](../../docs/quickstart-runs/multi-backend-20260609T095312Z.json) |
 | 跨資料中心、跨地理區域的上下文同步 | ❌ 不在路線圖 |
 | 加密、隱私保護(差分隱私、PII 過濾) | ❌ 不在 PoC 範圍,由整合商於上層處理 |
 

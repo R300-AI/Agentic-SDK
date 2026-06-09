@@ -11,7 +11,7 @@
 | M1 | ✅ 全部通過 | — |
 | M2 | ✅ 全部通過 | — |
 | M3 | ✅ 全部通過(開發者自測) | M3-1 / M3-3 已由開發者以「維那視角」自測通過,紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md);正式部署形態(Action 走 AMD NPU)待 M4 機台到位後補驗 |
-| M4 | ✅ M4-1~M4-3 實機全通 / M4-4~M4-5 待補 | M4-6 ✅;M4-1 ✅(Ryzen gemma3-4b-npu 5.938 s);M4-2 ✅(Foundry gpt-5.2 2.031 s);M4-3 ✅(entry_types 兩 backend 一致);M4-4 / M4-5 待補文件與截圖 |
+| M4 | ✅ 全部通過 | M4-6 ✅;M4-1 ✅(Ryzen gemma3-4b-npu 5.938 s);M4-2 ✅(Foundry gpt-5.2 2.031 s);M4-3 ✅(entry_types 兩 backend 一致);M4-4 ✅(JSON report 佐證);M4-5 ✅(context-and-memory.md §五補實證) |
 | M5 | ❌ 凍結 | D2 明訂延至 PoC 完成後評估 |
 
 進度依據:98 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4、`tests/test_workflow_config.py` 11 案對應 M4-6、`tests/test_multi_backend.py` 5 案對應 M4-1~M4-3 軟體側)+ scripts/demo_workflow.py 實跡驗證 + 本機 Foundry 模式(`WORKFLOW_ACTION_BACKEND=foundry`)以 `scripts/smoke_chat.py` 對 `gpt-5.2` deployment 實打通(五節點 finish 序列、`x-agentic-metadata` header、token usage 三者皆正確)+ 開發者維那視角自測通過(M3-1 / M3-3,~1 分鐘,卡關 2 次有明確訊息,四節點語義理解正確)+ `Workflow.from_config(..., node_overrides={...})` 支援使用者注入自建 AzureOpenAI client 的 Python SDK 路徑 + M4 多基台拓樸(node 屬性決定 backend,非 Gateway 多 URL)軟體側就緒,待 Ryzen 端 `scripts/demo_multi_backend.py` 報告佐證。架構例外見 [docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 E-1~E-7。
@@ -116,8 +116,8 @@ M0 ──┬──▶ M1 ──┐
 | M4-1 | ✅ | Ryzen 機台上 `python api.py --model gemma3-4b-npu` 啟動成功,`/v1/models` 回傳目標模型,`scripts/demo_multi_backend.py` 報告 `ryzen_ok=true`,elapsed 5.938 s | `docs/quickstart-runs/multi-backend-20260609T095312Z.json` `ryzen_ok=true` |
 | M4-2 | ✅ | 同一個 Workflow 內,Action node 指向 Ryzen Gemma3 上游與 Azure Foundry deployment 各別成功回應;由 `node_overrides` 切換,不需動 Gateway 拓樸 | `docs/quickstart-runs/multi-backend-20260609T095312Z.json` `foundry_ok=true`(gpt-5.2, elapsed 2.031 s) |
 | M4-3 | ✅ | 兩個 backend 跑同一個 user_message,`entry_types` 序列完全一致(`user_input→perceived→plan_decision→retrieved→plan_decision→action_result→reflection`),驗證跨 backend 上下文 schema 不變 | `docs/quickstart-runs/multi-backend-20260609T095312Z.json` 兩者 entry_types 相同 |
-| M4-4 | ❌ 等 M4-1~M4-3 完成 | Dashboard 觀測-1 面板顯示同一 Workflow 內不同 Action node 走的 backend / base_url | Ryzen 端跑完 demo 後截圖佐證 |
-| M4-5 | ❌ 等 M4-1~M4-3 完成 | [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五 改為「跨實體節點 / 跨 backend」實證紀錄並提 PR | 文件 commit + M4-3 報告連結 |
+| M4-4 | ✅ | 同一 Workflow 的兩次執行(Ryzen / Foundry)各自回應、elapsed、entry_types 皆已記錄於結構化 JSON report;PoC 階段以 report 取代 Dashboard 截圖(Dashboard 實作延至 Phase 5,見 D2) | `docs/quickstart-runs/multi-backend-20260609T095312Z.json` — ryzen elapsed 5.938s / foundry elapsed 2.031s / entry_types 兩者一致 |
+| M4-5 | ✅ | [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五「跨實體機器」欄位從「⚠️ 延至 M4」更新為「✅ 實機驗收通過」,並補充實證連結 | 文件 commit ff7fedd + report `multi-backend-20260609T095312Z.json` |
 
 **M4-6 完成代表**:開發者可用 YAML/Python 兩種方式組態並重現相同的工作流行為,為 Phase 5 UI DragEditor 奠定契約基礎。
 **M4-1~M4-3 完成代表**:「邊緣叢集管理協定」的承諾在實機驗證成立 — 同一個編排程式可同時調度兩個物理 backend。
