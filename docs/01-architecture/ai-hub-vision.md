@@ -100,5 +100,6 @@ AI Hub 的商業價值建立在一個核心假設上:
 | E-4 | **`/v1/chat/completions` 只回非串流**:Gateway 把整個 Workflow 跑完才回應 | OpenAI 標準 `stream=true` 串流 | 串流要求 Workflow 內部所有節點能以 callback 釋出部分結果,違反「節點批次更新 Active context」的當前語義;先讓非串流 + `x-agentic-metadata` 把節點軌跡透出 | M4 起,搭配 ReAct 路由細化 |
 | E-5 | **單機部署、無 Auth / 無 Quota**:Gateway 不驗 API key、不限流 | 多租戶 Auth + 配額管理 | PoC 在受信任邊緣節點內,沒有外部曝露面;Auth/Quota 屬叢集管理協定的「對外」面向,先把「對內編排」做完 | 對外發布前(M5 前) |
 | E-6 | **Telemetry 走 in-memory RingBuffer**:`agentic_sdk/observability/ring_buffer.py` 為唯一後端 | 標準 OpenTelemetry exporter(OTLP / Tempo / Jaeger) | RingBuffer 已對齊 OTEL semantic conventions,事件 schema 不變;後續換 exporter 不影響上層 | Multi-Gateway 副本出現時(同 E-2) |
+| E-7 | **Action 節點允許切換至 Azure Foundry 後端**:`WORKFLOW_ACTION_BACKEND=foundry` 時,Action 直接打 Azure Foundry deployment,不經 AMD 上游 | Action 必須打通過 Model Card 認證的「模型 × 國產晶片」上游 | 開發環境(無 Ryzen AI 機台)時讓五節點工作流仍能端到端驗證,避免 PoC 開發每次都要綁機台時段;與 E-3 不同的是這條影響的是 Action(對外承諾路徑),不是 Plan/Reflect(內部決策路徑) | M4 機台到位後,正式部署一律 `WORKFLOW_ACTION_BACKEND=upstream`;此例外只准在開發/CI 環境使用 |
 
 每一條都必須在子目錄的設計文件中標注「**此處違反潔淨架構,對應 E-X**」並附對 `ai-hub-vision.md §五` 的回連,避免日後接手者把妥協誤認為設計意圖。

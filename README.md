@@ -6,14 +6,69 @@
 
 ---
 
-## 三步啟動
+## 兩種啟動模式
 
-> **目標對象**:想在 AMD Ryzen AI 主機上嘗試 Agentic SDK Gateway 的工程師。
-> **環境前提**:Python 3.12;Gateway 本身可在任何作業系統啟動,但 AMD NPU 推論伺服器必須跑在 AMD 硬體上。
+| 模式 | 用途 | Action 上游 | 需要 AMD Ryzen AI 機台? |
+|------|------|------------|------------------------|
+| **A. 本機開發(Foundry-only)** | 開發、單元驗證、不便上機台時 | Azure AI Foundry | 否 |
+| **B. 正式部署(Upstream + Foundry)** | 對齊產品形態,Action 走 NPU | AMD NPU(`amd-ryzen-ai-benchmark/api.py`) | 是 |
+
+兩種模式共用相同的 Gateway 與 Workflow,差別只在 `.env` 的 `WORKFLOW_ACTION_BACKEND` 一個開關。建議先用模式 A 把開發環境跑通,再上 Ryzen AI 主機驗模式 B。
+
+---
+
+## 模式 A:本機開發(Foundry-only)
+
+> **適用對象**:在自己的開發機(Windows / Mac / Linux 皆可)驗證 Agentic SDK 行為,不需要 NPU 推論硬體。
+> **環境前提**:Python 3.12、`uv`、可連到 Azure AI Foundry 的 API key。
+
+```powershell
+git clone https://github.com/<your-org>/Agentic-SDK.git
+cd Agentic-SDK
+git submodule update --init      # 把 .claude/ 拉下來
+
+uv sync --extra dev               # 安裝依賴(uv 會自備 Python 3.12 + .venv)
+
+Copy-Item .env.example .env
+```
+
+編輯 `.env`,只需動兩處:
+
+```ini
+# 把 Action 切到 Foundry,免架上游
+WORKFLOW_ACTION_BACKEND=foundry
+
+# 填入專案維護者提供的 Azure AI Foundry 認證
+AZURE_FOUNDRY_ENDPOINT=https://<your-resource>.cognitiveservices.azure.com/
+AZURE_FOUNDRY_API_KEY=<由專案維護者提供>
+AZURE_FOUNDRY_DEPLOYMENT=gpt-4o-mini
+```
+
+啟動 Gateway 與 Dashboard:
+
+```powershell
+.\scripts\start.ps1               # Gateway @ 8080,Dashboard @ 8501
+```
+
+一鍵驗證(另開 PowerShell):
+
+```powershell
+uv run python scripts\smoke_chat.py
+```
+
+預期輸出包含:模型回覆內容、`x-agentic-metadata` header(`workflow_id` / `visit_counts` / `aborted`)、token usage。同時 Dashboard 會出現一條 `perceive → plan → retrieve → plan → action → reflect` 的時間序列。
+
+> 健康檢查:`http://127.0.0.1:8080/healthz`(模式 A 不會檢查 AMD 上游)。
+> Gateway 是 API server,直接用瀏覽器打 `localhost:8080` 會回 `Not Found`,屬正常。
+
+---
+
+## 模式 B:正式部署(Upstream + Foundry)
+
+> **適用對象**:在 AMD Ryzen AI 主機上對齊產品形態,Action 走 NPU。
+> **環境前提**:模式 A 的所有條件 + AMD Ryzen AI Software 1.7.1 + 已備好 `amd-ryzen-ai-benchmark`。
 
 ### 第一步:依上游 README 啟動推論伺服器
-
-照上游 [amd-ryzen-ai-benchmark](https://github.com/R300-AI/amd-ryzen-ai-benchmark) 完成 Ryzen AI Software 1.7.1 安裝,然後啟動 `api.py`:
 
 ```powershell
 conda activate ryzen-ai-1.7.1
@@ -23,37 +78,19 @@ python api.py --model gemma3-4b-npu
 
 預期 `curl http://localhost:8000/v1/models` 回傳 `gemma3-4b-npu`。上游不是本專案維護範圍,所有 NPU / iGPU 環境細節以上游 README 為準。
 
-### 第二步:啟動 Agentic SDK Gateway 與 Dashboard
+### 第二步:啟動 Gateway 與 Dashboard
+
+跟模式 A 一樣裝好依賴與 `.env`,但保留 `WORKFLOW_ACTION_BACKEND=upstream`(預設值);Azure Foundry 認證仍需填(Plan / Reflect 使用)。
 
 ```powershell
-git clone https://github.com/<your-org>/Agentic-SDK.git
-cd Agentic-SDK
-git submodule update --init      # 把 .claude/ 拉下來
-
-uv sync --extra dev               # 依 pyproject.toml 裝 Python 3.12 + .venv + 套件與開發依賴
-
-Copy-Item .env.example .env       # UPSTREAM_API_BASE_URL 預設指向 localhost:8000
-```
-
-接著編輯 `.env`,填入專案維護者提供的 Azure AI Foundry 認證(Plan / Reflect 節點必需):
-
-```ini
-AZURE_FOUNDRY_ENDPOINT=https://<your-resource>.cognitiveservices.azure.com/openai/v1/
-AZURE_FOUNDRY_API_KEY=<由專案維護者提供>
-AZURE_FOUNDRY_DEPLOYMENT=gpt-4o-mini
-```
-
-> 暫時沒有 Foundry 金鑰也能啟動 — Gateway 會在五節點工作流內自動切換至 Mock Foundry(行為對齊 [docs/01-architecture/](docs/01-architecture/) 內標注的「PoC 允許的例外」)。
-
-```powershell
-.\scripts\start.ps1               # 同時啟動 Gateway (8080) 與 Dashboard (8501)
+.\scripts\start.ps1
 ```
 
 預期(60 秒內):
 
 - `http://localhost:8080/v1/models` 回傳上游模型清單
-- 啟動日誌出現 AMD 與(若有金鑰)Azure Foundry 兩條 inference path 的 healthcheck 通過訊息
-- `http://localhost:8501` 開得開 Streamlit Dashboard,「節點存活拓樸」面板同時顯示兩條 inference path 狀態
+- 啟動日誌出現 AMD 與 Azure Foundry 兩條 inference path 的 healthcheck 通過訊息
+- Dashboard「節點存活拓樸」面板同時顯示兩條 inference path 狀態
 
 ### 第三步:用 OpenAI SDK 跑一次五節點工作流
 
@@ -61,24 +98,73 @@ AZURE_FOUNDRY_DEPLOYMENT=gpt-4o-mini
 from openai import OpenAI
 
 client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="local")
-response = client.chat.completions.create(
+response = client.with_raw_response.chat.completions.create(
     model="gemma3-4b-npu",
     messages=[{"role": "user", "content": "幫我查 2024Q4 的銷售報表並摘要"}],
 )
-print(response.choices[0].message.content)
-
-# Gateway 透過 response header 透出內部執行軌跡(JSON 字串)
-print(response.response.headers["x-agentic-metadata"])
+completion = response.parse()
+print(completion.choices[0].message.content)
+print(response.http_response.headers["x-agentic-metadata"])
 ```
 
 預期結果:
 
 - 回應為標準 OpenAI ChatCompletion 形態
 - `x-agentic-metadata` header 內含 `workflow_id` / `visit_counts` / `aborted` / `abort_reason`
-- Dashboard「Workflow 執行進度」面板出現一條同 `workflow_id` 的節點時間序列(`perceive → plan → retrieve → plan → action → reflect`)
-- Dashboard「推論指標時序圖」面板出現本次呼叫對應的 TTFT / tokens-per-sec 資料點
+- Dashboard 兩個面板(節點時間序列、推論指標時序圖)出現對應資料點
 
-健康檢查端點:`GET http://127.0.0.1:8080/healthz`。
+---
+
+## 模式 C:多基台驗收(M4-1~M4-3)
+
+> **適用對象**:已備好 Ryzen AI 主機 + Azure Foundry 認證,想一次驗證「node 屬性決定 backend」的多基台拓樸。
+> **驗證重點**:Action node 可獨立指向 Ryzen 上的 Gemma3 或 Azure Foundry,Gateway 拓樸與 Workflow 五節點順序不變。
+
+### 第一步:Ryzen 機器上起 Gemma3 推論
+
+```powershell
+conda activate ryzen-ai-1.7.1
+cd <path to amd-ryzen-ai-benchmark>
+python api.py --model gemma-3-4b-it
+```
+
+`curl http://127.0.0.1:8000/v1/models` 應回傳含 `gemma-3-4b-it` 的清單。
+
+### 第二步:同機 clone Agentic SDK 並裝依賴
+
+```powershell
+git clone https://github.com/<your-org>/Agentic-SDK.git
+cd Agentic-SDK
+git submodule update --init
+uv sync --extra dev
+Copy-Item .env.example .env
+# 編輯 .env 填入 AZURE_FOUNDRY_ENDPOINT / AZURE_FOUNDRY_API_KEY / AZURE_FOUNDRY_DEPLOYMENT
+```
+
+### 第三步:跑多基台 demo
+
+```powershell
+# 預設值:RYZEN_UPSTREAM_BASE_URL=http://127.0.0.1:8000/v1,RYZEN_MODEL=gemma-3-4b-it
+uv run python scripts\demo_multi_backend.py "請用一句話自我介紹"
+```
+
+腳本會:
+
+1. 用 `UpstreamCompletionAction(base_url=...)` 跑一次 Ryzen + Gemma3 工作流
+2. 用 `FoundryCompletionAction(client=AzureOpenAI(...))` 跑一次 Azure Foundry 工作流
+3. 比對兩次的 context entry 結構是否一致(驗證跨 backend 上下文 schema 不變)
+4. 輸出結構化報告至 `docs/quickstart-runs/multi-backend-<timestamp>.json`
+
+### 第四步:把報告推回 GitHub 共同檢視
+
+```powershell
+git checkout -b verify/m4-multi-backend-$(Get-Date -Format yyyyMMdd)
+git add docs/quickstart-runs/multi-backend-*.json
+git commit -m "M4 multi-backend verification run"
+git push origin HEAD
+```
+
+開 PR 後,協作者拉下來打開 `multi-backend-*.json` 就能看到兩個 backend 的回應、耗時、節點訪問計數,作為 M4-1~M4-3 的書面證據。
 
 ---
 
@@ -104,7 +190,7 @@ uv run python scripts\demo_workflow.py
 uv run pytest
 ```
 
-Phase 3 完成時測試共 82 項,涵蓋:基礎層(`/healthz`、`/v1/models`、Settings)、觀測層(事件 schema、RingBuffer、`/internal/telemetry/snapshot`)、Dashboard、Workflow 五節點端對端、Workflow 與 Gateway 的整合驗收(M3-2 / M3-4)。
+Phase 3 完成時測試共 99 項(M4-6 WorkflowConfig + M4 多基台合計加 16 案),涵蓋:基礎層(`/healthz`、`/v1/models`、Settings)、觀測層(事件 schema、RingBuffer、`/internal/telemetry/snapshot`)、Dashboard、Workflow 五節點端對端、Workflow 與 Gateway 的整合驗收(M3-2 / M3-4)、WorkflowConfig 序列化 + Python SDK 注入、多基台拓樸(M4-1~M4-3)。
 
 ---
 

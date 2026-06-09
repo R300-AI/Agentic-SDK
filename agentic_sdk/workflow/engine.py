@@ -84,6 +84,55 @@ class Workflow:
             "action": self.action or DEFAULT_ACTION(settings=self.settings),
         }
 
+    @classmethod
+    def from_config(
+        cls,
+        config: "WorkflowConfig",  # type: ignore[name-defined]
+        settings: Settings | None = None,
+        active_store: ActiveStore | None = None,
+        node_overrides: dict[str, Node] | None = None,
+    ) -> "Workflow":
+        """從 WorkflowConfig 建構 Workflow 實例。
+
+        - `node_overrides`:直接傳入已建構好的 node 實例(例如使用者自己 `AzureOpenAI(...)`
+          建好 client、`FoundryCompletionAction(client=...)` 包好後丟進來),優先級高於
+          `config.nodes[name]` 中的序列化規格。這是 Python SDK 的主要擴充口。
+        - 未在 `node_overrides` 也未在 `config.nodes` 中指定的節點退回各自的 DEFAULT。
+        - `config.gates` 覆蓋 Settings 的三道閘門預設值。
+        """
+        from agentic_sdk.workflow.config import _build_node_from_spec
+        from agentic_sdk.workflow.llm import get_foundry_client
+
+        s = settings or get_settings()
+        fc = get_foundry_client(s)
+        overrides = node_overrides or {}
+
+        def _node(name: str):
+            if name in overrides:
+                return overrides[name]
+            spec = config.nodes.get(name)
+            if spec is None:
+                return None  # 交給 __post_init__ 補 DEFAULT
+            return _build_node_from_spec(spec, name, settings=s, foundry_client=fc)
+
+        gates = Gates(
+            max_node_hops=config.gates.max_node_hops,
+            max_revisit=config.gates.max_revisit,
+            timeout_sec=config.gates.timeout_sec,
+        )
+
+        return cls(
+            perceive=_node("perceive"),
+            plan=_node("plan"),
+            retrieve=_node("retrieve"),
+            reflect=_node("reflect"),
+            action=_node("action"),
+            gates=gates,
+            settings=s,
+            active_store=active_store,
+            entry_node=config.entry,
+        )
+
     def run(self, user_message: str) -> WorkflowResult:
         state = WorkflowState(user_message=user_message)
         user_entry = ContextEntry(type=ContextEntryType.USER_INPUT, content=user_message)

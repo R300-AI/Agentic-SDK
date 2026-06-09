@@ -15,6 +15,6 @@ def list_models(request: Request) -> dict[str, object]:
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail=f"無法存取上游 {upstream._settings.upstream_api_base_url}:{exc}",
+            detail=f"無法存取上游 {upstream.base_url}:{exc}",
         ) from exc
     return result.model_dump()

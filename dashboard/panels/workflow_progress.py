@@ -50,8 +50,20 @@ def render(events: list[dict[str, Any]]) -> None:
     node_order = ["perceive", "plan", "retrieve", "reflect", "action"]
     summary = summary.reindex([n for n in node_order if n in summary.index])
 
+    _NODE_DESC = {
+        "perceive": "感知輸入 — 解析 user message,建立本次工作流的起始 context",
+        "plan":    "決策規劃 — 由 LLM 決定下一步走哪個節點(retrieve / action)",
+        "retrieve": "資料檢索 — 從知識庫取回相關上下文,補充 plan 的判斷依據",
+        "reflect":  "結果評估 — 檢視 action 產出,決定接受(END)或要求重試(→ plan)",
+        "action":   "產出執行 — 呼叫 LLM / 上游推論伺服器,產生最終回應",
+    }
+
     cols = st.columns(2)
     with cols[0]:
         st.dataframe(summary, use_container_width=True)
+        with st.expander("節點說明"):
+            for node, desc in _NODE_DESC.items():
+                if node in summary.index:
+                    st.markdown(f"**{node}** — {desc}")
     with cols[1]:
         st.bar_chart(summary["avg_ms"], height=260)

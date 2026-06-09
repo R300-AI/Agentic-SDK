@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     workflow_max_revisit: int = Field(default=5, ge=1, le=1_000)
     workflow_timeout_sec: float = Field(default=30.0, gt=0)
     workflow_force_mock_foundry: bool = Field(default=False)
+    workflow_action_backend: str = Field(default="upstream")
 
     active_context_max_mb: float = Field(default=8.0, gt=0)
     context_idle_demote_sec: float = Field(default=300.0, gt=0)

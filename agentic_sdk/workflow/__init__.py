@@ -1,5 +1,6 @@
 """Workflow 套件公開 API。"""
 
+from agentic_sdk.workflow.config import GateConfig, NodeSpec, WorkflowConfig
 from agentic_sdk.workflow.engine import Workflow
 from agentic_sdk.workflow.gates import Gates
 from agentic_sdk.workflow.node import (
@@ -12,6 +13,9 @@ from agentic_sdk.workflow.node import (
 
 __all__ = [
     "Workflow",
+    "WorkflowConfig",
+    "NodeSpec",
+    "GateConfig",
     "Gates",
     "Node",
     "NodeOutput",

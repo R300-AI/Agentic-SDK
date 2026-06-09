@@ -46,7 +46,8 @@ def render(events: list[dict[str, Any]]) -> None:
             "時間": time.strftime("%H:%M:%S", time.localtime(e["ts"])),
             "事件": e["event_name"],
             "原因 / 錯誤類型": (
-                e.get("reason")
+                e.get("workflow_reason")
+                or e.get("reason")
                 or e.get("error_type")
                 or ""
             ),

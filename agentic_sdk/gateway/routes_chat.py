@@ -30,7 +30,10 @@ from agentic_sdk.observability.events import (
     make_event,
 )
 from agentic_sdk.workflow import Workflow
-from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction
+from agentic_sdk.workflow.nodes.action import (
+    FoundryCompletionAction,
+    UpstreamCompletionAction,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -50,6 +53,18 @@ def _extract_user_message(messages: list[dict]) -> str:
         if isinstance(content, str) and content.strip():
             return content
     return ""
+
+
+def _build_action(settings, model: str):
+    backend = (settings.workflow_action_backend or "upstream").lower()
+    if backend == "foundry":
+        return FoundryCompletionAction(settings=settings, model=model)
+    if backend == "upstream":
+        return UpstreamCompletionAction(settings=settings, model=model)
+    raise HTTPException(
+        status_code=500,
+        detail=f"WORKFLOW_ACTION_BACKEND={backend!r} 不支援,僅接受 upstream 或 foundry。",
+    )
 
 
 @router.post(_ROUTE)
@@ -87,7 +102,7 @@ async def chat_completions(request: Request):
     workflow = Workflow(
         settings=settings,
         active_store=active_store,
-        action=UpstreamCompletionAction(settings=settings, model=model),
+        action=_build_action(settings, model),
     )
 
     try:

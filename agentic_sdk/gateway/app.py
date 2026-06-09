@@ -36,29 +36,39 @@ async def _periodic_upstream_health(app: FastAPI, interval_sec: float) -> None:
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    upstream: UpstreamClient = app.state.upstream
-    health = upstream.healthcheck()
-    if not health["reachable"]:
-        logger.warning(
-            "上游 %s 無法連線(error=%s)。Gateway 仍會啟動,/v1/* 將返回 502/503,直到上游就緒。",
-            health["url"],
-            health.get("error"),
+    settings: Settings = app.state.settings
+    upstream_required = (settings.workflow_action_backend or "upstream").lower() == "upstream"
+
+    if upstream_required:
+        upstream: UpstreamClient = app.state.upstream
+        health = upstream.healthcheck()
+        if not health["reachable"]:
+            logger.warning(
+                "上游 %s 無法連線(error=%s)。Gateway 仍會啟動,/v1/* 將返回 502/503,直到上游就緒。",
+                health["url"],
+                health.get("error"),
+            )
+        else:
+            logger.info("上游 %s 就緒,可用模型:%s", health["url"], health["models"])
+
+        task = asyncio.create_task(
+            _periodic_upstream_health(app, settings.upstream_health_poll_sec)
         )
     else:
-        logger.info("上游 %s 就緒,可用模型:%s", health["url"], health["models"])
+        logger.info(
+            "WORKFLOW_ACTION_BACKEND=foundry — Action 走 Azure Foundry,略過 AMD 上游 healthcheck。"
+        )
+        task = None
 
-    settings: Settings = app.state.settings
-    task = asyncio.create_task(
-        _periodic_upstream_health(app, settings.upstream_health_poll_sec)
-    )
     try:
         yield
     finally:
-        task.cancel()
-        try:
-            await task
-        except asyncio.CancelledError:
-            pass
+        if task is not None:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -89,11 +99,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @app.get("/healthz")
     def healthz() -> dict[str, object]:
-        return {
+        backend = (app.state.settings.workflow_action_backend or "upstream").lower()
+        info: dict[str, object] = {
             "status": "ok",
-            "upstream": app.state.upstream.healthcheck(),
+            "action_backend": backend,
             "telemetry": app.state.telemetry.stats(),
             "active_context": app.state.active_context.stats(),
         }
+        if backend == "upstream":
+            info["upstream"] = app.state.upstream.healthcheck()
+        return info
 
     return app

@@ -1,13 +1,12 @@
-"""Action baseline — 透過 openai SDK 呼叫上游 AMD NPU 取得最終回應。
+"""Action 變體 — 直接呼叫 Azure AI Foundry deployment 取得最終回應。
+
+用途:本機開發環境(無 AMD Ryzen AI 機台)時,讓五節點 Workflow 仍能端到端跑通。
+由 `WORKFLOW_ACTION_BACKEND=foundry` 啟用;預設仍為 upstream(指向 AMD NPU)。
 
 邊界:
-- 走 UPSTREAM_API_BASE_URL,**不**走 Gateway 本身(避免自循環)
-- 共用 `gateway/upstream_client.py` 的 UpstreamClient,因其封裝同一套設定
-- 失敗時將錯誤寫入 state.last_action_error,讓 Reflect 決定是否重試
-
-未來變體(Phase 5+):
-- function_call_router.py:支援 tools 路由
-- code_interpreter.py:走 sandbox 執行
+- 與 Plan / Reflect 用同一個 Azure deployment,但**不**強制 response_format=json_object
+- 不經 Gateway 本身,直接走 openai SDK 的 AzureOpenAI client
+- 失敗時行為與 UpstreamCompletionAction 對齊:寫 state.last_action_error,讓 Reflect 重試
 """
 
 from __future__ import annotations
@@ -16,44 +15,48 @@ import logging
 
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ContextEntry, ContextEntryType
-from agentic_sdk.gateway.upstream_client import UpstreamClient
 from agentic_sdk.workflow.node import NodeOutput, WorkflowState
 
 logger = logging.getLogger(__name__)
 
 
-class UpstreamCompletionAction:
+class FoundryCompletionAction:
     name = "action"
-    gen_ai_system = "amd_npu"
+    gen_ai_system = "azure_foundry"
 
     def __init__(
         self,
-        upstream: UpstreamClient | None = None,
         settings: Settings | None = None,
         model: str | None = None,
-        base_url: str | None = None,
+        client=None,
     ) -> None:
+        from openai import AzureOpenAI
+
         self._settings = settings or get_settings()
-        if upstream is not None and base_url is not None:
-            raise ValueError("upstream 與 base_url 互斥;指定 upstream 表示完全外部注入,base_url 則由本物件自建 UpstreamClient")
-        self._upstream = upstream or UpstreamClient(self._settings, base_url=base_url)
-        self._model = model  # 若未指定,從 state.payload 取或回 None 由上游預設
+        self._settings.require_azure_foundry()
+        self._deployment = self._settings.azure_foundry_deployment
+        self._model = model
+        self._client = client or AzureOpenAI(
+            azure_endpoint=self._settings.azure_foundry_endpoint,
+            api_key=self._settings.azure_foundry_api_key,
+            api_version=self._settings.azure_foundry_api_version,
+            timeout=self._settings.infer_request_timeout_sec,
+        )
 
     @property
     def gen_ai_request_model(self) -> str | None:
-        return self._model
+        return self._model or self._deployment
 
     def __call__(self, state: WorkflowState) -> NodeOutput:
-        model = self._model or state.payload.get("model") or "default"
         messages = _build_messages(state)
 
         try:
-            completion = self._upstream.openai.chat.completions.create(
-                model=model,
+            completion = self._client.chat.completions.create(
+                model=self._deployment,
                 messages=messages,
             )
         except Exception as exc:
-            logger.warning("action upstream call failed: %s", exc)
+            logger.warning("foundry action call failed: %s", exc)
             state.last_action_error = {
                 "type": type(exc).__name__,
                 "message": str(exc),
@@ -61,7 +64,7 @@ class UpstreamCompletionAction:
             entry = ContextEntry(
                 type=ContextEntryType.ACTION_RESULT,
                 content=f"error:{type(exc).__name__}",
-                metadata={"ok": False, "error": str(exc), "model": model},
+                metadata={"ok": False, "error": str(exc), "model": self._deployment},
             )
             return NodeOutput(
                 next_node="reflect",
@@ -71,23 +74,24 @@ class UpstreamCompletionAction:
 
         choice = completion.choices[0].message.content or ""
         usage = getattr(completion, "usage", None)
+        resolved_model = getattr(completion, "model", self._deployment)
         state.last_action_error = None
         state.last_action_result = {
             "content": choice,
-            "model": getattr(completion, "model", model),
+            "model": resolved_model,
         }
 
         entry = ContextEntry(
             type=ContextEntryType.ACTION_RESULT,
             content=choice,
-            metadata={"ok": True, "model": getattr(completion, "model", model)},
+            metadata={"ok": True, "model": resolved_model},
         )
 
         return NodeOutput(
             next_node="reflect",
             payload={
                 "_llm_usage": {
-                    "model": getattr(completion, "model", model),
+                    "model": resolved_model,
                     "input_tokens": getattr(usage, "prompt_tokens", None) if usage else None,
                     "output_tokens": getattr(usage, "completion_tokens", None) if usage else None,
                 }

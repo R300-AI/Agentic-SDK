@@ -1,0 +1,40 @@
+.............F.......................................................... [ 87%]
+..........                                                               [100%]
+================================== FAILURES ===================================
+_________ test_app_renders_without_exception_when_gateway_unreachable _________
+
+    def test_app_renders_without_exception_when_gateway_unreachable():
+        """預設 gateway 模式 + 沒起 Gateway → 應顯示 error meta 而非崩潰。"""
+        at = AppTest.from_file(APP, default_timeout=30)
+        at.run()
+        # 保持預設 gateway 模式,Gateway 不存在 → HttpDataSource 會回 Snapshot(events=[], meta={error: ...})
+        assert not at.exception, f"Gateway 不可達時 app 應優雅降級,但拋:{at.exception}"
+        # 應該看到 error 元件
+        errors = at.error
+>       assert len(errors) >= 1, "預期顯示連線錯誤提示"
+E       AssertionError: 預期顯示連線錯誤提示
+E       assert 0 >= 1
+E        +  where 0 = len(ElementList())
+
+tests\test_dashboard_app.py:56: AssertionError
+---------------------------- Captured stderr call -----------------------------
+2026-06-09 15:39:57.393 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+2026-06-09 15:39:57.898 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+2026-06-09 15:39:57.908 Please replace `use_container_width` with `width`.
+
+`use_container_width` will be removed after 2025-12-31.
+
+For `use_container_width=True`, use `width='stretch'`. For `use_container_width=False`, use `width='content'`.
+============================== warnings summary ===============================
+.venv\Lib\site-packages\fastapi\testclient.py:1
+  C:\Users\B20447\Desktop\GitHub\Agentic-SDK\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_dashboard_app.py::test_app_renders_without_exception_when_gateway_unreachable
+1 failed, 81 passed, 1 warning in 44.65s

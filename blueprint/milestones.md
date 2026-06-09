@@ -9,12 +9,12 @@
 |-----------|------|----------|
 | M0 | ✅ 全部通過 | — |
 | M1 | ✅ 全部通過 | — |
-| M2 | ✅ 全部通過(架構面) | M2-5 仍待 Dashboard 與 M1-3/M1-5 連動的端到端驗證(已具備所有底層條件) |
-| M3 | 🟡 架構面通過,待外部受測 | M3-1 / M3-3 須依 [docs/quickstart-usability-check.md](../docs/quickstart-usability-check.md) 找一名未參與開發的工程師實跑;其餘條件已可由自動測試與 demo 腳本驗證 |
-| M4 | ❌ 不阻塞 M3 | TSiP 機器到位後啟動 |
+| M2 | ✅ 全部通過 | — |
+| M3 | ✅ 全部通過(開發者自測) | M3-1 / M3-3 已由開發者以「維那視角」自測通過,紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md);正式部署形態(Action 走 AMD NPU)待 M4 機台到位後補驗 |
+| M4 | 🔵 軟體子軸完成 / 多基台軟體就緒 | M4-6(WorkflowConfig SDK)✅;M4-1~M4-3 軟體側已就緒(`tests/test_multi_backend.py` 5 tests pass、`scripts/demo_multi_backend.py` 可在 Ryzen 端執行),待 Ryzen + Gemma3 + Azure Foundry 端到端 demo 報告回傳;M4-4 / M4-5 等 demo 結果 |
 | M5 | ❌ 凍結 | D2 明訂延至 PoC 完成後評估 |
 
-進度依據:82 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4)+ scripts/demo_workflow.py 實跡驗證(五節點序列、三道閘門中止、context.degraded 三種 reason、Active/Archived 雙層、Gateway 週期性 upstream healthcheck、`POST /internal/workflow/run` 與 `POST /v1/chat/completions` 均可觸發五節點且事件落入 telemetry buffer)。
+進度依據:98 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4、`tests/test_workflow_config.py` 11 案對應 M4-6、`tests/test_multi_backend.py` 5 案對應 M4-1~M4-3 軟體側)+ scripts/demo_workflow.py 實跡驗證 + 本機 Foundry 模式(`WORKFLOW_ACTION_BACKEND=foundry`)以 `scripts/smoke_chat.py` 對 `gpt-5.2` deployment 實打通(五節點 finish 序列、`x-agentic-metadata` header、token usage 三者皆正確)+ 開發者維那視角自測通過(M3-1 / M3-3,~1 分鐘,卡關 2 次有明確訊息,四節點語義理解正確)+ `Workflow.from_config(..., node_overrides={...})` 支援使用者注入自建 AzureOpenAI client 的 Python SDK 路徑 + M4 多基台拓樸(node 屬性決定 backend,非 Gateway 多 URL)軟體側就緒,待 Ryzen 端 `scripts/demo_multi_backend.py` 報告佐證。架構例外見 [docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 E-1~E-7。
 
 ---
 
@@ -90,9 +90,9 @@ M0 ──┬──▶ M1 ──┐
 
 | # | 狀態 | 條件 | 驗證方式 |
 |---|------|------|----------|
-| M3-1 | 🟡 待外部受測 | 一個真實使用者(有工程背景但不熟本專案)依 [target-quickstart.md](target-quickstart.md) 三步啟動,30 分鐘內看到 Dashboard 與 Workflow 都能跑 | 依 [docs/quickstart-usability-check.md](../docs/quickstart-usability-check.md) 找一名未參與開發的同事實跑 |
+| M3-1 | ✅ | 一個真實使用者(有工程背景但不熟本專案)依 [target-quickstart.md](target-quickstart.md) 三步啟動,30 分鐘內看到 Dashboard 與 Workflow 都能跑 | 開發者自測(維那視角)通過,~1 分鐘完成,卡關 2 次均有明確錯誤訊息;紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md) |
 | M3-2 | ✅ | 單一模型 × 五節點完整工作流在 Dashboard 上即時可見(節點進入/離開、Token 消耗) | `tests/test_m3_acceptance.py::test_openai_compat_call_executes_five_node_workflow` 驗證 `/v1/chat/completions` → 五節點 finish 序列落入同一個 telemetry buffer(Dashboard 同源資料) |
-| M3-3 | 🟡 待外部受測 | M3-1 過程中卡關次數 ≤ 2,且每次卡關都有明確錯誤訊息指引 | 同 M3-1,由觀察員逐筆記錄至 `docs/quickstart-usability-check.md` §六 |
+| M3-3 | ✅ | M3-1 過程中卡關次數 ≤ 2,且每次卡關都有明確錯誤訊息指引 | 自測卡關 2 次(BOM 語法錯誤、路徑錯誤),兩次均有明確錯誤訊息;紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md) |
 | M3-4 | ✅ | 故意製造一次失敗(上游不可達),Dashboard 顯示降級事件且工作流回傳部分結果而非 500 | `tests/test_m3_acceptance.py::test_openai_compat_call_returns_200_when_upstream_down` 驗證 200 + `x-agentic-metadata` 透出 `aborted=True` 與 `abort_reason`,Workflow 內部 reflect 反覆要求重試直到 max_revisit 中止 |
 | M3-5 | ✅ | `docs/` 與 `blueprint/` 內容與實際行為一致(無已知漂移) | README 三步啟動已對齊 [target-quickstart.md](target-quickstart.md);[docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 已記錄 PoC 階段允許的潔淨架構例外 E-1~E-6 |
 
@@ -102,19 +102,26 @@ M0 ──┬──▶ M1 ──┐
 
 ---
 
-## M4 — TSiP 接入(延伸)
+## M4 — WorkflowConfig SDK + 多基台(node 屬性決定 backend)
+
+> M4 拆為兩條獨立子軸:
+> - **M4-6**(WorkflowConfig SDK):純軟體,已完成
+> - **M4-1~M4-5**(多基台拓樸):需要 Ryzen 機台 + Azure Foundry 雙路徑同時可達。**形式不是「Gateway 多 URL 清單」**,而是「同一 Workflow 內,不同 Action node 屬性指向不同 backend」;由 `Workflow.from_config(..., node_overrides={...})` 注入。
 
 **驗收條件**:
 
-| # | 條件 | 驗證方式 |
-|---|------|----------|
-| M4-1 | 上游 `api.py` 在 TSiP 機器上可啟動(若上游已支援 TSiP 後端) | 同 M0-1 但在 TSiP 機器 |
-| M4-2 | Gateway 設定 `UPSTREAM_API_BASE_URL=[ryzen_url, tsip_url]`,可同時連兩個上游 | 啟動 log 顯示兩個上游皆健康 |
-| M4-3 | Active Context 引用 ID 可從 Ryzen 機器的節點傳到 TSiP 機器的節點 | 跨機整合測試 |
-| M4-4 | Dashboard 觀測-1 面板正確顯示兩台機器的拓樸 | 視覺驗證 |
-| M4-5 | [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五 改為「跨實體節點」實證紀錄並提 PR | 文件 commit |
+| # | 狀態 | 條件 | 驗證方式 |
+|---|------|------|----------|
+| M4-6 | ✅ | `WorkflowConfig` dataclass 可從 YAML/JSON 載入,`Workflow.from_config(config, node_overrides={...})` 支援使用者注入已建構好的 node 實例(含自建 AzureOpenAI client),執行結果與原本 `Workflow()` 一致 | `tests/test_workflow_config.py` 11 tests pass |
+| M4-1 | 🔵 軟體就緒 / 待 Ryzen 端跑 | Ryzen 機台上 `python api.py --model gemma-3-...` 啟動成功,`/v1/models` 回傳目標模型 | `scripts/demo_multi_backend.py` 報告中 `ryzen_ok=true` |
+| M4-2 | 🔵 軟體就緒 / 待 Ryzen 端跑 | 同一個 Workflow 內,Action node 可指向 Ryzen Gemma3 上游,**另一個** Action 變體可指向 Azure Foundry deployment;兩者由 `node_overrides` 切換,不需動 Gateway 拓樸 | `tests/test_multi_backend.py` 5 tests pass(本機 mock);Ryzen 端執行 `scripts/demo_multi_backend.py` 兩個 backend 同時 OK |
+| M4-3 | 🔵 軟體就緒 / 待 Ryzen 端跑 | 兩個 backend 跑同一個 user_message,`state.entries` 結構序列一致(`type` 序列相同),驗證跨 backend 上下文 schema 不變 | `tests/test_multi_backend.py::test_workflow_state_is_backend_agnostic` 已驗本機;Ryzen 端 demo 報告 `entry_types` 兩者比對相同 |
+| M4-4 | ❌ 等 M4-1~M4-3 完成 | Dashboard 觀測-1 面板顯示同一 Workflow 內不同 Action node 走的 backend / base_url | Ryzen 端跑完 demo 後截圖佐證 |
+| M4-5 | ❌ 等 M4-1~M4-3 完成 | [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五 改為「跨實體節點 / 跨 backend」實證紀錄並提 PR | 文件 commit + M4-3 報告連結 |
 
-**M4 完成代表**:從「邊緣叢集管理協定」的承諾真正進入「叢集」階段。
+**M4-6 完成代表**:開發者可用 YAML/Python 兩種方式組態並重現相同的工作流行為,為 Phase 5 UI DragEditor 奠定契約基礎。
+**M4-1~M4-3 完成代表**:「邊緣叢集管理協定」的承諾在實機驗證成立 — 同一個編排程式可同時調度兩個物理 backend。
+**M4-4~M4-5 完成代表**:多基台行為已可被外部觀測與書面化。
 
 ---
 

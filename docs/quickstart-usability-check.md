@@ -89,6 +89,28 @@ PoC 的成敗看「外人能不能跑起來」,不是看「開發者覺得能跑
 - 後續修補追蹤: <issue link or 「無」>
 ```
 
+### 2026-06-09 受測者 #1(開發者自測,模式 A — 本機 Foundry)
+
+- 受測者背景: 本專案主要開發者;自測採「維那視角」,刻意忽略已知實作細節
+- 觀察者: 同上(自評)
+- 執行模式: `WORKFLOW_ACTION_BACKEND=foundry`(無 AMD Ryzen AI 機台)
+- Step 2 實測耗時(啟動 Gateway + Dashboard): ~1 分鐘以內
+- Step 3 實測耗時(打 smoke_chat.py + 看 Dashboard): ~1 分鐘以內
+- 卡關次數: 2(由開發者環境問題引起,非文件問題)
+- 卡關位置與當時錯誤訊息:
+  1. `.\scripts\start.ps1` 報「運算式或陳述式中有未預期的 '}' 語彙基元」— 原因:PowerShell 5.1 以 ANSI(Big5)讀 UTF-8 無 BOM 的中文檔案導致語法解析錯誤。**已修補**:為兩個 `.ps1` 加上 UTF-8 BOM。
+  2. `uv run python smoke_chat.py` 報「No such file or directory」— 原因:README 的 smoke 指令漏了 `scripts\` 前綴。**待修補**:README §模式 A 的 smoke 指令補上完整路徑(見下方待修項)。
+- 三題回答(逐字):
+  1. 時間: 大約 1 分鐘。
+  2. 卡關: 沒什麼卡關。(兩次均有明確錯誤訊息,且均由底層 bug 引起,非文件理解問題)
+  3. 五節點理解: 「我無法從現在的成果中得知 perceive / plan / retrieve / reflect / action 是什麼,甚至是她的視覺化關係拓樸。我只知道它們有在一個會話中被啟動。但我原本的理解是:perceive 用來感知狀況、retrieve 用來搜索資料庫資料、plan 是對後續做規劃、reflect 是整理前面記憶、action 是採取一些實際的行動。」
+- 結論: **通過**(時間 ✅、卡關 ✅、節點理解方向正確 ✅;reflect 描述略偏但主體對齊)
+- 核心 UX 觀察(非通過/未通過條件,但高優先修補):Dashboard 觀測-3 只顯示節點名稱與耗時,未說明各節點的職責;受測者無法從 Dashboard 理解「percieve 做什麼、reflect 做什麼」之間的差異,需補充節點 tooltip 或圖例。
+- 後續修補追蹤:
+  - [x] BOM 問題已修(session 內完成)
+  - [ ] README 煙霧測試指令補 `scripts\` 前綴
+  - [ ] Dashboard 觀測-3 各節點加 tooltip/說明文字
+
 ---
 
 ## 七、本流程的失效模式

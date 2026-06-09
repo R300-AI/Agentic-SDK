@@ -21,10 +21,11 @@ logger = logging.getLogger(__name__)
 
 
 class UpstreamClient:
-    def __init__(self, settings: Settings) -> None:
+    def __init__(self, settings: Settings, base_url: str | None = None) -> None:
         self._settings = settings
+        self._base_url = base_url or settings.upstream_api_base_url
         self._client = OpenAI(
-            base_url=settings.upstream_api_base_url,
+            base_url=self._base_url,
             api_key=settings.upstream_api_key or "not-needed",
             timeout=settings.infer_request_timeout_sec,
         )
@@ -37,8 +38,12 @@ class UpstreamClient:
     def settings(self) -> Settings:
         return self._settings
 
+    @property
+    def base_url(self) -> str:
+        return self._base_url
+
     def healthcheck(self) -> dict[str, object]:
-        url = self._settings.upstream_api_base_url.rstrip("/") + "/models"
+        url = self._base_url.rstrip("/") + "/models"
         try:
             response = httpx.get(
                 url,

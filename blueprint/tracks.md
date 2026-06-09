@@ -109,7 +109,7 @@ Track B 不依賴 Track A 的內部實作,只依賴 Phase 0 的 Gateway 遙測�
 | I-02 | ✅ | 撰寫 PoC 驗收腳本:單一模型 × 五節點完整工作流 + Dashboard 即時看見(對應假設 A5)— `tests/test_m3_acceptance.py` 三案覆蓋 M3-2 / M3-4 |
 | I-03 | ✅ | 完善根 README,讓使用者能依 [target-quickstart.md](target-quickstart.md) 三步啟動 |
 | I-04 | ✅ | 整理已知限制清單,寫入 [docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五「PoC 允許的例外」(E-1~E-6) |
-| I-05 | 🟡 文件已備 | [docs/quickstart-usability-check.md](../docs/quickstart-usability-check.md) 已定義 SOP 與紀錄格式;尚待找一名未參與開發的同事實際執行,結果回寫該檔 §六 |
+| I-05 | ✅ | [docs/quickstart-usability-check.md](../docs/quickstart-usability-check.md) 已定義 SOP;開發者以維那視角自測,~1 分鐘完成,紀錄已寫入 §六 |
 
 **Phase 3 完成標準(M3)** 見 [milestones.md](milestones.md)。
 
@@ -121,16 +121,123 @@ Track B 不依賴 Track A 的內部實作,只依賴 Phase 0 的 Gateway 遙測�
 
 | 工作項 | 內容 |
 |--------|------|
-| E-01 | 在 TSiP 機器上啟動上游 `api.py`(若上游已支援 TSiP 後端;否則跟上游協商) |
-| E-02 | Gateway 支援多個 `UPSTREAM_API_BASE_URL`(從單字串改為清單) |
+| E-01 | 在 Ryzen / TSiP 機器上啟動上游 `api.py --model <gemma3-...>`,確認 `/v1/models` 回傳含目標模型 |
+| E-02 | **取消「Gateway 多 URL 清單」**;backend 改由 **Action node 屬性**承載:`UpstreamCompletionAction(base_url=...)` 與 `FoundryCompletionAction(client=...)` 透過 `Workflow.from_config(..., node_overrides={...})` 注入。M4-2 即此契約,實作見 `tests/test_multi_backend.py` |
 | E-03 | 驗證跨實體機器的 Active Context 引用 ID 傳遞(in-memory dict 需升級為網路可達的儲存,如 Redis) |
-| E-04 | Dashboard 觀測-1 面板擴充為「跨機節點視圖」 |
+| E-04 | Dashboard 觀測-1 面板擴充為「跨機節點視圖」(顯示同一 Workflow 內不同 Action node 走的 backend 與 base_url) |
 | E-05 | 修訂 [docs/03-agentic-orchestration/context-and-memory.md](../docs/03-agentic-orchestration/context-and-memory.md) §五 把「跨單機節點」改為「跨實體節點」實證紀錄 |
+| E-06 | **WorkflowConfig Python SDK**:實作 `WorkflowConfig` Domain 物件(YAML/JSON 雙向序列化)+ `Workflow.from_config(config, node_overrides=...)` 載入介面。此為 Phase 5 圖形編排的必要前置。✅ 已完成,詳見下方「WorkflowConfig 共用契約設計」|
 
 ---
 
-## Phase 5:圖形編排(延後評估)
+## WorkflowConfig 共用契約設計(E-06 / Phase 5 前置)
 
-啟動條件見 [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四「Phase 2 啟動條件」(該文件已將圖形編排稱為「Phase 2」是 docs 視角的階段命名,在藍圖中對應到此 Phase 5)。
+### 動機
 
-工作項待啟動時再展開,目前**完全不規劃**,以避免提早消耗認知資源。
+現行 `Workflow` 的五節點與路由邏輯寫死在 `engine.py`,外部使用者無法替換節點。
+同時 Phase 5 的拖曳式 UI 需要一個「可序列化的工作流描述格式」作為 UI → 執行引擎的橋接。
+兩個需求的解法相同:引入 `WorkflowConfig` 作為 **UI 與 Python SDK 的共用契約**。
+
+### 依賴方向(Clean Architecture)
+
+```
+┌───────────────────────────────────────────────────┐
+│  外層 Adapter                                      │
+│  ┌─────────────────┐   ┌────────────────────────┐ │
+│  │ UI DragEditor   │   │ Python SDK             │ │
+│  │ (Phase 5)       │   │ Workflow.from_config()  │ │
+│  └────────┬────────┘   └──────────┬─────────────┘ │
+│           │ 產出/消費              │ 產出/消費      │
+│           ▼                       ▼                │
+│  ┌──────────────────────────────────────────────┐  │
+│  │  WorkflowConfig  (Domain — 唯一真相來源)      │  │
+│  │  • nodes: {name: NodeSpec(type, params)}     │  │
+│  │  • gates: GateConfig(hops/revisit/timeout)  │  │
+│  │  • entry: str (預設 "perceive")              │  │
+│  │  • serialization: YAML / JSON               │  │
+│  └──────────────────────────────────────────────┘  │
+└───────────────────────────────────────────────────┘
+```
+
+### WorkflowConfig YAML 範例
+
+```yaml
+version: "1"
+entry: perceive
+nodes:
+  perceive:
+    type: builtin.perceive
+  plan:
+    type: builtin.plan
+  retrieve:
+    type: builtin.retrieve
+    params:
+      backend: none          # none | chroma
+  reflect:
+    type: builtin.reflect
+  action:
+    type: foundry_completion  # foundry_completion | upstream_completion | custom
+    params:
+      deployment: gpt-5.2
+gates:
+  max_node_hops: 50
+  max_revisit: 5
+  timeout_sec: 30
+```
+
+### Python SDK 用法
+
+```python
+from agentic_sdk import Workflow, WorkflowConfig
+
+# 從檔案載入
+config = WorkflowConfig.from_yaml("my-workflow.yaml")
+wf = Workflow.from_config(config)
+result = wf.run("幫我查 2024Q4 銷售報表")
+
+# Inline 組態(適合敏捷開發)
+from agentic_sdk.workflow.config import NodeSpec, GateConfig
+config = WorkflowConfig(
+    nodes={"action": NodeSpec(type="foundry_completion", params={"deployment": "gpt-4o"})},
+    gates=GateConfig(max_revisit=3),
+)
+```
+
+### UI 拖曳流程(Phase 5)
+
+```
+使用者拖曳節點 → DragEditor 產生 WorkflowConfig dict
+    → 存成 workflow-my-task.yaml(可 git commit)
+    → Gateway POST /internal/workflow/load-config 載入
+    → 同一 config 可由 Python SDK 重現相同行為
+```
+
+### 實作順序與邊界
+
+| 順序 | 工作 | 依賴 |
+|------|------|------|
+| 1(E-06) | `WorkflowConfig` dataclass + YAML/JSON 序列化 + `Workflow.from_config()` | 無;可立即開工 |
+| 2(E-06) | `NodeSpec` 支援 `builtin.*` 與 `custom` 類型;`custom` 類型需提供 Python import path | E-06 #1 |
+| 3(Phase 5) | Gateway 加 `POST /internal/workflow/config` 端點,接收並暫存 config | E-06 |
+| 4(Phase 5) | UI DragEditor 產出符合 schema 的 YAML,送到 Gateway 端點 | Phase 5 #3 |
+
+**Phase 4 只做 1 + 2(Python SDK 層);Phase 5 才做 3 + 4(UI 層)。**
+`WorkflowConfig` 的 schema 設計完成後必須維持向下相容,不可因 UI 需求而破壞 Python SDK 用法。
+
+---
+
+## Phase 5:圖形編排
+
+啟動條件:
+1. [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四「Phase 2 啟動條件」全部達成
+2. E-06 `WorkflowConfig` Python SDK 已交付(Phase 5 的 UI 以此為資料模型,不另行設計格式)
+
+工作項(啟動條件成立後展開):
+
+| 工作項 | 內容 |
+|--------|------|
+| G-01 | Gateway 加 `POST /internal/workflow/config` 端點,接收 WorkflowConfig JSON 並暫存;`POST /v1/chat/completions` 可帶 `workflow_config_id` 指定使用哪份 config |
+| G-02 | 選型並整合拖曳編輯器:候選 Langflow(MIT)/ React Flow(MIT)/ 自製最小版。選型標準:能產出 WorkflowConfig-compatible YAML,且 MIT 授權可商用 |
+| G-03 | DragEditor → WorkflowConfig YAML 匯出 + 從 YAML 還原拓樸視圖 |
+| G-04 | Dashboard 整合:在 Streamlit 或獨立前端頁面內嵌 DragEditor,與遙測面板共存 |
+| G-05 | E2E 驗證:使用者拖曳出一個三節點工作流(perceive → action → reflect)→ 存 YAML → Python SDK `from_yaml` 重現 → 結果一致 |

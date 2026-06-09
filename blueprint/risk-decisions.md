@@ -37,9 +37,9 @@
 |--------|------|
 | 本專案實作 Runner 容器、`/internal/infer` | ❌ 取消,使用者依上游 README 啟動 `api.py` |
 | 本專案實作 Model Card SHA 驗證 | ❌ 取消,認證責任完全歸於上游 |
-| 本專案實作 Gateway 多 runner 路由 | ❌ 取消,改為對單一上游 `UPSTREAM_API_BASE_URL` 的客戶端封裝 |
+| 本專案實作 Gateway 多 runner 路由 | ❌ 取消;backend 屬於 **Action node 屬性**,同一個 Gateway / 同一個 Workflow 內由 `node_overrides` 切換(M4-2 已實作,見 `tests/test_multi_backend.py`)|
 | F-02 / F-03 / F-05 | ❌ 移除 |
-| 新增 F-02(上游客戶端封裝、healthcheck) | ✅ 新增 |
+| 新增 F-02(上游客戶端封裝、healthcheck,接受 `base_url` 參數可指向多台機器) | ✅ 新增 |
 
 ### 預期效應
 
