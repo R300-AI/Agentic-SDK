@@ -125,7 +125,14 @@ def _safe_run(name: str, fn, *args) -> dict:
 
 
 def main(argv: list[str]) -> int:
-    prompt = argv[1] if len(argv) > 1 else "請用一句話自我介紹"
+    # Windows PowerShell 5.1 預設 codepage 可能讓中文 CLI 引數變亂碼;
+    # 對 argv[1] 走一次「以當前 stdin 編碼解回 bytes 再以 UTF-8 解碼」嘗試,
+    # 失敗就維持原值(英文 / Linux 環境本來就沒事)。
+    raw = argv[1] if len(argv) > 1 else "請用一句話自我介紹"
+    try:
+        prompt = raw.encode(sys.stdin.encoding or "utf-8", errors="strict").decode("utf-8")
+    except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
+        prompt = raw
     ryzen_base = os.environ.get("RYZEN_UPSTREAM_BASE_URL", "http://127.0.0.1:8000/v1")
     ryzen_model = os.environ.get("RYZEN_MODEL", "gemma-3-4b-it")
 
