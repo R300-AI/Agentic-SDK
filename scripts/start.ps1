@@ -1,4 +1,4 @@
-#requires -Version 5.1
+﻿#requires -Version 5.1
 <#
 .SYNOPSIS
     啟動 Agentic SDK Gateway 與 Multi-Model Dashboard。
