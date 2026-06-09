@@ -34,4 +34,8 @@ uv run python scripts\demo_multi_backend.py "請用一句話自我介紹"
 ────────────────────────────────────────────────────────────
 ```
 
+AZURE_FOUNDRY_ENDPOINT=https://eosl-r3-general-eastus2-resource.cognitiveservices.azure.com/
+AZURE_FOUNDRY_API_KEY=5jA17dtGbPJXeiMxospDxFlTXQjjx9cR0Qh9oxia5D6C2fIOHNguJQQJ99CCACHYHv6XJ3w3AAAAACOGRekz
+AZURE_FOUNDRY_DEPLOYMENT=gpt-5.2
+
 # 4. 推結果回來給我看
