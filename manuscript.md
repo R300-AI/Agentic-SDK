@@ -1,7 +1,7 @@
 # 1. 起 Gemma3 上游
 conda activate ryzen-ai-1.7.1
 cd <amd-ryzen-ai-benchmark>
-python api.py --model gemma-3-4b-it
+python api.py --model gemma3-4b-npu
 
 # 2. clone / pull Agentic SDK 最新版
 git clone https://github.com/<your-org>/Agentic-SDK.git   # 或 git pull

@@ -192,7 +192,7 @@ def main(argv: list[str]) -> int:
     except (UnicodeEncodeError, UnicodeDecodeError, LookupError):
         prompt = raw
     ryzen_base = os.environ.get("RYZEN_UPSTREAM_BASE_URL", "http://127.0.0.1:8000/v1")
-    ryzen_model = os.environ.get("RYZEN_MODEL", "gemma-3-4b-it")
+    ryzen_model = os.environ.get("RYZEN_MODEL", "gemma3-4b-npu")
 
     print(f"[demo_multi_backend] prompt = {prompt!r}")
     print(f"[demo_multi_backend] ryzen_base = {ryzen_base}")
