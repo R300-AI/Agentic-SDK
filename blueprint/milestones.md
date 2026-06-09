@@ -129,7 +129,7 @@ M0 ──┬──▶ M1 ──┐
 
 啟動條件見 [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四「Phase 2 啟動條件」。
 
-未啟動前不展開驗收條件,避免提早消耗認知資源。
+候選框架(Langflow / React Flow / 自製)的硬性要求、評分骨架與 Phase 1 期間應蒐集的證據清單,見 [docs/04-observability-dashboard/phase2-orchestrator-evaluation.md](../docs/04-observability-dashboard/phase2-orchestrator-evaluation.md)。啟動條件成立前,僅按該文件 §四 蒐集證據,不展開 spike,亦不展開驗收條件。
 
 ---
 

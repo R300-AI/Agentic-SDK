@@ -65,6 +65,8 @@ MVP 後若需要更高的視覺品質,可平行接 Grafana(無需替換 Streamli
 
 當 M3 達成、PoC 對外驗收通過後,再評估是否進入 Phase 2 的圖形編排。
 
+> 候選框架的硬性要求、評分骨架與 Phase 1 期間應蒐集的證據,已整理在 [phase2-orchestrator-evaluation.md](phase2-orchestrator-evaluation.md)。本節僅保留**啟動門檻**;真正動手評估時請以該文件為準。
+
 ### Phase 2 啟動前必須先做的決策
 
 | 決策 | 候選 | 取捨依據 |
