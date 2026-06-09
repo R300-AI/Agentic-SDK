@@ -111,12 +111,19 @@ class UpstreamCompletionAction:
 
 
 def _build_messages(state: WorkflowState) -> list[dict]:
+    """組出送往上游 NPU 的 messages。
+
+    Gemma3 NPU chat template 要求嚴格 user/assistant 交替,不接受 'system' role。
+    因此把系統提示與檢索上下文折入 user 訊息首段,保持 messages 只有一個 user entry。
+    若未來上游換成支援 system role 的模型,在此處分出 UpstreamMessageBuilder 策略即可。
+    """
     retrieved = state.latest_of(ContextEntryType.RETRIEVED)
-    msgs: list[dict] = [{
-        "role": "system",
-        "content": "你是 Agentic SDK 內的 Action 節點,根據 user 輸入與已檢索上下文產出最終回應。",
-    }]
+
+    parts: list[str] = [
+        "你是 Agentic SDK 內的 Action 節點,根據 user 輸入與已檢索上下文產出最終回應。",
+    ]
     if retrieved:
-        msgs.append({"role": "system", "content": f"檢索到的上下文:{retrieved.content}"})
-    msgs.append({"role": "user", "content": state.user_message})
-    return msgs
+        parts.append(f"已檢索上下文:\n{retrieved.content}")
+    parts.append(f"user 輸入:\n{state.user_message}")
+
+    return [{"role": "user", "content": "\n\n".join(parts)}]
