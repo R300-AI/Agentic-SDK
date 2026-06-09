@@ -73,14 +73,11 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
     from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction
 
     s = Settings(
-        _env_file=None,  # type: ignore[call-arg]
         upstream_api_base_url=base_url,
         upstream_api_key=os.environ.get("UPSTREAM_API_KEY", "not-needed"),
         infer_request_timeout_sec=float(os.environ.get("INFER_REQUEST_TIMEOUT_SEC", "60")),
         workflow_force_mock_foundry=True,
         workflow_action_backend="upstream",
-        azure_foundry_endpoint=os.environ.get("AZURE_FOUNDRY_ENDPOINT", "https://placeholder.example.com/"),
-        azure_foundry_api_key=os.environ.get("AZURE_FOUNDRY_API_KEY", "placeholder"),
     )
     action = UpstreamCompletionAction(settings=s, model=model)
     config = WorkflowConfig(
@@ -118,33 +115,28 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
 
 
 def _run_foundry_action(prompt: str) -> dict:
-    # 在讀取 env 前先確認必填項目已設,給出明確錯誤訊息而非 KeyError
-    _endpoint = os.environ.get("AZURE_FOUNDRY_ENDPOINT")
-    _api_key = os.environ.get("AZURE_FOUNDRY_API_KEY")
-    if not _endpoint or not _api_key:
+    from agentic_sdk.config import Settings
+    from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
+    from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
+
+    # Settings 正常讀 .env(不傳 _env_file=None),讓 Pydantic 自動解析 .env 檔
+    s = Settings(
+        workflow_force_mock_foundry=True,
+        workflow_action_backend="foundry",
+    )
+
+    # 確認必填憑證已設(可能來自 .env 或 shell 環境變數)
+    if not s.azure_foundry_endpoint or not s.azure_foundry_api_key:
         missing = [
-            k for k, v in [("AZURE_FOUNDRY_ENDPOINT", _endpoint), ("AZURE_FOUNDRY_API_KEY", _api_key)]
-            if not v
+            k for k, v in [
+                ("AZURE_FOUNDRY_ENDPOINT", s.azure_foundry_endpoint),
+                ("AZURE_FOUNDRY_API_KEY", s.azure_foundry_api_key),
+            ] if not v
         ]
         raise EnvironmentError(
             f".env 缺少必填項目: {', '.join(missing)}。"
             f"請複製 .env.example 並填入 Azure Foundry 憑證後重跑。"
         )
-
-    from agentic_sdk.config import Settings
-    from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
-    from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
-
-    s = Settings(
-        _env_file=None,  # type: ignore[call-arg]
-        workflow_force_mock_foundry=True,
-        workflow_action_backend="foundry",
-        azure_foundry_endpoint=_endpoint,
-        azure_foundry_api_key=_api_key,
-        azure_foundry_deployment=os.environ.get("AZURE_FOUNDRY_DEPLOYMENT", "gpt-4o-mini"),
-        upstream_api_base_url="http://placeholder:8000/v1",
-        infer_request_timeout_sec=float(os.environ.get("INFER_REQUEST_TIMEOUT_SEC", "60")),
-    )
     action = FoundryCompletionAction(settings=s)
     config = WorkflowConfig(
         nodes={"action": NodeSpec(type="foundry_completion")},
