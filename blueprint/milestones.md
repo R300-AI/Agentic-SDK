@@ -12,7 +12,7 @@
 | M2 | ✅ 全部通過 | — |
 | M3 | ✅ 全部通過(開發者自測) | M3-1 / M3-3 已由開發者以「維那視角」自測通過,紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md);正式部署形態(Action 走 AMD NPU)待 M4 機台到位後補驗 |
 | M4 | ✅ 全部通過 | M4-6 ✅;M4-1 ✅(Ryzen gemma3-4b-npu 5.938 s);M4-2 ✅(Foundry gpt-5.2 2.031 s);M4-3 ✅(entry_types 兩 backend 一致);M4-4 ✅(JSON report 佐證);M4-5 ✅(context-and-memory.md §五補實證) |
-| M5 | ❌ 凍結 | D2 明訂延至 PoC 完成後評估 |
+| M5 | 🟡 規劃中 | 使用者已明確要求拖曳介面,Phase 5 設計規劃見 [docs/04-observability-dashboard/phase5-graph-editor-plan.md](../docs/04-observability-dashboard/phase5-graph-editor-plan.md);M5-1～M5-4 未動工 |
 
 進度依據:98 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4、`tests/test_workflow_config.py` 11 案對應 M4-6、`tests/test_multi_backend.py` 5 案對應 M4-1~M4-3 軟體側)+ scripts/demo_workflow.py 實跡驗證 + 本機 Foundry 模式(`WORKFLOW_ACTION_BACKEND=foundry`)以 `scripts/smoke_chat.py` 對 `gpt-5.2` deployment 實打通(五節點 finish 序列、`x-agentic-metadata` header、token usage 三者皆正確)+ 開發者維那視角自測通過(M3-1 / M3-3,~1 分鐘,卡關 2 次有明確訊息,四節點語義理解正確)+ `Workflow.from_config(..., node_overrides={...})` 支援使用者注入自建 AzureOpenAI client 的 Python SDK 路徑 + M4 多基台拓樸(node 屬性決定 backend,非 Gateway 多 URL)軟體側就緒,待 Ryzen 端 `scripts/demo_multi_backend.py` 報告佐證。架構例外見 [docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 E-1~E-7。
 
@@ -22,7 +22,7 @@
 
 ```
 M0 ──┬──▶ M1 ──┐
-     │         ├──▶ M3 ──▶ M4(TSiP 延伸) ──▶ M5(圖形編排,延後評估)
+     │         ├──▶ M3 ──▶ M4(TSiP 延伸) ──▶ M5(圖形編排 UI,規劃中)
      └──▶ M2 ──┘
 ```
 
@@ -30,7 +30,7 @@ M0 ──┬──▶ M1 ──┐
 - M1 與 M2 完全獨立,可並行
 - M3 同時依賴 M1 與 M2
 - M4 是 TSiP 到位後的延伸,不阻塞 M3 對外宣告 PoC 完成
-- M5 在 M3 後依 [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四 條件評估,目前不展開
+- M5 使用者已明確要求拖曳介面,Phase 5 規劃見 [docs/04-observability-dashboard/phase5-graph-editor-plan.md](../docs/04-observability-dashboard/phase5-graph-editor-plan.md);M2 Dashboard(觀測)與 M5 Editor(設計+觸發)分工,不重疉
 
 ---
 
@@ -125,11 +125,18 @@ M0 ──┬──▶ M1 ──┐
 
 ---
 
-## M5 — 圖形編排(延後評估)
+## M5 — 圖形編排 UI(規劃中)
 
-啟動條件見 [docs/04-observability-dashboard/visualization-ui.md](../docs/04-observability-dashboard/visualization-ui.md) §四「Phase 2 啟動條件」。
+完整設計、選型結論、使用者體驗、交付里程碑與技術接點見 [docs/04-observability-dashboard/phase5-graph-editor-plan.md](../docs/04-observability-dashboard/phase5-graph-editor-plan.md)。
 
-候選框架(Langflow / React Flow / 自製)的硬性要求、評分骨架與 Phase 1 期間應蒐集的證據清單,見 [docs/04-observability-dashboard/phase2-orchestrator-evaluation.md](../docs/04-observability-dashboard/phase2-orchestrator-evaluation.md)。啟動條件成立前,僅按該文件 §四 蒐集證據,不展開 spike,亦不展開驗收條件。
+| ID | 狀態 | 對外可見成果 | 驗收方式 |
+|----|------|-------------|----------|
+| M5-1 | ⬜ | Langflow fork 起來,預設五節點模板可顯示、可拖曳 | 開啟瀏覽器看到畫布,能改連線 |
+| M5-2 | ⬜ | 屬性面板對接 `NodeSpec.params`;儲存/載入 YAML 雙向通 | 同一份 YAML 經「載入 → 儲存」與 pytest 直接 load 結果一致 |
+| M5-3 | ⬜ | Gateway 接受 `x-agentic-workflow-config` header;Editor「跑一次」按鈕串通 | 在 Editor 改一個節點屬性,按跑一次,Dashboard 出現對應的五節點亮燈 |
+| M5-4 | ⬜ | 整合商客戶不看 README,自己改一個工作流並跑通 | 訪談 ≥ 1 位客戶,完成「拖曳 → 改屬性 → 儲存 → 跑一次」全流程,無口頭協助 |
+
+**M5 完成代表**:使用者(整合商 / 客戶現場)可在瀏覽器內設計、儲存、執行自己的五節點工作流,無需碰 Python 或 YAML。
 
 ---
 
@@ -141,5 +148,5 @@ M0 ──┬──▶ M1 ──┐
 - ❌ 自訂節點型別擴充機制 — 留到 MVP
 - ❌ 跨資料中心 / 跨地理區域的上下文同步 — 不在路線圖
 - ❌ 動態 Offload(Phase 4 之後評估)
-- ❌ 自製或 fork 圖形編排 UI(延至 M5 啟動條件成立後評估)
+- ❌ 自製圖形編排 UI(M5 採 fork Langflow,見 [phase5-graph-editor-plan.md §二](../docs/04-observability-dashboard/phase5-graph-editor-plan.md))
 - ❌ Runner 容器化、Model Card SHA 驗證(改由上游 `api.py` 取代,見 [risk-decisions.md](risk-decisions.md) D1)

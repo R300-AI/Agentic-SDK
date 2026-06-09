@@ -61,37 +61,29 @@ MVP 後若需要更高的視覺品質,可平行接 Grafana(無需替換 Streamli
 - ❌ 工作流的儲存與重放(由 SDK 內部處理,Dashboard 不負責持久化)
 - ❌ 跨工作流的歷史聚合(只看「現在」,歷史趨勢留給 Grafana)
 
-## 四、Phase 2 範圍:圖形編排能力(延後)
+## 四、Phase 2 範圍:圖形編排能力(規劃中)
 
-當 M3 達成、PoC 對外驗收通過後,再評估是否進入 Phase 2 的圖形編排。
+[blueprint/milestones.md](../../blueprint/milestones.md) M3 對外驗收已通過,內部使用者亦明確要求拖曳介面;Phase 2 啟動條件成立,**已進入規劃**。
 
-> 候選框架的硬性要求、評分骨架與 Phase 1 期間應蒐集的證據,已整理在 [phase2-orchestrator-evaluation.md](phase2-orchestrator-evaluation.md)。本節僅保留**啟動門檻**;真正動手評估時請以該文件為準。
+完整的選型結論、使用者體驗設計、交付里程碑、技術接點清單,見 [phase5-graph-editor-plan.md](phase5-graph-editor-plan.md)。本節僅保留與 Phase 1 的分工原則;細節以該文件為準。
 
-### Phase 2 啟動前必須先做的決策
+### 與 Phase 1 Dashboard 的分工(不重複觀測)
 
-| 決策 | 候選 | 取捨依據 |
-|------|------|----------|
-| **編排框架選型** | Langflow(MIT)/ React Flow(MIT)/ 自製 | 評估與本專案五節點抽象的對齊度、fork 維護成本、上游 rebase 痛苦度 |
-| **與 Phase 1 Streamlit 的整合** | 並存 / 替換 / 嵌入 | Streamlit 已足夠執行觀測,編排框架是否需要重做觀測功能? |
-| **工作流序列化格式** | Langflow 原生 JSON / 自訂 YAML / Python DSL | 影響使用者自訂工作流的學習曲線 |
+| 能力 | 由誰提供 |
+|------|----------|
+| 拖曳節點、設計工作流、儲存載入 YAML、跑一次 | **Phase 2 Editor**([phase5-graph-editor-plan.md](phase5-graph-editor-plan.md)) |
+| 五節點亮燈、推論指標、降級事件、節點存活 | Phase 1 Dashboard(M2 已交付) |
+
+Editor 與 Dashboard 透過 `workflow_id` 在 URL 上交接,**Editor 不重做觀測,Dashboard 不負責編輯**。
 
 ### 為什麼不在 Phase 1 直接做圖形編排
 
-三個結構性理由:
+當初延後的三個理由,在 Phase 2 啟動時的處理方式:
 
-1. **M3 驗收不需要**:單一模型 × 五節點跨節點路由成功 + Dashboard 即時看見,完全不依賴圖形編排
-2. **編排框架選型本身需要 spike**:Langflow 節點抽象能否乾淨對應到 `Perceive / Plan / Retrieve / Reflect / Action + required_capability` 是個開放問題,做錯選擇會拖累整個 Phase 1
-3. **Phase 1 已有替代入口**:使用者可用 OpenAI SDK 直接呼叫(對既有應用整合者友善),不一定需要圖形 UI
+1. **M3 驗收不需要** → M3 已通過,Phase 2 是「使用者體驗加值」,不在原 PoC 對外可見成果內
+2. **編排框架選型需要 spike** → 在 [phase5-graph-editor-plan.md §二](phase5-graph-editor-plan.md) 已決選 Langflow 為主、React Flow 為備案,fork 邊界已界定
+3. **Phase 1 已有替代入口** → 仍保留;Editor 不取代 OpenAI SDK 呼叫路徑,只新增第二條入口
 
-### Phase 2 啟動條件(待 M3 後重新評估)
-
-以下任一條件成立,才啟動 Phase 2:
-
-- 內部使用者明確反映「需要拖曳介面才能自訂工作流」
-- 對外展示場景需要「客戶在現場修改工作流」的能力
-- MVP 客戶簽約時將圖形編排列為必要條件
-
-未達成上述條件時,Phase 2 持續延後,工程資源優先用於擴充節點型別、優化 Active Context 機制等核心能力。
 
 ## 五、與 Phoenix / Grafana 等工具的關係
 
