@@ -43,19 +43,24 @@ export function PropertyPanel({ selectedNodeId, spec, onUpdate, style }: Props) 
     );
   }
 
-  const klass = detectNodeClass(nodeName, spec);
-
   return (
     <aside className="property-panel" style={style}>
       <h3>{selectedNodeId}</h3>
       <ClassEditor nodeName={nodeName} spec={spec} onUpdate={onUpdate} />
       <ComputeTargetEditor spec={spec} onUpdate={onUpdate} />
       <hr className="prop-divider" />
-      <p className="prop-class-hint">{klass.hint}</p>
       <Editor nodeId={selectedNodeId} spec={spec} onUpdate={onUpdate} />
     </aside>
   );
 }
+
+const NODE_ROLE_LABEL: Record<string, string> = {
+  perceive: "Perceive",
+  plan: "Plan",
+  retrieve: "Retrieve",
+  reflect: "Reflect",
+  action: "Action",
+};
 
 function ClassEditor({
   nodeName,
@@ -70,7 +75,7 @@ function ClassEditor({
   const current = detectNodeClass(nodeName, spec);
   return (
     <div className="prop-row">
-      <label>Class</label>
+      <label>{NODE_ROLE_LABEL[nodeName] ?? nodeName} 模組</label>
       <select
         value={current.value}
         onChange={(e) => {
@@ -84,6 +89,13 @@ function ClassEditor({
           </option>
         ))}
       </select>
+      {current.hint && (
+        <small className="hint module-desc">
+          {current.hint.split("\n").map((line, i) => (
+            <span key={i}>{line}<br /></span>
+          ))}
+        </small>
+      )}
     </div>
   );
 }
