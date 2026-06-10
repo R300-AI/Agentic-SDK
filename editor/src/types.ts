@@ -110,21 +110,21 @@ export const NODE_CLASSES: Record<NodeName, NodeClass[]> = {
       label: "ReActPlan",
       type: "builtin.plan",
       enforceParams: { system_prompt: PLAN_PROMPT_TEMPLATES.react },
-      hint: "依使用者問題情境決定走知識查詢還是直接回應，並記錄每次決策依據。（<a href='https://arxiv.org/abs/2210.03629' target='_blank'>ReAct 論文</a>）",
+      hint: "依使用者問題情境決定走知識查詢還是直接回應，並記錄每次決策依據。（<a href='https://arxiv.org/abs/2210.03629' target='_blank'>參考文獻</a>）",
     },
     {
       value: "cot",
       label: "ChainOfThoughtPlan",
       type: "builtin.plan",
       enforceParams: { system_prompt: PLAN_PROMPT_TEMPLATES.cot },
-      hint: "決策過程逐步記錄，適合需要合規稽核或決策可追溯的服務情境。（<a href='https://arxiv.org/abs/2201.11903' target='_blank'>CoT 論文</a>）",
+      hint: "決策過程逐步記錄，適合需要合規稽核或決策可追溯的服務情境。（<a href='https://arxiv.org/abs/2201.11903' target='_blank'>參考文獻</a>）",
     },
     {
       value: "plan_and_solve",
       label: "PlanAndSolvePlan",
       type: "builtin.plan",
       enforceParams: { system_prompt: PLAN_PROMPT_TEMPLATES.plan_and_solve },
-      hint: "將使用者目標拆解成多個服務步驟後依序推進，適合跨流程的複雜服務。（<a href='https://arxiv.org/abs/2305.04091' target='_blank'>Plan-and-Solve 論文</a>）",
+      hint: "將使用者目標拆解成多個服務步驟後依序推進，適合跨流程的複雜服務。（<a href='https://arxiv.org/abs/2305.04091' target='_blank'>參考文獻</a>）",
     },
   ],
   retrieve: [
@@ -132,7 +132,7 @@ export const NODE_CLASSES: Record<NodeName, NodeClass[]> = {
       value: "semantic",
       label: "SemanticRetrieve",
       type: "builtin.retrieve",
-      hint: "從你匯入的知識文件（如 FAQ、產品資訊、政策手冊）中找出與使用者問題最相關的內容，作為後續回應的依據。（<a href='https://arxiv.org/abs/2005.11401' target='_blank'>RAG 論文</a>）",
+      hint: "從你匯入的知識文件（如 FAQ、產品資訊、政策手冊）中找出與使用者問題最相關的內容，作為後續回應的依據。（<a href='https://arxiv.org/abs/2005.11401' target='_blank'>參考文獻</a>）",
     },
   ],
   reflect: [
@@ -148,7 +148,7 @@ export const NODE_CLASSES: Record<NodeName, NodeClass[]> = {
       label: "ReflexionReflect",
       type: "builtin.reflect",
       enforceParams: { mode: "llm" },
-      hint: "由系統自我評估回應是否符合服務標準，不足則自動修正後重試，適合標準較彈性的情境。（<a href='https://arxiv.org/abs/2303.11366' target='_blank'>Reflexion 論文</a>）",
+      hint: "由系統自我評估回應是否符合服務標準，不足則自動修正後重試，適合標準較彈性的情境。（<a href='https://arxiv.org/abs/2303.11366' target='_blank'>參考文獻</a>）",
     },
   ],
   action: [

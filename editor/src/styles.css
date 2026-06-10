@@ -359,6 +359,11 @@ html, body, #root {
 .memory-indicator-body { font-size: 16px; line-height: 1.4; }
 .memory-indicator-body small { display: block; color: var(--text-muted); }
 
+.hint a, .module-desc a {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
 .prop-divider {
   border: 0;
   border-top: 1px solid var(--border);
