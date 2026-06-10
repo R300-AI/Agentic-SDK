@@ -12,6 +12,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const editorRoot = resolve(__dirname, "..");
+const projectRoot = resolve(editorRoot, "..");
 
 const cyan  = "\x1b[36m";
 const green = "\x1b[32m";
@@ -24,10 +25,10 @@ function printPrefixed(label, color, buf) {
     .forEach((line) => process.stdout.write(`${color}[${label}]${reset} ${line}\n`));
 }
 
-// ── Gateway ───────────────────────────────────────────────────────
+// ── Gateway（cwd = 專案根，確保 pydantic_settings 能讀到 .env）──────
 const pythonExe = resolve(editorRoot, "../.venv/Scripts/python.exe");
 const gw = spawn(pythonExe, ["-m", "agentic_sdk.gateway", "--host", "127.0.0.1", "--port", "8080"], {
-  cwd: editorRoot,
+  cwd: projectRoot,
   stdio: "pipe",
   env: { ...process.env, PYTHONUNBUFFERED: "1" },
 });
