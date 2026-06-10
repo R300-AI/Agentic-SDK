@@ -1,0 +1,17 @@
+[project]
+name = "portfolio-optimizer"
+version = "0.1.0"
+description = "量化投資組合初篩引擎：TradingView 觀察清單 × GCF 排程 × LINE 推播"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "flask>=3.0.0",
+    "functions-framework==3.*",
+    "line-bot-sdk>=3.23.0",
+    "numpy>=1.24.0",
+    "pandas==2.2.3",
+    "pyyaml>=6.0",
+    "requests>=2.34.2",
+    "scipy>=1.10.0",
+    "yfinance>=0.2.28",
+]

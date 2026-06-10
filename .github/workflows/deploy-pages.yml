@@ -34,7 +34,7 @@ jobs:
       - name: Build Vite app
         env:
           VITE_BASE: /Agentic-SDK/
-          VITE_GATEWAY_URL: ""
+          VITE_GATEWAY_URL: ${{ secrets.CLOUD_RUN_GATEWAY_URL }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3

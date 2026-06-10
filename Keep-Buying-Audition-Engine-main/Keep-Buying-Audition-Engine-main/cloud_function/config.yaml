@@ -1,0 +1,63 @@
+tradingview:
+  session_id: 3xas32oe1qv01p1uzkh2uicgyowvg1p0
+  watchlist_id: '118349730'
+  expires_at: '2026-09-08'
+line:
+  channel_access_token: aKRtdIDqU8HQ9N/bHaXNOMtbEZAoIctjuyzsOcY+AHTf9cqQh18aMOJoPbx55VOl/qvS3LAB6I3tO/fbRCuL6TsrT08X9kb0IkncE0C/1pdIqQ/Oqi1zuWwUNaNNrFrPbIvxHHt1+ROP5d3EpfasqwdB04t89/1O/w1cDnyilFU=
+  group_id: C09ca18b7360b50eb65697210a41805ad
+backtest:
+  initial_capital: 1000000
+  amount_per_stock: 100000
+  max_positions: 10
+  market: us
+  start_date: '2025-09-29'
+  rebalance_freq: weekly
+  buy_conditions:
+    sharpe_rank:
+      enabled: true
+      top_n: 15
+    sharpe_threshold:
+      enabled: true
+      threshold: 1
+    sharpe_streak:
+      enabled: false
+      days: 3
+      top_n: 10
+    growth_streak:
+      enabled: true
+      days: 2
+      percentile: 30
+    growth_rank:
+      enabled: false
+      top_n: 7
+    sort_sharpe:
+      enabled: true
+    sort_industry:
+      enabled: false
+      per_industry: 2
+  sell_conditions:
+    sharpe_fail:
+      enabled: true
+      periods: 2
+      top_n: 15
+    growth_fail:
+      enabled: false
+      days: 5
+      threshold: 0
+    not_selected:
+      enabled: false
+      periods: 3
+    drawdown:
+      enabled: true
+      threshold: 0.4
+    weakness:
+      enabled: false
+      rank_k: 20
+      periods: 3
+  rebalance_strategy:
+    type: delayed
+    top_n: 5
+    sharpe_threshold: 0
+    batch_ratio: 0.2
+    concentrate_top_k: 3
+    lead_margin: 0.3

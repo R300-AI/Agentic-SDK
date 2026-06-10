@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portfolio Optimizer</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <link rel="stylesheet" href="/static/style.css?v=9" />
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────────── -->
+<header class="app-header">
+  <div class="header-left">
+    <span class="logo">Portfolio Optimizer</span>
+    <span class="subtitle">量化海選引擎 — TradingView × GCF</span>
+  </div>
+  <div class="header-status">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text"></span>
+  </div>
+</header>
+
+<!-- ── Main ────────────────────────────────────────────────────────────── -->
+<main class="app-main">
+
+  <!-- ===== 上半：權益曲線 + 產業排名 ===== -->
+  <section class="chart-section">
+
+    <!-- 左：權益曲線 -->
+    <div class="chart-panel">
+      <div class="chart-toolbar">
+        <span class="chart-toolbar-label">策略權益曲線 vs 基準指數</span>
+        <span id="chart-meta" style="margin-left:auto;font-size:10px;color:var(--text-muted);"></span>
+      </div>
+      <div id="equity-chart" style="height:260px;background:var(--bg-base);"></div>
+    </div>
+
+    <!-- 右：產業排名 -->
+    <aside class="industry-panel">
+      <div class="panel-title">產業持倉排名</div>
+      <div id="industry-list">
+        <p class="empty-state">執行回測後顯示</p>
+      </div>
+    </aside>
+  </section>
+
+  <!-- ===== 下半：部署配置 + 回測結果 ===== -->
+  <section class="backtest-section">
+
+    <!-- 左：配置面板 -->
+    <aside class="section-sidebar">
+      <div class="section-title">部署配置</div>
+
+      <!-- Tab 切換 -->
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tab-base')">基本設定</button>
+        <button class="tab-btn" onclick="switchTab('tab-buy')">買進條件</button>
+        <button class="tab-btn" onclick="switchTab('tab-sell')">賣出條件</button>
+      </div>
+
+      <!-- ── Tab 1：基本設定 ── -->
+      <div id="tab-base" class="tab-panel active">
+        <fieldset class="form-group">
+          <legend>TradingView</legend>
+          <div class="form-row">
+            <label>Session ID</label>
+            <input type="text" id="tv-session-id" placeholder="sessionid cookie" />
+          </div>
+          <div class="form-row">
+            <label>Watchlist ID</label>
+            <input type="text" id="tv-watchlist-id" placeholder="數字 ID" />
+          </div>
+          <div class="form-row">
+            <label>到期日</label>
+            <input type="date" id="tv-expires-at" />
+          </div>
+        </fieldset>
+
+        <fieldset class="form-group">
+          <legend>LINE 推播</legend>
+          <div class="form-row">
+            <label>Token</label>
+            <input type="text" id="line-token" placeholder="Channel Access Token" />
+          </div>
+          <div class="form-row">
+            <label>Group ID</label>
+            <input type="text" id="line-group" placeholder="LINE 群組 ID" />
+          </div>
+        </fieldset>
+
+        <fieldset class="form-group">
+          <legend>回測策略</legend>
+          <div class="form-row">
+            <label>市場</label>
+            <select id="market">
+              <option value="us">美股</option>
+              <option value="tw">台股</option>
+              <option value="global">全球</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>初始資金</label>
+            <input type="number" id="initial-capital" step="100000" />
+          </div>
+          <div class="form-row">
+            <label>每檔投入</label>
+            <input type="number" id="amount-per-stock" step="10000" />
+          </div>
+          <div class="form-row">
+            <label>最大持倉</label>
+            <input type="number" id="max-positions" min="1" max="100" />
+          </div>
+          <div class="form-row">
+            <label>起始日</label>
+            <input type="date" id="start-date" />
+          </div>
+          <div class="form-row">
+            <label>結束日</label>
+            <input type="date" id="end-date" />
+          </div>
+          <div class="form-row">
+            <label>再平衡頻率</label>
+            <select id="rebalance-freq">
+              <option value="daily">每日</option>
+              <option value="weekly">每週</option>
+              <option value="monthly">每月</option>
+            </select>
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- ── Tab 2：買進條件 ── -->
+      <div id="tab-buy" class="tab-panel">
+        <fieldset class="form-group">
+          <legend>篩選條件</legend>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="buy-sharpe-rank-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">Sharpe 排名前 N</span>
+            </label>
+            <div class="cond-param" id="p-buy-sharpe-rank">
+              <label>Top N</label>
+              <input type="number" id="buy-sharpe-rank-top_n" min="1" max="50" step="1" style="width:60px" />
+            </div>
+          </div>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="buy-sharpe-threshold-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">Sharpe 門檻</span>
+            </label>
+            <div class="cond-param" id="p-buy-sharpe-threshold">
+              <label>≥</label>
+              <input type="number" id="buy-sharpe-threshold-threshold" min="0" max="5" step="0.1" style="width:60px" />
+            </div>
+          </div>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="buy-growth-streak-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">連漲 N 天 + 分位</span>
+            </label>
+            <div class="cond-param" id="p-buy-growth-streak">
+              <label>天數</label>
+              <input type="number" id="buy-growth-streak-days" min="1" max="10" step="1" style="width:50px" />
+              <label>後 %</label>
+              <input type="number" id="buy-growth-streak-percentile" min="0" max="100" step="5" style="width:50px" />
+            </div>
+          </div>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="buy-sort-sharpe-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">依 Sharpe 排序選股</span>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset class="form-group">
+          <legend>再平衡策略</legend>
+          <div class="form-row">
+            <label>類型</label>
+            <select id="rebalance-type">
+              <option value="delayed">延遲（Sharpe 穩定）</option>
+              <option value="immediate">立即</option>
+              <option value="batch">批次</option>
+              <option value="concentrated">集中持倉</option>
+              <option value="none">關閉</option>
+            </select>
+          </div>
+          <div class="form-row" id="p-rebal-top-n">
+            <label>候選 Top N</label>
+            <input type="number" id="rebalance-top_n" min="1" max="30" step="1" />
+          </div>
+          <div class="form-row" id="p-rebal-sharpe">
+            <label>Sharpe 門檻</label>
+            <input type="number" id="rebalance-sharpe_threshold" min="0" max="5" step="0.1" />
+          </div>
+        </fieldset>
+      </div>
+
+      <!-- ── Tab 3：賣出條件 ── -->
+      <div id="tab-sell" class="tab-panel">
+        <fieldset class="form-group">
+          <legend>出場條件</legend>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="sell-sharpe-fail-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">Sharpe 連續掉出前 N</span>
+            </label>
+            <div class="cond-param" id="p-sell-sharpe-fail">
+              <label>期數</label>
+              <input type="number" id="sell-sharpe-fail-periods" min="1" max="10" step="1" style="width:50px" />
+              <label>Top N</label>
+              <input type="number" id="sell-sharpe-fail-top_n" min="1" max="50" step="1" style="width:50px" />
+            </div>
+          </div>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="sell-drawdown-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">最大回撤停損</span>
+            </label>
+            <div class="cond-param" id="p-sell-drawdown">
+              <label>≥</label>
+              <input type="number" id="sell-drawdown-threshold" min="0.05" max="1" step="0.05" style="width:60px" />
+              <span style="color:var(--text-muted);font-size:11px">（0.4 = 40%）</span>
+            </div>
+          </div>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="sell-growth-fail-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">連跌 N 天停損</span>
+            </label>
+            <div class="cond-param" id="p-sell-growth-fail">
+              <label>天數</label>
+              <input type="number" id="sell-growth-fail-days" min="1" max="20" step="1" style="width:50px" />
+            </div>
+          </div>
+
+          <div class="cond-row">
+            <label class="toggle-row">
+              <input type="checkbox" id="sell-not-selected-enabled" />
+              <span class="toggle-track"></span>
+              <span class="toggle-label">連續未入選 N 期賣出</span>
+            </label>
+            <div class="cond-param" id="p-sell-not-selected">
+              <label>期數</label>
+              <input type="number" id="sell-not-selected-periods" min="1" max="10" step="1" style="width:50px" />
+            </div>
+          </div>
+        </fieldset>
+      </div>
+
+      <div class="form-actions">
+        <button id="run-btn" class="btn-primary" onclick="runBacktest()">執行回測</button>
+        <div class="form-actions-row">
+          <button id="deploy-btn" class="btn-secondary" onclick="deployConfig()">部署配置</button>
+          <button id="reload-btn" class="btn-secondary" onclick="reloadConfig()">重新配置</button>
+        </div>
+      </div>
+    </aside>
+
+    <!-- 右：回測結果 -->
+    <div class="results-area">
+
+      <!-- 績效指標 -->
+      <div class="metrics-section">
+        <div id="metrics-grid" class="metrics-grid">
+          <p class="placeholder-text">設定參數後點擊「執行回測」</p>
+        </div>
+      </div>
+
+      <!-- 持倉清單 -->
+      <div class="holdings-section">
+        <div class="card-title">當前持倉</div>
+        <table id="holdings-table">
+          <thead><tr>
+            <th>標的</th><th>產業</th><th>股數</th>
+            <th>均價</th><th>現價</th><th>市值(TWD)</th><th>損益%</th><th>買入日</th>
+          </tr></thead>
+          <tbody><tr><td colspan="8" class="placeholder-text">—</td></tr></tbody>
+        </table>
+      </div>
+
+      <!-- 權益曲線（小圖，在結果區） -->
+      <div class="equity-section">
+        <div class="equity-label">近期交易（最多 20 筆）</div>
+        <table id="trades-table">
+          <thead><tr>
+            <th>日期</th><th>標的</th><th>動作</th><th>股數</th><th>價格</th>
+          </tr></thead>
+          <tbody><tr><td colspan="5" class="placeholder-text">—</td></tr></tbody>
+        </table>
+      </div>
+
+    </div><!-- .results-area -->
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  Portfolio Optimizer · 量化初篩引擎 · 輸出結果僅供參考，不構成投資建議
+</footer>
+
+<script src="/static/app.js?v=8"></script>
+</body>
+</html>

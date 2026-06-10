@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 import uvicorn
 
@@ -17,10 +18,13 @@ def main() -> None:
     )
     settings = get_settings()
     app = create_app(settings)
+    # Cloud Run 會注入 $PORT 並要求 0.0.0.0；本機 dev 則沿用 settings 設定。
+    port = int(os.environ.get("PORT", settings.gateway_port))
+    host = "0.0.0.0" if "PORT" in os.environ else settings.gateway_host
     uvicorn.run(
         app,
-        host=settings.gateway_host,
-        port=settings.gateway_port,
+        host=host,
+        port=port,
         log_level="info",
     )
 

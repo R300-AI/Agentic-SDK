@@ -1,0 +1,50 @@
+name: Deploy Gateway to Cloud Run
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agentic_sdk/**"
+      - "pyproject.toml"
+      - "Procfile"
+      - ".github/workflows/deploy-gateway.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 驗證 GCP 身分
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_CREDENTIALS }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Deploy to Cloud Run (source)
+        env:
+          FOUNDRY_ENDPOINT: ${{ secrets.AZURE_FOUNDRY_ENDPOINT }}
+          FOUNDRY_KEY: ${{ secrets.AZURE_FOUNDRY_API_KEY }}
+          FOUNDRY_DEPLOYMENT: ${{ secrets.AZURE_FOUNDRY_DEPLOYMENT }}
+        run: |
+          CORS='["https://R300-AI.github.io","http://localhost:5173"]'
+          gcloud run deploy agentic-sdk-gateway \
+            --source . \
+            --region asia-east1 \
+            --project eternal-insight-423516-m3 \
+            --platform managed \
+            --allow-unauthenticated \
+            --set-env-vars "^|^AZURE_FOUNDRY_ENDPOINT=${FOUNDRY_ENDPOINT}|AZURE_FOUNDRY_API_KEY=${FOUNDRY_KEY}|AZURE_FOUNDRY_DEPLOYMENT=${FOUNDRY_DEPLOYMENT}|GATEWAY_CORS_ORIGINS=${CORS}" \
+            --quiet
+
+      - name: Print service URL
+        run: |
+          URL=$(gcloud run services describe agentic-sdk-gateway \
+            --region asia-east1 \
+            --project eternal-insight-423516-m3 \
+            --format 'value(status.url)')
+          echo "===== GATEWAY URL: $URL ====="
+          echo "::notice title=Gateway URL::$URL"
+          echo "下一步：將此 URL 設為 GitHub Secret CLOUD_RUN_GATEWAY_URL"

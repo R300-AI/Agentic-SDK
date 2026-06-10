@@ -134,11 +134,11 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
           <span
             className="chat-gateway-label"
             onClick={() => setGwEditing(true)}
-            title="點擊設定 Gateway URL"
+            title="點擊修改 Gateway URL"
           >
             {gwMissing
-              ? "⚠ 尚未設定 Gateway URL，點此輸入（如 http://localhost:8080）"
-              : `Gateway: ${gatewayUrl || "dev proxy"}`}
+              ? "⚠ 未設定 Gateway URL，點此輸入（如 http://localhost:8080）"
+              : `Gateway: ${gatewayUrl || "dev proxy"}　|　需在本機啟動：cd demo && npm start`}
           </span>
         )}
       </div>
