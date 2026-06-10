@@ -1,26 +1,145 @@
-"""M2-4 — POST /internal/workflow/run
+"""Phase 5 圖形編排 UI 的後端端點 + M2-4 內部觸發端點。
 
-Track B 驗收用的內部觸發端點:在 Gateway 行程內同步跑一次五節點工作流,
-讓事件流入同一個 ring buffer 給 Dashboard 觀測。
+對外的兩個端點(M5-2):
+- `POST /v1/workflow/run`:接 WorkflowConfig YAML 與 user_message,於背景非同步
+  跑一次工作流,立即回 workflow_id 與 SSE stream URL
+- `GET /v1/workflow/{workflow_id}/stream`:Server-Sent Events,把 telemetry ring
+  buffer 中屬於該 workflow_id 的事件依序推給瀏覽器(動畫驅動來源)
 
-不是 OpenAI 相容介面;OpenAI 相容介面的整合是 I-01(Phase 3)的任務,
-維持兩個 Phase 的職責邊界清楚。
+對內的端點(M2-4 既有):
+- `POST /internal/workflow/run`:Track B 驗收用,直接用預設工作流跑一次
+
+兩組端點同住此 router;設計刻意分離 path prefix:`/v1/*` 對外開放給 UI 與
+LangChain/AutoGen 之外的 SDK 使用者;`/internal/*` 僅供本專案內部 Dashboard
+與運維工具使用。
 """
 
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+import json
+import logging
+import uuid
+from typing import Any, AsyncIterator
 
-from fastapi import APIRouter, Body, Request
+from fastapi import APIRouter, Body, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
-from agentic_sdk.workflow import Workflow
+from agentic_sdk.observability.events import (
+    EVENT_NODE_FINISH,
+    EVENT_WORKFLOW_FALLBACK,
+)
+from agentic_sdk.workflow import Workflow, WorkflowConfig
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 
+# ── M5-2:POST /v1/workflow/run ───────────────────────────────────────────────
+
+
+class WorkflowRunRequest(BaseModel):
+    workflow_yaml: str = Field(..., description="完整的 WorkflowConfig YAML 字串")
+    user_message: str = Field(..., min_length=1, description="使用者輸入訊息")
+    model: str | None = Field(default=None, description="保留欄位;目前由 YAML 決定")
+
+
+class WorkflowRunResponse(BaseModel):
+    workflow_id: str
+    stream_url: str
+
+
+@router.post("/v1/workflow/run", response_model=WorkflowRunResponse)
+async def run_workflow_v1(
+    request: Request, payload: WorkflowRunRequest
+) -> WorkflowRunResponse:
+    try:
+        config = WorkflowConfig.from_yaml(payload.workflow_yaml)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"YAML 解析失敗:{exc}") from exc
+
+    settings = request.app.state.settings
+    active_store = getattr(request.app.state, "active_context", None)
+
+    try:
+        wf = Workflow.from_config(config, settings=settings, active_store=active_store)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"WorkflowConfig 建構失敗:{exc}") from exc
+
+    workflow_id = uuid.uuid4().hex
+
+    async def _background_run() -> None:
+        try:
+            await asyncio.to_thread(wf.run, payload.user_message, workflow_id=workflow_id)
+        except Exception:
+            logger.exception("workflow background run failed wid=%s", workflow_id)
+
+    asyncio.create_task(_background_run())
+
+    return WorkflowRunResponse(
+        workflow_id=workflow_id,
+        stream_url=f"/v1/workflow/{workflow_id}/stream",
+    )
+
+
+# ── M5-2:GET /v1/workflow/{id}/stream(SSE) ──────────────────────────────────
+
+_TERMINAL_EVENTS = {EVENT_WORKFLOW_FALLBACK}
+_SSE_POLL_INTERVAL_SEC = 0.1
+_SSE_MAX_DURATION_SEC = 120.0
+
+
+def _is_terminal_event(event: dict[str, Any]) -> bool:
+    name = event.get("event_name")
+    if name in _TERMINAL_EVENTS:
+        return True
+    if name == EVENT_NODE_FINISH and "workflow_next_node" not in event:
+        return True
+    return False
+
+
+async def _sse_event_stream(ring, workflow_id: str) -> AsyncIterator[bytes]:
+    seen = 0
+    loop_started = asyncio.get_event_loop().time()
+    while True:
+        snapshot = ring.snapshot()
+        new_events = snapshot[seen:]
+        seen = len(snapshot)
+
+        for ev in new_events:
+            if ev.get("workflow_id") != workflow_id:
+                continue
+            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8")
+            if _is_terminal_event(ev):
+                return
+
+        if asyncio.get_event_loop().time() - loop_started > _SSE_MAX_DURATION_SEC:
+            yield b'data: {"event_name": "workflow.stream.timeout"}\n\n'
+            return
+
+        await asyncio.sleep(_SSE_POLL_INTERVAL_SEC)
+
+
+@router.get("/v1/workflow/{workflow_id}/stream")
+async def stream_workflow_v1(workflow_id: str, request: Request) -> StreamingResponse:
+    ring = request.app.state.telemetry
+    return StreamingResponse(
+        _sse_event_stream(ring, workflow_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ── M2-4:POST /internal/workflow/run(既有) ─────────────────────────────────
+
+
 @router.post("/internal/workflow/run")
-async def run_workflow(
+async def run_workflow_internal(
     request: Request,
     payload: dict[str, Any] = Body(...),
 ) -> dict[str, object]:
@@ -50,3 +169,4 @@ async def run_workflow(
             for e in result.entries
         ],
     }
+

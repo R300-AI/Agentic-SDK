@@ -133,8 +133,12 @@ class Workflow:
             entry_node=config.entry,
         )
 
-    def run(self, user_message: str) -> WorkflowResult:
-        state = WorkflowState(user_message=user_message)
+    def run(self, user_message: str, *, workflow_id: str | None = None) -> WorkflowResult:
+        state = (
+            WorkflowState(user_message=user_message, workflow_id=workflow_id)
+            if workflow_id
+            else WorkflowState(user_message=user_message)
+        )
         user_entry = ContextEntry(type=ContextEntryType.USER_INPUT, content=user_message)
         state.append(user_entry)
         if self.active_store is not None:
