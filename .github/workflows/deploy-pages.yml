@@ -1,11 +1,9 @@
-name: Deploy demo to GitHub Pages
+# 此 workflow 已合併至 deploy-gateway.yml（三段 pipeline：gateway → build → pages）
+# 僅保留做為緊急手動觸發備用，使用靜態 CLOUD_RUN_GATEWAY_URL secret。
+name: Deploy Pages Only (manual fallback)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "demo/**"
-      - ".github/workflows/deploy-pages.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read

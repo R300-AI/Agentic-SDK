@@ -1,4 +1,4 @@
-name: Deploy Gateway to Cloud Run
+name: Deploy Gateway + GitHub Pages
 
 on:
   push:
@@ -7,12 +7,24 @@ on:
       - "agentic_sdk/**"
       - "pyproject.toml"
       - "Procfile"
+      - "demo/**"
       - ".github/workflows/deploy-gateway.yml"
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
-  deploy:
+  deploy-gateway:
     runs-on: ubuntu-latest
+    outputs:
+      gateway_url: ${{ steps.get-url.outputs.url }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,12 +51,47 @@ jobs:
             --set-env-vars "^|^AZURE_FOUNDRY_ENDPOINT=${FOUNDRY_ENDPOINT}|AZURE_FOUNDRY_API_KEY=${FOUNDRY_KEY}|AZURE_FOUNDRY_DEPLOYMENT=${FOUNDRY_DEPLOYMENT}|GATEWAY_CORS_ORIGINS=${CORS}" \
             --quiet
 
-      - name: Print service URL
+      - name: Get service URL
+        id: get-url
         run: |
           URL=$(gcloud run services describe agentic-sdk-gateway \
             --region asia-east1 \
             --project eternal-insight-423516-m3 \
             --format 'value(status.url)')
+          echo "url=${URL}" >> $GITHUB_OUTPUT
           echo "===== GATEWAY URL: $URL ====="
-          echo "::notice title=Gateway URL::$URL"
-          echo "下一步：將此 URL 設為 GitHub Secret CLOUD_RUN_GATEWAY_URL"
+
+  build-pages:
+    needs: deploy-gateway
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: demo
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - run: npm ci
+
+      - name: Build Vite app
+        env:
+          VITE_BASE: /Agentic-SDK/
+          VITE_GATEWAY_URL: ${{ needs.deploy-gateway.outputs.gateway_url }}
+        run: npm run build
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: demo/dist
+
+  deploy-pages:
+    needs: build-pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
