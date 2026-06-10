@@ -10,7 +10,8 @@ const ENV_DEFAULT: string = (import.meta.env.VITE_GATEWAY_URL as string | undefi
 
 export function getGatewayUrl(): string {
   try {
-    return localStorage.getItem(STORAGE_KEY) ?? ENV_DEFAULT;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored && stored.length > 0 ? stored : ENV_DEFAULT;
   } catch {
     return ENV_DEFAULT;
   }
