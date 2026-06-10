@@ -204,8 +204,12 @@ class WorkflowConfig:
                 "PyYAML 未安裝。請執行 `uv add pyyaml` 後再使用 YAML 反序列化。"
             )
         p = Path(text_or_path) if isinstance(text_or_path, (str, Path)) else None
-        if p is not None and p.exists() and p.is_file():
-            text = p.read_text(encoding="utf-8")
+        try:
+            is_file = p is not None and p.exists() and p.is_file()
+        except OSError:
+            is_file = False
+        if is_file:
+            text = p.read_text(encoding="utf-8")  # type: ignore[union-attr]
         else:
             text = str(text_or_path)
         return WorkflowConfig.from_dict(_yaml.safe_load(text))

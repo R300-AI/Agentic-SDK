@@ -7,7 +7,13 @@ import pytest
 from agentic_sdk.config import Settings
 
 
-def test_defaults_when_no_env_file():
+def test_defaults_when_no_env_file(monkeypatch):
+    for var in (
+        "AZURE_FOUNDRY_DEPLOYMENT", "AZURE_FOUNDRY_ENDPOINT", "AZURE_FOUNDRY_API_KEY",
+        "WORKFLOW_ACTION_BACKEND", "WORKFLOW_FORCE_MOCK_FOUNDRY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
 
     assert settings.gateway_host == "127.0.0.1"
@@ -17,7 +23,13 @@ def test_defaults_when_no_env_file():
     assert settings.azure_foundry_deployment == "gpt-4o-mini"
 
 
-def test_env_file_overrides(tmp_path):
+def test_env_file_overrides(tmp_path, monkeypatch):
+    for var in (
+        "GATEWAY_PORT", "UPSTREAM_API_BASE_URL",
+        "AZURE_FOUNDRY_ENDPOINT", "AZURE_FOUNDRY_API_KEY",
+    ):
+        monkeypatch.delenv(var, raising=False)
+
     env_file = tmp_path / ".env.test"
     env_file.write_text(
         "GATEWAY_PORT=9090\n"

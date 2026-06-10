@@ -40,29 +40,41 @@ class FoundryCompletionAction:
         system_prompt: str | None = None,
         idle_timeout_sec: float = 30.0,
     ) -> None:
-        from openai import AzureOpenAI
-
         self._settings = settings or get_settings()
-        # 只有完全走 settings(未覆寫 endpoint/api_key)時才驗證 settings。
-        if not (endpoint and api_key):
-            self._settings.require_azure_foundry()
         self._deployment = deployment or self._settings.azure_foundry_deployment
         self._model = model
         self._temperature = temperature
         self._system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         self._idle_timeout_sec = idle_timeout_sec
-        self._client = client or AzureOpenAI(
-            azure_endpoint=endpoint or self._settings.azure_foundry_endpoint,
-            api_key=api_key or self._settings.azure_foundry_api_key,
-            api_version=self._settings.azure_foundry_api_version,
-            timeout=self._settings.infer_request_timeout_sec,
-        )
+
+        if client is not None:
+            self._client = client
+            self._mock_client = None
+        elif self._settings.workflow_force_mock_foundry or not self._settings.azure_foundry_api_key:
+            # 與 Plan/Reflect 共用同一決策路徑：mock 模式不嘗試建立真實連線
+            from agentic_sdk.workflow.llm import MockFoundryClient
+            self._client = None
+            self._mock_client = MockFoundryClient(deployment=self._deployment)
+        else:
+            from openai import AzureOpenAI
+            if not (endpoint and api_key):
+                self._settings.require_azure_foundry()
+            self._client = AzureOpenAI(
+                azure_endpoint=endpoint or self._settings.azure_foundry_endpoint,
+                api_key=api_key or self._settings.azure_foundry_api_key,
+                api_version=self._settings.azure_foundry_api_version,
+                timeout=self._settings.infer_request_timeout_sec,
+            )
+            self._mock_client = None
 
     @property
     def gen_ai_request_model(self) -> str | None:
         return self._model or self._deployment
 
     def __call__(self, state: WorkflowState) -> NodeOutput:
+        if self._mock_client is not None:
+            return self._call_mock(state)
+
         import httpx
 
         messages = _build_messages(state, self._system_prompt)
@@ -157,6 +169,49 @@ class FoundryCompletionAction:
                     "output_tokens": None,
                 }
             },
+            context_updates=[entry],
+        )
+
+    def _call_mock(self, state: WorkflowState) -> NodeOutput:
+        """Mock 模式：使用 MockFoundryClient，與 Plan/Reflect 共用同一 mock 層。"""
+        delta_index = 0
+
+        def on_delta(delta: str) -> None:
+            nonlocal delta_index
+            logger.info(
+                "node.delta wid=%s idx=%d", state.workflow_id, delta_index,
+                extra={"event": make_event(
+                    EVENT_NODE_DELTA,
+                    workflow_id=state.workflow_id,
+                    workflow_node="action",
+                    delta_text=delta,
+                    delta_index=delta_index,
+                )},
+            )
+            delta_index += 1
+
+        resp = self._mock_client.chat_stream(  # type: ignore[union-attr]
+            system=self._system_prompt,
+            user=state.user_message,
+            on_delta=on_delta,
+            idle_timeout_sec=self._idle_timeout_sec,
+        )
+
+        state.last_action_error = None
+        state.last_action_result = {"content": resp.content, "model": resp.model}
+
+        entry = ContextEntry(
+            type=ContextEntryType.ACTION_RESULT,
+            content=resp.content,
+            metadata={"ok": True, "model": resp.model},
+        )
+        return NodeOutput(
+            next_node="reflect",
+            payload={"_llm_usage": {
+                "model": resp.model,
+                "input_tokens": resp.input_tokens,
+                "output_tokens": resp.output_tokens,
+            }},
             context_updates=[entry],
         )
 
