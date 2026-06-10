@@ -11,7 +11,7 @@
  */
 
 import { dump, load } from "js-yaml";
-import type { Edge, Node } from "@xyflow/react";
+import { MarkerType, type Edge, type Node } from "@xyflow/react";
 import {
   ACTION_BACKEND_OPTIONS,
   FIVE_NODE_NAMES,
@@ -52,12 +52,31 @@ export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Ed
       data: { name, spec },
     };
   });
-  const edges: Edge[] = EDGE_WHITELIST.map(([s, t]) => ({
-    id: `${s}-${t}`,
-    source: s,
-    target: t,
-    animated: false,
-  }));
+const ARROW = { type: MarkerType.ArrowClosed } as const;
+
+/** 每條初始邊的 source/target handle，依節點佈局指定最短路徑側 */
+const EDGE_HANDLES: Record<string, { sourceHandle: string; targetHandle: string }> = {
+  "perceive-plan":  { sourceHandle: "right", targetHandle: "left"  },
+  "plan-retrieve":  { sourceHandle: "right", targetHandle: "left"  },
+  "plan-action":    { sourceHandle: "right", targetHandle: "left"  },
+  "retrieve-plan":  { sourceHandle: "left",  targetHandle: "right" },
+  "action-reflect": { sourceHandle: "right", targetHandle: "left"  },
+  "reflect-plan":   { sourceHandle: "left",  targetHandle: "right" },
+};
+
+  const edges: Edge[] = EDGE_WHITELIST.map(([s, t]) => {
+    const key = `${s}-${t}`;
+    const handles = EDGE_HANDLES[key] ?? { sourceHandle: "right", targetHandle: "left" };
+    return {
+      id: key,
+      source: s,
+      target: t,
+      animated: false,
+      markerEnd: ARROW,
+      style: { strokeWidth: 2 },
+      ...handles,
+    };
+  });
   return { nodes, edges };
 }
 

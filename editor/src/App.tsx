@@ -6,6 +6,8 @@ import {
   ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  ConnectionMode,
+  MarkerType,
   type Connection,
   type Edge,
   type Node,
@@ -158,7 +160,14 @@ function EditorRoot() {
       }
       setEdges((curr) => [
         ...curr,
-        { id: `${conn.source}-${conn.target}`, source: conn.source!, target: conn.target! },
+        {
+          id: `${conn.source}-${conn.target}`,
+          source: conn.source!,
+          target: conn.target!,
+          sourceHandle: conn.sourceHandle ?? undefined,
+          targetHandle: conn.targetHandle ?? undefined,
+          markerEnd: { type: MarkerType.ArrowClosed },
+        },
       ]);
     },
     [setEdges]
@@ -312,6 +321,8 @@ function EditorRoot() {
             onConnect={onConnect}
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
+            connectionMode={ConnectionMode.Loose}
+            defaultEdgeOptions={{ markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 } }}
             fitView
           >
             <Background />

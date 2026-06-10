@@ -16,7 +16,6 @@ export function PerceiveNode({ data }: NodeProps) {
       subtitle={subtitle}
       status={status}
       computeTarget={d.spec?.compute_target}
-      hasInput={false}
     />
   );
 }

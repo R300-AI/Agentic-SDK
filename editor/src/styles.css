@@ -252,8 +252,28 @@ html, body, #root {
 }
 
 /* ── React Flow 細節覆蓋 ────────────────────────────── */
-.react-flow__edge-path { stroke: var(--text-muted); }
+.react-flow__edge-path { stroke: var(--text-muted); stroke-width: 2; }
 .react-flow__attribution { display: none !important; }
+
+/* ── 四向連接點 ─────────────────────────────────────── */
+.node-handle {
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--accent);
+  background: var(--bg-elev);
+  border-radius: 50%;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+}
+.react-flow__node:hover .node-handle,
+.node-handle.react-flow__handle-connecting,
+.node-handle.react-flow__handle-valid {
+  opacity: 1;
+}
+.node-handle:hover,
+.node-handle.react-flow__handle-valid {
+  background: var(--accent);
+}
 
 /* ── M6 新增元件 ───────────────────────────────────── */
 
