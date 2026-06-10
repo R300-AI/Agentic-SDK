@@ -116,6 +116,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         }
         if backend == "upstream":
             info["upstream"] = app.state.upstream.healthcheck()
+        elif backend == "foundry":
+            info["foundry"] = {
+                "endpoint": bool(app.state.settings.azure_foundry_endpoint),
+                "deployment": app.state.settings.azure_foundry_deployment,
+            }
         return info
 
     return app

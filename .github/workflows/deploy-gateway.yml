@@ -49,7 +49,7 @@ jobs:
             --platform managed \
             --allow-unauthenticated \
             --clear-base-image \
-            --set-env-vars "^|^AZURE_FOUNDRY_ENDPOINT=${FOUNDRY_ENDPOINT}|AZURE_FOUNDRY_API_KEY=${FOUNDRY_KEY}|AZURE_FOUNDRY_DEPLOYMENT=${FOUNDRY_DEPLOYMENT}|GATEWAY_CORS_ORIGINS=${CORS}" \
+            --set-env-vars "^|^AZURE_FOUNDRY_ENDPOINT=${FOUNDRY_ENDPOINT}|AZURE_FOUNDRY_API_KEY=${FOUNDRY_KEY}|AZURE_FOUNDRY_DEPLOYMENT=${FOUNDRY_DEPLOYMENT}|GATEWAY_CORS_ORIGINS=${CORS}|WORKFLOW_ACTION_BACKEND=foundry" \
             --quiet
 
       - name: Get service URL
