@@ -50,13 +50,14 @@ export function NodeBase({
 }: Props) {
   const tgt = computeTarget ?? "local_cpu";
   const tgtLabel = COMPUTE_TARGET_OPTIONS.find((o) => o.value === tgt)?.label ?? tgt;
+  const showBadge = tgt !== "local_cpu";
   return (
     <div className={`node-shell ${STATUS_CLASS[status]}`}>
       {sideHandles("left",  leftCount,  Position.Left)}
       {sideHandles("right", rightCount, Position.Right)}
       <div className="node-head">
         <span className="node-title">{title}</span>
-        <span className={`node-badge badge-${tgt}`}>{tgtLabel}</span>
+        {showBadge && <span className={`node-badge badge-${tgt}`}>{tgtLabel}</span>}
       </div>
       {subtitle && <div className="node-subtitle">{subtitle}</div>}
       {children && <div className="node-body">{children}</div>}
