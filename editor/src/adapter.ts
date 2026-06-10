@@ -61,7 +61,7 @@ const EDGE_HANDLES: Record<string, { sourceHandle: string; targetHandle: string 
   "plan-action":    { sourceHandle: "right", targetHandle: "left"  },
   "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },  // retrieve 前面出，進 plan 前面
   "action-reflect": { sourceHandle: "right", targetHandle: "right" },  // 進 reflect 後面（右側）
-  "reflect-plan":   { sourceHandle: "left",  targetHandle: "right" },  // reflect 前面出，進 plan 右側
+  "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },  // reflect 前面出，進 plan 前面
 };
 
   const edges: Edge[] = EDGE_WHITELIST.map(([s, t]) => {
