@@ -15,9 +15,9 @@ import {
 } from "@xyflow/react";
 
 import { NODE_TYPES } from "./nodes";
-import { BypassEdge } from "./edges/BypassEdge";
+import { EditableElbowEdge } from "./edges/EditableElbowEdge";
 
-const EDGE_TYPES = { bypass: BypassEdge };
+const EDGE_TYPES = { elbow: EditableElbowEdge };
 import { NodePalette, PythonModal } from "./panels/NodePalette";
 import { PropertyPanel } from "./panels/PropertyPanel";
 import { ChatPanel } from "./panels/ChatPanel";
@@ -327,7 +327,7 @@ function EditorRoot() {
             onNodeClick={(_, n) => setSelectedId(n.id)}
             onPaneClick={() => setSelectedId(null)}
             connectionMode={ConnectionMode.Loose}
-            defaultEdgeOptions={{ type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 } }}
+            defaultEdgeOptions={{ type: "elbow", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 } }}
             snapToGrid
             snapGrid={[20, 20]}
             fitView

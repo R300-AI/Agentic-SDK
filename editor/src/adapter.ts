@@ -53,7 +53,7 @@ const EDGE_HANDLES: Record<string, { sourceHandle: "left" | "right"; targetHandl
   "plan-reflect":   { sourceHandle: "right", targetHandle: "right" },
   "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },
   "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },
-  "action-perceive":{ sourceHandle: "right", targetHandle: "left",  edgeType: "smoothstep" }, // 下一輪回到 perceive，移動節點可調整路徑
+  "action-perceive":{ sourceHandle: "right", targetHandle: "left" }, // 下一輪回到 perceive
 };
 
 export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Edge[] } {
@@ -75,7 +75,7 @@ export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Ed
       id: key,
       source: s,
       target: t,
-      type: sides.edgeType ?? "smoothstep",
+      type: sides.edgeType ?? "elbow",
       animated: false,
       markerEnd: ARROW,
       style: { strokeWidth: 2 },
