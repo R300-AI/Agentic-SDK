@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
+  BackgroundVariant,
   Controls,
   ReactFlowProvider,
   useEdgesState,
@@ -327,9 +328,11 @@ function EditorRoot() {
             onPaneClick={() => setSelectedId(null)}
             connectionMode={ConnectionMode.Loose}
             defaultEdgeOptions={{ type: "smoothstep", markerEnd: { type: MarkerType.ArrowClosed }, style: { strokeWidth: 2 } }}
+            snapToGrid
+            snapGrid={[20, 20]}
             fitView
           >
-            <Background />
+            <Background variant={BackgroundVariant.Dots} gap={20} size={1.5} />
             <Controls />
           </ReactFlow>
         </main>

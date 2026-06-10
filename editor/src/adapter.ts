@@ -53,7 +53,7 @@ const EDGE_HANDLES: Record<string, { sourceHandle: "left" | "right"; targetHandl
   "plan-reflect":   { sourceHandle: "right", targetHandle: "right" },
   "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },
   "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },
-  "action-perceive":{ sourceHandle: "right", targetHandle: "left",  edgeType: "bypass" }, // 從下方繞回 perceive 左側
+  "action-perceive":{ sourceHandle: "right", targetHandle: "left",  edgeType: "smoothstep" }, // 下一輪回到 perceive，移動節點可調整路徑
 };
 
 export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Edge[] } {
