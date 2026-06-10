@@ -18,8 +18,8 @@ import { NODE_TYPES } from "./nodes";
 import { EditableElbowEdge } from "./edges/EditableElbowEdge";
 
 const EDGE_TYPES = { elbow: EditableElbowEdge };
-import { NodePalette, PythonModal } from "./panels/NodePalette";
-import { PropertyPanel } from "./panels/PropertyPanel";
+import { AccordionPanel } from "./panels/AccordionPanel";
+import { PythonModal } from "./panels/NodePalette";
 import { ChatPanel } from "./panels/ChatPanel";
 import { DEFAULT_WORKFLOW, DEFAULT_WORKFLOW_YAML } from "./defaultWorkflow";
 import { configToPython } from "./export";
@@ -300,14 +300,10 @@ function EditorRoot() {
   return (
     <div className="editor-shell">
       <aside className="left-column" style={{ width: leftWidth }}>
-        <div className="left-property">
-          <PropertyPanel
-            selectedNodeId={selectedId}
-            spec={selectedSpec}
-            onUpdate={handleSpecUpdate}
-          />
-        </div>
-        <NodePalette
+        <AccordionPanel
+          selectedNodeId={selectedId}
+          spec={selectedSpec}
+          onUpdate={handleSpecUpdate}
           onDownload={handleDownload}
           onLoad={handleLoad}
           onShowPython={handleShowPython}
