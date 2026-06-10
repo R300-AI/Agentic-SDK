@@ -41,7 +41,7 @@ jobs:
           FOUNDRY_KEY: ${{ secrets.AZURE_FOUNDRY_API_KEY }}
           FOUNDRY_DEPLOYMENT: ${{ secrets.AZURE_FOUNDRY_DEPLOYMENT }}
         run: |
-          CORS='["https://markovchenitri.github.io","https://R300-AI.github.io","http://localhost:5173"]'
+          CORS='https://markovchenitri.github.io,https://R300-AI.github.io,http://localhost:5173'
           gcloud run deploy agentic-sdk-gateway \
             --source . \
             --region asia-east1 \
