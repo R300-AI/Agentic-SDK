@@ -53,6 +53,106 @@ interface PythonModalProps {
   onClose: () => void;
 }
 
+const PY_KEYWORDS = new Set([
+  "False", "None", "True", "and", "as", "assert", "async", "await",
+  "break", "class", "continue", "def", "del", "elif", "else", "except",
+  "finally", "for", "from", "global", "if", "import", "in", "is",
+  "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try",
+  "while", "with", "yield", "match", "case",
+]);
+
+const PY_BUILTINS = new Set([
+  "print", "len", "range", "list", "dict", "set", "tuple", "str", "int",
+  "float", "bool", "isinstance", "type", "open", "enumerate", "zip",
+  "map", "filter", "any", "all", "sum", "min", "max", "sorted", "reversed",
+  "Exception", "ValueError", "TypeError", "KeyError", "RuntimeError",
+  "__name__", "__main__", "self", "cls",
+]);
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+/** 極簡 Python 高亮：line-by-line，先抽掉 comments/strings 再標記 keywords/numbers。 */
+function highlightPython(src: string): string {
+  return src.split("\n").map((line) => highlightLine(line)).join("\n");
+}
+
+function highlightLine(line: string): string {
+  const tokens: string[] = [];
+  let i = 0;
+  while (i < line.length) {
+    const ch = line[i];
+
+    // 註解
+    if (ch === "#") {
+      tokens.push(`<span class="hl-com">${escapeHtml(line.slice(i))}</span>`);
+      i = line.length;
+      break;
+    }
+
+    // 字串（單行三引號簡化處理為一般字串）
+    if (ch === '"' || ch === "'") {
+      const quote = ch;
+      let j = i + 1;
+      // 三引號
+      if (line.slice(i, i + 3) === quote.repeat(3)) {
+        j = i + 3;
+        while (j < line.length && line.slice(j, j + 3) !== quote.repeat(3)) j++;
+        j = Math.min(j + 3, line.length);
+      } else {
+        while (j < line.length && line[j] !== quote) {
+          if (line[j] === "\\" && j + 1 < line.length) j += 2;
+          else j++;
+        }
+        if (j < line.length) j++;
+      }
+      tokens.push(`<span class="hl-str">${escapeHtml(line.slice(i, j))}</span>`);
+      i = j;
+      continue;
+    }
+
+    // 數字
+    if (/[0-9]/.test(ch) && (i === 0 || !/[A-Za-z_]/.test(line[i - 1]))) {
+      let j = i;
+      while (j < line.length && /[0-9_.eE+\-xXoObB]/.test(line[j])) j++;
+      tokens.push(`<span class="hl-num">${escapeHtml(line.slice(i, j))}</span>`);
+      i = j;
+      continue;
+    }
+
+    // 識別字
+    if (/[A-Za-z_]/.test(ch)) {
+      let j = i;
+      while (j < line.length && /[A-Za-z0-9_]/.test(line[j])) j++;
+      const word = line.slice(i, j);
+      if (PY_KEYWORDS.has(word)) {
+        tokens.push(`<span class="hl-kw">${escapeHtml(word)}</span>`);
+      } else if (PY_BUILTINS.has(word)) {
+        tokens.push(`<span class="hl-bi">${escapeHtml(word)}</span>`);
+      } else if (line[j] === "(") {
+        tokens.push(`<span class="hl-fn">${escapeHtml(word)}</span>`);
+      } else {
+        tokens.push(escapeHtml(word));
+      }
+      i = j;
+      continue;
+    }
+
+    // 裝飾子 @decorator
+    if (ch === "@") {
+      let j = i + 1;
+      while (j < line.length && /[A-Za-z0-9_.]/.test(line[j])) j++;
+      tokens.push(`<span class="hl-dec">${escapeHtml(line.slice(i, j))}</span>`);
+      i = j;
+      continue;
+    }
+
+    tokens.push(escapeHtml(ch));
+    i++;
+  }
+  return tokens.join("");
+}
+
 export function PythonModal({ code, onClose }: PythonModalProps) {
   const [copied, setCopied] = useState(false);
 
@@ -85,10 +185,16 @@ export function PythonModal({ code, onClose }: PythonModalProps) {
         </p>
 
         <div className="deploy-code-card">
+          <div className="deploy-code-lang">python</div>
           <button className="deploy-code-copy" onClick={handleCopy} aria-label="複製">
             {copied ? "✓" : "⧉"}
           </button>
-          <pre id="python-code-pre" className="deploy-code">{code}</pre>
+          <pre id="python-code-pre" className="deploy-code">
+            <code
+              className="hl-python"
+              dangerouslySetInnerHTML={{ __html: highlightPython(code) }}
+            />
+          </pre>
         </div>
 
         <div className="deploy-notice">

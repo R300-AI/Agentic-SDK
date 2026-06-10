@@ -770,6 +770,30 @@ html, body, #root {
   flex: 1;
 }
 
+.deploy-code-lang {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  font-family: "Consolas", "Cascadia Code", monospace;
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: #7d8590;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 2px 8px;
+  border-radius: 4px;
+  z-index: 1;
+  pointer-events: none;
+}
+.deploy-code .hl-python { display: block; padding-top: 18px; }
+.deploy-code .hl-kw  { color: #c586c0; }       /* import / def / return */
+.deploy-code .hl-bi  { color: #4ec9b0; }       /* print / len / self */
+.deploy-code .hl-fn  { color: #dcdcaa; }       /* function calls */
+.deploy-code .hl-str { color: #ce9178; }       /* "..." */
+.deploy-code .hl-num { color: #b5cea8; }       /* 123 */
+.deploy-code .hl-com { color: #6a9955; font-style: italic; }
+.deploy-code .hl-dec { color: #d7ba7d; }       /* @decorator */
+
 .deploy-notice {
   margin-top: 14px;
   padding: 10px 14px;
