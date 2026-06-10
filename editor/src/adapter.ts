@@ -57,11 +57,11 @@ const ARROW = { type: MarkerType.ArrowClosed } as const;
 /** 每條初始邊的 source/target handle，依節點佈局指定最短路徑側 */
 const EDGE_HANDLES: Record<string, { sourceHandle: string; targetHandle: string }> = {
   "perceive-plan":  { sourceHandle: "right", targetHandle: "left"  },
-  "plan-retrieve":  { sourceHandle: "right", targetHandle: "left"  },
+  "plan-retrieve":  { sourceHandle: "right", targetHandle: "right" },  // 進 retrieve 後面（右側）
   "plan-action":    { sourceHandle: "right", targetHandle: "left"  },
-  "retrieve-plan":  { sourceHandle: "left",  targetHandle: "right" },
-  "action-reflect": { sourceHandle: "right", targetHandle: "left"  },
-  "reflect-plan":   { sourceHandle: "left",  targetHandle: "right" },
+  "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },  // retrieve 前面出，進 plan 前面
+  "action-reflect": { sourceHandle: "right", targetHandle: "right" },  // 進 reflect 後面（右側）
+  "reflect-plan":   { sourceHandle: "left",  targetHandle: "right" },  // reflect 前面出，進 plan 右側
 };
 
   const edges: Edge[] = EDGE_WHITELIST.map(([s, t]) => {

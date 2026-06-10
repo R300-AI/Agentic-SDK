@@ -33,10 +33,8 @@ export function NodeBase({
   const tgtLabel = COMPUTE_TARGET_OPTIONS.find((o) => o.value === tgt)?.label ?? tgt;
   return (
     <div className={`node-shell ${STATUS_CLASS[status]}`}>
-      <Handle className="node-handle" type="source" position={Position.Top}    id="top"    />
-      <Handle className="node-handle" type="source" position={Position.Bottom} id="bottom" />
-      <Handle className="node-handle" type="source" position={Position.Left}   id="left"   />
-      <Handle className="node-handle" type="source" position={Position.Right}  id="right"  />
+      <Handle className="node-handle" type="source" position={Position.Left}  id="left"  />
+      <Handle className="node-handle" type="source" position={Position.Right} id="right" />
       <div className="node-head">
         <span className="node-title">{title}</span>
         <span className={`node-badge badge-${tgt}`}>{tgtLabel}</span>
