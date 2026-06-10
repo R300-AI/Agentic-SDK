@@ -1,43 +1,45 @@
 /**
- * EditableElbowEdge — 直角肘形折線（PPT 肘形連接線效果）。
+ * EditableElbowEdge — smoothstep 圓弧折線（視覺與原本完全相同），
+ * 垂直段中間放不可見拖曳熱區，拖曳可左右平移垂直段。
  *
- * 路徑：source → 水平出 → 垂直段 → 水平入 → target
- * 垂直段中點有一個圓形拖曳鈕，拖曳可左右平移整條垂直段。
- *
- * midX 持久化在 edge data.midX（透過 setEdges 更新），重新載入後保留位置。
- * 拖曳 delta 除以 zoom，確保縮放時位移量正確。
+ * - 視覺：getSmoothStepPath（borderRadius=8，與預設 smoothstep 一致）
+ * - 拖曳：透明 rect 覆蓋垂直段中點，cursor 變 ew-resize；無可見圓點
+ * - 持久化：偏移量存在 edge data.centerXOffset，重繪後保留
  */
 
 import { useCallback, useRef } from "react";
-import { BaseEdge, useReactFlow, type EdgeProps } from "@xyflow/react";
+import {
+  BaseEdge,
+  getSmoothStepPath,
+  useReactFlow,
+  type EdgeProps,
+} from "@xyflow/react";
 
-const HANDLE_R = 5;
-const HANDLE_HIT = 14;
-
-function elbowPath(
-  sx: number, sy: number,
-  tx: number, ty: number,
-  mx: number,
-) {
-  return `M ${sx} ${sy} L ${mx} ${sy} L ${mx} ${ty} L ${tx} ${ty}`;
-}
+const HIT_HALF = 16; // 不可見點擊區半寬/半高（px，flow 座標）
 
 export function EditableElbowEdge({
   id,
-  sourceX, sourceY,
-  targetX, targetY,
+  sourceX, sourceY, sourcePosition,
+  targetX, targetY, targetPosition,
   style = {},
   markerEnd,
   data,
 }: EdgeProps) {
   const { setEdges, getZoom } = useReactFlow();
 
-  // midX 儲存在 edge data 中，預設取中點
-  const midX: number = (data as any)?.midX ?? (sourceX + targetX) / 2;
-  const path = elbowPath(sourceX, sourceY, targetX, targetY, midX);
+  const centerXOffset: number = (data as any)?.centerXOffset ?? 0;
+  const centerX = (sourceX + targetX) / 2 + centerXOffset;
 
-  // 垂直段中點 Y（拖曳鈕位置）
-  const seg1MidY = (sourceY + targetY) / 2;
+  const [edgePath] = getSmoothStepPath({
+    sourceX, sourceY, sourcePosition,
+    targetX, targetY, targetPosition,
+    centerX,
+    borderRadius: 8,
+  });
+
+  // 拖曳熱區位置：垂直段中點
+  const handleX = centerX;
+  const handleY = (sourceY + targetY) / 2;
 
   const dragging = useRef(false);
 
@@ -46,19 +48,17 @@ export function EditableElbowEdge({
     e.stopPropagation();
     dragging.current = true;
 
-    const startX = e.clientX;
-    const startMidX = midX;
+    const startClientX = e.clientX;
+    const startOffset = centerXOffset;
 
     const onMove = (mv: MouseEvent) => {
       if (!dragging.current) return;
-      const dx = mv.clientX - startX;
+      const dx = mv.clientX - startClientX;
       const zoom = getZoom();
-      const newMidX = startMidX + dx / zoom;
-
       setEdges((eds) =>
         eds.map((ed) =>
           ed.id === id
-            ? { ...ed, data: { ...(ed.data ?? {}), midX: newMidX } }
+            ? { ...ed, data: { ...(ed.data ?? {}), centerXOffset: startOffset + dx / zoom } }
             : ed
         )
       );
@@ -72,41 +72,23 @@ export function EditableElbowEdge({
 
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [id, midX, getZoom, setEdges]);
+  }, [id, centerXOffset, getZoom, setEdges]);
 
   return (
     <>
-      <BaseEdge
-        id={id}
-        path={path}
-        style={{ ...style, strokeWidth: (style as any).strokeWidth ?? 2 }}
-        markerEnd={markerEnd}
+      <BaseEdge id={id} path={edgePath} style={style} markerEnd={markerEnd} />
+      {/* 不可見拖曳熱區，只改變 cursor，不繪製任何視覺元素 */}
+      <rect
+        x={handleX - HIT_HALF}
+        y={handleY - HIT_HALF}
+        width={HIT_HALF * 2}
+        height={HIT_HALF * 2}
+        fill="transparent"
+        stroke="none"
+        style={{ cursor: "ew-resize", pointerEvents: "all" }}
+        onMouseDown={onMouseDownHandle}
       />
-
-      {/* 垂直段拖曳鈕（在 edge 的 SVG 層直接渲染） */}
-      <g className="elbow-handle" style={{ cursor: "ew-resize" }}>
-        {/* 透明大矩形擴大點擊區 */}
-        <rect
-          x={midX - HANDLE_HIT}
-          y={seg1MidY - HANDLE_HIT}
-          width={HANDLE_HIT * 2}
-          height={HANDLE_HIT * 2}
-          fill="transparent"
-          stroke="none"
-          style={{ pointerEvents: "all", cursor: "ew-resize" }}
-          onMouseDown={onMouseDownHandle}
-        />
-        {/* 視覺圓點 */}
-        <circle
-          cx={midX}
-          cy={seg1MidY}
-          r={HANDLE_R}
-          fill="#ffffff"
-          stroke="#555555"
-          strokeWidth={1.5}
-          style={{ pointerEvents: "none" }}
-        />
-      </g>
     </>
   );
 }
+
