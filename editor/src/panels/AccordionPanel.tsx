@@ -57,14 +57,10 @@ export function AccordionPanel({
   onDownload, onLoad, onShowPython,
   style,
 }: Props) {
-  const [open, setOpen] = useState<Record<string, boolean>>({
-    props: true,
-    memory: false,
-    deploy: false,
-  });
+  const [open, setOpen] = useState<string>("props");
 
   const toggle = (key: string) =>
-    setOpen((prev) => ({ ...prev, [key]: !prev[key] }));
+    setOpen((prev) => (prev === key ? "" : key));
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -79,7 +75,7 @@ export function AccordionPanel({
     <aside className="accordion-panel" style={style}>
 
       {/* ── 屬性 ── */}
-      <Section title="屬性" open={open.props} onToggle={() => toggle("props")}>
+      <Section title="屬性" open={open === "props"} onToggle={() => toggle("props")}>
         <PropsContent
           selectedNodeId={selectedNodeId}
           spec={spec}
@@ -88,7 +84,7 @@ export function AccordionPanel({
       </Section>
 
       {/* ── 記憶管理 ── */}
-      <Section title="記憶管理" open={open.memory} onToggle={() => toggle("memory")}>
+      <Section title="記憶管理" open={open === "memory"} onToggle={() => toggle("memory")}>
         <div className="memory-indicator">
           <div className="memory-indicator-icon">⛁</div>
           <div className="memory-indicator-body">
@@ -100,7 +96,7 @@ export function AccordionPanel({
       </Section>
 
       {/* ── 部署流程 ── */}
-      <Section title="部署流程" open={open.deploy} onToggle={() => toggle("deploy")}>
+      <Section title="部署流程" open={open === "deploy"} onToggle={() => toggle("deploy")}>
         <div className="left-tools-buttons">
           <button onClick={onDownload}>下載 YAML</button>
           <button onClick={onShowPython}>顯示 Python</button>
