@@ -134,7 +134,6 @@ function PropsContent({
 
   return (
     <>
-      <h3 className="props-node-title">{selectedNodeId}</h3>
       <ClassEditor nodeName={nodeName} spec={spec} onUpdate={onUpdate} />
       <ComputeTargetEditor spec={spec} onUpdate={onUpdate} />
       <hr className="prop-divider" />
@@ -173,11 +172,8 @@ function ClassEditor({ nodeName, spec, onUpdate }: {
         ))}
       </select>
       {current.hint && (
-        <small className="hint module-desc">
-          {current.hint.split("\n").map((line, i) => (
-            <span key={i}>{line}<br /></span>
-          ))}
-        </small>
+        <small className="hint module-desc"
+          dangerouslySetInnerHTML={{ __html: current.hint }} />
       )}
     </div>
   );
@@ -187,15 +183,16 @@ function ClassEditor({ nodeName, spec, onUpdate }: {
 
 function ComputeTargetEditor({ spec, onUpdate }: { spec: NodeSpec; onUpdate: (s: NodeSpec) => void }) {
   const current = spec.compute_target ?? "local_cpu";
+  // 只在使用者選擇特定後端時才顯示（local_cpu 為預設，不需要說明）
+  if (current === "local_cpu" && !spec.compute_target) return null;
   return (
     <div className="prop-row">
-      <label>compute_target(M6-4)</label>
+      <label>運算後端</label>
       <select value={current} onChange={(e) => onUpdate({ ...spec, compute_target: e.target.value })}>
         {COMPUTE_TARGET_OPTIONS.map((o) => (
           <option key={o.value} value={o.value}>{o.label}</option>
         ))}
       </select>
-      <small className="hint">節點實際 offload 至哪個計算資源。Phase 1 為靜態綁定。</small>
     </div>
   );
 }
