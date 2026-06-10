@@ -144,6 +144,7 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
       </div>
 
       <div className="chat-stream" ref={streamRef}>
+        {showPlaceholder ? (
           <div className="chat-placeholder">
             {welcome && <div className="chat-placeholder-title">{welcome}</div>}
             {!welcome && !options.length && (
