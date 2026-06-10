@@ -1,10 +1,12 @@
 """Phase 5 圖形編排 UI 的後端端點 + M2-4 內部觸發端點。
 
-對外的兩個端點(M5-2):
+對外的三個端點(M5-2):
 - `POST /v1/workflow/run`:接 WorkflowConfig YAML 與 user_message,於背景非同步
   跑一次工作流,立即回 workflow_id 與 SSE stream URL
 - `GET /v1/workflow/{workflow_id}/stream`:Server-Sent Events,把 telemetry ring
   buffer 中屬於該 workflow_id 的事件依序推給瀏覽器(動畫驅動來源)
+- `GET /v1/workflow/{workflow_id}/result`:工作流跑完後,取最終 final_message
+  與 abort 資訊。SSE 結束後由前端拉取一次
 
 對內的端點(M2-4 既有):
 - `POST /internal/workflow/run`:Track B 驗收用,直接用預設工作流跑一次
@@ -35,6 +37,11 @@ from agentic_sdk.workflow import Workflow, WorkflowConfig
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+
+# 工作流 result 記憶體儲存:由背景 task 寫入,GET /v1/workflow/{id}/result 讀
+# PoC 簡化:無 TTL、無 size cap;Gateway 重啟即清空。生產化請改外部 store。
+_WORKFLOW_RESULTS: dict[str, dict[str, Any]] = {}
+_WORKFLOW_RESULTS_LOCK = asyncio.Lock()
 
 
 # ── M5-2:POST /v1/workflow/run ───────────────────────────────────────────────
@@ -72,9 +79,27 @@ async def run_workflow_v1(
 
     async def _background_run() -> None:
         try:
-            await asyncio.to_thread(wf.run, payload.user_message, workflow_id=workflow_id)
-        except Exception:
+            result = await asyncio.to_thread(
+                wf.run, payload.user_message, workflow_id=workflow_id
+            )
+            async with _WORKFLOW_RESULTS_LOCK:
+                _WORKFLOW_RESULTS[workflow_id] = {
+                    "workflow_id": result.workflow_id,
+                    "final_message": result.final_message,
+                    "aborted": result.aborted,
+                    "abort_reason": result.abort_reason,
+                    "visit_counts": result.visit_counts,
+                    "usage": result.usage,
+                }
+        except Exception as exc:
             logger.exception("workflow background run failed wid=%s", workflow_id)
+            async with _WORKFLOW_RESULTS_LOCK:
+                _WORKFLOW_RESULTS[workflow_id] = {
+                    "workflow_id": workflow_id,
+                    "final_message": "",
+                    "aborted": True,
+                    "abort_reason": f"unhandled:{type(exc).__name__}:{exc}",
+                }
 
     asyncio.create_task(_background_run())
 
@@ -82,6 +107,18 @@ async def run_workflow_v1(
         workflow_id=workflow_id,
         stream_url=f"/v1/workflow/{workflow_id}/stream",
     )
+
+
+# ── M5-2:GET /v1/workflow/{id}/result(SSE 結束後拉) ────────────────────────
+
+
+@router.get("/v1/workflow/{workflow_id}/result")
+async def get_workflow_result(workflow_id: str) -> dict[str, Any]:
+    async with _WORKFLOW_RESULTS_LOCK:
+        result = _WORKFLOW_RESULTS.get(workflow_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="workflow_id 尚未完成或不存在")
+    return result
 
 
 # ── M5-2:GET /v1/workflow/{id}/stream(SSE) ──────────────────────────────────

@@ -1,0 +1,19 @@
+version: "1"
+entry: perceive
+nodes:
+  perceive:
+    type: builtin.perceive
+  plan:
+    type: builtin.plan
+  retrieve:
+    type: builtin.retrieve
+  reflect:
+    type: builtin.reflect
+    params:
+      on_failure: retry_plan
+  action:
+    type: foundry_completion
+gates:
+  max_node_hops: 20
+  max_revisit: 3
+  timeout_sec: 30
