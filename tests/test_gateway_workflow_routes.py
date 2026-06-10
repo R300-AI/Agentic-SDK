@@ -65,14 +65,17 @@ def test_post_v1_workflow_run_rejects_invalid_yaml(make_client) -> None:
     assert "YAML" in resp.json()["detail"]
 
 
-def test_post_v1_workflow_run_rejects_empty_message(make_client) -> None:
+def test_post_v1_workflow_run_accepts_empty_message_for_attachments(make_client) -> None:
+    """純圖片請求允許 user_message 為空字串（M9 多模態語意）。"""
     with make_client() as client:
         resp = client.post(
             "/v1/workflow/run",
             json={"workflow_yaml": _MINIMAL_YAML, "user_message": ""},
         )
 
-    assert resp.status_code == 422  # pydantic min_length 拒收
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "workflow_id" in body and "stream_url" in body
 
 
 def test_post_v1_workflow_run_rejects_unknown_node_type(make_client) -> None:

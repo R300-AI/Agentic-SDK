@@ -36,6 +36,7 @@ class UpstreamCompletionAction:
         api_key: str | None = None,
         deployment: str | None = None,
         temperature: float | None = None,
+        system_prompt: str | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         if upstream is not None and base_url is not None:
@@ -45,6 +46,7 @@ class UpstreamCompletionAction:
         self._upstream = upstream or UpstreamClient(self._settings, base_url=effective_base)
         self._model = model or deployment
         self._temperature = temperature
+        self._system_prompt = system_prompt or DEFAULT_SYSTEM_PROMPT
         # api_key 是 UI 明文覆寫;本階段走 settings、不重新注入讀者需手動設 env。
         _ = api_key
 
@@ -54,7 +56,7 @@ class UpstreamCompletionAction:
 
     def __call__(self, state: WorkflowState) -> NodeOutput:
         model = self._model or state.payload.get("model") or "default"
-        messages = _build_messages(state)
+        messages = _build_messages(state, self._system_prompt)
 
         try:
             kwargs: dict = {"model": model, "messages": messages}
@@ -119,20 +121,31 @@ class UpstreamCompletionAction:
         )
 
 
-def _build_messages(state: WorkflowState) -> list[dict]:
+DEFAULT_SYSTEM_PROMPT = "你是 Agentic SDK 內的 Action 節點，根據 user 輸入與已檢索上下文產出最終回應。"
+
+
+def _build_messages(state: WorkflowState, system_prompt: str) -> list[dict]:
     """組出送往上游 NPU 的 messages。
 
     Gemma3 NPU chat template 要求嚴格 user/assistant 交替,不接受 'system' role。
     因此把系統提示與檢索上下文折入 user 訊息首段,保持 messages 只有一個 user entry。
+    若 state.attachments 含 image 附件,user content 從 str 切換為 OpenAI multimodal
+    陣列(text + image_url parts),由上游 vision-capable runtime 解析。
     若未來上游換成支援 system role 的模型,在此處分出 UpstreamMessageBuilder 策略即可。
     """
     retrieved = state.latest_of(ContextEntryType.RETRIEVED)
 
-    parts: list[str] = [
-        "你是 Agentic SDK 內的 Action 節點,根據 user 輸入與已檢索上下文產出最終回應。",
-    ]
+    parts: list[str] = [system_prompt]
     if retrieved:
         parts.append(f"已檢索上下文:\n{retrieved.content}")
     parts.append(f"user 輸入:\n{state.user_message}")
+    text_blob = "\n\n".join(parts)
 
-    return [{"role": "user", "content": "\n\n".join(parts)}]
+    if state.attachments:
+        content_parts: list[dict] = [{"type": "text", "text": text_blob}]
+        for att in state.attachments:
+            if att.kind == "image":
+                content_parts.append({"type": "image_url", "image_url": {"url": att.data_url}})
+        return [{"role": "user", "content": content_parts}]
+
+    return [{"role": "user", "content": text_blob}]

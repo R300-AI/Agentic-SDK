@@ -22,6 +22,7 @@ from agentic_sdk.memory import MemoryStore
 from agentic_sdk.observability import make_event, node_span
 from agentic_sdk.observability.events import EVENT_WORKFLOW_FALLBACK
 from agentic_sdk.workflow.gates import Gates
+from agentic_sdk.workflow.attachments import Attachment
 from agentic_sdk.workflow.node import (
     Node,
     NodeOutput,
@@ -139,7 +140,13 @@ class Workflow:
             entry_node=config.entry,
         )
 
-    def run(self, user_message: str, *, workflow_id: str | None = None) -> WorkflowResult:
+    def run(
+        self,
+        user_message: str,
+        *,
+        workflow_id: str | None = None,
+        attachments: list[Attachment] | None = None,
+    ) -> WorkflowResult:
         state = (
             WorkflowState(user_message=user_message, workflow_id=workflow_id)
             if workflow_id
@@ -147,6 +154,8 @@ class Workflow:
         )
         state.workflow_name = self.workflow_name
         state.memory_store = self.memory_store
+        if attachments:
+            state.attachments = list(attachments)
         user_entry = ContextEntry(type=ContextEntryType.USER_INPUT, content=user_message)
         state.append(user_entry)
         if self.active_store is not None:

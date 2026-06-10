@@ -92,15 +92,15 @@ def test_from_config_runs_workflow(mock_settings) -> None:
     from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
 
     # 1. 使用者建立 AzureOpenAI client(測試用 MagicMock 取代)
-    fake_message = MagicMock(content="測試回覆")
-    fake_choice = MagicMock(message=fake_message)
-    fake_completion = MagicMock(
+    fake_delta = MagicMock(content="測試回覆")
+    fake_choice = MagicMock(delta=fake_delta)
+    fake_chunk = MagicMock(
         choices=[fake_choice],
-        usage=None,
         model="gpt-4o-mini",
     )
     azure_client = MagicMock()
-    azure_client.chat.completions.create.return_value = fake_completion
+    azure_client.with_options.return_value = azure_client
+    azure_client.chat.completions.create.return_value = iter([fake_chunk])
 
     # 2. 用該 client 建立 action node
     action = FoundryCompletionAction(settings=mock_settings, client=azure_client)

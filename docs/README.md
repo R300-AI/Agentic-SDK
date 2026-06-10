@@ -12,10 +12,13 @@
 | [01-architecture/microservices-design.md](01-architecture/microservices-design.md) | SDK 與上游推論伺服器的部署拓樸 | 後端工程師 |
 | [02-model-card-contract/upstream-integration.md](02-model-card-contract/upstream-integration.md) | 與上游 `amd-ryzen-ai-benchmark` 的銜接契約 | SDK 整合者 |
 | [03-agentic-orchestration/context-and-memory.md](03-agentic-orchestration/context-and-memory.md) | 跨節點上下文管理與 Token 過期處理 | SDK 核心開發 |
+| [03-agentic-orchestration/knowledge-vs-memory.md](03-agentic-orchestration/knowledge-vs-memory.md) | KnowledgeBase 與 MemoryStore 的分工與替換流程 | SDK 核心開發、領域整合者 |
 | [03-agentic-orchestration/react-workflow-routing.md](03-agentic-orchestration/react-workflow-routing.md) | 五大節點動態路由 | SDK 核心開發 |
 | [03-agentic-orchestration/dynamic-offload-engine.md](03-agentic-orchestration/dynamic-offload-engine.md) | 邊緣端 NPU / GPU / CPU 異質卸載策略 | 資源層開發 |
 | [04-observability-dashboard/telemetry-metrics.md](04-observability-dashboard/telemetry-metrics.md) | token/sec、記憶體峰值的遙測資料流 | 觀測層開發 |
 | [04-observability-dashboard/visualization-ui.md](04-observability-dashboard/visualization-ui.md) | Multi-Model Dashboard 魔改策略 | UI 整合 |
+| [04-observability-dashboard/phase5-graph-editor-plan.md](04-observability-dashboard/phase5-graph-editor-plan.md) | M5 圖形編排 UI 設計與實作計畫 | Phase 5 開發者 |
+| [04-observability-dashboard/phase12-github-pages-plan.md](04-observability-dashboard/phase12-github-pages-plan.md) | M12 編輯器上架 GitHub Pages 規劃 | Phase 12 開發者 |
 | [05-api-reference/openai-compatible-api.md](05-api-reference/openai-compatible-api.md) | OpenAI 相容端點規格 | 應用端開發者 |
 | [05-api-reference/python-sdk-integration.md](05-api-reference/python-sdk-integration.md) | Agentic SDK Python 套件使用 | 應用端開發者 |
 

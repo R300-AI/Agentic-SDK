@@ -30,6 +30,11 @@ def test_settings() -> Settings:
         upstream_api_key="test-key",
         upstream_healthcheck_timeout_sec=1.0,
         infer_request_timeout_sec=2.0,
+        # 顯式鎖定測試用值，避免 OS 環境變數污染
+        workflow_action_backend="upstream",
+        workflow_force_mock_foundry=False,
+        azure_foundry_endpoint="",
+        azure_foundry_api_key="",
     )
 
 

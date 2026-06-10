@@ -33,6 +33,7 @@ from agentic_sdk.observability.events import (
     EVENT_WORKFLOW_FALLBACK,
 )
 from agentic_sdk.workflow import Workflow, WorkflowConfig
+from agentic_sdk.workflow.attachments import Attachment
 
 logger = logging.getLogger(__name__)
 
@@ -49,8 +50,12 @@ _WORKFLOW_RESULTS_LOCK = asyncio.Lock()
 
 class WorkflowRunRequest(BaseModel):
     workflow_yaml: str = Field(..., description="完整的 WorkflowConfig YAML 字串")
-    user_message: str = Field(..., min_length=1, description="使用者輸入訊息")
+    user_message: str = Field(..., min_length=0, description="使用者輸入訊息；純圖片請求可為空字串")
     model: str | None = Field(default=None, description="保留欄位;目前由 YAML 決定")
+    attachments: list[dict] | None = Field(
+        default=None,
+        description="多模態附件。每筆需含 kind/mime/data_url，可選 name",
+    )
 
 
 class WorkflowRunResponse(BaseModel):
@@ -77,10 +82,20 @@ async def run_workflow_v1(
 
     workflow_id = uuid.uuid4().hex
 
+    attachments_in: list[Attachment] = []
+    if payload.attachments:
+        try:
+            attachments_in = [Attachment.from_dict(a) for a in payload.attachments]
+        except (KeyError, TypeError) as exc:
+            raise HTTPException(status_code=400, detail=f"attachments 格式錯誤:{exc}") from exc
+
     async def _background_run() -> None:
         try:
             result = await asyncio.to_thread(
-                wf.run, payload.user_message, workflow_id=workflow_id
+                wf.run,
+                payload.user_message,
+                workflow_id=workflow_id,
+                attachments=attachments_in or None,
             )
             async with _WORKFLOW_RESULTS_LOCK:
                 _WORKFLOW_RESULTS[workflow_id] = {
@@ -124,8 +139,8 @@ async def get_workflow_result(workflow_id: str) -> dict[str, Any]:
 # ── M5-2:GET /v1/workflow/{id}/stream(SSE) ──────────────────────────────────
 
 _TERMINAL_EVENTS = {EVENT_WORKFLOW_FALLBACK}
-_SSE_POLL_INTERVAL_SEC = 0.1
-_SSE_MAX_DURATION_SEC = 120.0
+_SSE_POLL_INTERVAL_SEC = 0.05
+_SSE_MAX_DURATION_SEC = 600.0
 
 
 def _is_terminal_event(event: dict[str, Any]) -> bool:

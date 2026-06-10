@@ -17,8 +17,9 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
 
 from agentic_sdk.config import Settings, get_settings
 
@@ -40,16 +41,35 @@ class FoundryResponse:
             return {}
 
 
+DeltaCallback = Callable[[str], None]
+
+
 @runtime_checkable
 class FoundryClient(Protocol):
     def chat(self, *, system: str, user: str, temperature: float = 0.0) -> FoundryResponse: ...
+
+    def chat_stream(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float = 0.0,
+        on_delta: DeltaCallback | None = None,
+        idle_timeout_sec: float = 30.0,
+        response_format: dict | None = None,
+    ) -> FoundryResponse: ...
 
     @property
     def label(self) -> str: ...
 
 
 class RealFoundryClient:
-    """走 openai SDK → Azure OpenAI / Foundry deployment。"""
+    """走 openai SDK → Azure OpenAI / Foundry deployment。
+
+    chat / chat_stream 統一走 stream=True 路徑;chat 只是不傳 on_delta、最後一次回完整內容。
+    chunk 之間的等待用 httpx read timeout 控制,實現 idle-timeout 而非 wall-clock timeout,
+    讓長回覆只要持續產 token 就不會被砍。
+    """
 
     def __init__(self, settings: Settings) -> None:
         from openai import AzureOpenAI
@@ -69,22 +89,78 @@ class RealFoundryClient:
         return f"azure_openai:{self._deployment}"
 
     def chat(self, *, system: str, user: str, temperature: float = 0.0) -> FoundryResponse:
-        completion = self._client.chat.completions.create(
-            model=self._deployment,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+        return self.chat_stream(
+            system=system,
+            user=user,
             temperature=temperature,
             response_format={"type": "json_object"},
         )
-        choice = completion.choices[0].message.content or ""
-        usage = getattr(completion, "usage", None)
+
+    def chat_stream(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float = 0.0,
+        on_delta: DeltaCallback | None = None,
+        idle_timeout_sec: float = 30.0,
+        response_format: dict | None = None,
+    ) -> FoundryResponse:
+        import httpx
+
+        timeout_cfg = httpx.Timeout(
+            connect=10.0,
+            write=10.0,
+            pool=10.0,
+            read=idle_timeout_sec,
+        )
+        kwargs: dict = {
+            "model": self._deployment,
+            "messages": [
+                {"role": "system", "content": system},
+                {"role": "user", "content": user},
+            ],
+            "temperature": temperature,
+            "stream": True,
+        }
+        if response_format is not None:
+            kwargs["response_format"] = response_format
+
+        stream = self._client.with_options(timeout=timeout_cfg).chat.completions.create(**kwargs)
+
+        chunks: list[str] = []
+        response_model = self._deployment
+        last_token_at = time.monotonic()
+        try:
+            for chunk in stream:
+                if getattr(chunk, "model", None):
+                    response_model = chunk.model
+                if not chunk.choices:
+                    continue
+                delta = chunk.choices[0].delta.content
+                if not delta:
+                    continue
+                now = time.monotonic()
+                idle_gap = now - last_token_at
+                if idle_gap > idle_timeout_sec:
+                    raise TimeoutError(
+                        f"foundry stream idle {idle_gap:.1f}s > {idle_timeout_sec}s"
+                    )
+                last_token_at = now
+                chunks.append(delta)
+                if on_delta is not None:
+                    on_delta(delta)
+        except httpx.ReadTimeout as exc:
+            raise TimeoutError(
+                f"foundry stream idle > {idle_timeout_sec}s (httpx read timeout)"
+            ) from exc
+
+        content = "".join(chunks)
         return FoundryResponse(
-            content=choice,
-            model=getattr(completion, "model", self._deployment),
-            input_tokens=getattr(usage, "prompt_tokens", None) if usage else None,
-            output_tokens=getattr(usage, "completion_tokens", None) if usage else None,
+            content=content,
+            model=response_model,
+            input_tokens=None,
+            output_tokens=None,
         )
 
 
@@ -109,6 +185,25 @@ class MockFoundryClient:
         return f"mock_foundry:{self._deployment}"
 
     def chat(self, *, system: str, user: str, temperature: float = 0.0) -> FoundryResponse:
+        return self._scripted(system=system, user=user)
+
+    def chat_stream(
+        self,
+        *,
+        system: str,
+        user: str,
+        temperature: float = 0.0,
+        on_delta: DeltaCallback | None = None,
+        idle_timeout_sec: float = 30.0,
+        response_format: dict | None = None,
+    ) -> FoundryResponse:
+        response = self._scripted(system=system, user=user)
+        if on_delta is not None:
+            for ch in response.content:
+                on_delta(ch)
+        return response
+
+    def _scripted(self, *, system: str, user: str) -> FoundryResponse:
         # 用 system prompt 開頭 keyword 區分 Plan / Reflect
         if system.startswith("PLAN"):
             self._plan_visit_counter += 1
@@ -127,7 +222,6 @@ class MockFoundryClient:
             payload = {"echo": user[:80]}
 
         content = json.dumps(payload, ensure_ascii=False)
-        # 假裝有 token 計數
         return FoundryResponse(
             content=content,
             model=self._deployment,

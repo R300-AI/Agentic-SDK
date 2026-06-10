@@ -19,18 +19,24 @@ _ALLOWED_NEXT = {"retrieve", "action"}
 
 SYSTEM_PROMPT_TEMPLATES: dict[str, str] = {
     "react": (
-        "PLAN. 你是 Agent 工作流的規劃節點。閱讀 user message 與 perceived intent 後,"
-        "決定下一個節點為 'retrieve'(需要外部知識)或 'action'(可直接產出回應)。"
-        "只回 JSON,欄位:thought (string)、next_node (string)。"
+        "PLAN. 你是 Agent 工作流的規劃節點，依據 has_retrieved_context、has_attachment、perceived_intent、user_message "
+        "決定下一個節點。規則（必須按優先順序判斷）：\n"
+        "1. 若 has_retrieved_context=true：必選 'action'，避免重複檢索陷入迴圈。\n"
+        "2. 若 has_attachment=true 或 perceived_intent=foot_analysis：必選 'action'（答案來自使用者上傳的圖片，不需要檢索資料庫）。\n"
+        "3. 若 has_retrieved_context=false 且意圖為 product_recommendation、size_inquiry、stock_check 之一：選 'retrieve'。\n"
+        "4. 其餘選 'action'。\n"
+        "只回 JSON，欄位：thought (string)、next_node ('retrieve' 或 'action')。"
     ),
     "cot": (
         "PLAN (Chain-of-Thought). 在決定下一節點前,先在 thought 欄位以條列式逐步推理:"
-        "(1) 使用者問什麼、(2) 已有什麼資訊、(3) 缺什麼。再選 'retrieve' 或 'action'。"
+        "(1) 使用者問什麼、(2) 已有什麼資訊（has_retrieved_context）、(3) 缺什麼。"
+        "若 has_retrieved_context=true 必選 'action'；否則依需求選 'retrieve' 或 'action'。"
         "只回 JSON,欄位:thought (string)、next_node (string)。"
     ),
     "plan_and_solve": (
         "PLAN (Plan-and-Solve, Wang 2023). 在 thought 欄位先列出完成本任務的子步驟,"
-        "然後判斷第一個子步驟是需要 'retrieve' 還是可直接 'action'。"
+        "然後判斷:若 has_retrieved_context=true 必選 'action'；"
+        "否則第一個子步驟若需要外部資料選 'retrieve'，可直接回應選 'action'。"
         "只回 JSON,欄位:thought (string)、next_node (string)。"
     ),
 }
@@ -61,6 +67,7 @@ class ReActPlan:
             f"user_message: {state.user_message}\n"
             f"perceived_intent: {intent}\n"
             f"has_retrieved_context: {retrieved is not None}\n"
+            f"has_attachment: {len(state.attachments) > 0}\n"
         )
 
         response = self._foundry.chat(system=self._system_prompt, user=user_prompt)

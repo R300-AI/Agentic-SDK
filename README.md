@@ -1,105 +1,160 @@
 # Agentic SDK
 
-> **邊緣叢集管理協定**:把上游已認證的「模型 × 國產晶片」組合,延伸為支援 Perceive / Plan / Retrieve / Reflect / Action 五節點工作流的 Agentic 編排層,並對外維持單一 OpenAI 相容 API。
+> **邊緣叢集管理協定**：把上游已認證的「模型 × 國產晶片」組合，延伸為支援 Perceive / Plan / Retrieve / Reflect / Action 五節點工作流的 Agentic 編排層，並對外維持單一 OpenAI 相容 API。
 
-當前狀態:**Phase 3 完成** — Gateway `/v1/chat/completions` 已接上 Workflow,五節點端對端可用;Multi-Model Dashboard 可即時觀察節點進度。完整施工進度見 [blueprint/README.md](blueprint/README.md)。
-
----
-
-## 兩種啟動模式
-
-| 模式 | 用途 | Action 上游 | 需要 AMD Ryzen AI 機台? |
-|------|------|------------|------------------------|
-| **A. 本機開發(Foundry-only)** | 開發、單元驗證、不便上機台時 | Azure AI Foundry | 否 |
-| **B. 正式部署(Upstream + Foundry)** | 對齊產品形態,Action 走 NPU | AMD NPU(`amd-ryzen-ai-benchmark/api.py`) | 是 |
-
-兩種模式共用相同的 Gateway 與 Workflow,差別只在 `.env` 的 `WORKFLOW_ACTION_BACKEND` 一個開關。建議先用模式 A 把開發環境跑通,再上 Ryzen AI 主機驗模式 B。
+當前狀態：**Phase 3 完成 + M4–M11 進行中** — Gateway `/v1/chat/completions` 已接上 Workflow，五節點端對端可用；圖形編輯器（`demo/`）可拖曳設計工作流並即時看到節點亮燈；Gateway `/v1/workflow/{id}/stream` 以 SSE 透出逐 token 串流事件（`workflow.node.delta`），長回覆只在「真的沒有新 token」時才會中止。69 個測試檔、158 項自動測試全綠。完整施工進度見 [blueprint/README.md](blueprint/README.md)。
 
 ---
 
-## 模式 A:本機開發(Foundry-only)
+## 三步上手（最小路徑）
 
-> **適用對象**:在自己的開發機(Windows / Mac / Linux 皆可)驗證 Agentic SDK 行為,不需要 NPU 推論硬體。
-> **環境前提**:Python 3.12、`uv`、可連到 Azure AI Foundry 的 API key。
+> **目標**：在自己的開發機（Windows / macOS / Linux 任一）跑起 Gateway + 圖形編輯器，用瀏覽器拖曳工作流並按「跑一次」看到動畫。
+> **不需要**：AMD Ryzen AI 主機、NPU、上游推論伺服器；Plan / Reflect / Action 都先走 Azure AI Foundry。
 
-```powershell
-git clone https://github.com/<your-org>/Agentic-SDK.git
-cd Agentic-SDK
-git submodule update --init      # 把 .claude/ 拉下來
+### 第一步：安裝必要工具
 
-uv sync --extra dev               # 安裝依賴(uv 會自備 Python 3.12 + .venv)
+只需要四樣：Git、Python 3.12、`uv`、Node.js 22+。Azure AI Foundry 認證請向專案維護者索取。
 
-Copy-Item .env.example .env
+| 工具 | Windows（建議用 winget） | macOS（建議用 Homebrew） | Linux（Debian / Ubuntu） |
+|------|--------------------------|---------------------------|--------------------------|
+| Git | `winget install Git.Git` | `brew install git` | `sudo apt install git` |
+| Python 3.12 | 由 `uv` 代管，不必另裝 | 同左 | 同左 |
+| `uv` | `winget install astral-sh.uv` | `brew install uv` | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| Node.js 22+ | `winget install OpenJS.NodeJS.LTS` | `brew install node@22` | 依官方步驟安裝 [NodeSource 22.x](https://github.com/nodesource/distributions) |
+
+驗證安裝（任一平台終端機）：
+
+```bash
+git --version
+uv --version
+node --version    # 應為 v22.x 或以上
 ```
 
-編輯 `.env`,只需動兩處:
+> macOS / Linux 使用者請把後續所有 `powershell` 指令改成等價的 `bash` 指令；`Copy-Item .env.example .env` 改為 `cp .env.example .env`，路徑分隔符以系統為準。腳本 `scripts/start.ps1` 目前僅支援 Windows，非 Windows 平台請參照第三步的「手動啟動」段落。
+
+### 第二步：取得程式碼 + 安裝相依
+
+```bash
+git clone https://github.com/<your-org>/Agentic-SDK.git
+cd Agentic-SDK
+git submodule update --init       # 拉下 .claude/ 協作規範
+
+# Python 端：uv 會自動裝 Python 3.12 + 建立 .venv
+uv sync --extra dev
+
+# 前端：進 demo/ 裝 npm 套件（首次約需 1 分鐘）
+cd demo
+npm install
+cd ..
+```
+
+填 `.env`（只動三行即可跑起來）：
+
+```bash
+# Windows
+Copy-Item .env.example .env
+# macOS / Linux
+cp .env.example .env
+```
+
+打開 `.env`，把以下三行填好：
 
 ```ini
-# 把 Action 切到 Foundry,免架上游
 WORKFLOW_ACTION_BACKEND=foundry
-
-# 填入專案維護者提供的 Azure AI Foundry 認證
 AZURE_FOUNDRY_ENDPOINT=https://<your-resource>.cognitiveservices.azure.com/
 AZURE_FOUNDRY_API_KEY=<由專案維護者提供>
 AZURE_FOUNDRY_DEPLOYMENT=gpt-4o-mini
 ```
 
-啟動 Gateway 與 Dashboard:
+### 第三步：啟動 Gateway 與圖形編輯器
 
-```powershell
-.\scripts\start.ps1               # Gateway @ 8080,Dashboard @ 8501
+需要兩個終端機視窗，**分別啟 Gateway 與編輯器**。
+
+**終端機 1 — 啟 Gateway（埠 8080）**：
+
+```bash
+# Windows（建議；會額外順手帶起 Multi-Model Dashboard 於 8501）
+.\scripts\start.ps1
+
+# macOS / Linux（手動啟動，僅 Gateway）
+uv run python -m agentic_sdk.gateway
 ```
 
-一鍵驗證(另開 PowerShell):
+**終端機 2 — 啟編輯器（埠 5173）**：
 
-```powershell
-uv run python scripts\smoke_chat.py
+```bash
+cd demo
+npm run dev
 ```
 
-預期輸出包含:模型回覆內容、`x-agentic-metadata` header(`workflow_id` / `visit_counts` / `aborted`)、token usage。同時 Dashboard 會出現一條 `perceive → plan → retrieve → plan → action → reflect` 的時間序列。
+瀏覽器打開 [http://localhost:5173](http://localhost:5173)，應看到預設五節點畫布；於下方對話框輸入訊息按「跑一次」，節點會依序亮燈並印出最終回應。Vite dev server 已設好 `/v1/workflow` proxy 到 `localhost:8080`，不必處理跨域。
 
-> 健康檢查:`http://127.0.0.1:8080/healthz`(模式 A 不會檢查 AMD 上游)。
-> Gateway 是 API server,直接用瀏覽器打 `localhost:8080` 會回 `Not Found`,屬正常。
+> 健康檢查：`curl http://127.0.0.1:8080/healthz`。Gateway 是 API server，直接用瀏覽器打 `localhost:8080` 會回 `Not Found`，屬正常。
 
 ---
 
-## 模式 B:正式部署(Upstream + Foundry)
+## 進階情境
 
-> **適用對象**:在 AMD Ryzen AI 主機上對齊產品形態,Action 走 NPU。
-> **環境前提**:模式 A 的所有條件 + AMD Ryzen AI Software 1.7.1 + 已備好 `amd-ryzen-ai-benchmark`。
+### 切換 Action 上游到 AMD Ryzen AI NPU
 
-### 第一步:依上游 README 啟動推論伺服器
+> **適用對象**：已備好 Ryzen AI 主機，想對齊產品形態讓 Action 走 NPU。
 
-```powershell
-conda activate ryzen-ai-1.7.1
-cd <path to amd-ryzen-ai-benchmark>
-python api.py --model gemma3-4b-npu
+先在 Ryzen 機器上依 [`amd-ryzen-ai-benchmark`](https://github.com/R300-AI/amd-ryzen-ai-benchmark) 的 README 起 `api.py`，確認 `curl http://localhost:8000/v1/models` 能回傳模型清單。然後把 `.env` 的 `WORKFLOW_ACTION_BACKEND` 改回預設值 `upstream`（Plan / Reflect 仍走 Foundry），重啟 Gateway 即可。
+
+### 多基台驗收（M4-1~M4-3）
+
+驗證「同一份 WorkflowConfig，Action 可獨立指向 Ryzen 或 Foundry」：
+
+```bash
+# Ryzen 端先起好 api.py
+uv run python scripts/demo_multi_backend.py "請用一句話自我介紹"
 ```
 
-預期 `curl http://localhost:8000/v1/models` 回傳 `gemma3-4b-npu`。上游不是本專案維護範圍,所有 NPU / iGPU 環境細節以上游 README 為準。
+腳本會跑兩次工作流（Ryzen + Gemma3、Azure Foundry），比對 context entry 結構，並輸出 `docs/quickstart-runs/multi-backend-<timestamp>.json` 作為書面證據。
 
-### 第二步:啟動 Gateway 與 Dashboard
+### 一鍵 smoke test
 
-跟模式 A 一樣裝好依賴與 `.env`,但保留 `WORKFLOW_ACTION_BACKEND=upstream`(預設值);Azure Foundry 認證仍需填(Plan / Reflect 使用)。
+```bash
+uv run python scripts/smoke_chat.py
+```
 
-```powershell
+走 `/v1/chat/completions` 跑完一次五節點工作流，印出回覆內容與 `x-agentic-metadata` header（含 `workflow_id` / `visit_counts` / `aborted`）。
+
+### 無 Azure 配額時的離線 demo
+
+```bash
+uv run python scripts/demo_workflow.py
+```
+
+用 Mock Foundry 與故意不可達的上游跑完工作流，可驗證安裝是否正確、觀察 `workflow.node.start` / `delta` / `finish` 事件 schema。
+
+### 啟動 Multi-Model Dashboard（Streamlit）
+
+```bash
+# 跟 Gateway 一併啟（Windows 已含於 start.ps1）
 .\scripts\start.ps1
+# 只啟 Gateway 不要 Dashboard
+.\scripts\start.ps1 -GatewayOnly
+# 任何平台手動單啟 Dashboard
+uv run streamlit run agentic_sdk/observability/dashboard_app.py
 ```
 
-預期(60 秒內):
+### 跑全部測試
 
-- `http://localhost:8080/v1/models` 回傳上游模型清單
-- 啟動日誌出現 AMD 與 Azure Foundry 兩條 inference path 的 healthcheck 通過訊息
-- Dashboard「節點存活拓樸」面板同時顯示兩條 inference path 狀態
+```bash
+uv run pytest
+```
 
-### 第三步:用 OpenAI SDK 跑一次五節點工作流
+Phase 3 對外宣告完成時測試共 99 項；Phase 4–10 隨工作軸加入 M5 圖形編排、M6 MVP 差異化、M7–M8 UX 收斂、M9–M10 多模態與 vision 橋接、與 Phase 11 串流與 idle-timeout 重構後，**總項來到 158 項**，涵蓋：基礎層（`/healthz`、`/v1/models`、Settings）、觀測層（事件 schema 含 `workflow.node.delta`、RingBuffer、`/internal/telemetry/snapshot`）、Dashboard、Workflow 五節點端對端、Workflow 與 Gateway 的整合驗收（M3-2 / M3-4）、WorkflowConfig 序列化 + Python SDK 注入、多基台拓樸（M4-1~M4-3）、Memory Stream、Semantic Retrieve、多模態與串流輸出。
+
+### 直接呼叫 Gateway（OpenAI SDK 相容）
 
 ```python
 from openai import OpenAI
 
 client = OpenAI(base_url="http://127.0.0.1:8080/v1", api_key="local")
 response = client.with_raw_response.chat.completions.create(
-    model="gemma3-4b-npu",
+    model="gpt-4o-mini",
     messages=[{"role": "user", "content": "幫我查 2024Q4 的銷售報表並摘要"}],
 )
 completion = response.parse()
@@ -107,101 +162,17 @@ print(completion.choices[0].message.content)
 print(response.http_response.headers["x-agentic-metadata"])
 ```
 
-預期結果:
-
-- 回應為標準 OpenAI ChatCompletion 形態
-- `x-agentic-metadata` header 內含 `workflow_id` / `visit_counts` / `aborted` / `abort_reason`
-- Dashboard 兩個面板(節點時間序列、推論指標時序圖)出現對應資料點
-
----
-
-## 模式 C:多基台驗收(M4-1~M4-3)
-
-> **適用對象**:已備好 Ryzen AI 主機 + Azure Foundry 認證,想一次驗證「node 屬性決定 backend」的多基台拓樸。
-> **驗證重點**:Action node 可獨立指向 Ryzen 上的 Gemma3 或 Azure Foundry,Gateway 拓樸與 Workflow 五節點順序不變。
-
-### 第一步:Ryzen 機器上起 Gemma3 推論
-
-```powershell
-conda activate ryzen-ai-1.7.1
-cd <path to amd-ryzen-ai-benchmark>
-python api.py --model gemma-3-4b-it
-```
-
-`curl http://127.0.0.1:8000/v1/models` 應回傳含 `gemma-3-4b-it` 的清單。
-
-### 第二步:同機 clone Agentic SDK 並裝依賴
-
-```powershell
-git clone https://github.com/<your-org>/Agentic-SDK.git
-cd Agentic-SDK
-git submodule update --init
-uv sync --extra dev
-Copy-Item .env.example .env
-# 編輯 .env 填入 AZURE_FOUNDRY_ENDPOINT / AZURE_FOUNDRY_API_KEY / AZURE_FOUNDRY_DEPLOYMENT
-```
-
-### 第三步:跑多基台 demo
-
-```powershell
-# 預設值:RYZEN_UPSTREAM_BASE_URL=http://127.0.0.1:8000/v1,RYZEN_MODEL=gemma-3-4b-it
-uv run python scripts\demo_multi_backend.py "請用一句話自我介紹"
-```
-
-腳本會:
-
-1. 用 `UpstreamCompletionAction(base_url=...)` 跑一次 Ryzen + Gemma3 工作流
-2. 用 `FoundryCompletionAction(client=AzureOpenAI(...))` 跑一次 Azure Foundry 工作流
-3. 比對兩次的 context entry 結構是否一致(驗證跨 backend 上下文 schema 不變)
-4. 輸出結構化報告至 `docs/quickstart-runs/multi-backend-<timestamp>.json`
-
-### 第四步:把報告推回 GitHub 共同檢視
-
-```powershell
-git checkout -b verify/m4-multi-backend-$(Get-Date -Format yyyyMMdd)
-git add docs/quickstart-runs/multi-backend-*.json
-git commit -m "M4 multi-backend verification run"
-git push origin HEAD
-```
-
-開 PR 後,協作者拉下來打開 `multi-backend-*.json` 就能看到兩個 backend 的回應、耗時、節點訪問計數,作為 M4-1~M4-3 的書面證據。
-
----
-
-## 選用工具
-
-### 不啟 Dashboard 只起 Gateway
-
-```powershell
-.\scripts\start.ps1 -GatewayOnly
-```
-
-### 用 Mock Foundry 跑一次離線 demo
-
-```powershell
-uv run python scripts\demo_workflow.py
-```
-
-會用 Mock Foundry(無 Azure 配額亦可)與故意不可達的上游,跑完一次五節點工作流並印出節點事件序列,可用來驗證安裝與觀察 `workflow.node.start` / `finish` 事件 schema。
-
-### 跑測試
-
-```powershell
-uv run pytest
-```
-
-Phase 3 完成時測試共 99 項(M4-6 WorkflowConfig + M4 多基台合計加 16 案),涵蓋:基礎層(`/healthz`、`/v1/models`、Settings)、觀測層(事件 schema、RingBuffer、`/internal/telemetry/snapshot`)、Dashboard、Workflow 五節點端對端、Workflow 與 Gateway 的整合驗收(M3-2 / M3-4)、WorkflowConfig 序列化 + Python SDK 注入、多基台拓樸(M4-1~M4-3)。
-
 ---
 
 ## 設計與施工文件
 
 | 目錄 | 內容 | 何時看 |
 |------|------|--------|
-| [docs/](docs/README.md) | 系統設計(What & Why):五節點對齊表、上下文管理、遙測契約、API reference | 想理解架構決策時 |
-| [blueprint/](blueprint/README.md) | 施工藍圖(How & When):兩條工作軸、M0–M5 里程碑、目錄結構、風險與決策紀錄 | 想認領工作項或追施工進度時 |
+| [docs/](docs/README.md) | 系統設計（What & Why）：五節點對齊表、上下文管理、遙測契約、API reference | 想理解架構決策時 |
+| [blueprint/](blueprint/README.md) | 施工藍圖（How & When）：兩條工作軸、M0–M12 里程碑、目錄結構、風險與決策紀錄 | 想認領工作項或追施工進度時 |
+| [demo/README.md](demo/README.md) | 圖形編輯器的目錄結構、節點屬性對應、SSE 事件流 | 想擴充編輯器或除錯前端時 |
 | [blueprint/target-quickstart.md](blueprint/target-quickstart.md) | 本 README 三步啟動的反推來源與驗收方式 | 想驗證 quickstart 是否退化時 |
-| [.claude/](.claude/) | 協作預設規則(submodule,唯讀) | 跨專案套用 Connect AI style 時 |
+| [.claude/](.claude/) | 協作預設規則（submodule，唯讀） | 跨專案套用 Connect AI style 時 |
 
 ---
 

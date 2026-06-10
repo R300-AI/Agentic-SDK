@@ -1,6 +1,6 @@
-"""M5-3 — examples/workflows/default.yaml 與 editor 預設 YAML 同步驗證。
+"""M5-3 — examples/workflows/default.yaml 與 demo 預設 YAML 同步驗證。
 
-editor 端 src/defaultWorkflow.ts 的 DEFAULT_WORKFLOW_YAML 與此檔必須完全等價,
+demo 端 src/defaultWorkflow.ts 的 DEFAULT_WORKFLOW_YAML 與此檔必須完全等價,
 保證使用者下載的 YAML 可被 SDK 載入並跑通。
 """
 
@@ -46,7 +46,7 @@ def test_default_yaml_loads_to_valid_config() -> None:
 
 
 def test_default_yaml_roundtrip_stable() -> None:
-    """載入 → 序列化 → 再載入,結果必須完全一致(等同 editor 的「下載→載入」循環)。"""
+    """載入 → 序列化 → 再載入,結果必須完全一致(等同 demo 的「下載→載入」循環)。"""
     config_a = WorkflowConfig.from_yaml(DEFAULT_YAML_PATH)
     yaml_text = config_a.to_yaml()
     config_b = WorkflowConfig.from_yaml(yaml_text)
@@ -54,15 +54,16 @@ def test_default_yaml_roundtrip_stable() -> None:
 
 
 def test_default_yaml_runs_to_completion(mock_settings) -> None:
-    """預設 YAML 直接餵 Workflow.from_config 就能跑通,證明 editor 預設 ready-to-run。"""
+    """預設 YAML 直接餵 Workflow.from_config 就能跑通,證明 demo 預設 ready-to-run。"""
     from unittest.mock import MagicMock
     from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
 
-    fake_message = MagicMock(content="預設 YAML 跑通的回應")
-    fake_choice = MagicMock(message=fake_message)
-    fake_completion = MagicMock(choices=[fake_choice], usage=None, model="mock-deployment")
+    fake_delta = MagicMock(content="預設 YAML 跑通的回應")
+    fake_choice = MagicMock(delta=fake_delta)
+    fake_chunk = MagicMock(choices=[fake_choice], model="mock-deployment")
     fake_client = MagicMock()
-    fake_client.chat.completions.create.return_value = fake_completion
+    fake_client.with_options.return_value = fake_client
+    fake_client.chat.completions.create.return_value = iter([fake_chunk])
 
     config = WorkflowConfig.from_yaml(DEFAULT_YAML_PATH)
     action = FoundryCompletionAction(settings=mock_settings, client=fake_client)

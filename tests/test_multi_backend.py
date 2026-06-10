@@ -102,11 +102,13 @@ def test_workflow_runs_with_foundry_action_backend(ryzen_settings):
     from unittest.mock import MagicMock
 
     azure_client = MagicMock()
-    azure_client.chat.completions.create.return_value = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="Foundry 回覆"))],
-        usage=None,
-        model="gpt-4o-mini",
-    )
+    azure_client.with_options.return_value = azure_client
+    azure_client.chat.completions.create.return_value = iter([
+        MagicMock(
+            choices=[MagicMock(delta=MagicMock(content="Foundry 回覆"))],
+            model="gpt-4o-mini",
+        )
+    ])
 
     action = FoundryCompletionAction(settings=ryzen_settings, client=azure_client)
     config = WorkflowConfig(
@@ -152,11 +154,13 @@ def test_workflow_state_is_backend_agnostic(respx_mock, ryzen_settings):
 
     from unittest.mock import MagicMock
     azure_client = MagicMock()
-    azure_client.chat.completions.create.return_value = MagicMock(
-        choices=[MagicMock(message=MagicMock(content="B"))],
-        usage=None,
-        model="gpt-4o-mini",
-    )
+    azure_client.with_options.return_value = azure_client
+    azure_client.chat.completions.create.return_value = iter([
+        MagicMock(
+            choices=[MagicMock(delta=MagicMock(content="B"))],
+            model="gpt-4o-mini",
+        )
+    ])
     foundry_wf = Workflow.from_config(
         config,
         settings=ryzen_settings,

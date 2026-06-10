@@ -7,6 +7,7 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ArchivedStore
@@ -96,6 +97,13 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(telemetry_router)
     app.include_router(context_router)
     app.include_router(workflow_router)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.gateway_cors_origins,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.get("/healthz")
     def healthz() -> dict[str, object]:

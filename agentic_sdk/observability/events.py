@@ -30,6 +30,7 @@ EVENT_GATEWAY_REQUEST_ERROR = "gateway.request.error"
 # 在此預先鎖定字串避免散落字面值。新增 emitter 時請同步補上對應 SemConv attribute。
 EVENT_NODE_START = "workflow.node.start"
 EVENT_NODE_FINISH = "workflow.node.finish"
+EVENT_NODE_DELTA = "workflow.node.delta"
 EVENT_CONTEXT_DEGRADED = "context.degraded"
 EVENT_WORKFLOW_FALLBACK = "workflow.fallback"
 
@@ -84,6 +85,10 @@ class TelemetryEvent(TypedDict, total=False):
     workflow_node_visit: int               # 該節點於本次工作流的第 N 次進入
     workflow_status: str                   # "ok" | "fallback" | "aborted"
     workflow_reason: str                   # 降級/失敗的人類可讀說明
+
+    # ----- 節點串流 token 増量 -----
+    delta_text: str                        # 本 chunk 新增的文字片段
+    delta_index: int                       # 本次節點內的 chunk 序號
 
 
 def make_event(event_name: str, **attributes: Any) -> TelemetryEvent:

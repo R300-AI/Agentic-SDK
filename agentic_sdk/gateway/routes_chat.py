@@ -30,6 +30,7 @@ from agentic_sdk.observability.events import (
     make_event,
 )
 from agentic_sdk.workflow import Workflow
+from agentic_sdk.workflow.attachments import Attachment
 from agentic_sdk.workflow.nodes.action import (
     FoundryCompletionAction,
     UpstreamCompletionAction,
@@ -43,16 +44,43 @@ _GEN_AI_SYSTEM = "agentic_sdk"
 _GEN_AI_OPERATION_CHAT = "chat"
 
 
-def _extract_user_message(messages: list[dict]) -> str:
-    """從 OpenAI messages 取出最後一則 user content;
-    僅支援字串型 content,陣列型(多模態)未在 PoC 範圍。"""
+def _extract_user_input(messages: list[dict]) -> tuple[str, list[Attachment]]:
+    """從 OpenAI messages 取出最後一則 user content，並抽出附件。
+
+    支援:
+    - content 為 str:純文字 user input
+    - content 為 list[dict]:OpenAI 多模態格式;`type: text` 收進文字、
+      `type: image_url` 收進 Attachment（kind=image）
+    """
     for m in reversed(messages or []):
         if m.get("role") != "user":
             continue
         content = m.get("content")
         if isinstance(content, str) and content.strip():
-            return content
-    return ""
+            return content, []
+        if isinstance(content, list):
+            text_parts: list[str] = []
+            atts: list[Attachment] = []
+            for part in content:
+                ptype = part.get("type")
+                if ptype == "text":
+                    text = part.get("text") or ""
+                    if text.strip():
+                        text_parts.append(text)
+                elif ptype == "image_url":
+                    url_obj = part.get("image_url") or {}
+                    url = url_obj.get("url") if isinstance(url_obj, dict) else None
+                    if not url:
+                        continue
+                    mime = "image/png"
+                    if url.startswith("data:"):
+                        head = url.split(",", 1)[0]
+                        if ":" in head and ";" in head:
+                            mime = head.split(":", 1)[1].split(";", 1)[0] or mime
+                    atts.append(Attachment(kind="image", mime=mime, data_url=url))
+            if text_parts or atts:
+                return "\n".join(text_parts), atts
+    return "", []
 
 
 def _build_action(settings, model: str):
@@ -72,15 +100,17 @@ async def chat_completions(request: Request):
     body = await request.json()
     model = body.get("model") or "agentic-sdk"
     messages = body.get("messages") or []
-    user_message = _extract_user_message(messages)
-    if not user_message:
+    user_message, attachments = _extract_user_input(messages)
+    if not user_message and not attachments:
         raise HTTPException(
             status_code=400,
             detail={
                 "error": "invalid_request",
-                "reason": "messages 中找不到非空 user content(本 PoC 暫不支援多模態 content)",
+                "reason": "messages 中找不到非空 user content(支援純文字或 OpenAI 多模態 content 陣列)",
             },
         )
+    if not user_message:
+        user_message = "(image-only message)"
 
     settings = request.app.state.settings
     active_store = request.app.state.active_context
@@ -106,7 +136,7 @@ async def chat_completions(request: Request):
     )
 
     try:
-        result = await asyncio.to_thread(workflow.run, user_message)
+        result = await asyncio.to_thread(workflow.run, user_message, attachments=attachments or None)
     except Exception as exc:
         duration_ms = (time.monotonic() - started_at) * 1000
         logger.warning(

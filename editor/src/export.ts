@@ -59,25 +59,47 @@ function perceiveNodePy(params: Record<string, unknown>): NodePy {
     ? `RuleBasedPerceive(\n${kw}\n    )`
     : "RuleBasedPerceive()";
   return {
-    imports: ["from agentic_sdk.workflow.nodes.perceive.rule_based import RuleBasedPerceive"],
+    imports: ["from agentic_sdk.workflow.nodes.perceive import RuleBasedPerceive"],
     call,
   };
 }
 
 function retrieveNodePy(params: Record<string, unknown>): NodePy {
-  const kw = buildKwargs(params);
-  const call = kw ? `SemanticRetrieve(\n${kw}\n    )` : "SemanticRetrieve()";
+  const { knowledge_base, enable_vision_query, ...rest } = params as Record<string, unknown>;
+  const kbPath = typeof knowledge_base === "string" ? knowledge_base.trim() : "";
+  const wantVision = enable_vision_query === true || enable_vision_query === "true";
+  const kw = buildKwargs(rest);
+  const imports = ["from agentic_sdk.workflow.nodes.retrieve import SemanticRetrieve"];
+
+  const extraLines: string[] = [];
+  if (kbPath) {
+    imports.push("from agentic_sdk.knowledge import KnowledgeBase");
+    extraLines.push(`        knowledge_base=KnowledgeBase.from_file(${toPyStr(kbPath)}),`);
+  }
+  if (wantVision) {
+    imports.push("from agentic_sdk.workflow.nodes.retrieve.vision_query import FoundryVisionQuery");
+    extraLines.push("        vision_query=FoundryVisionQuery(),");
+  }
+
+  if (extraLines.length === 0 && !kw) {
+    return { imports, call: "SemanticRetrieve()" };
+  }
+
+  const merged = [extraLines.join("\n"), kw].filter(Boolean).join("\n");
   return {
-    imports: ["from agentic_sdk.workflow.nodes.retrieve.semantic import SemanticRetrieve"],
-    call,
+    imports,
+    call: `SemanticRetrieve(\n${merged}\n    )`,
   };
 }
 
 function planNodePy(params: Record<string, unknown>): NodePy {
-  const kw = buildKwargs(params);
+  // model/endpoint/deployment 是 editor UI 用，不傳給 ReActPlan 建構子
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { model: _m, endpoint: _e, deployment: _d, ...planParams } = params as Record<string, unknown>;
+  const kw = buildKwargs(planParams);
   const call = kw ? `ReActPlan(\n${kw}\n    )` : "ReActPlan()";
   return {
-    imports: ["from agentic_sdk.workflow.nodes.plan.react import ReActPlan"],
+    imports: ["from agentic_sdk.workflow.nodes.plan import ReActPlan"],
     call,
   };
 }
@@ -87,13 +109,13 @@ function reflectNodePy(params: Record<string, unknown>): NodePy {
   if (mode === "llm") {
     const kw = buildKwargs(rest);
     return {
-      imports: ["from agentic_sdk.workflow.nodes.reflect.llm_reflexion import ReflexionReflect"],
+      imports: ["from agentic_sdk.workflow.nodes.reflect import ReflexionReflect"],
       call: kw ? `ReflexionReflect(\n${kw}\n    )` : "ReflexionReflect()",
     };
   }
   const kw = buildKwargs(rest);
   return {
-    imports: ["from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect"],
+    imports: ["from agentic_sdk.workflow.nodes.reflect import RuleBasedReflect"],
     call: kw ? `RuleBasedReflect(\n${kw}\n    )` : "RuleBasedReflect()",
   };
 }
@@ -102,12 +124,12 @@ function actionNodePy(type: string, params: Record<string, unknown>): NodePy {
   const kw = buildKwargs(params);
   if (type === "foundry_completion") {
     return {
-      imports: ["from agentic_sdk.workflow.nodes.action.foundry_completion import FoundryCompletionAction"],
+      imports: ["from agentic_sdk.workflow.nodes.action import FoundryCompletionAction"],
       call: kw ? `FoundryCompletionAction(\n${kw}\n    )` : "FoundryCompletionAction()",
     };
   }
   return {
-    imports: ["from agentic_sdk.workflow.nodes.action.upstream_completion import UpstreamCompletionAction"],
+    imports: ["from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction"],
     call: kw ? `UpstreamCompletionAction(\n${kw}\n    )` : "UpstreamCompletionAction()",
   };
 }
@@ -130,9 +152,7 @@ export function configToPython(config: WorkflowConfig): string {
 
   const nodeSpecs: Record<string, NodePy> = {};
   const allImports = new Set<string>([
-    "from agentic_sdk.memory import MemoryStore",
     "from agentic_sdk.workflow.engine import Workflow",
-    "from agentic_sdk.workflow.gates import Gates",
   ]);
 
   for (const nodeId of NODE_ORDER) {
@@ -145,12 +165,6 @@ export function configToPython(config: WorkflowConfig): string {
 
   const wfName = config.name ?? "demo";
 
-  const gateKw = [
-    `        max_node_hops=${config.gates.max_node_hops},`,
-    `        max_revisit=${config.gates.max_revisit},`,
-    `        timeout_sec=${config.gates.timeout_sec},`,
-  ].join("\n");
-
   const nodeArgs = NODE_ORDER
     .filter((id) => nodeSpecs[id])
     .map((id) => `    ${id}=${nodeSpecs[id].call},`)
@@ -158,30 +172,15 @@ export function configToPython(config: WorkflowConfig): string {
 
   const importSection = [...allImports].sort().join("\n");
 
-  return `"""由 Agentic SDK Editor 自動生成。"""
-
-import asyncio
-
-${importSection}
+  return `${importSection}
 
 
 wf = Workflow(
 ${nodeArgs}
-    gates=Gates(
-${gateKw}
-    ),
     workflow_name=${toPyStr(wfName)},
-    memory_store=MemoryStore(db_path=".memory/${wfName}.sqlite"),
 )
 
-
-async def main(user_message: str) -> str:
-    result = await asyncio.to_thread(wf.run, user_message)
-    return result.final_message or ""
-
-
-if __name__ == "__main__":
-    answer = asyncio.run(main("你好，我想了解這個 workflow"))
-    print(answer)
+result = wf.run("你好，我想了解這個 workflow")
+print(result.final_message or "")
 `;
 }

@@ -105,7 +105,7 @@ class GateConfig:
 
     max_node_hops: int = 50
     max_revisit: int = 5
-    timeout_sec: float = 30.0
+    timeout_sec: float = 300.0
 
     def to_dict(self) -> dict:
         return {
@@ -119,7 +119,7 @@ class GateConfig:
         return GateConfig(
             max_node_hops=int(d.get("max_node_hops", 50)),
             max_revisit=int(d.get("max_revisit", 5)),
-            timeout_sec=float(d.get("timeout_sec", 30.0)),
+            timeout_sec=float(d.get("timeout_sec", 300.0)),
         )
 
 
@@ -241,12 +241,29 @@ def _build_node_from_spec(
 
     if t == "builtin.plan":
         from agentic_sdk.workflow.nodes.plan import DEFAULT
-        kw = {"foundry_client": foundry_client, **spec.params} if foundry_client else spec.params
+        plan_params = {k: v for k, v in spec.params.items()
+                       if k not in ("model", "endpoint", "deployment")}
+        # 若 YAML 指定 deployment 且與全域不同，建立 override foundry client
+        plan_foundry = foundry_client
+        spec_deployment = spec.params.get("deployment")
+        if spec_deployment and settings and spec_deployment != settings.azure_foundry_deployment:
+            from agentic_sdk.workflow.llm import RealFoundryClient
+            try:
+                plan_foundry = RealFoundryClient(
+                    settings.model_copy(update={"azure_foundry_deployment": spec_deployment})
+                )
+            except Exception:
+                pass  # key 未設定時退回全域 client
+        kw = {"foundry_client": plan_foundry, **plan_params} if plan_foundry else plan_params
         return DEFAULT(**kw)
 
     if t == "builtin.retrieve":
+        from agentic_sdk.knowledge import KnowledgeBase
         from agentic_sdk.workflow.nodes.retrieve import DEFAULT
-        return DEFAULT(**spec.params)
+        retrieve_params = {k: v for k, v in spec.params.items() if k != "enable_vision_query"}
+        if isinstance(retrieve_params.get("knowledge_base"), str):
+            retrieve_params["knowledge_base"] = KnowledgeBase.from_file(retrieve_params["knowledge_base"])
+        return DEFAULT(**retrieve_params)
 
     if t == "builtin.reflect":
         from agentic_sdk.workflow.nodes.reflect import ReflexionReflect, RuleBasedReflect

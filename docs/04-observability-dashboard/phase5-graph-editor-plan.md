@@ -68,9 +68,9 @@ browser
   └─ 由 Vite dev server 或靜態打包使用
 ```
 
-**布局位置**:`editor/` (與現有 `dashboard/` 同層的前端專用目錄)。同一套 SDK 兩個前端共存。
+**布局位置**:`demo/` (與現有 `dashboard/` 同層的前端專用目錄)。同一套 SDK 兩個前端共存。
 
-**五節點型別**直接在 [`editor/src/nodes/`](../../editor/src/nodes/) 以 React component 實作,與 SDK 端 [`agentic_sdk/workflow/nodes/`](../../agentic_sdk/workflow/nodes/) 一一對應。UI 屬性 ⇄ `NodeSpec.params` 的轉換在 [`editor/src/adapter.ts`](../../editor/src/adapter.ts) 中心化。
+**五節點型別**直接在 [`demo/src/nodes/`](../../demo/src/nodes/) 以 React component 實作,與 SDK 端 [`agentic_sdk/workflow/nodes/`](../../agentic_sdk/workflow/nodes/) 一一對應。UI 屬性 ⇄ `NodeSpec.params` 的轉換在 [`demo/src/adapter.ts`](../../demo/src/adapter.ts) 中心化。
 
 ---
 
@@ -96,7 +96,7 @@ UI 拖曳時即時擋下不在白名單的連線,並 tooltip 解釋原因。
 | **Plan** | `system_prompt`:下拉模板(`react` / `cot` / `plan_and_solve`)+ 自訂多行 | [`ReActPlan(foundry_client=None)`](../../agentic_sdk/workflow/nodes/plan/react.py) `_SYSTEM_PROMPT` 寫死 | `ReActPlan.__init__(system_prompt: str \| None = None)`;新增 `_SYSTEM_PROMPT_TEMPLATES: dict[str, str]` |
 | **Retrieve** | `backend` 下拉(僅 `stub`)、`corpus` 多行 JSON | [`StubRetrieve(corpus=None)`](../../agentic_sdk/workflow/nodes/retrieve/stub.py) 已支援 corpus | — |
 | **Reflect** | `on_failure` 下拉(`retry_plan` / `end`) | [`RuleBasedReflect`](../../agentic_sdk/workflow/nodes/reflect/rule_based.py) 無 `__init__`,行為寫死 | `RuleBasedReflect.__init__(on_failure: str = "retry_plan")` |
-| **Action** | `backend` 下拉(`upstream` / `foundry`)+ 對應屬性(model、base_url / deployment) | [`UpstreamCompletionAction`](../../agentic_sdk/workflow/nodes/action/upstream_completion.py) 與 [`FoundryCompletionAction`](../../agentic_sdk/workflow/nodes/action/foundry_completion.py) 是不同 class | 不改 SDK。UI adapter 在 [`editor/src/adapter.ts`](../../editor/src/adapter.ts) 把 backend 下拉值映射到 [`NodeSpec.type`](../../agentic_sdk/workflow/config.py)(`upstream_completion` / `foundry_completion`),不動 [`_build_node_from_spec`](../../agentic_sdk/workflow/config.py) |
+| **Action** | `backend` 下拉(`upstream` / `foundry`)+ 對應屬性(model、base_url / deployment) | [`UpstreamCompletionAction`](../../agentic_sdk/workflow/nodes/action/upstream_completion.py) 與 [`FoundryCompletionAction`](../../agentic_sdk/workflow/nodes/action/foundry_completion.py) 是不同 class | 不改 SDK。UI adapter 在 [`demo/src/adapter.ts`](../../demo/src/adapter.ts) 把 backend 下拉值映射到 [`NodeSpec.type`](../../agentic_sdk/workflow/config.py)(`upstream_completion` / `foundry_completion`),不動 [`_build_node_from_spec`](../../agentic_sdk/workflow/config.py) |
 | **全域 Gates** | `max_node_hops` / `max_revisit` / `timeout_sec` 數字框 | [`GateConfig`](../../agentic_sdk/workflow/config.py) 已支援 | — |
 
 ### 3.3 Plan system_prompt 模板(M5-1 新增到 SDK)
@@ -238,10 +238,10 @@ Editor 內附「在 Dashboard 觀看完整 trace」按鈕,跳到 `http://localho
 |------|----------|--------|
 | Plan 模板字典 + system_prompt 參數 | [`agentic_sdk/workflow/nodes/plan/react.py`](../../agentic_sdk/workflow/nodes/plan/react.py) | 同檔擴充 |
 | Reflect on_failure 參數 | [`agentic_sdk/workflow/nodes/reflect/rule_based.py`](../../agentic_sdk/workflow/nodes/reflect/rule_based.py) | 同檔擴充 |
-| Action backend 下拉 ⇄ NodeSpec.type 映射 | — | 在 `editor/src/adapter.ts` 集中化,SDK 不動 |
+| Action backend 下拉 ⇄ NodeSpec.type 映射 | — | 在 `demo/src/adapter.ts` 集中化,SDK 不動 |
 | `POST /v1/workflow/run` + SSE | [`agentic_sdk/gateway/app.py`](../../agentic_sdk/gateway/app.py) router 註冊 | 新增 `agentic_sdk/gateway/routes_workflow.py` |
-| Editor 前端專案(Vite + React + React Flow + shadcn/ui) | — | 新增 `editor/` 目錄作為前端 monorepo 兩口 |
-| `WorkflowConfig` ⇄ React Flow 畫布 JSON adapter | — | 新增 `editor/src/adapter.ts` |
+| Editor 前端專案(Vite + React + React Flow + shadcn/ui) | — | 新增 `demo/` 目錄作為前端 monorepo 兩口 |
+| `WorkflowConfig` ⇄ React Flow 畫布 JSON adapter | — | 新增 `demo/src/adapter.ts` |
 | Editor 啟動腳本 | [`scripts/start.ps1`](../../scripts/start.ps1) | 新增 `scripts/start_editor.ps1`(跑 `npm run dev`) |
 | 預設五節點模板 YAML | — | 新增 `examples/workflows/default.yaml` |
 | Dashboard 接 `?workflow_id=` URL 過濾 | [`dashboard/app.py`](../../dashboard/app.py) | 同檔擴充 |

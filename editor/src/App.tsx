@@ -35,6 +35,7 @@ import { FIVE_NODE_NAMES } from "./types";
 import type { ChatMessage, NodeStatus, TelemetryEvent } from "./runtime/types";
 import { runWorkflow, subscribeStream, fetchWorkflowResult } from "./runtime/api";
 import {
+  EVENT_NODE_DELTA,
   EVENT_NODE_FINISH,
   EVENT_NODE_START,
   EVENT_WORKFLOW_FALLBACK,
@@ -66,7 +67,7 @@ function EditorRoot() {
 
   // ── M7-3 面板拖曳縮放 / M8-1 LEFT 為主面板 ─────────────────────────────
   const [leftWidth, setLeftWidth] = useState(360);
-  const [chatHeight, setChatHeight] = useState(220);
+  const [chatHeight, setChatHeight] = useState(440);
   const dragDir = useRef<'v' | 'h' | null>(null);
 
   const startResizeV = useCallback((e: React.MouseEvent) => {
@@ -115,14 +116,13 @@ function EditorRoot() {
 
   // ── 屬性面板更新 ──────────────────────────────────────────────────────────
   const handleSpecUpdate = useCallback(
-    (newSpec: NodeSpec) => {
-      if (!selectedId) return;
+    (nodeId: string, newSpec: NodeSpec) => {
       setNodes((curr) =>
-        curr.map((n) => (n.id === selectedId ? { ...n, data: { ...n.data, spec: newSpec } } : n))
+        curr.map((n) => (n.id === nodeId ? { ...n, data: { ...n.data, spec: newSpec } } : n))
       );
-      setConfig((c) => ({ ...c, nodes: { ...c.nodes, [selectedId]: newSpec } }));
+      setConfig((c) => ({ ...c, nodes: { ...c.nodes, [nodeId]: newSpec } }));
     },
-    [selectedId, setNodes]
+    [setNodes]
   );
 
   // ── YAML 下載 / 載入 ──────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ function EditorRoot() {
 
   // ── 跑一次 + SSE 動畫 ─────────────────────────────────────────────────────
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, attachments?: import("./types").Attachment[]) => {
       // 上一次的 stream 若未關,先關
       closeStreamRef.current?.();
       closeStreamRef.current = null;
@@ -188,9 +188,13 @@ function EditorRoot() {
       setIsRunning(true);
       startTimeRef.current = performance.now();
 
+      const displayText = attachments && attachments.length > 0
+        ? `${text}${text ? "\n" : ""}[已附上 ${attachments.length} 個附件]`
+        : text;
+
       setMessages((prev) => [
         ...prev,
-        { role: "user", content: text },
+        { role: "user", content: displayText },
         { role: "assistant", content: "" },
       ]);
 
@@ -199,7 +203,7 @@ function EditorRoot() {
 
       let runResult: { workflow_id: string; stream_url: string };
       try {
-        runResult = await runWorkflow(yamlText, text);
+        runResult = await runWorkflow(yamlText, text, attachments);
       } catch (err) {
         setIsRunning(false);
         setMessages((prev) => {
@@ -230,10 +234,26 @@ function EditorRoot() {
       let lastModel: string | undefined;
       let lastInputTokens: number | undefined;
       let lastOutputTokens: number | undefined;
+      let streamedContent = "";
 
       closeStreamRef.current = subscribeStream(
         runResult.workflow_id,
         (ev: TelemetryEvent) => {
+          if (ev.event_name === EVENT_NODE_DELTA) {
+            const delta = typeof ev.delta_text === "string" ? ev.delta_text : "";
+            if (!delta) return;
+            streamedContent += delta;
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last && last.role === "assistant") {
+                next[next.length - 1] = { ...last, content: streamedContent };
+              }
+              return next;
+            });
+            return;
+          }
+
           const node = ev.workflow_node;
           if (!node || !FIVE_NODE_NAMES.includes(node as (typeof FIVE_NODE_NAMES)[number])) return;
 
@@ -256,12 +276,12 @@ function EditorRoot() {
           // SSE 異常關閉
         },
         async () => {
-          // SSE 結束 → 拉 /v1/workflow/{id}/result 取最終回應
+          // SSE 結束 → 拉 /v1/workflow/{id}/result 取最終回應;串流已有內容則優先使用串流
           try {
             const data = await fetchWorkflowResult(runResult.workflow_id);
             const finalMsg = data.aborted
               ? `(中止:${data.abort_reason ?? "unknown"})`
-              : String(data.final_message ?? "");
+              : streamedContent || String(data.final_message ?? "");
             finalize(finalMsg, {
               model: lastModel ?? data.usage?.model,
               input_tokens: lastInputTokens ?? data.usage?.input_tokens,
@@ -286,15 +306,14 @@ function EditorRoot() {
     };
   }, []);
 
-  const selectedSpec: NodeSpec | null = useMemo(() => {
-    if (!selectedId) return null;
-    const n = nodes.find((nn) => nn.id === selectedId);
-    return ((n?.data as { spec?: NodeSpec })?.spec ?? null) as NodeSpec | null;
-  }, [selectedId, nodes]);
-
-  const perceiveSpec = useMemo(() => {
-    const n = nodes.find((nn) => nn.id === "perceive");
-    return ((n?.data as { spec?: NodeSpec })?.spec ?? null) as NodeSpec | null;
+  const nodeSpecs = useMemo(() => {
+    const ids = ["perceive", "plan", "retrieve", "reflect", "action"] as const;
+    return Object.fromEntries(
+      ids.map((id) => {
+        const n = nodes.find((nn) => nn.id === id);
+        return [id, ((n?.data as { spec?: NodeSpec })?.spec ?? null) as NodeSpec | null];
+      })
+    ) as Record<string, NodeSpec | null>;
   }, [nodes]);
 
   return (
@@ -302,10 +321,8 @@ function EditorRoot() {
       <aside className="left-column" style={{ width: leftWidth }}>
         <AccordionPanel
           selectedNodeId={selectedId}
-          spec={selectedSpec}
+          specs={nodeSpecs}
           onUpdate={handleSpecUpdate}
-          onDownload={handleDownload}
-          onLoad={handleLoad}
           onShowPython={handleShowPython}
         />
       </aside>
@@ -338,7 +355,7 @@ function EditorRoot() {
             messages={messages}
             isRunning={isRunning}
             onSend={handleSend}
-            perceiveSpec={perceiveSpec}
+            perceiveSpec={nodeSpecs["perceive"]}
           />
         </footer>
       </div>

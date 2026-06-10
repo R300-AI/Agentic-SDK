@@ -50,6 +50,11 @@ class Settings(BaseSettings):
 
     upstream_health_poll_sec: float = Field(default=5.0, gt=0)
 
+    gateway_cors_origins: list[str] = Field(
+        default=["http://localhost:5173"],
+        description="允許跌過 CORS 的 Origin 白名單。GH Pages 部署時需加入 https://R300-AI.github.io。",
+    )
+
     def require_azure_foundry(self) -> None:
         missing = [
             name

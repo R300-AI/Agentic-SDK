@@ -1,5 +1,6 @@
 /** Gateway API 呼叫薄封裝。 */
 
+import type { Attachment } from "../types";
 import type { TelemetryEvent } from "./types";
 
 interface RunResponse {
@@ -18,15 +19,20 @@ export interface WorkflowResultData {
 
 export async function runWorkflow(
   workflowYaml: string,
-  userMessage: string
+  userMessage: string,
+  attachments?: Attachment[]
 ): Promise<RunResponse> {
+  const body: Record<string, unknown> = {
+    workflow_yaml: workflowYaml,
+    user_message: userMessage,
+  };
+  if (attachments && attachments.length > 0) {
+    body.attachments = attachments;
+  }
   const resp = await fetch("/v1/workflow/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      workflow_yaml: workflowYaml,
-      user_message: userMessage,
-    }),
+    body: JSON.stringify(body),
   });
   if (!resp.ok) {
     const text = await resp.text();

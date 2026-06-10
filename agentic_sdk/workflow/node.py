@@ -15,6 +15,7 @@ from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from agentic_sdk.context import ContextEntry
 from agentic_sdk.memory import MemoryStore
+from agentic_sdk.workflow.attachments import Attachment
 
 
 class NodeOutput(TypedDict, total=False):
@@ -53,6 +54,7 @@ class WorkflowState:
     visit_counts: dict[str, int] = field(default_factory=dict)
     last_action_result: dict | None = None
     last_action_error: dict | None = None
+    attachments: list[Attachment] = field(default_factory=list)
 
     def append(self, entry: ContextEntry) -> None:
         self.entries.append(entry)

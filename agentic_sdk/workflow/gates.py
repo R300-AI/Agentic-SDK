@@ -21,7 +21,7 @@ from agentic_sdk.workflow.node import WorkflowAborted, WorkflowState
 class Gates:
     max_node_hops: int = 50
     max_revisit: int = 5
-    timeout_sec: float = 30.0
+    timeout_sec: float = 300.0
 
     def before_visit(self, node_name: str, state: WorkflowState, total_hops: int) -> None:
         if total_hops > self.max_node_hops:

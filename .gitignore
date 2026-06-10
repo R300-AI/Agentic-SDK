@@ -43,3 +43,5 @@ chroma_db/
 
 # 本機暫存
 pytest_*.log
+pytest_*.txt
+fail.txt
