@@ -30,8 +30,8 @@ function Section({ title, open, onToggle, children }: SectionProps) {
   return (
     <div className={`accordion-section${open ? " accordion-open" : ""}`}>
       <button className="accordion-header" onClick={onToggle}>
+        <span className="accordion-chevron">{open ? "▼" : "▶"}</span>
         <span>{title}</span>
-        <span className="accordion-chevron">{open ? "▲" : "▼"}</span>
       </button>
       <div className="accordion-body">
         {children}
