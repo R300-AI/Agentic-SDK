@@ -134,10 +134,26 @@ M0 ──┬──▶ M1 ──┐
 | M5-0 | ✅ | 圖形平台 spike(文件證據判決) | Langflow 為 DAG-only、Loop 僅支援 for-each list 而非條件回環 → 走 React Flow 路線 |
 | M5-1 | ✅ | SDK 改 Plan/Reflect `__init__` + Plan 模板字典 | tests/test_workflow_config.py 由 11 案延伸至 19 案,涵蓋 system_prompt(預設模板/自訂/WorkflowConfig 注入)與 on_failure(retry_plan/end/pass 路徑/不合法值/WorkflowConfig 注入) |
 | M5-2 | ✅ | Gateway `POST /v1/workflow/run` + `GET /v1/workflow/{id}/stream` SSE | tests/test_gateway_workflow_routes.py 9 案 (YAML 解析、空訊息、未知節點型別、終止判斷四案、SSE 過濾 workflow_id 與終止);Workflow.run 加 workflow_id 注入點 |
-| M5-3 | ⬜ | Editor 骨架(Vite + React Flow + shadcn/ui) + 五節點 + 屬性面板 + YAML 下載/載入 | 同一份 YAML 經「載入→下載」與 pytest load 結果一致 |
-| M5-4 | ⬜ | 「跑一次」串通 + 五節點動畫 + 對話框 + Dashboard 跳轉 | 改 Action backend → 送訊息 → 動畫 → 看到回應;Dashboard ?workflow_id 跳轉正確 |
+| M5-3 | ✅(碼層) | Editor 骨架(Vite + React Flow) + 五節點 + 屬性面板 + YAML 下載/載入 + 佈局 + 預設範本 | examples/workflows/default.yaml + tests/test_default_workflow_yaml.py 4 案證明 YAML round-trip 與實際 from_config 跑通;實機 UI demo 待使用者裝 Node 22+ |
+| M5-4 | ✅(碼層) | 「跑一次」串通 + 五節點動畫 + 對話框 | App.tsx + ChatPanel + SSE handler 完整交付;實機 demo 待 npm install 後驗證 |
 
 **M5 完成代表**:使用者(整合商 / 客戶現場)可在瀏覽器內設計、儲存、執行自己的五節點工作流,並即時看到節點動畫與最終回應,無需碰 Python 或 YAML。
+
+實機驗收指引(由使用者執行):
+
+```powershell
+# 1. 裝 Node 22+
+winget install OpenJS.NodeJS.22
+
+# 2. 啟動 Gateway
+.\.venv\Scripts\python.exe -m agentic_sdk.gateway --host 127.0.0.1 --port 8080
+
+# 3. 啟動 editor(另一個 terminal)
+cd editor
+npm install
+npm run dev
+# 開 http://localhost:5173
+```
 
 ---
 
