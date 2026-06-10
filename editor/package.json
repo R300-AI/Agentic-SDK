@@ -6,6 +6,7 @@
   "description": "Phase 5 圖形編排 UI:拖曳設計、即時動畫、對話框輸出。後端走 Agentic SDK Gateway。",
   "scripts": {
     "dev": "vite",
+    "start": "concurrently -n gateway,editor -c cyan,green \"../.venv/Scripts/python.exe -m agentic_sdk.gateway --host 127.0.0.1 --port 8080\" \"vite\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
   },
@@ -20,6 +21,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.0.1",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }
