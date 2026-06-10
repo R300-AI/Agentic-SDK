@@ -204,13 +204,32 @@ def _make_plan_state(message: str = "hi"):
 
 
 def test_plan_uses_react_template_by_default() -> None:
-    from agentic_sdk.workflow.nodes.plan.react import ReActPlan, SYSTEM_PROMPT_TEMPLATES
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan
 
     stub = _StubFoundry()
     plan = ReActPlan(foundry_client=stub)
     plan(_make_plan_state())
 
-    assert stub.last_system == SYSTEM_PROMPT_TEMPLATES["react"]
+    # 預設模板含有 retrieve_index 區塊與規則編號，且無 retrieve_description 時標示為未配置。
+    assert "retrieve_index" in stub.last_system
+    assert "（未配置知識庫）" in stub.last_system
+    assert "只回 JSON" in stub.last_system
+
+
+def test_plan_injects_retrieve_description() -> None:
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan
+
+    stub = _StubFoundry()
+    plan = ReActPlan(
+        foundry_client=stub,
+        retrieve_name="shoe_store",
+        retrieve_description="鞋店產品型錄 — 含跑鞋、休閒鞋、鞋墊。",
+    )
+    plan(_make_plan_state())
+
+    assert "shoe_store" in stub.last_system
+    assert "鞋店產品型錄" in stub.last_system
+    assert "（未配置知識庫）" not in stub.last_system
 
 
 def test_plan_accepts_custom_system_prompt() -> None:

@@ -118,7 +118,7 @@ class Workflow:
             spec = config.nodes.get(name)
             if spec is None:
                 return None  # 交給 __post_init__ 補 DEFAULT
-            return _build_node_from_spec(spec, name, settings=s, foundry_client=fc)
+            return _build_node_from_spec(spec, name, settings=s, foundry_client=fc, config=config)
 
         gates = Gates(
             max_node_hops=config.gates.max_node_hops,

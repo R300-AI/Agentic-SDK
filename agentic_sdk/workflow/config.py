@@ -232,6 +232,7 @@ def _build_node_from_spec(
     node_name: str,
     settings=None,
     foundry_client=None,
+    config: "WorkflowConfig | None" = None,
 ):
     """依 NodeSpec 建構節點實例。
 
@@ -247,6 +248,19 @@ def _build_node_from_spec(
         from agentic_sdk.workflow.nodes.plan import DEFAULT
         plan_params = {k: v for k, v in spec.params.items()
                        if k not in ("model", "endpoint", "deployment")}
+        # 自動帶入 retrieve 節點的 KB 名稱/描述，讓 Plan 知道「可檢索什麼」
+        if "retrieve_description" not in plan_params and config is not None:
+            retrieve_spec = config.nodes.get("retrieve")
+            if retrieve_spec is not None:
+                kb = retrieve_spec.params.get("knowledge_base")
+                if isinstance(kb, str):
+                    try:
+                        from agentic_sdk.knowledge import KnowledgeBase
+                        kb_obj = KnowledgeBase.from_file(kb)
+                        plan_params.setdefault("retrieve_name", kb_obj.name)
+                        plan_params.setdefault("retrieve_description", kb_obj.description)
+                    except (FileNotFoundError, OSError, ValueError):
+                        pass
         # 若 YAML 指定 deployment 且與全域不同，建立 override foundry client
         plan_foundry = foundry_client
         spec_deployment = spec.params.get("deployment")
