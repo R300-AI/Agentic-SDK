@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from agentic_sdk.context import ContextEntry
+from agentic_sdk.memory import MemoryStore
 
 
 class NodeOutput(TypedDict, total=False):
@@ -44,6 +45,8 @@ class WorkflowState:
 
     user_message: str
     workflow_id: str = field(default_factory=lambda: uuid.uuid4().hex)
+    workflow_name: str = "default"
+    memory_store: MemoryStore | None = None
     started_monotonic: float = field(default_factory=time.monotonic)
     entries: list[ContextEntry] = field(default_factory=list)
     payload: dict[str, Any] = field(default_factory=dict)

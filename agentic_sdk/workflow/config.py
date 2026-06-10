@@ -72,20 +72,31 @@ class NodeSpec:
         - 完整 Python import path(如 ``mypackage.nodes.MyNode``)— 自訂節點
     params:
         傳遞給節點建構子的關鍵字參數,各節點自行解讀。
+    compute_target:
+        M6-3 節點異質部署宣告。MVP 階段僅作 telemetry / UI label使用,
+        SDK 端不隨此值實際 dispatch。合法值:``ryzen_ai`` / ``azure_foundry`` /
+        ``local_cpu``。None 表示未宣告。
     """
 
     type: str
     params: dict[str, Any] = field(default_factory=dict)
+    compute_target: str | None = None
 
     def to_dict(self) -> dict:
         d: dict = {"type": self.type}
         if self.params:
             d["params"] = self.params
+        if self.compute_target:
+            d["compute_target"] = self.compute_target
         return d
 
     @staticmethod
     def from_dict(d: dict) -> "NodeSpec":
-        return NodeSpec(type=d["type"], params=d.get("params") or {})
+        return NodeSpec(
+            type=d["type"],
+            params=d.get("params") or {},
+            compute_target=d.get("compute_target"),
+        )
 
 
 @dataclass
@@ -119,12 +130,16 @@ class WorkflowConfig:
     nodes 中只需列出要覆蓋預設值的節點;未列出的節點在 ``Workflow.from_config``
     時會補回各節點的 DEFAULT。
 
+    name 是 M6-1 Memory Stream 的隔離單位:同名 workflow 跨 run 共享記憶,
+    不同名互不干擾。預設 ``default``。
+
     version 用於未來 schema 向下相容判斷,目前只認 "1"。
     """
 
     nodes: dict[str, NodeSpec] = field(default_factory=dict)
     gates: GateConfig = field(default_factory=GateConfig)
     entry: str = "perceive"
+    name: str = "default"
     version: str = "1"
 
     # ── 序列化 ────────────────────────────────────────────────────────────────
@@ -132,6 +147,7 @@ class WorkflowConfig:
     def to_dict(self) -> dict:
         return {
             "version": self.version,
+            "name": self.name,
             "entry": self.entry,
             "nodes": {name: spec.to_dict() for name, spec in self.nodes.items()},
             "gates": self.gates.to_dict(),
@@ -173,6 +189,7 @@ class WorkflowConfig:
             nodes=nodes,
             gates=gates,
             entry=d.get("entry", "perceive"),
+            name=d.get("name", "default"),
             version=version,
         )
 
@@ -232,8 +249,13 @@ def _build_node_from_spec(
         return DEFAULT(**spec.params)
 
     if t == "builtin.reflect":
-        from agentic_sdk.workflow.nodes.reflect import DEFAULT
-        return DEFAULT(**spec.params)
+        from agentic_sdk.workflow.nodes.reflect import ReflexionReflect, RuleBasedReflect
+        params = dict(spec.params)
+        mode = params.pop("mode", "rule_based")
+        if mode == "llm":
+            kw = {"foundry_client": foundry_client, **params} if foundry_client else params
+            return ReflexionReflect(**kw)
+        return RuleBasedReflect(**params)
 
     if t in ("builtin.action", "upstream_completion"):
         from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction

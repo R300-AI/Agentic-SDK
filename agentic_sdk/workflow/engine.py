@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ContextEntry, ContextEntryType
+from agentic_sdk.memory import MemoryStore
 from agentic_sdk.observability import make_event, node_span
 from agentic_sdk.observability.events import EVENT_WORKFLOW_FALLBACK
 from agentic_sdk.workflow.gates import Gates
@@ -54,6 +55,8 @@ class Workflow:
     gates: Gates | None = None
     settings: Settings | None = None
     active_store: ActiveStore | None = None
+    memory_store: MemoryStore | None = None
+    workflow_name: str = "default"
     entry_node: str = "perceive"
 
     nodes: dict[str, Node] = field(init=False)
@@ -90,6 +93,7 @@ class Workflow:
         config: "WorkflowConfig",  # type: ignore[name-defined]
         settings: Settings | None = None,
         active_store: ActiveStore | None = None,
+        memory_store: MemoryStore | None = None,
         node_overrides: dict[str, Node] | None = None,
     ) -> "Workflow":
         """從 WorkflowConfig 建構 Workflow 實例。
@@ -130,6 +134,8 @@ class Workflow:
             gates=gates,
             settings=s,
             active_store=active_store,
+            memory_store=memory_store,
+            workflow_name=config.name,
             entry_node=config.entry,
         )
 
@@ -139,6 +145,8 @@ class Workflow:
             if workflow_id
             else WorkflowState(user_message=user_message)
         )
+        state.workflow_name = self.workflow_name
+        state.memory_store = self.memory_store
         user_entry = ContextEntry(type=ContextEntryType.USER_INPUT, content=user_message)
         state.append(user_entry)
         if self.active_store is not None:

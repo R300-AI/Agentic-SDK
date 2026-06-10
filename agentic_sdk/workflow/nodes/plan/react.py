@@ -67,27 +67,34 @@ class ReActPlan:
         decision = response.as_json()
         thought = str(decision.get("thought", "(no thought)"))
         next_node = decision.get("next_node")
+        subtasks_raw = decision.get("subtasks") or []
+        subtasks = [str(s) for s in subtasks_raw] if isinstance(subtasks_raw, list) else []
 
         fallback = False
         if next_node not in _ALLOWED_NEXT:
             next_node = "action"
             fallback = True
 
+        metadata: dict = {
+            "thought": thought,
+            "next_node": next_node,
+            "fallback": fallback,
+            "llm": self._foundry.label,
+        }
+        if subtasks:
+            metadata["subtasks"] = subtasks
+
         entry = ContextEntry(
             type=ContextEntryType.PLAN_DECISION,
             content=f"thought={thought} next={next_node}",
-            metadata={
-                "thought": thought,
-                "next_node": next_node,
-                "fallback": fallback,
-                "llm": self._foundry.label,
-            },
+            metadata=metadata,
         )
 
         return NodeOutput(
             next_node=next_node,
             payload={
                 "plan_thought": thought,
+                "plan_subtasks": subtasks,
                 "_llm_usage": {
                     "model": response.model,
                     "input_tokens": response.input_tokens,

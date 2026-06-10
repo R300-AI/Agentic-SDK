@@ -71,6 +71,7 @@ export function flowToConfig(
 ): WorkflowConfig {
   const out: WorkflowConfig = {
     version: "1",
+    name: baseConfig.name,
     entry: baseConfig.entry,
     nodes: {},
     gates: { ...baseConfig.gates },
@@ -99,10 +100,12 @@ export function yamlToConfig(yaml: string): WorkflowConfig {
     throw new Error(`不支援的 version=${String(obj.version)},僅接受 "1"`);
   }
   const entry = typeof obj.entry === "string" ? obj.entry : "perceive";
+  const name = typeof obj.name === "string" ? obj.name : undefined;
   const nodesRaw = (obj.nodes ?? {}) as Record<string, NodeSpec>;
   const gatesRaw = (obj.gates ?? {}) as Partial<WorkflowConfig["gates"]>;
   return {
     version: "1",
+    name,
     entry,
     nodes: nodesRaw,
     gates: {
@@ -119,8 +122,8 @@ function defaultTypeFor(name: string): string {
 }
 
 function stripEmptyParams(spec: NodeSpec): NodeSpec {
-  if (!spec.params || Object.keys(spec.params).length === 0) {
-    return { type: spec.type };
-  }
-  return spec;
+  const out: NodeSpec = { type: spec.type };
+  if (spec.params && Object.keys(spec.params).length > 0) out.params = spec.params;
+  if (spec.compute_target) out.compute_target = spec.compute_target;
+  return out;
 }

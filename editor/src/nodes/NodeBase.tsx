@@ -1,15 +1,16 @@
-/** 五節點共用外殼 — 顯示標題、狀態描邊動畫,內容由子節點自填。 */
+/** 五節點共用外殼 — 顯示標題、狀態描邊動畫、compute_target badge(M6-4)。 */
 
 import { Handle, Position } from "@xyflow/react";
 import type { ReactNode } from "react";
 import type { NodeStatus } from "../runtime/types";
+import { COMPUTE_TARGET_OPTIONS } from "../types";
 
 interface Props {
   title: string;
   subtitle?: string;
   status: NodeStatus;
+  computeTarget?: string;
   children?: ReactNode;
-  /** 為 false 時不渲染 source / target handle(例如 perceive 沒入口、reflect 出口會多條)。 */
   hasInput?: boolean;
   hasOutput?: boolean;
 }
@@ -25,14 +26,20 @@ export function NodeBase({
   title,
   subtitle,
   status,
+  computeTarget,
   children,
   hasInput = true,
   hasOutput = true,
 }: Props) {
+  const tgt = computeTarget ?? "local_cpu";
+  const tgtLabel = COMPUTE_TARGET_OPTIONS.find((o) => o.value === tgt)?.label ?? tgt;
   return (
     <div className={`node-shell ${STATUS_CLASS[status]}`}>
       {hasInput && <Handle type="target" position={Position.Left} />}
-      <div className="node-title">{title}</div>
+      <div className="node-head">
+        <span className="node-title">{title}</span>
+        <span className={`node-badge badge-${tgt}`}>{tgtLabel}</span>
+      </div>
       {subtitle && <div className="node-subtitle">{subtitle}</div>}
       {children && <div className="node-body">{children}</div>}
       {hasOutput && <Handle type="source" position={Position.Right} />}

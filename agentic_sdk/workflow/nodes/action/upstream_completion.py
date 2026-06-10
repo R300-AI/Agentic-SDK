@@ -32,12 +32,21 @@ class UpstreamCompletionAction:
         settings: Settings | None = None,
         model: str | None = None,
         base_url: str | None = None,
+        endpoint: str | None = None,
+        api_key: str | None = None,
+        deployment: str | None = None,
+        temperature: float | None = None,
     ) -> None:
         self._settings = settings or get_settings()
         if upstream is not None and base_url is not None:
             raise ValueError("upstream 與 base_url 互斥;指定 upstream 表示完全外部注入,base_url 則由本物件自建 UpstreamClient")
-        self._upstream = upstream or UpstreamClient(self._settings, base_url=base_url)
-        self._model = model  # 若未指定,從 state.payload 取或回 None 由上游預設
+        # endpoint 是 UI 端的語意;映射為 base_url。
+        effective_base = endpoint or base_url
+        self._upstream = upstream or UpstreamClient(self._settings, base_url=effective_base)
+        self._model = model or deployment
+        self._temperature = temperature
+        # api_key 是 UI 明文覆寫;本階段走 settings、不重新注入讀者需手動設 env。
+        _ = api_key
 
     @property
     def gen_ai_request_model(self) -> str | None:
@@ -48,10 +57,10 @@ class UpstreamCompletionAction:
         messages = _build_messages(state)
 
         try:
-            completion = self._upstream.openai.chat.completions.create(
-                model=model,
-                messages=messages,
-            )
+            kwargs: dict = {"model": model, "messages": messages}
+            if self._temperature is not None:
+                kwargs["temperature"] = self._temperature
+            completion = self._upstream.openai.chat.completions.create(**kwargs)
         except Exception as exc:
             # 嘗試從 openai.APIStatusError 取得完整 HTTP 回應本體(包含 server 的錯誤 JSON),
             # 以便日誌中顯示真正原因,而非只有 "Internal Server Error" 文字。

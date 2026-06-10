@@ -3,6 +3,7 @@
 export interface NodeSpec {
   type: string;
   params?: Record<string, unknown>;
+  compute_target?: string;
 }
 
 export interface GateConfig {
@@ -13,10 +14,29 @@ export interface GateConfig {
 
 export interface WorkflowConfig {
   version: "1";
+  name?: string;
   entry: string;
   nodes: Record<string, NodeSpec>;
   gates: GateConfig;
 }
+
+export interface PerceiveOption {
+  label: string;
+  value: string;
+  intent: string;
+}
+
+/** M6-4 — 節點計算資源綁定。對應 NodeSpec.compute_target。 */
+export const COMPUTE_TARGET_OPTIONS = [
+  { label: "Ryzen AI NPU", value: "ryzen_ai" },
+  { label: "Azure Foundry", value: "azure_foundry" },
+  { label: "本機 CPU", value: "local_cpu" },
+] as const;
+
+export const REFLECT_MODE_OPTIONS = [
+  { label: "規則式(零成本)", value: "rule_based" },
+  { label: "LLM 反思(Reflexion)", value: "llm" },
+] as const;
 
 export const FIVE_NODE_NAMES = ["perceive", "plan", "retrieve", "reflect", "action"] as const;
 export type NodeName = (typeof FIVE_NODE_NAMES)[number];

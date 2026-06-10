@@ -12,10 +12,11 @@ import {
 } from "@xyflow/react";
 
 import { NODE_TYPES } from "./nodes";
-import { NodePalette } from "./panels/NodePalette";
+import { NodePalette, PythonModal } from "./panels/NodePalette";
 import { PropertyPanel } from "./panels/PropertyPanel";
 import { ChatPanel } from "./panels/ChatPanel";
 import { DEFAULT_WORKFLOW, DEFAULT_WORKFLOW_YAML } from "./defaultWorkflow";
+import { configToPython } from "./export";
 import {
   configToFlow,
   configToYaml,
@@ -53,6 +54,13 @@ function EditorRoot() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const closeStreamRef = useRef<(() => void) | null>(null);
   const startTimeRef = useRef<number>(0);
+
+  // ── M6-10 Python 程式碼 modal ─────────────────────────────────────────────
+  const [pythonCode, setPythonCode] = useState<string | null>(null);
+  const handleShowPython = useCallback(() => {
+    const merged = flowToConfig(nodes, config);
+    setPythonCode(configToPython(merged));
+  }, [nodes, config]);
 
   const updateNodeStatus = useCallback(
     (nodeId: string, status: NodeStatus) => {
@@ -239,11 +247,17 @@ function EditorRoot() {
     return ((n?.data as { spec?: NodeSpec })?.spec ?? null) as NodeSpec | null;
   }, [selectedId, nodes]);
 
+  const perceiveSpec = useMemo(() => {
+    const n = nodes.find((nn) => nn.id === "perceive");
+    return ((n?.data as { spec?: NodeSpec })?.spec ?? null) as NodeSpec | null;
+  }, [nodes]);
+
   return (
     <div className="editor-shell">
       <NodePalette
         onDownload={handleDownload}
         onLoad={handleLoad}
+        onShowPython={handleShowPython}
         selectedId={selectedId}
         onSelect={setSelectedId}
       />
@@ -269,8 +283,16 @@ function EditorRoot() {
         onUpdate={handleSpecUpdate}
       />
       <footer className="footer-area">
-        <ChatPanel messages={messages} isRunning={isRunning} onSend={handleSend} />
+        <ChatPanel
+          messages={messages}
+          isRunning={isRunning}
+          onSend={handleSend}
+          perceiveSpec={perceiveSpec}
+        />
       </footer>
+      {pythonCode !== null && (
+        <PythonModal code={pythonCode} onClose={() => setPythonCode(null)} />
+      )}
     </div>
   );
 }

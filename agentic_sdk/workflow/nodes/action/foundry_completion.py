@@ -29,16 +29,23 @@ class FoundryCompletionAction:
         settings: Settings | None = None,
         model: str | None = None,
         client=None,
+        endpoint: str | None = None,
+        deployment: str | None = None,
+        api_key: str | None = None,
+        temperature: float | None = None,
     ) -> None:
         from openai import AzureOpenAI
 
         self._settings = settings or get_settings()
-        self._settings.require_azure_foundry()
-        self._deployment = self._settings.azure_foundry_deployment
+        # 只有完全走 settings(未覆寫 endpoint/api_key)時才驗證 settings。
+        if not (endpoint and api_key):
+            self._settings.require_azure_foundry()
+        self._deployment = deployment or self._settings.azure_foundry_deployment
         self._model = model
+        self._temperature = temperature
         self._client = client or AzureOpenAI(
-            azure_endpoint=self._settings.azure_foundry_endpoint,
-            api_key=self._settings.azure_foundry_api_key,
+            azure_endpoint=endpoint or self._settings.azure_foundry_endpoint,
+            api_key=api_key or self._settings.azure_foundry_api_key,
             api_version=self._settings.azure_foundry_api_version,
             timeout=self._settings.infer_request_timeout_sec,
         )
@@ -51,10 +58,10 @@ class FoundryCompletionAction:
         messages = _build_messages(state)
 
         try:
-            completion = self._client.chat.completions.create(
-                model=self._deployment,
-                messages=messages,
-            )
+            kwargs: dict = {"model": self._deployment, "messages": messages}
+            if self._temperature is not None:
+                kwargs["temperature"] = self._temperature
+            completion = self._client.chat.completions.create(**kwargs)
         except Exception as exc:
             logger.warning("foundry action call failed: %s", exc)
             state.last_action_error = {
