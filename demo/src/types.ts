@@ -24,6 +24,8 @@ export interface PerceiveOption {
   label: string;
   /** Perceive 傳給 Plan 的意圖識別碼，用於路由決策（如 product_recommendation）。 */
   intent?: string;
+  /** 送出值（預設等同 label）。 */
+  value?: string;
   /** 點該選項時是否引導使用者上傳附件（M9-5）。 */
   expects_attachment?: "image" | "file";
 }

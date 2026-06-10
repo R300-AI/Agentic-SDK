@@ -28,7 +28,6 @@ import {
   configToYaml,
   flowToConfig,
   isLegalEdge,
-  yamlToConfig,
 } from "./adapter";
 import type { NodeSpec, WorkflowConfig } from "./types";
 import { FIVE_NODE_NAMES } from "./types";
@@ -130,35 +129,6 @@ function EditorRoot() {
       setConfig((c) => ({ ...c, nodes: { ...c.nodes, [nodeId]: newSpec } }));
     },
     [setNodes]
-  );
-
-  // ── YAML 下載 / 載入 ──────────────────────────────────────────────────────
-  const handleDownload = useCallback(() => {
-    const merged = flowToConfig(nodes, config);
-    const yamlText = configToYaml(merged);
-    const blob = new Blob([yamlText], { type: "text/yaml;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `workflow-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "")}.yaml`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [nodes, config]);
-
-  const handleLoad = useCallback(
-    (yamlText: string) => {
-      try {
-        const next = yamlToConfig(yamlText);
-        setConfig(next);
-        const f = configToFlow(next);
-        setNodes(f.nodes);
-        setEdges(f.edges);
-        setSelectedId(null);
-      } catch (err) {
-        alert(`YAML 載入失敗:${err instanceof Error ? err.message : String(err)}`);
-      }
-    },
-    [setNodes, setEdges]
   );
 
   // ── 邊連線白名單 ──────────────────────────────────────────────────────────
