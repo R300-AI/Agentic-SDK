@@ -54,7 +54,7 @@ html, body, #root {
   border-top: 1px solid var(--border);
   background: var(--bg-elev2);
 }
-.left-tools h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
+.left-tools h3 { margin: 0 0 8px; font-size: 15px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
 .left-tools hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
 .left-tools-buttons { display: flex; flex-direction: column; gap: 6px; }
 .left-tools button, .left-tools .file-button {
@@ -66,7 +66,7 @@ html, body, #root {
   background: var(--bg);
   color: var(--text);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 16px;
   text-align: center;
   box-sizing: border-box;
 }
@@ -305,7 +305,7 @@ html, body, #root {
   margin-bottom: 12px;
 }
 .memory-indicator-icon { font-size: 22px; color: var(--accent); }
-.memory-indicator-body { font-size: 12px; line-height: 1.4; }
+.memory-indicator-body { font-size: 16px; line-height: 1.4; }
 .memory-indicator-body small { display: block; color: var(--text-muted); }
 
 .prop-divider {
@@ -321,7 +321,7 @@ html, body, #root {
   margin-bottom: 4px;
 }
 .perceive-option input {
-  font-size: 12px;
+  font-size: 16px;
   padding: 4px 6px;
 }
 .icon-btn {
@@ -341,7 +341,7 @@ html, body, #root {
   border-radius: 4px;
   padding: 6px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 16px;
   margin-top: 4px;
 }
 .add-btn:hover { color: var(--accent); border-color: var(--accent); }
