@@ -13,6 +13,10 @@ from __future__ import annotations
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.workflow.llm import FoundryClient, get_foundry_client
 from agentic_sdk.workflow.node import NodeOutput, WorkflowState
+from agentic_sdk.observability.events import EVENT_NODE_THOUGHT, make_event
+
+import logging
+logger = logging.getLogger("agentic_sdk.workflow")
 
 
 _ALLOWED_NEXT = {"retrieve", "action"}
@@ -108,6 +112,20 @@ class ReActPlan:
         if next_node not in _ALLOWED_NEXT:
             next_node = "action"
             fallback = True
+
+        # emit thought 讓前端可以顯示推理軌跡
+        logger.info(
+            "plan.thought wid=%s next=%s thought=%s",
+            state.workflow_id, next_node, thought,
+            extra={"event": make_event(
+                EVENT_NODE_THOUGHT,
+                workflow_id=state.workflow_id,
+                workflow_node="plan",
+                plan_thought=thought,
+                plan_next_node=next_node,
+                plan_fallback=fallback,
+            )},
+        )
 
         metadata: dict = {
             "thought": thought,

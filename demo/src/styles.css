@@ -293,6 +293,39 @@ html, body, #root {
 .chat-msg-markdown { white-space: normal; line-height: 1.6; }
 .chat-msg-meta { font-size: 11px; color: var(--text-muted); margin-top: 6px; display: flex; gap: 10px; }
 
+/* Plan 推理軌跡 */
+.chat-plan-thought {
+  margin: 6px 0 2px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+  border-left: 2px solid #4ec9b040;
+  padding-left: 8px;
+}
+.chat-plan-thought summary {
+  cursor: pointer;
+  user-select: none;
+  color: #4ec9b0;
+  font-style: italic;
+  list-style: none;
+}
+.chat-plan-thought summary::before { content: "▶ "; font-size: 9px; }
+.chat-plan-thought[open] summary::before { content: "▼ "; }
+.chat-plan-thought p {
+  margin: 4px 0 2px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+.chat-plan-next {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  background: #4ec9b018;
+  border: 1px solid #4ec9b040;
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: #4ec9b0;
+}
+
 .chat-input {
   display: flex;
   gap: 8px;

@@ -38,6 +38,7 @@ import {
   EVENT_NODE_DELTA,
   EVENT_NODE_FINISH,
   EVENT_NODE_START,
+  EVENT_NODE_THOUGHT,
   EVENT_WORKFLOW_FALLBACK,
 } from "./runtime/eventNames";
 
@@ -211,11 +212,35 @@ function EditorRoot() {
       let lastModel: string | undefined;
       let lastInputTokens: number | undefined;
       let lastOutputTokens: number | undefined;
+      let lastPlanThought: string | undefined;
+      let lastPlanNextNode: string | undefined;
       let streamedContent = "";
 
       closeStreamRef.current = subscribeStream(
         runResult.workflow_id,
         (ev: TelemetryEvent) => {
+          // Plan 推理軌跡 — 寫入最後一條 assistant metadata 讓 ChatPanel 顯示
+          if (ev.event_name === EVENT_NODE_THOUGHT && ev.workflow_node === "plan") {
+            lastPlanThought = typeof ev.plan_thought === "string" ? ev.plan_thought : undefined;
+            lastPlanNextNode = typeof ev.plan_next_node === "string" ? ev.plan_next_node : undefined;
+            setMessages((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              if (last && last.role === "assistant") {
+                next[next.length - 1] = {
+                  ...last,
+                  metadata: {
+                    ...last.metadata,
+                    plan_thought: lastPlanThought,
+                    plan_next_node: lastPlanNextNode,
+                  },
+                };
+              }
+              return next;
+            });
+            return;
+          }
+
           if (ev.event_name === EVENT_NODE_DELTA) {
             const delta = typeof ev.delta_text === "string" ? ev.delta_text : "";
             if (!delta) return;
@@ -263,6 +288,8 @@ function EditorRoot() {
               model: lastModel ?? data.usage?.model,
               input_tokens: lastInputTokens ?? data.usage?.input_tokens,
               output_tokens: lastOutputTokens ?? data.usage?.output_tokens,
+              plan_thought: lastPlanThought,
+              plan_next_node: lastPlanNextNode,
             });
           } catch (err) {
             finalize(`(完成,但取結果失敗:${err instanceof Error ? err.message : String(err)})`, {

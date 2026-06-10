@@ -17,6 +17,9 @@ export interface TelemetryEvent {
   gen_ai_usage_output_tokens?: number;
   delta_text?: string;
   delta_index?: number;
+  plan_thought?: string;
+  plan_next_node?: string;
+  plan_fallback?: boolean;
   [key: string]: unknown;
 }
 
@@ -28,5 +31,7 @@ export interface ChatMessage {
     elapsed_ms?: number;
     input_tokens?: number;
     output_tokens?: number;
+    plan_thought?: string;
+    plan_next_node?: string;
   };
 }

@@ -3,4 +3,5 @@
 export const EVENT_NODE_START = "workflow.node.start";
 export const EVENT_NODE_FINISH = "workflow.node.finish";
 export const EVENT_NODE_DELTA = "workflow.node.delta";
+export const EVENT_NODE_THOUGHT = "workflow.node.thought";
 export const EVENT_WORKFLOW_FALLBACK = "workflow.fallback";

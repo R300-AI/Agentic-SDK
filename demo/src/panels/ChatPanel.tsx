@@ -187,12 +187,23 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
                 </div>
               )}
               {m.metadata && (
-                <div className="chat-msg-meta">
-                  {m.metadata.model && <span>{m.metadata.model}</span>}
-                  {m.metadata.input_tokens !== undefined && <span>↑{m.metadata.input_tokens}</span>}
-                  {m.metadata.output_tokens !== undefined && <span>↓{m.metadata.output_tokens}</span>}
-                  {m.metadata.elapsed_ms !== undefined && <span>{m.metadata.elapsed_ms}ms</span>}
-                </div>
+                <>
+                  {m.metadata.plan_thought && (
+                    <details className="chat-plan-thought">
+                      <summary>💭 Plan 推理</summary>
+                      <p>{m.metadata.plan_thought}</p>
+                      {m.metadata.plan_next_node && (
+                        <span className="chat-plan-next">→ {m.metadata.plan_next_node}</span>
+                      )}
+                    </details>
+                  )}
+                  <div className="chat-msg-meta">
+                    {m.metadata.model && <span>{m.metadata.model}</span>}
+                    {m.metadata.input_tokens !== undefined && <span>↑{m.metadata.input_tokens}</span>}
+                    {m.metadata.output_tokens !== undefined && <span>↓{m.metadata.output_tokens}</span>}
+                    {m.metadata.elapsed_ms !== undefined && <span>{m.metadata.elapsed_ms}ms</span>}
+                  </div>
+                </>
               )}
             </div>
           ))

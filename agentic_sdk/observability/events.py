@@ -31,6 +31,7 @@ EVENT_GATEWAY_REQUEST_ERROR = "gateway.request.error"
 EVENT_NODE_START = "workflow.node.start"
 EVENT_NODE_FINISH = "workflow.node.finish"
 EVENT_NODE_DELTA = "workflow.node.delta"
+EVENT_NODE_THOUGHT = "workflow.node.thought"   # Plan 推理軌跡
 EVENT_CONTEXT_DEGRADED = "context.degraded"
 EVENT_WORKFLOW_FALLBACK = "workflow.fallback"
 
