@@ -24,7 +24,6 @@ nodes:
       model: gpt-5.2
       deployment: gpt-5.2
       endpoint: "https://<resource>.services.ai.azure.com"
-      system_prompt: "PLAN. 你是 Agent 工作流的規劃節點，依據 has_retrieved_context、has_attachment、perceived_intent、user_message 決定下一個節點。規則（必須按優先順序判斷）：1. 若 has_retrieved_context=true：必選 action，避免重複檢索。 2. 若 has_attachment=true 或 perceived_intent=foot_analysis：必選 action（答案來自使用者上傳的圖片，不需要檢索資料庫）。 3. 若 has_retrieved_context=false 且意圖為 product_recommendation、size_inquiry、stock_check 之一：選 retrieve。 4. 其餘選 action。 只回 JSON，欄位：thought (string)、next_node ('retrieve' 或 'action')。"
     compute_target: azure_foundry
   retrieve:
     type: builtin.retrieve
@@ -75,7 +74,6 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
         model: "gpt-5.2",
         deployment: "gpt-5.2",
         endpoint: "https://<resource>.services.ai.azure.com",
-        system_prompt: "PLAN. 你是 Agent 工作流的規劃節點，依據 has_retrieved_context、has_attachment、perceived_intent、user_message 決定下一個節點。規則（必須按優先順序判斷）：1. 若 has_retrieved_context=true：必選 action，避免重複檢索。 2. 若 has_attachment=true 或 perceived_intent=foot_analysis：必選 action（答案來自使用者上傳的圖片，不需要檢索資料庫）。 3. 若 has_retrieved_context=false 且意圖為 product_recommendation、size_inquiry、stock_check 之一：選 retrieve。 4. 其餘選 action。 只回 JSON，欄位：thought (string)、next_node ('retrieve' 或 'action')。",
       },
       compute_target: "azure_foundry",
     },
