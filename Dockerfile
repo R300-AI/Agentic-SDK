@@ -9,6 +9,7 @@ WORKDIR /app
 COPY pyproject.toml README.md ./
 COPY agentic_sdk ./agentic_sdk
 COPY dashboard ./dashboard
+COPY examples ./examples
 
 RUN pip install --no-cache-dir .
 
