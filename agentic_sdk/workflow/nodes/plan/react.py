@@ -17,19 +17,36 @@ from agentic_sdk.workflow.node import NodeOutput, WorkflowState
 
 _ALLOWED_NEXT = {"retrieve", "action"}
 
-_SYSTEM_PROMPT = (
-    "PLAN. 你是 Agent 工作流的規劃節點。閱讀 user message 與 perceived intent 後,"
-    "決定下一個節點為 'retrieve'(需要外部知識)或 'action'(可直接產出回應)。"
-    "只回 JSON,欄位:thought (string)、next_node (string)。"
-)
+SYSTEM_PROMPT_TEMPLATES: dict[str, str] = {
+    "react": (
+        "PLAN. 你是 Agent 工作流的規劃節點。閱讀 user message 與 perceived intent 後,"
+        "決定下一個節點為 'retrieve'(需要外部知識)或 'action'(可直接產出回應)。"
+        "只回 JSON,欄位:thought (string)、next_node (string)。"
+    ),
+    "cot": (
+        "PLAN (Chain-of-Thought). 在決定下一節點前,先在 thought 欄位以條列式逐步推理:"
+        "(1) 使用者問什麼、(2) 已有什麼資訊、(3) 缺什麼。再選 'retrieve' 或 'action'。"
+        "只回 JSON,欄位:thought (string)、next_node (string)。"
+    ),
+    "plan_and_solve": (
+        "PLAN (Plan-and-Solve, Wang 2023). 在 thought 欄位先列出完成本任務的子步驟,"
+        "然後判斷第一個子步驟是需要 'retrieve' 還是可直接 'action'。"
+        "只回 JSON,欄位:thought (string)、next_node (string)。"
+    ),
+}
 
 
 class ReActPlan:
     name = "plan"
     gen_ai_system = "azure_openai"
 
-    def __init__(self, foundry_client: FoundryClient | None = None) -> None:
+    def __init__(
+        self,
+        foundry_client: FoundryClient | None = None,
+        system_prompt: str | None = None,
+    ) -> None:
         self._foundry = foundry_client or get_foundry_client()
+        self._system_prompt = system_prompt or SYSTEM_PROMPT_TEMPLATES["react"]
 
     @property
     def gen_ai_request_model(self) -> str:
@@ -46,7 +63,7 @@ class ReActPlan:
             f"has_retrieved_context: {retrieved is not None}\n"
         )
 
-        response = self._foundry.chat(system=_SYSTEM_PROMPT, user=user_prompt)
+        response = self._foundry.chat(system=self._system_prompt, user=user_prompt)
         decision = response.as_json()
         thought = str(decision.get("thought", "(no thought)"))
         next_node = decision.get("next_node")
@@ -79,3 +96,4 @@ class ReActPlan:
             },
             context_updates=[entry],
         )
+

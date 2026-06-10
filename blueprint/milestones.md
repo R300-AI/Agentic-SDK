@@ -132,7 +132,7 @@ M0 ──┬──▶ M1 ──┐
 | ID | 狀態 | 對外可見成果 | 驗收方式 |
 |----|------|-------------|----------|
 | M5-0 | ✅ | 圖形平台 spike(文件證據判決) | Langflow 為 DAG-only、Loop 僅支援 for-each list 而非條件回環 → 走 React Flow 路線 |
-| M5-1 | ⬜ | SDK 改 Plan/Reflect `__init__` + Plan 模板字典 + WorkflowConfig Action backend dispatch | tests/test_workflow_config.py 延伸覆蓋 system_prompt / on_failure / Action backend 切換 |
+| M5-1 | ✅ | SDK 改 Plan/Reflect `__init__` + Plan 模板字典 | tests/test_workflow_config.py 由 11 案延伸至 19 案,涵蓋 system_prompt(預設模板/自訂/WorkflowConfig 注入)與 on_failure(retry_plan/end/pass 路徑/不合法值/WorkflowConfig 注入) |
 | M5-2 | ⬜ | Gateway `POST /v1/workflow/run` + `GET /v1/workflow/{id}/stream` SSE | curl 灌 YAML 跑通;改 Plan prompt 影響回應;SSE 收完整事件序列 |
 | M5-3 | ⬜ | Editor 骨架(Vite + React Flow + shadcn/ui) + 五節點 + 屬性面板 + YAML 下載/載入 | 同一份 YAML 經「載入→下載」與 pytest load 結果一致 |
 | M5-4 | ⬜ | 「跑一次」串通 + 五節點動畫 + 對話框 + Dashboard 跳轉 | 改 Action backend → 送訊息 → 動畫 → 看到回應;Dashboard ?workflow_id 跳轉正確 |

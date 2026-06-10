@@ -175,3 +175,130 @@ def test_custom_node_import_path_not_found_raises(mock_settings) -> None:
     )
     with pytest.raises(ImportError, match="nonexistent"):
         Workflow.from_config(config, settings=mock_settings)
+
+
+# ── M5-1:Plan system_prompt 模板參數 ──────────────────────────────────────────
+
+class _StubFoundry:
+    """攔截 chat() 呼叫,記錄傳入的 system prompt 供斷言。"""
+
+    label = "stub-foundry"
+
+    def __init__(self) -> None:
+        self.last_system: str | None = None
+
+    def chat(self, *, system: str, user: str, temperature: float = 0.0):
+        from agentic_sdk.workflow.llm import FoundryResponse
+        self.last_system = system
+        return FoundryResponse(
+            content='{"thought": "stub", "next_node": "action"}',
+            model="stub-model",
+            input_tokens=1,
+            output_tokens=1,
+        )
+
+
+def _make_plan_state(message: str = "hi"):
+    from agentic_sdk.workflow.node import WorkflowState
+    return WorkflowState(user_message=message)
+
+
+def test_plan_uses_react_template_by_default() -> None:
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan, SYSTEM_PROMPT_TEMPLATES
+
+    stub = _StubFoundry()
+    plan = ReActPlan(foundry_client=stub)
+    plan(_make_plan_state())
+
+    assert stub.last_system == SYSTEM_PROMPT_TEMPLATES["react"]
+
+
+def test_plan_accepts_custom_system_prompt() -> None:
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan
+
+    stub = _StubFoundry()
+    custom = "PLAN. 自訂規劃指示:永遠選 action。只回 JSON。"
+    plan = ReActPlan(foundry_client=stub, system_prompt=custom)
+    plan(_make_plan_state())
+
+    assert stub.last_system == custom
+
+
+def test_plan_built_via_workflow_config_passes_system_prompt(mock_settings) -> None:
+    """確認 WorkflowConfig.params["system_prompt"] 能透過 from_config 流入 Plan。"""
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan
+
+    custom = "PLAN. CoT 變體。"
+    config = WorkflowConfig(
+        nodes={
+            "plan": NodeSpec(type="builtin.plan", params={"system_prompt": custom}),
+            "action": NodeSpec(type="foundry_completion"),
+        },
+        gates=GateConfig(max_revisit=3, timeout_sec=10.0),
+    )
+    wf = Workflow.from_config(config, settings=mock_settings)
+    plan_node = wf.nodes["plan"]
+    assert isinstance(plan_node, ReActPlan)
+    assert plan_node._system_prompt == custom
+
+
+# ── M5-1:Reflect on_failure 參數 ─────────────────────────────────────────────
+
+def _make_reflect_state_with_error():
+    state = _make_plan_state()
+    state.last_action_error = {"message": "boom"}
+    return state
+
+
+def _make_reflect_state_ok():
+    return _make_plan_state()
+
+
+def test_reflect_default_on_failure_routes_to_plan() -> None:
+    from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
+
+    reflect = RuleBasedReflect()
+    out = reflect(_make_reflect_state_with_error())
+    assert out["next_node"] == "plan"
+
+
+def test_reflect_on_failure_end_routes_to_none() -> None:
+    from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
+
+    reflect = RuleBasedReflect(on_failure="end")
+    out = reflect(_make_reflect_state_with_error())
+    assert out["next_node"] is None
+
+
+def test_reflect_pass_path_always_ends_regardless_of_on_failure() -> None:
+    from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
+
+    for mode in ("retry_plan", "end"):
+        reflect = RuleBasedReflect(on_failure=mode)
+        out = reflect(_make_reflect_state_ok())
+        assert out["next_node"] is None, f"on_failure={mode} 在無錯時應回 None"
+
+
+def test_reflect_invalid_on_failure_raises() -> None:
+    from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
+
+    with pytest.raises(ValueError, match="on_failure"):
+        RuleBasedReflect(on_failure="restart_workflow")
+
+
+def test_reflect_built_via_workflow_config_passes_on_failure(mock_settings) -> None:
+    """確認 WorkflowConfig.params["on_failure"] 能透過 from_config 流入 Reflect。"""
+    from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
+
+    config = WorkflowConfig(
+        nodes={
+            "reflect": NodeSpec(type="builtin.reflect", params={"on_failure": "end"}),
+            "action": NodeSpec(type="foundry_completion"),
+        },
+        gates=GateConfig(max_revisit=3, timeout_sec=10.0),
+    )
+    wf = Workflow.from_config(config, settings=mock_settings)
+    reflect_node = wf.nodes["reflect"]
+    assert isinstance(reflect_node, RuleBasedReflect)
+    assert reflect_node._on_failure == "end"
+

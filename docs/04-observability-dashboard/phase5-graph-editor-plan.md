@@ -96,7 +96,7 @@ UI 拖曳時即時擋下不在白名單的連線,並 tooltip 解釋原因。
 | **Plan** | `system_prompt`:下拉模板(`react` / `cot` / `plan_and_solve`)+ 自訂多行 | [`ReActPlan(foundry_client=None)`](../../agentic_sdk/workflow/nodes/plan/react.py) `_SYSTEM_PROMPT` 寫死 | `ReActPlan.__init__(system_prompt: str \| None = None)`;新增 `_SYSTEM_PROMPT_TEMPLATES: dict[str, str]` |
 | **Retrieve** | `backend` 下拉(僅 `stub`)、`corpus` 多行 JSON | [`StubRetrieve(corpus=None)`](../../agentic_sdk/workflow/nodes/retrieve/stub.py) 已支援 corpus | — |
 | **Reflect** | `on_failure` 下拉(`retry_plan` / `end`) | [`RuleBasedReflect`](../../agentic_sdk/workflow/nodes/reflect/rule_based.py) 無 `__init__`,行為寫死 | `RuleBasedReflect.__init__(on_failure: str = "retry_plan")` |
-| **Action** | `backend` 下拉(`upstream` / `foundry`)+ 對應屬性(model、base_url / deployment) | [`UpstreamCompletionAction`](../../agentic_sdk/workflow/nodes/action/upstream_completion.py) 與 [`FoundryCompletionAction`](../../agentic_sdk/workflow/nodes/action/foundry_completion.py) 是不同 class | `WorkflowConfig` 端依 `params["backend"]` dispatch;不在 SDK 端建 unified class(維持單一職責) |
+| **Action** | `backend` 下拉(`upstream` / `foundry`)+ 對應屬性(model、base_url / deployment) | [`UpstreamCompletionAction`](../../agentic_sdk/workflow/nodes/action/upstream_completion.py) 與 [`FoundryCompletionAction`](../../agentic_sdk/workflow/nodes/action/foundry_completion.py) 是不同 class | 不改 SDK。UI adapter 在 [`editor/src/adapter.ts`](../../editor/src/adapter.ts) 把 backend 下拉值映射到 [`NodeSpec.type`](../../agentic_sdk/workflow/config.py)(`upstream_completion` / `foundry_completion`),不動 [`_build_node_from_spec`](../../agentic_sdk/workflow/config.py) |
 | **全域 Gates** | `max_node_hops` / `max_revisit` / `timeout_sec` 數字框 | [`GateConfig`](../../agentic_sdk/workflow/config.py) 已支援 | — |
 
 ### 3.3 Plan system_prompt 模板(M5-1 新增到 SDK)
@@ -223,7 +223,7 @@ Editor 內附「在 Dashboard 觀看完整 trace」按鈕,跳到 `http://localho
 | 里程 | 內容 | 完成判準 | 上限 |
 |------|------|----------|------|
 | **M5-0** | 圖形平台 spike(文件證據判決) | ✅ 已完成:Langflow 為 DAG-only,不符需求 → 走 React Flow | 已完成 |
-| **M5-1** | SDK 改 Plan/Reflect 兩節點 `__init__` + Plan 模板字典 + `WorkflowConfig` Action backend dispatch | `tests/test_workflow_config.py` 延伸到 14+ 案,覆蓋 system_prompt / on_failure / Action backend 切換 | 1 天 |
+| **M5-1** | SDK 改 Plan/Reflect 兩節點 `__init__` + Plan 模板字典 | `tests/test_workflow_config.py` 延伸到 19 案,覆蓋 system_prompt(預設模板 / 自訂 / WorkflowConfig 注入)與 on_failure(retry_plan / end / pass 路徑 / 不合法值 / WorkflowConfig 注入) | 1 天 |
 | **M5-2** | Gateway 新 `POST /v1/workflow/run` + `GET /v1/workflow/{id}/stream` SSE | `curl` 灌 YAML 跑通;改 Plan prompt 真的影響回應;SSE 收到完整事件序列 | 1.5 天 |
 | **M5-3** | Editor 骨架(Vite + React Flow + shadcn/ui)+ 五節點 + 屬性面板 + YAML 下載/載入 | 同一份 YAML 經「載入→下載」與 pytest load 結果一致 | 5 天 |
 | **M5-4** | 「跑一次」串通 + 五節點動畫 + 對話框 + Dashboard 跳轉 | 端到端:改 Action backend → 送訊息 → 動畫 → 看到回應;Dashboard 跳轉 URL 正確 | 1.5 天 |
@@ -238,7 +238,7 @@ Editor 內附「在 Dashboard 觀看完整 trace」按鈕,跳到 `http://localho
 |------|----------|--------|
 | Plan 模板字典 + system_prompt 參數 | [`agentic_sdk/workflow/nodes/plan/react.py`](../../agentic_sdk/workflow/nodes/plan/react.py) | 同檔擴充 |
 | Reflect on_failure 參數 | [`agentic_sdk/workflow/nodes/reflect/rule_based.py`](../../agentic_sdk/workflow/nodes/reflect/rule_based.py) | 同檔擴充 |
-| Action backend 在 WorkflowConfig 層 dispatch | [`agentic_sdk/workflow/config.py`](../../agentic_sdk/workflow/config.py) `_build_node_instance` | 同檔擴充 |
+| Action backend 下拉 ⇄ NodeSpec.type 映射 | — | 在 `editor/src/adapter.ts` 集中化,SDK 不動 |
 | `POST /v1/workflow/run` + SSE | [`agentic_sdk/gateway/app.py`](../../agentic_sdk/gateway/app.py) router 註冊 | 新增 `agentic_sdk/gateway/routes_workflow.py` |
 | Editor 前端專案(Vite + React + React Flow + shadcn/ui) | — | 新增 `editor/` 目錄作為前端 monorepo 兩口 |
 | `WorkflowConfig` ⇄ React Flow 畫布 JSON adapter | — | 新增 `editor/src/adapter.ts` |
