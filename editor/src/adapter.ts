@@ -71,6 +71,7 @@ const EDGE_HANDLES: Record<string, { sourceHandle: string; targetHandle: string 
       id: key,
       source: s,
       target: t,
+      type: "smoothstep",
       animated: false,
       markerEnd: ARROW,
       style: { strokeWidth: 2 },
