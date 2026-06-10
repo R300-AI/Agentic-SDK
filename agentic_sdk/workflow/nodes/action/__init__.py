@@ -1,6 +1,5 @@
-from agentic_sdk.workflow.nodes.action.foundry_completion import FoundryCompletionAction
-from agentic_sdk.workflow.nodes.action.upstream_completion import UpstreamCompletionAction
+from agentic_sdk.workflow.nodes.action.completion import CompletionAction
 
-DEFAULT = UpstreamCompletionAction
+DEFAULT = CompletionAction
 
-__all__ = ["FoundryCompletionAction", "UpstreamCompletionAction", "DEFAULT"]
+__all__ = ["CompletionAction", "DEFAULT"]

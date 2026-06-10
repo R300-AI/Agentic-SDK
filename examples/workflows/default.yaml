@@ -12,7 +12,9 @@ nodes:
     params:
       on_failure: retry_plan
   action:
-    type: foundry_completion
+    type: completion
+    params:
+      backend: foundry
 gates:
   max_node_hops: 20
   max_revisit: 3

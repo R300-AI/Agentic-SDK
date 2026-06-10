@@ -81,7 +81,7 @@ class Workflow:
         # 明確把 Workflow 接收到的 settings 傳下去,避免它們各自
         # 退回到 lru_cache 的全域 get_settings(會被外部 .env 污染)。
         self.nodes = {
-            "perceive": self.perceive or DEFAULT_PERCEIVE(),
+            "perceive": self.perceive or DEFAULT_PERCEIVE(foundry_client=get_foundry_client(self.settings)),
             "plan": self.plan or DEFAULT_PLAN(foundry_client=get_foundry_client(self.settings)),
             "retrieve": self.retrieve or DEFAULT_RETRIEVE(),
             "reflect": self.reflect or DEFAULT_REFLECT(),
@@ -100,7 +100,7 @@ class Workflow:
         """從 WorkflowConfig 建構 Workflow 實例。
 
         - `node_overrides`:直接傳入已建構好的 node 實例(例如使用者自己 `AzureOpenAI(...)`
-          建好 client、`FoundryCompletionAction(client=...)` 包好後丟進來),優先級高於
+          建好 client、`CompletionAction(backend="foundry", client=...)` 包好後丟進來),優先級高於
           `config.nodes[name]` 中的序列化規格。這是 Python SDK 的主要擴充口。
         - 未在 `node_overrides` 也未在 `config.nodes` 中指定的節點退回各自的 DEFAULT。
         - `config.gates` 覆蓋 Settings 的三道閘門預設值。

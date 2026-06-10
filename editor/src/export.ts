@@ -120,17 +120,11 @@ function reflectNodePy(params: Record<string, unknown>): NodePy {
   };
 }
 
-function actionNodePy(type: string, params: Record<string, unknown>): NodePy {
+function actionNodePy(_type: string, params: Record<string, unknown>): NodePy {
   const kw = buildKwargs(params);
-  if (type === "foundry_completion") {
-    return {
-      imports: ["from agentic_sdk.workflow.nodes.action import FoundryCompletionAction"],
-      call: kw ? `FoundryCompletionAction(\n${kw}\n    )` : "FoundryCompletionAction()",
-    };
-  }
   return {
-    imports: ["from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction"],
-    call: kw ? `UpstreamCompletionAction(\n${kw}\n    )` : "UpstreamCompletionAction()",
+    imports: ["from agentic_sdk.workflow.nodes.action import CompletionAction"],
+    call: kw ? `CompletionAction(\n${kw}\n    )` : "CompletionAction()",
   };
 }
 

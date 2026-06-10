@@ -77,7 +77,7 @@ def test_openai_compat_call_executes_five_node_workflow(make_client, m3_settings
         assert metadata["aborted"] is False
         assert metadata["workflow_id"]
         assert metadata["visit_counts"] == {
-            "perceive": 1, "plan": 2, "retrieve": 1, "action": 1, "reflect": 1
+            "perceive": 1, "plan": 2, "retrieve": 1, "action": 1
         }
 
         # Dashboard 共用的同一個 telemetry buffer 必須見到五節點 finish 序列
@@ -88,14 +88,14 @@ def test_openai_compat_call_executes_five_node_workflow(make_client, m3_settings
         finishes = snap.json()["events"]
         same_wf = [e for e in finishes if e.get("workflow_id") == metadata["workflow_id"]]
         nodes = [e["workflow_node"] for e in same_wf]
-        assert nodes == ["perceive", "plan", "retrieve", "plan", "action", "reflect"]
+        assert nodes == ["perceive", "plan", "retrieve", "plan", "action"]
 
 
 def test_openai_compat_call_returns_200_when_upstream_down(make_client, m3_settings, respx_mock):
-    """上游不可達時,Workflow 內部 fallback;Gateway 仍回 200 與診斷 metadata。
+    """上游不可達時,Workflow 內部 Action 以 error 結束;Gateway 仍回 200 與診斷 metadata。
 
     呼叫端只看 OpenAI 表面 → 體驗為「拿到一段提示性回應」;
-    運維端看 metadata.aborted / abort_reason → 知道是 max_revisit 觸頂。
+    運維端看 metadata.visit_counts → 知道 action 曾被執行過。
 
     這體現了 M3-4「故意製造一次失敗,Dashboard 顯示降級事件且工作流回傳
     部分結果而非 500」的驗收路徑。
@@ -122,11 +122,10 @@ def test_openai_compat_call_returns_200_when_upstream_down(make_client, m3_setti
         assert isinstance(body["choices"][0]["message"]["content"], str)
 
         metadata = json.loads(resp.headers["x-agentic-metadata"])
-        # 上游死,reflect 反覆要求重試直到 max_revisit 中止
-        assert metadata["aborted"] is True
+        # Action 失敗後直接 END,不再透過 Reflect 重試
         assert "action" in metadata["visit_counts"]
-        # finish_reason 隨 abort 標為 length(暗示「結果不完整」)
-        assert body["choices"][0]["finish_reason"] == "length"
+        # 未 abort → finish_reason = stop
+        assert body["choices"][0]["finish_reason"] == "stop"
 
 
 def test_openai_compat_call_rejects_empty_user_content(make_client, m3_settings):

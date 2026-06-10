@@ -4,7 +4,7 @@
 - Protocol 不依賴任何 LLM SDK，方便測試替身與第三方實作替換
 - 失敗時必須回 fallback（通常為原始 user_message），不阻斷整條 Retrieve
 - 預設實作 FoundryVisionQuery 走 Azure Foundry 的 chat.completions（vision-capable
-  deployment），與 FoundryCompletionAction 共用 Settings
+  deployment），與 CompletionAction(backend="foundry") 共用 Settings
 """
 
 from __future__ import annotations

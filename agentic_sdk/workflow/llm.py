@@ -204,8 +204,13 @@ class MockFoundryClient:
         return response
 
     def _scripted(self, *, system: str, user: str) -> FoundryResponse:
-        # 用 system prompt 開頭 keyword 區分 Plan / Reflect
-        if system.startswith("PLAN"):
+        # 用 system prompt 開頭 keyword 區分 Perceive / Plan / Reflect
+        if system.startswith("PERCEIVE"):
+            payload = {
+                "intent": "mock_intent",
+                "summary": "mock perceive：使用者輸入已被模擬感知節點解析。",
+            }
+        elif system.startswith("PLAN"):
             self._plan_visit_counter += 1
             next_node = "retrieve" if self._plan_visit_counter == 1 else "action"
             payload = {

@@ -1,5 +1,6 @@
 from agentic_sdk.workflow.nodes.perceive.rule_based import RuleBasedPerceive
+from agentic_sdk.workflow.nodes.perceive.llm_based import LLMBasedPerceive
 
-DEFAULT = RuleBasedPerceive
+DEFAULT = LLMBasedPerceive
 
-__all__ = ["RuleBasedPerceive", "DEFAULT"]
+__all__ = ["RuleBasedPerceive", "LLMBasedPerceive", "DEFAULT"]

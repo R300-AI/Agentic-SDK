@@ -1,7 +1,7 @@
-"""M4-2 多基台驗收 — Action node 屬性決定 backend,Gateway / Workflow 拓樸不變。
+"""M4-2 多基台驗收 — Action node 屬性(backend) 決定推論後端,Gateway / Workflow 拓機不變。
 
 關鍵驗證:
-1. UpstreamCompletionAction 可用 `base_url=` 直接指向第二個上游(模擬 Ryzen + Gemma3),
+1. CompletionAction(backend="upstream") 可用 `base_url=` 直接指向第二個上游(模擬 Ryzen + Gemma3),
    不需要動 Settings、不需要動 Gateway 拓樸。
 2. 同一個 WorkflowConfig 可在不同 `node_overrides` 之間切 Ryzen / Foundry Action,
    驗證「model / backend 是 node 屬性」這個心智模型成立。
@@ -18,10 +18,7 @@ import pytest
 from agentic_sdk.config import Settings
 from agentic_sdk.gateway.upstream_client import UpstreamClient
 from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
-from agentic_sdk.workflow.nodes.action import (
-    FoundryCompletionAction,
-    UpstreamCompletionAction,
-)
+from agentic_sdk.workflow.nodes.action import CompletionAction
 
 
 # ── fixtures ─────────────────────────────────────────────────────────────────
@@ -55,7 +52,8 @@ def test_upstream_client_accepts_base_url_override(ryzen_settings):
 def test_upstream_completion_action_rejects_both_upstream_and_base_url(ryzen_settings):
     """upstream 與 base_url 互斥,違反須在建構時抛例外。"""
     with pytest.raises(ValueError):
-        UpstreamCompletionAction(
+        CompletionAction(
+            backend="upstream",
             upstream=UpstreamClient(ryzen_settings),
             base_url="http://other.test/v1",
             settings=ryzen_settings,
@@ -79,7 +77,8 @@ def test_workflow_runs_with_ryzen_action_backend(respx_mock, ryzen_settings):
         })
     )
 
-    action = UpstreamCompletionAction(
+    action = CompletionAction(
+        backend="upstream",
         settings=ryzen_settings,
         model="gemma3-4b-npu",
     )
@@ -98,7 +97,7 @@ def test_workflow_runs_with_ryzen_action_backend(respx_mock, ryzen_settings):
 
 
 def test_workflow_runs_with_foundry_action_backend(ryzen_settings):
-    """同一份 config 拓樸,把 Action 換成 FoundryCompletionAction(注入自建 client)。"""
+    """同一份 config 拓機,把 Action 換成 CompletionAction(backend="foundry", 注入自建 client)。"""
     from unittest.mock import MagicMock
 
     azure_client = MagicMock()
@@ -110,7 +109,7 @@ def test_workflow_runs_with_foundry_action_backend(ryzen_settings):
         )
     ])
 
-    action = FoundryCompletionAction(settings=ryzen_settings, client=azure_client)
+    action = CompletionAction(backend="foundry", settings=ryzen_settings, client=azure_client)
     config = WorkflowConfig(
         nodes={"action": NodeSpec(type="foundry_completion")},
         gates=GateConfig(max_node_hops=20, max_revisit=3, timeout_sec=10.0),
@@ -148,7 +147,7 @@ def test_workflow_state_is_backend_agnostic(respx_mock, ryzen_settings):
     ryzen_wf = Workflow.from_config(
         config,
         settings=ryzen_settings,
-        node_overrides={"action": UpstreamCompletionAction(settings=ryzen_settings, model="gemma3-4b-npu")},
+        node_overrides={"action": CompletionAction(backend="upstream", settings=ryzen_settings, model="gemma3-4b-npu")},
     )
     ryzen_result = ryzen_wf.run("同樣的問題")
 
@@ -164,7 +163,7 @@ def test_workflow_state_is_backend_agnostic(respx_mock, ryzen_settings):
     foundry_wf = Workflow.from_config(
         config,
         settings=ryzen_settings,
-        node_overrides={"action": FoundryCompletionAction(settings=ryzen_settings, client=azure_client)},
+        node_overrides={"action": CompletionAction(backend="foundry", settings=ryzen_settings, client=azure_client)},
     )
     foundry_result = foundry_wf.run("同樣的問題")
 

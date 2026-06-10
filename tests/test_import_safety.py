@@ -2,7 +2,7 @@
 
 歷史紀錄(2026-06-09):
     Ryzen 機台執行 `scripts/demo_multi_backend.py` 失敗,
-    錯誤訊息為 `cannot import name 'UpstreamCompletionAction' from partially initialized module`。
+    錯誤訊息為 `cannot import name 'CompletionAction' from partially initialized module`。
     根因為 `agentic_sdk/gateway/__init__.py` 曾 re-export `create_app`,
     導致 `action → gateway.__init__ → app → routes_chat → action` 形成循環。
     修法:把 gateway `__init__` 改空,使用者改 `from agentic_sdk.gateway.app import create_app`。
@@ -32,11 +32,9 @@ def test_cold_import_action_modules_does_not_trigger_gateway_app() -> None:
         import sys
         from agentic_sdk.workflow import Workflow, WorkflowConfig, NodeSpec, GateConfig
         from agentic_sdk.workflow.nodes.action import (
-            UpstreamCompletionAction,
-            FoundryCompletionAction,
+            CompletionAction,
         )
-        assert UpstreamCompletionAction.__name__ == "UpstreamCompletionAction"
-        assert FoundryCompletionAction.__name__ == "FoundryCompletionAction"
+        assert CompletionAction.__name__ == "CompletionAction"
         assert "agentic_sdk.gateway.app" not in sys.modules, (
             "冷啟動匯入 action 不應觸發 gateway.app 載入"
         )

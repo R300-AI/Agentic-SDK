@@ -31,10 +31,7 @@ from agentic_sdk.observability.events import (
 )
 from agentic_sdk.workflow import Workflow
 from agentic_sdk.workflow.attachments import Attachment
-from agentic_sdk.workflow.nodes.action import (
-    FoundryCompletionAction,
-    UpstreamCompletionAction,
-)
+from agentic_sdk.workflow.nodes.action import CompletionAction
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -85,14 +82,12 @@ def _extract_user_input(messages: list[dict]) -> tuple[str, list[Attachment]]:
 
 def _build_action(settings, model: str):
     backend = (settings.workflow_action_backend or "upstream").lower()
-    if backend == "foundry":
-        return FoundryCompletionAction(settings=settings, model=model)
-    if backend == "upstream":
-        return UpstreamCompletionAction(settings=settings, model=model)
-    raise HTTPException(
-        status_code=500,
-        detail=f"WORKFLOW_ACTION_BACKEND={backend!r} 不支援,僅接受 upstream 或 foundry。",
-    )
+    if backend not in ("upstream", "foundry"):
+        raise HTTPException(
+            status_code=500,
+            detail=f"WORKFLOW_ACTION_BACKEND={backend!r} 不支援,僅接受 upstream 或 foundry。",
+        )
+    return CompletionAction(backend=backend, settings=settings, model=model)
 
 
 @router.post(_ROUTE)

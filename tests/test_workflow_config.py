@@ -3,7 +3,7 @@
 涵蓋:
 - YAML / JSON round-trip(序列化 → 反序列化 → 再序列化結果一致)
 - from_config() 端到端:以 MockFoundry 跑通一次工作流
-- builtin action 類型切換(upstream_completion / foundry_completion)
+- builtin action 類型切換(upstream_completion / foundry_completion YAML 反向相容)
 - GateConfig 覆蓋生效驗證
 - 自訂節點 import path(成功 / 失敗)
 - 格式版本號碼不符拋例外
@@ -83,13 +83,13 @@ def test_from_config_runs_workflow(mock_settings) -> None:
     """from_config() 端到端 — 展示 Python SDK 標準用法。
 
     使用者自己建好 AzureOpenAI client(此處以 MagicMock 取代真實 client,介面相同),
-    丟給 FoundryCompletionAction,再用 node_overrides 注入 Workflow。
+    丟給 CompletionAction(backend="foundry"),再用 node_overrides 注入 Workflow。
     這就是 WorkflowConfig + Python SDK 的設計用意:
     YAML 描述拓樸與類型,Python 側可任意替換為帶有自訂 client 的活實例。
     """
     from unittest.mock import MagicMock
 
-    from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
+    from agentic_sdk.workflow.nodes.action import CompletionAction
 
     # 1. 使用者建立 AzureOpenAI client(測試用 MagicMock 取代)
     fake_delta = MagicMock(content="測試回覆")
@@ -103,7 +103,7 @@ def test_from_config_runs_workflow(mock_settings) -> None:
     azure_client.chat.completions.create.return_value = iter([fake_chunk])
 
     # 2. 用該 client 建立 action node
-    action = FoundryCompletionAction(settings=mock_settings, client=azure_client)
+    action = CompletionAction(backend="foundry", settings=mock_settings, client=azure_client)
 
     # 3. 用 WorkflowConfig 描述拓樸,Python 側注入 node_overrides
     config = WorkflowConfig(
@@ -152,8 +152,9 @@ def test_node_spec_upstream_completion_type(mock_settings) -> None:
         gates=GateConfig(max_revisit=3, timeout_sec=10.0),
     )
     wf = Workflow.from_config(config, settings=mock_settings)
-    from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction
-    assert isinstance(wf.nodes["action"], UpstreamCompletionAction)
+    from agentic_sdk.workflow.nodes.action import CompletionAction
+    assert isinstance(wf.nodes["action"], CompletionAction)
+    assert wf.nodes["action"].backend == "upstream"
 
 
 def test_node_spec_foundry_completion_type(mock_settings) -> None:
@@ -162,8 +163,9 @@ def test_node_spec_foundry_completion_type(mock_settings) -> None:
         gates=GateConfig(max_revisit=3, timeout_sec=10.0),
     )
     wf = Workflow.from_config(config, settings=mock_settings)
-    from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
-    assert isinstance(wf.nodes["action"], FoundryCompletionAction)
+    from agentic_sdk.workflow.nodes.action import CompletionAction
+    assert isinstance(wf.nodes["action"], CompletionAction)
+    assert wf.nodes["action"].backend == "foundry"
 
 
 # ── 自訂節點 import path ──────────────────────────────────────────────────────

@@ -3,8 +3,8 @@
 執行情境:
     在 Ryzen 機台上跑 amd-ryzen-ai-benchmark 的 `python api.py --model gemma3-...`,
     本腳本同時驗證:
-      1. Action 走 Ryzen Gemma3 上游(走 UpstreamCompletionAction)
-      2. Action 走 Azure Foundry deployment(走 FoundryCompletionAction)
+      1. Action 走 Ryzen Gemma3 上游(CompletionAction(backend="upstream"))
+      2. Action 走 Azure Foundry deployment(CompletionAction(backend="foundry"))
       3. 同一份 WorkflowConfig 拓樸,只換 node_overrides 即可切 backend
 
 使用方式:
@@ -70,7 +70,7 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
     from agentic_sdk.context import ContextEntryType
     from agentic_sdk.config import Settings
     from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
-    from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction
+    from agentic_sdk.workflow.nodes.action import CompletionAction
 
     s = Settings(
         upstream_api_base_url=base_url,
@@ -79,7 +79,7 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
         workflow_force_mock_foundry=True,
         workflow_action_backend="upstream",
     )
-    action = UpstreamCompletionAction(settings=s, model=model)
+    action = CompletionAction(backend="upstream", settings=s, model=model)
     config = WorkflowConfig(
         nodes={"action": NodeSpec(type="upstream_completion", params={"model": model})},
         gates=GateConfig(max_node_hops=20, max_revisit=3, timeout_sec=60.0),
@@ -117,7 +117,7 @@ def _run_ryzen_action(prompt: str, base_url: str, model: str) -> dict:
 def _run_foundry_action(prompt: str) -> dict:
     from agentic_sdk.config import Settings
     from agentic_sdk.workflow import GateConfig, NodeSpec, Workflow, WorkflowConfig
-    from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
+    from agentic_sdk.workflow.nodes.action import CompletionAction
 
     # Settings 正常讀 .env(不傳 _env_file=None),讓 Pydantic 自動解析 .env 檔
     s = Settings(
@@ -137,7 +137,7 @@ def _run_foundry_action(prompt: str) -> dict:
             f".env 缺少必填項目: {', '.join(missing)}。"
             f"請複製 .env.example 並填入 Azure Foundry 憑證後重跑。"
         )
-    action = FoundryCompletionAction(settings=s)
+    action = CompletionAction(backend="foundry", settings=s)
     config = WorkflowConfig(
         nodes={"action": NodeSpec(type="foundry_completion")},
         gates=GateConfig(max_node_hops=20, max_revisit=3, timeout_sec=60.0),

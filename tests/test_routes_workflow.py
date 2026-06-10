@@ -57,7 +57,7 @@ def test_workflow_run_endpoint_emits_five_node_sequence(
     assert body["aborted"] is False
     assert body["final_message"] == "TSiP 是 AI 晶片落地藍圖"
     assert body["visit_counts"] == {
-        "perceive": 1, "plan": 2, "retrieve": 1, "action": 1, "reflect": 1
+        "perceive": 1, "plan": 2, "retrieve": 1, "action": 1
     }
 
     snap = client.get(
@@ -67,7 +67,7 @@ def test_workflow_run_endpoint_emits_five_node_sequence(
     assert snap.status_code == 200
     finishes = snap.json()["events"]
     nodes_in_order = [e["workflow_node"] for e in finishes if e.get("workflow_id") == body["workflow_id"]]
-    assert nodes_in_order == ["perceive", "plan", "retrieve", "plan", "action", "reflect"]
+    assert nodes_in_order == ["perceive", "plan", "retrieve", "plan", "action"]
 
 
 def test_workflow_run_endpoint_rejects_empty_message(make_client, workflow_settings):

@@ -42,7 +42,9 @@ nodes:
       mode: rule_based
     compute_target: local_cpu
   action:
-    type: foundry_completion
+    type: completion
+    params:
+      backend: foundry
     compute_target: azure_foundry
 gates:
   max_node_hops: 20
@@ -95,7 +97,8 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
       compute_target: "local_cpu",
     },
     action: {
-      type: "foundry_completion",
+      type: "completion",
+      params: { backend: "foundry" },
       compute_target: "azure_foundry",
     },
   },

@@ -14,7 +14,7 @@ import pytest
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.workflow.llm import MockFoundryClient
 from agentic_sdk.workflow.node import WorkflowState
-from agentic_sdk.workflow.nodes.action.upstream_completion import UpstreamCompletionAction
+from agentic_sdk.workflow.nodes.action import CompletionAction
 from agentic_sdk.workflow.nodes.perceive.rule_based import RuleBasedPerceive
 from agentic_sdk.workflow.nodes.plan.react import ReActPlan
 from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
@@ -113,24 +113,24 @@ def test_action_writes_result_on_success(respx_mock, test_settings):
         })
     )
     state = WorkflowState(user_message="hello")
-    action = UpstreamCompletionAction(settings=test_settings, model="gemma3-4b-npu")
+    action = CompletionAction(backend="upstream", settings=test_settings, model="gemma3-4b-npu")
     out = action(state)
 
-    assert out["next_node"] == "reflect"
+    assert out["next_node"] is None
     assert state.last_action_error is None
     assert state.last_action_result["content"] == "Hi there"
     assert out["context_updates"][0].metadata["ok"] is True
     assert out["payload"]["_llm_usage"]["output_tokens"] == 2
 
 
-def test_action_records_error_and_still_routes_to_reflect(respx_mock, test_settings):
+def test_action_records_error_and_ends_workflow(respx_mock, test_settings):
     respx_mock.post("http://upstream.test/v1/chat/completions").mock(
         side_effect=httpx.ConnectError("refused")
     )
     state = WorkflowState(user_message="hello")
-    out = UpstreamCompletionAction(settings=test_settings, model="gemma3-4b-npu")(state)
+    out = CompletionAction(backend="upstream", settings=test_settings, model="gemma3-4b-npu")(state)
 
-    assert out["next_node"] == "reflect"
+    assert out["next_node"] is None
     assert state.last_action_error is not None
     assert state.last_action_error["type"] in ("APIConnectionError", "ConnectError")
     assert out["context_updates"][0].metadata["ok"] is False

@@ -38,7 +38,8 @@ def test_default_yaml_loads_to_valid_config() -> None:
     assert config.version == "1"
     assert config.entry == "perceive"
     assert set(config.nodes.keys()) == {"perceive", "plan", "retrieve", "reflect", "action"}
-    assert config.nodes["action"].type == "foundry_completion"
+    assert config.nodes["action"].type == "completion"
+    assert config.nodes["action"].params.get("backend") == "foundry"
     assert config.nodes["reflect"].params == {"on_failure": "retry_plan"}
     assert config.gates.max_node_hops == 20
     assert config.gates.max_revisit == 3
@@ -56,7 +57,7 @@ def test_default_yaml_roundtrip_stable() -> None:
 def test_default_yaml_runs_to_completion(mock_settings) -> None:
     """預設 YAML 直接餵 Workflow.from_config 就能跑通,證明 demo 預設 ready-to-run。"""
     from unittest.mock import MagicMock
-    from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
+    from agentic_sdk.workflow.nodes.action import CompletionAction
 
     fake_delta = MagicMock(content="預設 YAML 跑通的回應")
     fake_choice = MagicMock(delta=fake_delta)
@@ -66,7 +67,7 @@ def test_default_yaml_runs_to_completion(mock_settings) -> None:
     fake_client.chat.completions.create.return_value = iter([fake_chunk])
 
     config = WorkflowConfig.from_yaml(DEFAULT_YAML_PATH)
-    action = FoundryCompletionAction(settings=mock_settings, client=fake_client)
+    action = CompletionAction(backend="foundry", settings=mock_settings, client=fake_client)
     wf = Workflow.from_config(config, settings=mock_settings, node_overrides={"action": action})
     result = wf.run("hello")
 

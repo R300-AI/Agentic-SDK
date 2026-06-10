@@ -91,10 +91,10 @@ export const NODE_DISPLAY_ORDER: NodeName[] = [
   "reflect",
 ];
 
-/** UI 端「Action backend 下拉」與 SDK `NodeSpec.type` 字串映射(M5-1 設計決策)。 */
+/** UI 端「Action backend 下拉」與 SDK NodeSpec.params.backend 映射(同一 type=completion,依 backend 參數切)。 */
 export const ACTION_BACKEND_OPTIONS = [
-  { label: "AMD NPU 上游", value: "upstream", typeString: "upstream_completion" },
-  { label: "Azure Foundry", value: "foundry", typeString: "foundry_completion" },
+  { label: "AMD NPU 上游", value: "upstream", typeString: "completion" },
+  { label: "Azure Foundry", value: "foundry", typeString: "completion" },
 ] as const;
 
 /** Plan system_prompt 三模板;與 `ReActPlan.SYSTEM_PROMPT_TEMPLATES` 一致。 */
@@ -205,7 +205,7 @@ export const NODE_CLASSES: Record<NodeName, NodeClass[]> = {
     {
       value: "foundry",
       label: "CompletionAction",
-      type: "foundry_completion",
+      type: "completion",
       usesLLM: true,
       hint: "彙整前面各服務環節的結果，產出送給使用者的完整回應。",
     },

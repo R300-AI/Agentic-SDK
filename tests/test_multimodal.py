@@ -47,7 +47,7 @@ def test_state_carries_attachments() -> None:
 
 
 def test_foundry_action_builds_multimodal_content_when_attachments_present() -> None:
-    from agentic_sdk.workflow.nodes.action.foundry_completion import _build_messages
+    from agentic_sdk.workflow.nodes.action.completion import _build_messages_foundry as _build_messages
 
     state = WorkflowState(user_message="這雙鞋適合我嗎")
     state.attachments = [Attachment(kind="image", mime="image/png", data_url=_TINY_PNG)]
@@ -62,7 +62,7 @@ def test_foundry_action_builds_multimodal_content_when_attachments_present() -> 
 
 
 def test_foundry_action_keeps_string_content_when_no_attachments() -> None:
-    from agentic_sdk.workflow.nodes.action.foundry_completion import _build_messages
+    from agentic_sdk.workflow.nodes.action.completion import _build_messages_foundry as _build_messages
 
     state = WorkflowState(user_message="哈囉")
     msgs = _build_messages(state, "sys")
@@ -71,7 +71,7 @@ def test_foundry_action_keeps_string_content_when_no_attachments() -> None:
 
 
 def test_upstream_action_builds_multimodal_content_when_attachments_present() -> None:
-    from agentic_sdk.workflow.nodes.action.upstream_completion import _build_messages
+    from agentic_sdk.workflow.nodes.action.completion import _build_messages_upstream as _build_messages
 
     state = WorkflowState(user_message="看看這張")
     state.attachments = [Attachment(kind="image", mime="image/jpeg", data_url=_TINY_PNG)]
@@ -88,7 +88,7 @@ def test_upstream_action_builds_multimodal_content_when_attachments_present() ->
 
 
 def test_upstream_action_string_path_unchanged_without_attachments() -> None:
-    from agentic_sdk.workflow.nodes.action.upstream_completion import _build_messages
+    from agentic_sdk.workflow.nodes.action.completion import _build_messages_upstream as _build_messages
 
     state = WorkflowState(user_message="哈囉")
     msgs = _build_messages(state, "sys")

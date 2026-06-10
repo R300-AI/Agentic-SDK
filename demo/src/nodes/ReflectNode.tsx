@@ -13,7 +13,7 @@ export function ReflectNode({ data }: NodeProps) {
   return (
     <NodeBase
       title={klass}
-      subtitle={`失敗時：${failLabel}`}
+      subtitle={`規畫失敗時進行重試`}
       status={status}
       computeTarget={d.spec?.compute_target}
       leftCount={d.leftCount}

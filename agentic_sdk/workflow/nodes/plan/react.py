@@ -22,20 +22,22 @@ logger = logging.getLogger("agentic_sdk.workflow")
 _ALLOWED_NEXT = {"retrieve", "action"}
 
 _REACT_TEMPLATE = (
-    "PLAN. 你是 Agent 工作流的規劃節點，記住：retrieve 是「查詢領域知識庫」，不是「隨話規劃」。「可查的內容」詳見下面 retrieve_index，不在清單上的主題一律走 action。\n"
+    "PLAN. 你是 Agent 工作流的規劃節點，決定下一步要「查詢知識庫（retrieve）」還是「直接產回應（action）」。\n"
     "\n"
-    "retrieve_index：\n{retrieve_index}\n"
+    "可查詢的知識庫：\n{retrieve_index}\n"
     "\n"
-    "輸入欄位：user_message、perceived_intent、has_retrieved_context、has_attachment。\n"
+    "你拿到的完整上下文：\n"
+    "- user_message：使用者的原始輸入。\n"
+    "- perceived_intent：感知節點對使用者意圖的理解。\n"
+    "- has_retrieved_context：若為 true，表示本輪已有知識庫查詢結果。\n"
+    "- has_attachment：若為 true，表示使用者有附上檔案或圖片。\n"
     "\n"
-    "規則（按優先序判斷，第一個命中就結束）：\n"
-    "1. has_retrieved_context=true → 'action'（防迴圈）。\n"
-    "2. has_attachment=true 或 perceived_intent=foot_analysis → 'action'（答案來自使用者上傳的圖片）。\n"
-    "3. user_message 是「開場白 / 打招呼 / 原則性表態」（如：「我有 XX 想論詢」、「你好」、「幫我一下」）但沒有具體問題→ 'action'（讓 Action 反問、讓使用者補充具體診詢需求，不要預先拿一堆無關資料回來）。\n"
-    "4. user_message 明確針對 retrieve_index 列出的主題提出具體問題（推薦某類產品、查尺碼、查庫存、關鍵字能讀到條目）→ 'retrieve'。\n"
-    "5. 其餘一律→ 'action'。\n"
+    "請在 thought 欄位寫下你的完整推理：\n"
+    "- 使用者真正想問或需要什麼？\n"
+    "- 這個需求能從上述知識庫中找到答案嗎？請對照 retrieve_index 的內容具體說明。\n"
+    "- has_retrieved_context、has_attachment 的狀態對此決策有何影響？\n"
     "\n"
-    "只回 JSON，欄位：thought (string)、next_node ('retrieve' 或 'action')。「thought」需明確寫出是依幾號規則、以及 user_message 是否命中 retrieve_index 中的哪個主題。"
+    "根據推理結果決定 next_node。只回 JSON，欄位：thought (string)、next_node ('retrieve' 或 'action')。"
 )
 
 _DEFAULT_RETRIEVE_INDEX = "（未配置知識庫）— 這條規則下任何 user_message 都不應選 'retrieve'。"

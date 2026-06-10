@@ -22,8 +22,9 @@ YAML 格式範例::
       reflect:
         type: builtin.reflect
       action:
-        type: foundry_completion
+        type: completion
         params:
+          backend: foundry
           deployment: gpt-5.2
     gates:
       max_node_hops: 50
@@ -54,12 +55,19 @@ _BUILTIN_NODE_TYPES = {
     "builtin.plan",
     "builtin.retrieve",
     "builtin.reflect",
-    "builtin.action",           # alias → upstream_completion
+    "builtin.action",       # alias → completion
+    "completion",
+    # 反向相容:舊 YAML 仍可用以下兩個 type,會自動映射成 completion + backend
     "upstream_completion",
     "foundry_completion",
 }
 
-_BUILTIN_ACTION_TYPES = {"builtin.action", "upstream_completion", "foundry_completion"}
+_BUILTIN_ACTION_TYPES = {
+    "builtin.action",
+    "completion",
+    "upstream_completion",
+    "foundry_completion",
+}
 
 
 @dataclass
@@ -68,7 +76,7 @@ class NodeSpec:
 
     type:
         - ``builtin.perceive`` / ``builtin.plan`` / ... — 內建節點
-        - ``upstream_completion`` / ``foundry_completion`` — 內建 Action 變體
+        - ``completion`` — 內建 Action(以 ``params.backend`` 切 upstream/foundry)
         - 完整 Python import path(如 ``mypackage.nodes.MyNode``)— 自訂節點
     params:
         傳遞給節點建構子的關鍵字參數,各節點自行解讀。
@@ -242,7 +250,8 @@ def _build_node_from_spec(
 
     if t == "builtin.perceive":
         from agentic_sdk.workflow.nodes.perceive import DEFAULT
-        return DEFAULT(**spec.params)
+        kw = {"foundry_client": foundry_client, **spec.params} if foundry_client else spec.params
+        return DEFAULT(**kw)
 
     if t == "builtin.plan":
         from agentic_sdk.workflow.nodes.plan import DEFAULT
@@ -292,13 +301,15 @@ def _build_node_from_spec(
             return ReflexionReflect(**kw)
         return RuleBasedReflect(**params)
 
-    if t in ("builtin.action", "upstream_completion"):
-        from agentic_sdk.workflow.nodes.action import UpstreamCompletionAction
-        return UpstreamCompletionAction(settings=settings, **spec.params)
-
-    if t == "foundry_completion":
-        from agentic_sdk.workflow.nodes.action import FoundryCompletionAction
-        return FoundryCompletionAction(settings=settings, **spec.params)
+    if t in _BUILTIN_ACTION_TYPES:
+        from agentic_sdk.workflow.nodes.action import CompletionAction
+        params = dict(spec.params)
+        # YAML schema 反向相容:舊 type 名稱自動推導 backend
+        if t == "upstream_completion":
+            params.setdefault("backend", "upstream")
+        elif t == "foundry_completion":
+            params.setdefault("backend", "foundry")
+        return CompletionAction(settings=settings, **params)
 
     # custom — 解析為 "module.path:ClassName" 或 "module.path.ClassName"
     if ":" in t:

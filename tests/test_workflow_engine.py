@@ -24,7 +24,7 @@ from agentic_sdk.observability import (
 )
 from agentic_sdk.workflow import Workflow
 from agentic_sdk.workflow.llm import MockFoundryClient
-from agentic_sdk.workflow.nodes.action.upstream_completion import UpstreamCompletionAction
+from agentic_sdk.workflow.nodes.action import CompletionAction
 from agentic_sdk.workflow.nodes.plan.react import ReActPlan
 
 
@@ -40,7 +40,7 @@ def buffer(test_settings):
 def _make_wf(settings: Settings) -> Workflow:
     return Workflow(
         plan=ReActPlan(foundry_client=MockFoundryClient()),
-        action=UpstreamCompletionAction(settings=settings, model="gemma3-4b-npu"),
+        action=CompletionAction(backend="upstream", settings=settings, model="gemma3-4b-npu"),
         settings=settings,
     )
 
@@ -64,14 +64,14 @@ def test_full_five_node_path_succeeds(buffer, respx_mock, test_settings):
 
     assert not result.aborted
     assert result.final_message == "Hi from upstream"
-    # 預期走訪:perceive(1) → plan(1→retrieve) → retrieve(1) → plan(2→action) → action(1) → reflect(1)
+    # 預期走訪:perceive(1) → plan(1→retrieve) → retrieve(1) → plan(2→action) → action(1) → END
     assert result.visit_counts == {
-        "perceive": 1, "plan": 2, "retrieve": 1, "action": 1, "reflect": 1,
+        "perceive": 1, "plan": 2, "retrieve": 1, "action": 1,
     }
     # entries 至少各型別出現一次
     types = {e.type for e in result.entries}
     from agentic_sdk.context import ContextEntryType as T
-    assert {T.USER_INPUT, T.PERCEIVED, T.PLAN_DECISION, T.RETRIEVED, T.ACTION_RESULT, T.REFLECTION} <= types
+    assert {T.USER_INPUT, T.PERCEIVED, T.PLAN_DECISION, T.RETRIEVED, T.ACTION_RESULT} <= types
 
 
 def test_full_path_emits_node_events_in_order(buffer, respx_mock, test_settings):
@@ -81,14 +81,14 @@ def test_full_path_emits_node_events_in_order(buffer, respx_mock, test_settings)
 
     starts = buffer.filter_by_name(EVENT_NODE_START)
     finishes = buffer.filter_by_name(EVENT_NODE_FINISH)
-    # 6 個節點訪問(plan 兩次) → 6 start + 6 finish
-    assert len(starts) == 6
-    assert len(finishes) == 6
+    # 5 個節點訪問(plan 兩次) → 5 start + 5 finish
+    assert len(starts) == 5
+    assert len(finishes) == 5
     # 所有事件 workflow_id 一致
     assert {e["workflow_id"] for e in starts} == {result.workflow_id}
     # start 事件節點順序正確
     assert [e["workflow_node"] for e in starts] == [
-        "perceive", "plan", "retrieve", "plan", "action", "reflect",
+        "perceive", "plan", "retrieve", "plan", "action",
     ]
     # finish 帶 duration_ms 與 next_node
     plan_finish = [e for e in finishes if e["workflow_node"] == "plan"]
@@ -113,30 +113,18 @@ def test_plan_visit_emits_gen_ai_attrs(buffer, respx_mock, test_settings):
     assert plan_finishes[0]["gen_ai_usage_output_tokens"] > 0
 
 
-def test_action_error_triggers_reflect_retry_then_abort_on_revisit_limit(buffer, respx_mock, test_settings):
-    # 上游永遠失敗 → Action 永遠 error → Reflect rule_based 永遠回 plan
-    # plan visit 1→retrieve, 2→action, 3→action, ... ;max_revisit=5 對 plan 設定下,
-    # plan 跑到第 5 次時 Gates 觸發 abort
+def test_action_error_ends_workflow(buffer, respx_mock, test_settings):
+    # Action 現在不論成功失敗都直接 END，不再路由到 Reflect
     respx_mock.post("http://upstream.test/v1/chat/completions").mock(
         side_effect=httpx.ConnectError("refused")
     )
-    settings = Settings(
-        _env_file=None,
-        upstream_api_base_url="http://upstream.test/v1",
-        upstream_api_key="not-needed",
-        workflow_max_node_hops=50,
-        workflow_max_revisit=3,
-    )
-    wf = _make_wf(settings)
+    wf = _make_wf(test_settings)
     result = wf.run("hi")
 
-    assert result.aborted
-    assert "plan" in result.abort_reason and "重訪" in result.abort_reason
-    # plan 被踩到 max_revisit=3 才中止
-    assert result.visit_counts["plan"] == 3
-    fallback_events = buffer.filter_by_name(EVENT_WORKFLOW_FALLBACK)
-    assert len(fallback_events) == 1
-    assert fallback_events[0]["workflow_status"] == "aborted"
+    # 上游失敗 → action 寫 last_action_error 並結束，不進入 reflect
+    assert not result.aborted
+    assert "action" in result.visit_counts
+    assert "reflect" not in result.visit_counts
 
 
 def test_max_node_hops_abort_when_reached(buffer, respx_mock, test_settings):
