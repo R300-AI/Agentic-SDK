@@ -46,14 +46,14 @@ export function isLegalEdge(source: string, target: string): boolean {
 const ARROW = { type: MarkerType.ArrowClosed } as const;
 
 /** 每條邊使用哪一側的連接點（left = 節點左側，right = 節點右側） */
-const EDGE_HANDLES: Record<string, { sourceHandle: "left" | "right"; targetHandle: "left" | "right" }> = {
+const EDGE_HANDLES: Record<string, { sourceHandle: "left" | "right"; targetHandle: "left" | "right"; edgeType?: string }> = {
   "perceive-plan":  { sourceHandle: "right", targetHandle: "left"  },
   "plan-retrieve":  { sourceHandle: "right", targetHandle: "right" },
   "plan-action":    { sourceHandle: "right", targetHandle: "left"  },
-  "plan-reflect":   { sourceHandle: "right", targetHandle: "right" },  // 尾部接尾部
+  "plan-reflect":   { sourceHandle: "right", targetHandle: "right" },
   "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },
   "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },
-  "action-perceive":{ sourceHandle: "right", targetHandle: "right" },  // right→right 讓 smoothstep 從下方繞
+  "action-perceive":{ sourceHandle: "right", targetHandle: "left",  edgeType: "bypass" }, // 從下方繞回 perceive 左側
 };
 
 export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Edge[] } {
@@ -75,7 +75,7 @@ export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Ed
       id: key,
       source: s,
       target: t,
-      type: "smoothstep",
+      type: sides.edgeType ?? "smoothstep",
       animated: false,
       markerEnd: ARROW,
       style: { strokeWidth: 2 },

@@ -14,6 +14,9 @@ import {
 } from "@xyflow/react";
 
 import { NODE_TYPES } from "./nodes";
+import { BypassEdge } from "./edges/BypassEdge";
+
+const EDGE_TYPES = { bypass: BypassEdge };
 import { NodePalette, PythonModal } from "./panels/NodePalette";
 import { PropertyPanel } from "./panels/PropertyPanel";
 import { ChatPanel } from "./panels/ChatPanel";
@@ -316,6 +319,7 @@ function EditorRoot() {
             nodes={nodes}
             edges={edges}
             nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
