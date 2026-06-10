@@ -132,10 +132,10 @@ html, body, #root {
   height: 100%;
   box-sizing: border-box;
 }
-.property-panel h3 { margin: 0 0 12px; font-size: 14px; }
-.property-panel .hint { color: var(--text-muted); font-size: 12px; }
+.property-panel h3 { margin: 0 0 14px; font-size: 17px; }
+.property-panel .hint { color: var(--text-muted); font-size: 13px; }
 .prop-class-hint {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   line-height: 1.5;
   margin: 0 0 12px;
@@ -170,7 +170,7 @@ html, body, #root {
   margin-bottom: 14px;
 }
 .prop-row label {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -181,7 +181,7 @@ html, body, #root {
   border-radius: 6px;
   color: var(--text);
   padding: 8px;
-  font-size: 13px;
+  font-size: 15px;
   font-family: inherit;
 }
 .prop-row textarea { resize: vertical; min-height: 80px; line-height: 1.5; }
@@ -189,9 +189,9 @@ html, body, #root {
   background: var(--bg-elev2);
   padding: 4px 8px;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
-.prop-row small { color: var(--text-muted); font-size: 11px; }
+.prop-row small { color: var(--text-muted); font-size: 13px; }
 
 /* ── Chat Panel ─────────────────────────────────────── */
 
