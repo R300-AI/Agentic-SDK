@@ -76,3 +76,120 @@ export const REFLECT_ON_FAILURE_OPTIONS = [
   { label: "失敗時回 Plan 重試", value: "retry_plan" },
   { label: "失敗時直接結束", value: "end" },
 ] as const;
+
+/** M8-2 — 節點 class 概念：使用者可在屬性面板切換實際 class，
+ * 切換後 NodeSpec.type / params 對應更新；canvas 上的節點標題顯示 class label。
+ *
+ * 每個 NodeClass 描述一個可選的實作（後端 import path 對應到 SDK 真實存在的 class）。
+ */
+export interface NodeClass {
+  /** 內部 key — 不外露 */
+  value: string;
+  /** Canvas / 下拉清單上顯示的 class 名（對齊 SDK 端類別） */
+  label: string;
+  /** 對應 NodeSpec.type 字串 */
+  type: string;
+  /** 切到此 class 時要強制 set 的 params；其餘保留 */
+  enforceParams?: Record<string, unknown>;
+  /** 額外提示 */
+  hint?: string;
+}
+
+export const NODE_CLASSES: Record<NodeName, NodeClass[]> = {
+  perceive: [
+    {
+      value: "rule_based",
+      label: "RuleBasedPerceive",
+      type: "builtin.perceive",
+      hint: "規則式意圖判斷 + welcome/options 渲染。",
+    },
+  ],
+  plan: [
+    {
+      value: "react",
+      label: "ReActPlan",
+      type: "builtin.plan",
+      enforceParams: { system_prompt: PLAN_PROMPT_TEMPLATES.react },
+      hint: "ReAct（Yao 2022）— 推理↔行動交替。",
+    },
+    {
+      value: "cot",
+      label: "ChainOfThoughtPlan",
+      type: "builtin.plan",
+      enforceParams: { system_prompt: PLAN_PROMPT_TEMPLATES.cot },
+      hint: "Chain-of-Thought（Wei 2022）— 逐步推理後決策。",
+    },
+    {
+      value: "plan_and_solve",
+      label: "PlanAndSolvePlan",
+      type: "builtin.plan",
+      enforceParams: { system_prompt: PLAN_PROMPT_TEMPLATES.plan_and_solve },
+      hint: "Plan-and-Solve（Wang 2023）— 顯式分離規劃與執行。",
+    },
+  ],
+  retrieve: [
+    {
+      value: "semantic",
+      label: "SemanticRetrieve",
+      type: "builtin.retrieve",
+      hint: "TF-IDF jaccard + 時近性 + 重要性加權。",
+    },
+  ],
+  reflect: [
+    {
+      value: "rule_based",
+      label: "RuleBasedReflect",
+      type: "builtin.reflect",
+      enforceParams: { mode: "rule_based" },
+      hint: "零成本即時判斷。",
+    },
+    {
+      value: "reflexion",
+      label: "ReflexionReflect",
+      type: "builtin.reflect",
+      enforceParams: { mode: "llm" },
+      hint: "LLM 反思 — Reflexion（Shinn 2023）。",
+    },
+  ],
+  action: [
+    {
+      value: "foundry",
+      label: "FoundryCompletionAction",
+      type: "foundry_completion",
+      hint: "走 Azure Foundry deployment。",
+    },
+    {
+      value: "upstream",
+      label: "UpstreamCompletionAction",
+      type: "upstream_completion",
+      hint: "走 AMD NPU 上游 OpenAI 相容服務。",
+    },
+  ],
+};
+
+/** 由現有 NodeSpec 反推它屬於哪個 class。
+ * 規則：先以 type 對齊；若 type 對齊到多個 class（例如 Plan 的三個 template），
+ * 再以 enforceParams 是否完全成立判斷。
+ */
+export function detectNodeClass(nodeName: NodeName, spec: NodeSpec): NodeClass {
+  const candidates = NODE_CLASSES[nodeName].filter((c) => c.type === spec.type);
+  if (candidates.length === 0) return NODE_CLASSES[nodeName][0];
+  if (candidates.length === 1) return candidates[0];
+  // 多個 candidate（如 Plan 三個 template）— 比對 enforceParams
+  const matched = candidates.find((c) => {
+    if (!c.enforceParams) return false;
+    return Object.entries(c.enforceParams).every(
+      ([k, v]) => (spec.params ?? {})[k] === v
+    );
+  });
+  return matched ?? candidates[0];
+}
+
+/** 切換 class：更新 type 與 enforceParams，其餘 params 原封不動。 */
+export function applyNodeClass(spec: NodeSpec, klass: NodeClass): NodeSpec {
+  return {
+    ...spec,
+    type: klass.type,
+    params: { ...(spec.params ?? {}), ...(klass.enforceParams ?? {}) },
+  };
+}

@@ -23,86 +23,66 @@ html, body, #root {
   color: var(--text);
 }
 
-/* ── 主版型 ─────────────────────────────────────────── */
+/* ── 主版型（M8-1 LEFT 為主面板，貫穿到底） ───────────── */
 
 .editor-shell {
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   height: 100vh;
   width: 100vw;
   overflow: hidden;
 }
 
-.top-row {
+.left-column {
+  flex-shrink: 0;
   display: flex;
-  flex: 1 1 0;
-  overflow: hidden;
+  flex-direction: column;
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
   min-height: 0;
 }
 
-.palette { flex-shrink: 0; }
-.canvas-area { flex: 1; position: relative; overflow: hidden; }
-.property-panel { flex-shrink: 0; overflow: auto; }
-.footer-area { flex-shrink: 0; overflow: hidden; }
-
-/* ── Palette ────────────────────────────────────────── */
-
-.palette {
-  width: 220px;
-  background: var(--bg-elev);
-  border-right: 1px solid var(--border);
-  padding: 16px;
+.left-property {
+  flex: 1 1 0;
   overflow: auto;
-  display: flex;
-  flex-direction: column;
-}
-.palette h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
-.palette hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
-
-.palette-top {
-  /* 佔用剩餘空間，把 bottom 推到底部 */
-}
-.palette-hint {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  margin: 0 0 8px;
-}
-.palette-bottom {
-  margin-top: auto;
+  min-height: 0;
 }
 
-.palette-list {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 8px;
-}
-.palette-item {
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
+.left-tools {
+  flex-shrink: 0;
+  padding: 12px 16px 16px;
+  border-top: 1px solid var(--border);
   background: var(--bg-elev2);
-  margin-bottom: 4px;
-  font-size: 14px;
 }
-.palette-item:hover { background: #2a3142; }
-.palette-item.selected { background: var(--accent); color: #fff; }
-
-.palette button, .file-button {
+.left-tools h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
+.left-tools hr { border: 0; border-top: 1px solid var(--border); margin: 12px 0; }
+.left-tools-buttons { display: flex; flex-direction: column; gap: 6px; }
+.left-tools button, .left-tools .file-button {
   display: inline-block;
   width: 100%;
   padding: 8px 12px;
   border-radius: 6px;
   border: 1px solid var(--border);
-  background: var(--bg-elev2);
+  background: var(--bg);
   color: var(--text);
   cursor: pointer;
   font-size: 13px;
   text-align: center;
-  margin-bottom: 6px;
+  box-sizing: border-box;
 }
-.palette button:hover, .file-button:hover { border-color: var(--accent); }
+.left-tools button:hover, .left-tools .file-button:hover { border-color: var(--accent); }
 .file-button input { display: none; }
+
+.right-column {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.canvas-area { flex: 1; position: relative; overflow: hidden; }
+.footer-area { flex-shrink: 0; overflow: hidden; }
 
 /* ── Canvas / 節點 ──────────────────────────────────── */
 
@@ -147,12 +127,19 @@ html, body, #root {
 
 .property-panel {
   background: var(--bg-elev);
-  border-left: 1px solid var(--border);
   padding: 16px;
   overflow: auto;
+  height: 100%;
+  box-sizing: border-box;
 }
 .property-panel h3 { margin: 0 0 12px; font-size: 14px; }
 .property-panel .hint { color: var(--text-muted); font-size: 12px; }
+.prop-class-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 12px;
+}
 
 /* ── Resize handles (M7-3) ──────────────────────────────────── */
 
@@ -361,6 +348,25 @@ html, body, #root {
 }
 .chat-option-btn:disabled { background: var(--border); cursor: not-allowed; }
 .chat-option-btn:hover:not(:disabled) { filter: brightness(1.1); }
+
+/* M8-3 — BingChat 風格的引導按鈕列（顯示於輸入框上方） */
+.chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 0;
+}
+.chat-suggestion-btn {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 14px;
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+}
+.chat-suggestion-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.chat-suggestion-btn:hover:not(:disabled) { background: rgba(99,102,241,0.1); }
 
 .modal-backdrop {
   position: fixed;

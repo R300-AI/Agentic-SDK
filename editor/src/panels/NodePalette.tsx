@@ -1,6 +1,5 @@
-/** 左側面板:工具列（Memory Stream 指示 + YAML/Python 雙重輸出）。
- * 節點選取改由直接點擊畫布節點觸發（M7-1），此欄不再重複節點清單。
- * Memory Stream + 輸出區塊貼底排列（M7-2）。
+/** M8-1 — 左側下半部工具區：Memory Stream 指示 + YAML/Python 輸出。
+ * 已不再是獨立的 aside，而是 LEFT 主面板下半段；屬性編輯器在其上方。
  */
 
 import { useState } from "react";
@@ -25,24 +24,19 @@ export function NodePalette({ onDownload, onLoad, onShowPython }: Props) {
   };
 
   return (
-    <aside className="palette">
-      <div className="palette-top">
-        <h3>點選節點編輯屬性</h3>
-        <p className="palette-hint">在畫布上點擊任一節點，右側屬性面板將開啟對應編輯器。</p>
+    <div className="left-tools">
+      <h3>Memory Stream</h3>
+      <div className="memory-indicator">
+        <div className="memory-indicator-icon">⛁</div>
+        <div className="memory-indicator-body">
+          <div>跨 run 持久化</div>
+          <small>workflow_name 隔離</small>
+        </div>
       </div>
 
-      <div className="palette-bottom">
-        <h3>Memory Stream</h3>
-        <div className="memory-indicator">
-          <div className="memory-indicator-icon">⛁</div>
-          <div className="memory-indicator-body">
-            <div>跨 run 持久化</div>
-            <small>workflow_name 隔離</small>
-          </div>
-        </div>
-
-        <hr />
-        <h3>輸出</h3>
+      <hr />
+      <h3>輸出</h3>
+      <div className="left-tools-buttons">
         <button onClick={onDownload}>下載 YAML</button>
         <button onClick={onShowPython}>顯示 Python</button>
         <label className="file-button">
@@ -50,7 +44,7 @@ export function NodePalette({ onDownload, onLoad, onShowPython }: Props) {
           <input type="file" accept=".yaml,.yml" onChange={handleFile} />
         </label>
       </div>
-    </aside>
+    </div>
   );
 }
 

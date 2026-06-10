@@ -1,10 +1,10 @@
-/** M6-7 — Chat Panel:由 Perceive 節點屬性驅動的對話介面。
+/** M6-7 + M8-3 — Chat Panel：由 Perceive 節點屬性驅動的對話介面。
  *
- * 開場與引導選項都不再寫死,改讀 Perceive 節點 spec 上的 welcome_message + options[]。
- * 點選引導按鈕 = 直接以該選項的 value 啟動 workflow。
+ * 開場與引導選項從 Perceive spec 讀取。
+ * M8-3：點選引導按鈕只「填入」輸入框（BingChat 風格），不自動送出；使用者按下 Enter 才啟動。
  */
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { ChatMessage } from "../runtime/types";
 import type { NodeSpec, PerceiveOption } from "../types";
 
@@ -17,6 +17,7 @@ interface Props {
 
 export function ChatPanel({ messages, isRunning, onSend, perceiveSpec }: Props) {
   const [input, setInput] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const welcome = (perceiveSpec?.params?.welcome_message as string | undefined) ?? "";
   const options = (perceiveSpec?.params?.options as PerceiveOption[] | undefined) ?? [];
@@ -31,10 +32,14 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec }: Props) 
 
   const handleOption = (opt: PerceiveOption) => {
     if (isRunning) return;
-    onSend(opt.value);
+    setInput(opt.label);
+    inputRef.current?.focus();
   };
 
   const showWelcome = messages.length === 0 && (welcome || options.length > 0);
+
+  // 進入時自動聚焦輸入框
+  useEffect(() => { inputRef.current?.focus(); }, []);
 
   return (
     <div className="chat-panel">
@@ -42,20 +47,6 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec }: Props) 
         {showWelcome ? (
           <div className="chat-welcome">
             {welcome && <div className="chat-welcome-text">{welcome}</div>}
-            {options.length > 0 && (
-              <div className="chat-options">
-                {options.map((opt, i) => (
-                  <button
-                    key={i}
-                    className="chat-option-btn"
-                    onClick={() => handleOption(opt)}
-                    disabled={isRunning}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         ) : messages.length === 0 ? (
           <div className="chat-empty">在下方輸入框送出訊息開始一次工作流。</div>
@@ -84,10 +75,29 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec }: Props) 
           </div>
         ))}
       </div>
+
+      {options.length > 0 && (
+        <div className="chat-suggestions">
+          {options.map((opt, i) => (
+            <button
+              key={i}
+              className="chat-suggestion-btn"
+              onClick={() => handleOption(opt)}
+              disabled={isRunning}
+              type="button"
+              title={`填入「${opt.label}」`}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <form className="chat-input" onSubmit={submit}>
         <input
+          ref={inputRef}
           type="text"
-          placeholder={isRunning ? "工作流執行中…" : "輸入訊息,Enter 送出"}
+          placeholder={isRunning ? "工作流執行中…" : "輸入訊息，Enter 送出（點上方按鈕僅填入文字）"}
           disabled={isRunning}
           value={input}
           onChange={(e) => setInput(e.target.value)}

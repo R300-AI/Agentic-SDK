@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ReactFlow,
   Background,
@@ -58,8 +58,8 @@ function EditorRoot() {
   // ── M6-10 Python 程式碼 modal ─────────────────────────────────────────────
   const [pythonCode, setPythonCode] = useState<string | null>(null);
 
-  // ── M7-3 面板拖曳縮放 ─────────────────────────────────────────────────────
-  const [rightWidth, setRightWidth] = useState(360);
+  // ── M7-3 面板拖曳縮放 / M8-1 LEFT 為主面板 ─────────────────────────────
+  const [leftWidth, setLeftWidth] = useState(360);
   const [chatHeight, setChatHeight] = useState(220);
   const dragDir = useRef<'v' | 'h' | null>(null);
 
@@ -76,7 +76,7 @@ function EditorRoot() {
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (dragDir.current === 'v') {
-        setRightWidth(Math.max(240, Math.min(600, window.innerWidth - e.clientX)));
+        setLeftWidth(Math.max(280, Math.min(600, e.clientX)));
       } else if (dragDir.current === 'h') {
         setChatHeight(Math.max(160, Math.min(500, window.innerHeight - e.clientY)));
       }
@@ -286,12 +286,22 @@ function EditorRoot() {
 
   return (
     <div className="editor-shell">
-      <div className="top-row">
+      <aside className="left-column" style={{ width: leftWidth }}>
+        <div className="left-property">
+          <PropertyPanel
+            selectedNodeId={selectedId}
+            spec={selectedSpec}
+            onUpdate={handleSpecUpdate}
+          />
+        </div>
         <NodePalette
           onDownload={handleDownload}
           onLoad={handleLoad}
           onShowPython={handleShowPython}
         />
+      </aside>
+      <div className="resize-v" onMouseDown={startResizeV} />
+      <div className="right-column">
         <main className="canvas-area">
           <ReactFlow
             nodes={nodes}
@@ -308,23 +318,16 @@ function EditorRoot() {
             <Controls />
           </ReactFlow>
         </main>
-        <div className="resize-v" onMouseDown={startResizeV} />
-        <PropertyPanel
-          selectedNodeId={selectedId}
-          spec={selectedSpec}
-          onUpdate={handleSpecUpdate}
-          style={{ width: rightWidth } as CSSProperties}
-        />
+        <div className="resize-h" onMouseDown={startResizeH} />
+        <footer className="footer-area" style={{ height: chatHeight }}>
+          <ChatPanel
+            messages={messages}
+            isRunning={isRunning}
+            onSend={handleSend}
+            perceiveSpec={perceiveSpec}
+          />
+        </footer>
       </div>
-      <div className="resize-h" onMouseDown={startResizeH} />
-      <footer className="footer-area" style={{ height: chatHeight }}>
-        <ChatPanel
-          messages={messages}
-          isRunning={isRunning}
-          onSend={handleSend}
-          perceiveSpec={perceiveSpec}
-        />
-      </footer>
       {pythonCode !== null && (
         <PythonModal code={pythonCode} onClose={() => setPythonCode(null)} />
       )}

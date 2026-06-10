@@ -1,18 +1,18 @@
-/** M6-9 — 白盒化屬性面板。
+/** M6-9 + M8-2 — 白盒化屬性面板。
  *
- * 每個節點都有專屬編輯器;所有節點共用 compute_target 下拉(M6-4)。
- * Action 一律白盒:endpoint / deployment / api_key(明文)/ model / temperature 可直接編輯。
+ * 頂部共用：Class 下拉（決定該節點用哪個 SDK class）+ compute_target。
+ * 下方：依 Class 顯示對應的參數編輯區。
  */
 
 import type React from "react";
-import { useMemo } from "react";
-import type { NodeSpec, PerceiveOption } from "../types";
+import type { NodeName, NodeSpec, PerceiveOption } from "../types";
 import {
-  ACTION_BACKEND_OPTIONS,
   COMPUTE_TARGET_OPTIONS,
-  PLAN_PROMPT_TEMPLATES,
-  REFLECT_MODE_OPTIONS,
+  FIVE_NODE_NAMES,
+  NODE_CLASSES,
   REFLECT_ON_FAILURE_OPTIONS,
+  applyNodeClass,
+  detectNodeClass,
 } from "../types";
 
 interface Props {
@@ -32,13 +32,59 @@ export function PropertyPanel({ selectedNodeId, spec, onUpdate, style }: Props) 
     );
   }
 
+  const nodeName = selectedNodeId as NodeName;
+  const isFiveNode = (FIVE_NODE_NAMES as readonly string[]).includes(selectedNodeId);
+  if (!isFiveNode) {
+    return (
+      <aside className="property-panel" style={style}>
+        <h3>{selectedNodeId}</h3>
+        <pre>{JSON.stringify(spec, null, 2)}</pre>
+      </aside>
+    );
+  }
+
+  const klass = detectNodeClass(nodeName, spec);
+
   return (
     <aside className="property-panel" style={style}>
       <h3>{selectedNodeId}</h3>
+      <ClassEditor nodeName={nodeName} spec={spec} onUpdate={onUpdate} />
       <ComputeTargetEditor spec={spec} onUpdate={onUpdate} />
       <hr className="prop-divider" />
+      <p className="prop-class-hint">{klass.hint}</p>
       <Editor nodeId={selectedNodeId} spec={spec} onUpdate={onUpdate} />
     </aside>
+  );
+}
+
+function ClassEditor({
+  nodeName,
+  spec,
+  onUpdate,
+}: {
+  nodeName: NodeName;
+  spec: NodeSpec;
+  onUpdate: (spec: NodeSpec) => void;
+}) {
+  const klasses = NODE_CLASSES[nodeName];
+  const current = detectNodeClass(nodeName, spec);
+  return (
+    <div className="prop-row">
+      <label>Class</label>
+      <select
+        value={current.value}
+        onChange={(e) => {
+          const next = klasses.find((k) => k.value === e.target.value);
+          if (next) onUpdate(applyNodeClass(spec, next));
+        }}
+      >
+        {klasses.map((k) => (
+          <option key={k.value} value={k.value}>
+            {k.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -231,45 +277,17 @@ function PlanEditor({
   spec: NodeSpec;
   onUpdate: (spec: NodeSpec) => void;
 }) {
-  const current = (spec.params?.system_prompt as string | undefined) ?? PLAN_PROMPT_TEMPLATES.react;
-  const matchedTemplate = useMemo(() => {
-    const entry = Object.entries(PLAN_PROMPT_TEMPLATES).find(([, v]) => v === current);
-    return entry?.[0] ?? "custom";
-  }, [current]);
-
-  const updatePrompt = (next: string) => onUpdate(setParam(spec, "system_prompt", next));
-
+  const current = (spec.params?.system_prompt as string | undefined) ?? "";
   return (
-    <>
-      <div className="prop-row">
-        <label>system_prompt 模板</label>
-        <select
-          value={matchedTemplate}
-          onChange={(e) => {
-            const k = e.target.value;
-            if (k !== "custom" && PLAN_PROMPT_TEMPLATES[k]) {
-              updatePrompt(PLAN_PROMPT_TEMPLATES[k]);
-            }
-          }}
-        >
-          {Object.keys(PLAN_PROMPT_TEMPLATES).map((k) => (
-            <option key={k} value={k}>
-              {k}
-            </option>
-          ))}
-          <option value="custom">custom</option>
-        </select>
-      </div>
-      <div className="prop-row">
-        <label>system_prompt 內容</label>
-        <textarea
-          rows={8}
-          value={current}
-          onChange={(e) => updatePrompt(e.target.value)}
-        />
-        <small className="hint">儲存 YAML 時只存最終文字,不存模板名。</small>
-      </div>
-    </>
+    <div className="prop-row">
+      <label>system_prompt</label>
+      <textarea
+        rows={8}
+        value={current}
+        onChange={(e) => onUpdate(setParam(spec, "system_prompt", e.target.value))}
+      />
+      <small className="hint">切換 Class 會覆寫為該 Class 的標準模板；編輯文本可自訂。</small>
+    </div>
   );
 }
 
@@ -281,38 +299,20 @@ function ReflectEditor({
   onUpdate: (spec: NodeSpec) => void;
 }) {
   const onFailure = (spec.params?.on_failure as string | undefined) ?? "retry_plan";
-  const mode = (spec.params?.mode as string | undefined) ?? "rule_based";
-
   return (
-    <>
-      <div className="prop-row">
-        <label>mode(M6-6)</label>
-        <select
-          value={mode}
-          onChange={(e) => onUpdate(setParam(spec, "mode", e.target.value))}
-        >
-          {REFLECT_MODE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-        <small className="hint">LLM 反思走 Reflexion(Shinn 2023);規則式零成本即時判斷。</small>
-      </div>
-      <div className="prop-row">
-        <label>on_failure</label>
-        <select
-          value={onFailure}
-          onChange={(e) => onUpdate(setParam(spec, "on_failure", e.target.value))}
-        >
-          {REFLECT_ON_FAILURE_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
-    </>
+    <div className="prop-row">
+      <label>on_failure</label>
+      <select
+        value={onFailure}
+        onChange={(e) => onUpdate(setParam(spec, "on_failure", e.target.value))}
+      >
+        {REFLECT_ON_FAILURE_OPTIONS.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
 
@@ -323,7 +323,6 @@ function ActionEditor({
   spec: NodeSpec;
   onUpdate: (spec: NodeSpec) => void;
 }) {
-  const currentBackend = ACTION_BACKEND_OPTIONS.find((o) => o.typeString === spec.type)?.value ?? "foundry";
   const endpoint = (spec.params?.endpoint as string | undefined) ?? "";
   const deployment = (spec.params?.deployment as string | undefined) ?? "";
   const apiKey = (spec.params?.api_key as string | undefined) ?? "";
@@ -332,23 +331,6 @@ function ActionEditor({
 
   return (
     <>
-      <div className="prop-row">
-        <label>backend</label>
-        <select
-          value={currentBackend}
-          onChange={(e) => {
-            const opt = ACTION_BACKEND_OPTIONS.find((o) => o.value === e.target.value);
-            if (!opt) return;
-            onUpdate({ ...spec, type: opt.typeString });
-          }}
-        >
-          {ACTION_BACKEND_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
-          ))}
-        </select>
-      </div>
       <div className="prop-row">
         <label>endpoint</label>
         <input

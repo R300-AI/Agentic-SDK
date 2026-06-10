@@ -6,6 +6,7 @@
   "description": "Phase 5 圖形編排 UI:拖曳設計、即時動畫、對話框輸出。後端走 Agentic SDK Gateway。",
   "scripts": {
     "dev": "vite",
+    "prestart": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Get-NetTCPConnection -LocalPort 8080 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }\"",
     "start": "concurrently -n gateway,editor -c cyan,green \"../.venv/Scripts/python.exe -m agentic_sdk.gateway --host 127.0.0.1 --port 8080\" \"vite\"",
     "build": "tsc -b && vite build",
     "preview": "vite preview"
