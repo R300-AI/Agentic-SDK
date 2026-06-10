@@ -29,12 +29,12 @@ const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
 };
 
 const EDGE_WHITELIST: Array<[string, string]> = [
-  ["perceive", "plan"],
-  ["plan", "retrieve"],
+  ["plan", "retrieve"],   // plan 右側先出兩條，不佔左側計數
   ["plan", "action"],
-  ["retrieve", "plan"],
+  ["retrieve", "plan"],   // → plan left-0（最上）
+  ["perceive", "plan"],   // → plan left-1（中）
+  ["reflect", "plan"],    // → plan left-2（最下）
   ["action", "reflect"],
-  ["reflect", "plan"],
 ];
 
 export function isLegalEdge(source: string, target: string): boolean {
