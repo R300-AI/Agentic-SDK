@@ -26,31 +26,51 @@ html, body, #root {
 /* ── 主版型 ─────────────────────────────────────────── */
 
 .editor-shell {
-  display: grid;
-  grid-template-columns: 220px 1fr 360px;
-  grid-template-rows: 1fr 320px;
-  grid-template-areas:
-    "palette canvas property"
-    "footer footer footer";
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   width: 100vw;
+  overflow: hidden;
 }
 
-.palette { grid-area: palette; }
-.canvas-area { grid-area: canvas; position: relative; }
-.property-panel { grid-area: property; }
-.footer-area { grid-area: footer; }
+.top-row {
+  display: flex;
+  flex: 1 1 0;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.palette { flex-shrink: 0; }
+.canvas-area { flex: 1; position: relative; overflow: hidden; }
+.property-panel { flex-shrink: 0; overflow: auto; }
+.footer-area { flex-shrink: 0; overflow: hidden; }
 
 /* ── Palette ────────────────────────────────────────── */
 
 .palette {
+  width: 220px;
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
   padding: 16px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 .palette h3 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 0.05em; }
 .palette hr { border: 0; border-top: 1px solid var(--border); margin: 16px 0; }
+
+.palette-top {
+  /* 佔用剩餘空間，把 bottom 推到底部 */
+}
+.palette-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin: 0 0 8px;
+}
+.palette-bottom {
+  margin-top: auto;
+}
 
 .palette-list {
   list-style: none;
@@ -133,6 +153,28 @@ html, body, #root {
 }
 .property-panel h3 { margin: 0 0 12px; font-size: 14px; }
 .property-panel .hint { color: var(--text-muted); font-size: 12px; }
+
+/* ── Resize handles (M7-3) ──────────────────────────────────── */
+
+.resize-v {
+  width: 5px;
+  flex-shrink: 0;
+  background: var(--border);
+  cursor: col-resize;
+  transition: background 0.15s;
+  user-select: none;
+}
+.resize-v:hover { background: var(--accent); }
+
+.resize-h {
+  height: 5px;
+  flex-shrink: 0;
+  background: var(--border);
+  cursor: row-resize;
+  transition: background 0.15s;
+  user-select: none;
+}
+.resize-h:hover { background: var(--accent); }
 
 .prop-row {
   display: flex;

@@ -13,8 +13,7 @@
 | M3 | ✅ 全部通過(開發者自測) | M3-1 / M3-3 已由開發者以「維那視角」自測通過,紀錄見 [docs/quickstart-usability-check.md §六](../docs/quickstart-usability-check.md);正式部署形態(Action 走 AMD NPU)待 M4 機台到位後補驗 |
 | M4 | ✅ 全部通過 | M4-6 ✅;M4-1 ✅(Ryzen gemma3-4b-npu 5.938 s);M4-2 ✅(Foundry gpt-5.2 2.031 s);M4-3 ✅(entry_types 兩 backend 一致);M4-4 ✅(JSON report 佐證);M4-5 ✅(context-and-memory.md §五補實證) |
 | M5 | 🟡 規劃中 | 使用者已明確要求拖曳介面,Phase 5 設計規劃見 [docs/04-observability-dashboard/phase5-graph-editor-plan.md](../docs/04-observability-dashboard/phase5-graph-editor-plan.md);M5-1～M5-4 未動工 |
-| M6 | � 第一輪完成 | MVP 差異化三主軸：持久記憶、節點異質部署、Plan 真實規劃能力；10 子項全綠 |
-
+| M6 | � 第一輪完成 | MVP 差異化三主軸：持久記憶、節點異質部署、Plan 真實規劃能力；10 子項全綠 || M7 | 🔴 規劃中 | 編輯器 UX 精修：Palette 精簡、面板拖曳調整尺寸、Python 輸出改 Builder 模式、預設 Backend 改 Azure |
 進度依據:98 項自動測試全綠(其中 `tests/test_m3_acceptance.py` 三案對應 M3-2 / M3-4、`tests/test_workflow_config.py` 11 案對應 M4-6、`tests/test_multi_backend.py` 5 案對應 M4-1~M4-3 軟體側)+ scripts/demo_workflow.py 實跡驗證 + 本機 Foundry 模式(`WORKFLOW_ACTION_BACKEND=foundry`)以 `scripts/smoke_chat.py` 對 `gpt-5.2` deployment 實打通(五節點 finish 序列、`x-agentic-metadata` header、token usage 三者皆正確)+ 開發者維那視角自測通過(M3-1 / M3-3,~1 分鐘,卡關 2 次有明確訊息,四節點語義理解正確)+ `Workflow.from_config(..., node_overrides={...})` 支援使用者注入自建 AzureOpenAI client 的 Python SDK 路徑 + M4 多基台拓樸(node 屬性決定 backend,非 Gateway 多 URL)軟體側就緒,待 Ryzen 端 `scripts/demo_multi_backend.py` 報告佐證。架構例外見 [docs/01-architecture/ai-hub-vision.md](../docs/01-architecture/ai-hub-vision.md) §五 E-1~E-7。
 
 ---
@@ -186,6 +185,22 @@ npm run dev
 > **第一輪實作小註**：M6-2 預設用 TF-IDF jaccard 而非 sentence-transformers，是為了避開 1.5GB torch 依賴；Embedder Protocol 已預留，未來 `pip install sentence-transformers` 即可升級。M6-5 的 subtasks 由 Plan 寫入 payload，Action 端依序消費的迴圈邏輯保留為下一輪細節。
 
 **M6 完成代表**：可向整合商展示「為什麼用 Agentic SDK 而不用 LangGraph / Dify / Coze」— 因為記憶跨對話存活、節點跑在國產晶片上、整條鏈路在瀏覽器內可視可調。
+
+---
+
+## M7 — 編輯器 UX 精修
+
+> **M7 的核心主張**：M6 交付了功能，M7 修正使用習慣落差 — 操作路徑更直覺、面板尺寸可控、Python 輸出對齊 SDK 學習曲線、開發機環境預設移除 AMD NPU 依賴。
+
+| ID | 狀態 | 對外可見成果 | 驗收方式 |
+|----|------|-------------|----------|
+| M7-1 | 🔴 | **移除 Palette 節點清單**：左側欄不再重複列出五節點；點擊畫布節點直接開屬性面板，操作路徑唯一化 | Palette 側欄無 `palette-list`；PropertyPanel hint 文字確認點擊節點即開啟 |
+| M7-2 | 🔴 | **Palette 底部化**：Memory Stream 指示卡 + 輸出按鈕靠底部貫穿；Chat Panel 預設高度縮小至 ≤ 220px | 左側欄 Memory/Output 區塊 `margin-top: auto` 固定底部；Chat Panel 高度目測合理 |
+| M7-3 | 🔴 | **面板拖曳調整尺寸**：右側屬性面板可水平拖曳縮放寬度（min 240 / max 600）；底部 Chat Panel 可垂直拖曳縮放高度（min 160 / max 500） | 拖曳 `.resize-v` 分隔線後右側面板寬度即時更新；拖曳 `.resize-h` 後 Chat Panel 高度即時更新 |
+| M7-4 | 🔴 | **Python 輸出改 Builder 模式**：`export.ts` 生成逐節點顯式建構程式碼（`RuleBasedPerceive(...)`、`SemanticRetrieve(...)` 等），不依賴 YAML 字串中介載入 | PythonModal 顯示的代碼包含明確 import 路徑 + `Workflow(perceive=..., retrieve=..., ...)` 建構呼叫，無任何 YAML 字串 |
+| M7-5 | 🔴 | **預設 Backend 改 Azure**：`defaultWorkflow.ts` 移除 `ryzen_ai` 預設值，Plan 節點 `compute_target` 改為 `azure_foundry`；開發機環境可直接跑無 NPU 依賴 | `defaultWorkflow.ts` 中所有 `compute_target` 均為 `azure_foundry` 或 `local_cpu`，無 `ryzen_ai` |
+
+**M7 完成代表**：開發機上不裝 AMD NPU Runtime 也能完整跑通 UI demo；整合商在 PythonModal 看到的是可直接 `pip install agentic-sdk` 後執行的 Builder 風格代碼，而非隱藏細節的 YAML 載入片段。
 
 ---
 

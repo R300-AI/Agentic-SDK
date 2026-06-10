@@ -19,7 +19,7 @@ nodes:
     compute_target: local_cpu
   plan:
     type: builtin.plan
-    compute_target: ryzen_ai
+    compute_target: azure_foundry
   retrieve:
     type: builtin.retrieve
     params:
@@ -62,7 +62,7 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
     },
     plan: {
       type: "builtin.plan",
-      compute_target: "ryzen_ai",
+      compute_target: "azure_foundry",
     },
     retrieve: {
       type: "builtin.retrieve",

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   ReactFlow,
   Background,
@@ -57,6 +57,38 @@ function EditorRoot() {
 
   // ── M6-10 Python 程式碼 modal ─────────────────────────────────────────────
   const [pythonCode, setPythonCode] = useState<string | null>(null);
+
+  // ── M7-3 面板拖曳縮放 ─────────────────────────────────────────────────────
+  const [rightWidth, setRightWidth] = useState(360);
+  const [chatHeight, setChatHeight] = useState(220);
+  const dragDir = useRef<'v' | 'h' | null>(null);
+
+  const startResizeV = useCallback((e: React.MouseEvent) => {
+    dragDir.current = 'v';
+    e.preventDefault();
+  }, []);
+
+  const startResizeH = useCallback((e: React.MouseEvent) => {
+    dragDir.current = 'h';
+    e.preventDefault();
+  }, []);
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (dragDir.current === 'v') {
+        setRightWidth(Math.max(240, Math.min(600, window.innerWidth - e.clientX)));
+      } else if (dragDir.current === 'h') {
+        setChatHeight(Math.max(160, Math.min(500, window.innerHeight - e.clientY)));
+      }
+    };
+    const onUp = () => { dragDir.current = null; };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    return () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    };
+  }, []);
   const handleShowPython = useCallback(() => {
     const merged = flowToConfig(nodes, config);
     setPythonCode(configToPython(merged));
@@ -254,35 +286,38 @@ function EditorRoot() {
 
   return (
     <div className="editor-shell">
-      <NodePalette
-        onDownload={handleDownload}
-        onLoad={handleLoad}
-        onShowPython={handleShowPython}
-        selectedId={selectedId}
-        onSelect={setSelectedId}
-      />
-      <main className="canvas-area">
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={NODE_TYPES}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeClick={(_, n) => setSelectedId(n.id)}
-          onPaneClick={() => setSelectedId(null)}
-          fitView
-        >
-          <Background />
-          <Controls />
-        </ReactFlow>
-      </main>
-      <PropertyPanel
-        selectedNodeId={selectedId}
-        spec={selectedSpec}
-        onUpdate={handleSpecUpdate}
-      />
-      <footer className="footer-area">
+      <div className="top-row">
+        <NodePalette
+          onDownload={handleDownload}
+          onLoad={handleLoad}
+          onShowPython={handleShowPython}
+        />
+        <main className="canvas-area">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            nodeTypes={NODE_TYPES}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeClick={(_, n) => setSelectedId(n.id)}
+            onPaneClick={() => setSelectedId(null)}
+            fitView
+          >
+            <Background />
+            <Controls />
+          </ReactFlow>
+        </main>
+        <div className="resize-v" onMouseDown={startResizeV} />
+        <PropertyPanel
+          selectedNodeId={selectedId}
+          spec={selectedSpec}
+          onUpdate={handleSpecUpdate}
+          style={{ width: rightWidth } as CSSProperties}
+        />
+      </div>
+      <div className="resize-h" onMouseDown={startResizeH} />
+      <footer className="footer-area" style={{ height: chatHeight }}>
         <ChatPanel
           messages={messages}
           isRunning={isRunning}

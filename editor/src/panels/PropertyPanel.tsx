@@ -4,6 +4,7 @@
  * Action 一律白盒:endpoint / deployment / api_key(明文)/ model / temperature 可直接編輯。
  */
 
+import type React from "react";
 import { useMemo } from "react";
 import type { NodeSpec, PerceiveOption } from "../types";
 import {
@@ -18,12 +19,13 @@ interface Props {
   selectedNodeId: string | null;
   spec: NodeSpec | null;
   onUpdate: (spec: NodeSpec) => void;
+  style?: React.CSSProperties;
 }
 
-export function PropertyPanel({ selectedNodeId, spec, onUpdate }: Props) {
+export function PropertyPanel({ selectedNodeId, spec, onUpdate, style }: Props) {
   if (!selectedNodeId || !spec) {
     return (
-      <aside className="property-panel">
+      <aside className="property-panel" style={style}>
         <h3>屬性</h3>
         <p className="hint">點選畫布節點以編輯屬性。</p>
       </aside>
@@ -31,7 +33,7 @@ export function PropertyPanel({ selectedNodeId, spec, onUpdate }: Props) {
   }
 
   return (
-    <aside className="property-panel">
+    <aside className="property-panel" style={style}>
       <h3>{selectedNodeId}</h3>
       <ComputeTargetEditor spec={spec} onUpdate={onUpdate} />
       <hr className="prop-divider" />
