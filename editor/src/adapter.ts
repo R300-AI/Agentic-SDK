@@ -29,12 +29,14 @@ const NODE_POSITIONS: Record<string, { x: number; y: number }> = {
 };
 
 const EDGE_WHITELIST: Array<[string, string]> = [
-  ["plan", "retrieve"],   // plan 右側先出兩條，不佔左側計數
-  ["plan", "action"],
+  ["plan", "retrieve"],   // plan right-0
+  ["plan", "action"],     // plan right-1
+  ["plan", "reflect"],    // plan right-2（直接進 reflect，不等 action）
   ["retrieve", "plan"],   // → plan left-0（最上）
   ["perceive", "plan"],   // → plan left-1（中）
   ["reflect", "plan"],    // → plan left-2（最下）
-  ["action", "reflect"],
+  ["action", "reflect"],  // action right-0
+  ["action", "perceive"], // 下一輪對話回到 perceive
 ];
 
 export function isLegalEdge(source: string, target: string): boolean {
@@ -49,9 +51,11 @@ const EDGE_HANDLES: Record<string, { sourceHandle: "left" | "right"; targetHandl
   "perceive-plan":  { sourceHandle: "right", targetHandle: "left"  },
   "plan-retrieve":  { sourceHandle: "right", targetHandle: "right" },
   "plan-action":    { sourceHandle: "right", targetHandle: "left"  },
+  "plan-reflect":   { sourceHandle: "right", targetHandle: "left"  },  // plan 直接進 reflect 左側
   "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },
   "action-reflect": { sourceHandle: "right", targetHandle: "right" },
   "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },
+  "action-perceive":{ sourceHandle: "left",  targetHandle: "right" },  // 回到 perceive 右側
 };
 
 export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Edge[] } {
