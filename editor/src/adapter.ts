@@ -42,31 +42,33 @@ export function isLegalEdge(source: string, target: string): boolean {
 }
 
 /** WorkflowConfig → React Flow */
-export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Edge[] } {
-  const nodes: Node[] = NODE_DISPLAY_ORDER.map((name) => {
-    const spec = config.nodes[name] ?? { type: defaultTypeFor(name) };
-    return {
-      id: name,
-      type: name,
-      position: NODE_POSITIONS[name],
-      data: { name, spec },
-    };
-  });
 const ARROW = { type: MarkerType.ArrowClosed } as const;
 
-/** 每條初始邊的 source/target handle，依節點佈局指定最短路徑側 */
-const EDGE_HANDLES: Record<string, { sourceHandle: string; targetHandle: string }> = {
+/** 每條邊使用哪一側的連接點（left = 節點左側，right = 節點右側） */
+const EDGE_HANDLES: Record<string, { sourceHandle: "left" | "right"; targetHandle: "left" | "right" }> = {
   "perceive-plan":  { sourceHandle: "right", targetHandle: "left"  },
-  "plan-retrieve":  { sourceHandle: "right", targetHandle: "right" },  // 進 retrieve 後面（右側）
+  "plan-retrieve":  { sourceHandle: "right", targetHandle: "right" },
   "plan-action":    { sourceHandle: "right", targetHandle: "left"  },
-  "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },  // retrieve 前面出，進 plan 前面
-  "action-reflect": { sourceHandle: "right", targetHandle: "right" },  // 進 reflect 後面（右側）
-  "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },  // reflect 前面出，進 plan 前面
+  "retrieve-plan":  { sourceHandle: "left",  targetHandle: "left"  },
+  "action-reflect": { sourceHandle: "right", targetHandle: "right" },
+  "reflect-plan":   { sourceHandle: "left",  targetHandle: "left"  },
 };
+
+export function configToFlow(config: WorkflowConfig): { nodes: Node[]; edges: Edge[] } {
+  // 先掃邊，記錄每個節點左右各被幾條連線使用，生成帶 index 的 handle ID
+  const leftCount: Record<string, number> = Object.fromEntries(FIVE_NODE_NAMES.map(n => [n, 0]));
+  const rightCount: Record<string, number> = Object.fromEntries(FIVE_NODE_NAMES.map(n => [n, 0]));
 
   const edges: Edge[] = EDGE_WHITELIST.map(([s, t]) => {
     const key = `${s}-${t}`;
-    const handles = EDGE_HANDLES[key] ?? { sourceHandle: "right", targetHandle: "left" };
+    const sides = EDGE_HANDLES[key] ?? { sourceHandle: "right" as const, targetHandle: "left" as const };
+
+    const srcSide = sides.sourceHandle;
+    const srcIdx = srcSide === "left" ? leftCount[s]++ : rightCount[s]++;
+
+    const tgtSide = sides.targetHandle;
+    const tgtIdx = tgtSide === "left" ? leftCount[t]++ : rightCount[t]++;
+
     return {
       id: key,
       source: s,
@@ -75,9 +77,22 @@ const EDGE_HANDLES: Record<string, { sourceHandle: string; targetHandle: string 
       animated: false,
       markerEnd: ARROW,
       style: { strokeWidth: 2 },
-      ...handles,
+      sourceHandle: `${srcSide}-${srcIdx}`,
+      targetHandle: `${tgtSide}-${tgtIdx}`,
     };
   });
+
+  // 節點在 edges 之後建立，才能拿到正確的 leftCount / rightCount
+  const nodes: Node[] = NODE_DISPLAY_ORDER.map((name) => {
+    const spec = config.nodes[name] ?? { type: defaultTypeFor(name) };
+    return {
+      id: name,
+      type: name,
+      position: NODE_POSITIONS[name],
+      data: { name, spec, leftCount: leftCount[name], rightCount: rightCount[name] },
+    };
+  });
+
   return { nodes, edges };
 }
 
