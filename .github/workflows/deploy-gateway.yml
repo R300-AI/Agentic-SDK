@@ -7,6 +7,7 @@ on:
       - "agentic_sdk/**"
       - "pyproject.toml"
       - "Procfile"
+      - "Dockerfile"
       - "demo/**"
       - ".github/workflows/deploy-gateway.yml"
   workflow_dispatch:
