@@ -138,7 +138,7 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
           >
             {gwMissing
               ? "⚠ 未設定 Gateway URL，點此輸入（如 http://localhost:8080）"
-              : `Gateway: ${gatewayUrl || "dev proxy"}`}
+              : `Gateway: ${gatewayUrl || "dev proxy"} • build ${__BUILD_TIME__}`}
           </span>
         )}
       </div>

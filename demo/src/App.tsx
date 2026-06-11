@@ -168,8 +168,8 @@ function EditorRoot() {
 
       resetAllNodeStatus();
       animator.reset();
-      // 樂觀更新:使用者按下送出當下,Perceive 立刻變黃,不等 SSE 第一個事件
-      animator.enqueue("perceive", "running");
+      // 不做樂觀更新：節點黃燈只能由後端真實 SSE 事件驅動，不能「預如」它已經開始。
+      // ChatPanel 的「執行中...」占位才是「我送出了」的即時反饋，工作流圖代表「後端現狀」。
       setIsRunning(true);
       startTimeRef.current = performance.now();
 
@@ -226,6 +226,9 @@ function EditorRoot() {
       closeStreamRef.current = subscribeStream(
         runResult.workflow_id,
         (ev: TelemetryEvent) => {
+          // 誊斷用：在瀏覽器 console 印出所有事件，可以看 SSE 抵達順序與間隔
+          // eslint-disable-next-line no-console
+          console.debug("[SSE]", ev.event_name, ev.workflow_node, ev);
           // Plan 推理軌跡 — 寫入最後一條 assistant metadata 讓 ChatPanel 顯示
           if (ev.event_name === EVENT_NODE_THOUGHT && ev.workflow_node === "plan") {
             lastPlanThought = typeof ev.plan_thought === "string" ? ev.plan_thought : undefined;

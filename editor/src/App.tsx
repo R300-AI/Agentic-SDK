@@ -189,7 +189,7 @@ function EditorRoot() {
 
       resetAllNodeStatus();
       animator.reset();
-      animator.enqueue("perceive", "running");
+      // 不做樂觀更新：節點黃燈只能由後端真實 SSE 事件驅動。
       setIsRunning(true);
       startTimeRef.current = performance.now();
 
@@ -244,6 +244,8 @@ function EditorRoot() {
       closeStreamRef.current = subscribeStream(
         runResult.workflow_id,
         (ev: TelemetryEvent) => {
+          // eslint-disable-next-line no-console
+          console.debug("[SSE]", ev.event_name, ev.workflow_node, ev);
           if (ev.event_name === EVENT_NODE_DELTA) {
             const delta = typeof ev.delta_text === "string" ? ev.delta_text : "";
             if (!delta) return;
