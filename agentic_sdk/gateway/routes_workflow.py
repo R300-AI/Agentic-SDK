@@ -44,6 +44,9 @@ router = APIRouter()
 _WORKFLOW_RESULTS: dict[str, dict[str, Any]] = {}
 _WORKFLOW_RESULTS_LOCK = asyncio.Lock()
 
+# 各 workflow 啟動時 ring 的事件數量 offset；SSE 從此處往後掃以避免遺漏早期節點事件。
+_WORKFLOW_RING_OFFSETS: dict[str, int] = {}
+
 
 # ── M5-2:POST /v1/workflow/run ───────────────────────────────────────────────
 
@@ -88,6 +91,11 @@ async def run_workflow_v1(
             attachments_in = [Attachment.from_dict(a) for a in payload.attachments]
         except (KeyError, TypeError) as exc:
             raise HTTPException(status_code=400, detail=f"attachments 格式錯誤:{exc}") from exc
+
+    # 記錄 ring 當前長度作為 SSE 起始 offset，防止 race condition
+    # （後端 task 可能在前端建立 SSE 連線前就發出了早期節點事件）
+    ring = request.app.state.telemetry
+    _WORKFLOW_RING_OFFSETS[workflow_id] = len(ring.snapshot())
 
     async def _background_run() -> None:
         try:
@@ -152,8 +160,8 @@ def _is_terminal_event(event: dict[str, Any]) -> bool:
     return False
 
 
-async def _sse_event_stream(ring, workflow_id: str) -> AsyncIterator[bytes]:
-    seen = 0
+async def _sse_event_stream(ring, workflow_id: str, start_offset: int = 0) -> AsyncIterator[bytes]:
+    seen = start_offset
     loop_started = asyncio.get_event_loop().time()
     while True:
         snapshot = ring.snapshot()
@@ -177,8 +185,9 @@ async def _sse_event_stream(ring, workflow_id: str) -> AsyncIterator[bytes]:
 @router.get("/v1/workflow/{workflow_id}/stream")
 async def stream_workflow_v1(workflow_id: str, request: Request) -> StreamingResponse:
     ring = request.app.state.telemetry
+    start_offset = _WORKFLOW_RING_OFFSETS.get(workflow_id, 0)
     return StreamingResponse(
-        _sse_event_stream(ring, workflow_id),
+        _sse_event_stream(ring, workflow_id, start_offset=start_offset),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
