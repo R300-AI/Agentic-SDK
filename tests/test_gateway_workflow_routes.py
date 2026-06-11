@@ -21,6 +21,7 @@ from agentic_sdk.observability.events import (
     EVENT_NODE_FINISH,
     EVENT_NODE_START,
     EVENT_WORKFLOW_FALLBACK,
+    EVENT_NODE_DELTA,
 )
 
 
@@ -340,7 +341,9 @@ async def test_sse_chunks_match_node_event_order_for_full_workflow(
                 if name == EVENT_NODE_THOUGHT:
                     assert node == "plan", f"thought event inside non-plan node {node}"
                 elif name == EVENT_NODE_DELTA:
-                    assert node == "action", f"delta event inside non-action node {node}"
+                    # plan 節點以 delta_index=0 作為第一個 token 的時間戳記錨點；
+                    # action 節點以 delta 串流回應內容。兩者都合法。
+                    assert node in ("action", "plan"), f"delta event inside unexpected node {node}"
                 else:
                     # 不應有別的 start/finish
                     assert name not in (EVENT_NODE_START, EVENT_NODE_FINISH), (
@@ -395,16 +398,24 @@ async def test_plan_start_precedes_thought_in_realtime_sse(
     import logging
 
     class SlowPlanFoundryClient(MockFoundryClient):
-        """第一次 plan 節點的 chat() 延遲 2 秒，模擬慢 LLM；其餘節點不延遲。"""
+        """第一次 plan 節點的 chat_stream() 延遲 2 秒，模擬慢 LLM；其餘節點不延遲。
+        ReActPlan 現在使用 chat_stream，所以需要 override chat_stream 而非 chat。
+        """
         def __init__(self) -> None:
             super().__init__()
             self._plan_slow_done = False
 
-        def chat(self, *, system: str, user: str, temperature: float = 0.0) -> FoundryResponse:
+        def chat_stream(self, *, system: str, user: str, temperature: float = 0.0,
+                        on_delta=None, idle_timeout_sec: float = 30.0,
+                        response_format=None):
             if system.startswith("PLAN") and not self._plan_slow_done:
                 self._plan_slow_done = True
                 time.sleep(2.0)   # 在 asyncio.to_thread 內，time.sleep 不阻塞 event loop
-            return super().chat(system=system, user=user, temperature=temperature)
+            return super().chat_stream(
+                system=system, user=user, temperature=temperature,
+                on_delta=on_delta, idle_timeout_sec=idle_timeout_sec,
+                response_format=response_format,
+            )
 
     respx_mock.post("http://upstream.test/v1/chat/completions").mock(
         return_value=httpx.Response(200, json={
@@ -434,12 +445,15 @@ async def test_plan_start_precedes_thought_in_realtime_sse(
                 name = ev.get("event_name")
                 node = ev.get("workflow_node")
                 visit = ev.get("workflow_node_visit", 1)
+                delta_index = ev.get("delta_index")
                 if name == EVENT_NODE_START and node == "plan" and visit == 1:
                     timestamps["plan_start"] = time.monotonic() - t0
+                elif name == EVENT_NODE_DELTA and node == "plan" and delta_index == 0:
+                    timestamps["plan_first_token"] = time.monotonic() - t0
                 elif name == EVENT_NODE_THOUGHT and node == "plan" and visit == 1:
                     timestamps["plan_thought"] = time.monotonic() - t0
                     return  # plan 第一次 thought 到手即可，不用等 action 完成
-                # 安全出口：action 跑完代表 workflow 已結束（plan.thought 應已收到）
+                # 安全出口：action 跑完代表 workflow 已結束
                 elif name == EVENT_NODE_FINISH and node == "action":
                     return
 
@@ -450,12 +464,21 @@ async def test_plan_start_precedes_thought_in_realtime_sse(
         await asyncio.gather(wf_task, sse_task)
 
         assert "plan_start" in timestamps, "未收到 plan.start（黃燈），SSE 時序測試無效"
+        assert "plan_first_token" in timestamps, "未收到 plan delta_index=0（第一個 token），chat_stream on_delta 未正確觸發"
         assert "plan_thought" in timestamps, "未收到 plan.thought（LLM 輸出），SlowMock 未正確觸發"
 
-        gap = timestamps["plan_thought"] - timestamps["plan_start"]
-        assert gap >= 1.5, (
-            f"plan.start → plan.thought 間距僅 {gap:.2f}s，"
-            "期望 ≥ 1.5s（代表 LLM 執行中 consumer 已看到黃燈）"
+        # 核心斷言：T1（黃燈）< T2（第一個 token）
+        # 即「plan 先黃，LLM 才開始產第一個字」
+        gap_start_to_first = timestamps["plan_first_token"] - timestamps["plan_start"]
+        assert gap_start_to_first >= 1.5, (
+            f"plan.start → first_token 間距僅 {gap_start_to_first:.2f}s，"
+            "期望 ≥ 1.5s（代表黃燈已亮超過 1.5 秒才收到第一個 token）"
+        )
+
+        # 順序斷言：T2 ≤ T3（第一個 token 不晚於 thought 完成）
+        # Mock 因同步執行兩者可同 tick，用 <= 而非 <
+        assert timestamps["plan_first_token"] <= timestamps["plan_thought"], (
+            f"first_token({timestamps['plan_first_token']:.3f}s) 不應晚於 plan.thought({timestamps['plan_thought']:.3f}s)"
         )
     finally:
         logging.getLogger("agentic_sdk").removeHandler(handler)

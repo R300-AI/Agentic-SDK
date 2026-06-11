@@ -13,7 +13,7 @@ from __future__ import annotations
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.workflow.llm import FoundryClient, get_foundry_client
 from agentic_sdk.workflow.node import NodeOutput, WorkflowState
-from agentic_sdk.observability.events import EVENT_NODE_THOUGHT, make_event
+from agentic_sdk.observability.events import EVENT_NODE_DELTA, EVENT_NODE_THOUGHT, make_event
 
 import logging
 logger = logging.getLogger("agentic_sdk.workflow")
@@ -103,7 +103,32 @@ class ReActPlan:
             f"has_attachment: {len(state.attachments) > 0}\n"
         )
 
-        response = self._foundry.chat(system=self._system_prompt, user=user_prompt)
+        # 用串流模式呼叫 LLM，在第一個 token 抵達時 emit EVENT_NODE_DELTA(delta_index=0)，
+        # 讓前端與測試可以量測三個時間點：
+        #   T1 plan.start（黃燈）→ T2 delta_index=0（LLM 第一字）→ T3 plan.finish（綠燈）
+        _first_token_emitted: list[bool] = [False]
+
+        def _on_delta(token: str) -> None:
+            if not _first_token_emitted[0]:
+                _first_token_emitted[0] = True
+                logger.info(
+                    "plan.first_token wid=%s",
+                    state.workflow_id,
+                    extra={"event": make_event(
+                        EVENT_NODE_DELTA,
+                        workflow_id=state.workflow_id,
+                        workflow_node="plan",
+                        delta_index=0,
+                        delta_text="",  # 不洩漏推理原文，僅作為時間戳記錨點
+                    )},
+                )
+
+        response = self._foundry.chat_stream(
+            system=self._system_prompt,
+            user=user_prompt,
+            on_delta=_on_delta,
+            response_format={"type": "json_object"},
+        )
         decision = response.as_json()
         thought = str(decision.get("thought", "(no thought)"))
         next_node = decision.get("next_node")

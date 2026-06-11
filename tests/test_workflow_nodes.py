@@ -56,8 +56,15 @@ def test_plan_falls_back_to_action_when_foundry_returns_unknown():
     class BadFoundry:
         label = "bad-mock"
         def chat(self, *, system, user, temperature=0.0):
+            return self.chat_stream(system=system, user=user, temperature=temperature)
+        def chat_stream(self, *, system, user, temperature=0.0,
+                        on_delta=None, idle_timeout_sec=30.0, response_format=None):
             from agentic_sdk.workflow.llm import FoundryResponse
-            return FoundryResponse(content='{"next_node": "nowhere"}', model="bad")
+            content = '{"next_node": "nowhere"}'
+            if on_delta is not None:
+                for ch in content:
+                    on_delta(ch)
+            return FoundryResponse(content=content, model="bad")
     state = WorkflowState(user_message="hi")
     out = ReActPlan(foundry_client=BadFoundry())(state)
     assert out["next_node"] == "action"

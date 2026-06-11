@@ -182,7 +182,7 @@ def test_custom_node_import_path_not_found_raises(mock_settings) -> None:
 # ── M5-1:Plan system_prompt 模板參數 ──────────────────────────────────────────
 
 class _StubFoundry:
-    """攔截 chat() 呼叫,記錄傳入的 system prompt 供斷言。"""
+    """攔截 chat_stream() 呼叫，記錄傳入的 system prompt 供斷言。"""
 
     label = "stub-foundry"
 
@@ -190,10 +190,18 @@ class _StubFoundry:
         self.last_system: str | None = None
 
     def chat(self, *, system: str, user: str, temperature: float = 0.0):
+        return self.chat_stream(system=system, user=user, temperature=temperature)
+
+    def chat_stream(self, *, system: str, user: str, temperature: float = 0.0,
+                    on_delta=None, idle_timeout_sec: float = 30.0, response_format=None):
         from agentic_sdk.workflow.llm import FoundryResponse
         self.last_system = system
+        content = '{"thought": "stub", "next_node": "action"}'
+        if on_delta is not None:
+            for ch in content:
+                on_delta(ch)
         return FoundryResponse(
-            content='{"thought": "stub", "next_node": "action"}',
+            content=content,
             model="stub-model",
             input_tokens=1,
             output_tokens=1,
