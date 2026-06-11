@@ -24,6 +24,7 @@ def workflow_settings():
         upstream_healthcheck_timeout_sec=1.0,
         infer_request_timeout_sec=2.0,
         workflow_force_mock_foundry=True,
+        workflow_action_backend="upstream",  # 明確鎖定，防止 CI 環境變數污染
         workflow_max_revisit=3,
         workflow_timeout_sec=10.0,
     )
