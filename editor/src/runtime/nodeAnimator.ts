@@ -1,5 +1,5 @@
 /**
- * 節點狀態動畫佇列。
+ * 節點狀態動畫排程器。
  *
  * 快節點（RuleBasedPerceive / Retrieve / Reflect 等規則式、JSON lookup等
  * 純 CPU 動作）的實際執行時長遠小於一個瀏覽器 frame（~16ms@60Hz）。
@@ -8,8 +8,10 @@
  * （這與 React batching / SSE poll cycle 無關；慢節點如 Plan / Action
  *  本來就跨多個 frame，沒有這個問題。）
  *
- * 本佇列在慢節點零影響：running 已經露面足夠久就不 sleep。
- * 只為快節點補上 MIN_RUNNING_VISIBLE_MS，讓黃色至少被 paint 一次。
+ * 設計關鍵：每個節點獨立計時、獨立 timer，互不阻塞。
+ * `ok`/`fail` 若早於 MIN_RUNNING_VISIBLE_MS 抵達，只延後該節點的綠燈，
+ * 不阻塞下一個節點的黃燈立即顯示——否則 Plan 已經在跑時，前端還會卡在
+ * 上一個節點的黃燈，與 ChatPanel 顯示的「執行中(Plan)」矛盾。
  */
 
 import type { NodeStatus } from "./types";
@@ -24,44 +26,50 @@ export interface NodeAnimator {
 }
 
 export function createNodeAnimator(updateStatus: StatusUpdater): NodeAnimator {
-  let queue: Array<{ nodeId: string; status: NodeStatus }> = [];
-  let processing = false;
   const runningStartedAt: Record<string, number> = {};
+  const pendingTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 
-  const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-  async function process(): Promise<void> {
-    processing = true;
-    while (queue.length > 0) {
-      const item = queue.shift()!;
-      if (item.status === "running") {
-        if (runningStartedAt[item.nodeId] === undefined) {
-          updateStatus(item.nodeId, "running");
-          runningStartedAt[item.nodeId] = performance.now();
-        }
-      } else {
-        const startedAt = runningStartedAt[item.nodeId];
-        if (startedAt !== undefined) {
-          const elapsed = performance.now() - startedAt;
-          if (elapsed < MIN_RUNNING_VISIBLE_MS) {
-            await sleep(MIN_RUNNING_VISIBLE_MS - elapsed);
-          }
-        }
-        updateStatus(item.nodeId, item.status);
-        delete runningStartedAt[item.nodeId];
-      }
+  function clearPending(nodeId: string): void {
+    const t = pendingTimers[nodeId];
+    if (t !== undefined) {
+      clearTimeout(t);
+      delete pendingTimers[nodeId];
     }
-    processing = false;
   }
 
   return {
     enqueue(nodeId, status) {
-      queue.push({ nodeId, status });
-      if (!processing) void process();
+      if (status === "running") {
+        if (runningStartedAt[nodeId] !== undefined) return;
+        clearPending(nodeId);
+        runningStartedAt[nodeId] = performance.now();
+        updateStatus(nodeId, "running");
+        return;
+      }
+
+      const apply = () => {
+        updateStatus(nodeId, status);
+        delete runningStartedAt[nodeId];
+        delete pendingTimers[nodeId];
+      };
+      const startedAt = runningStartedAt[nodeId];
+      if (startedAt === undefined) {
+        apply();
+        return;
+      }
+      const elapsed = performance.now() - startedAt;
+      if (elapsed >= MIN_RUNNING_VISIBLE_MS) {
+        apply();
+      } else {
+        clearPending(nodeId);
+        pendingTimers[nodeId] = setTimeout(apply, MIN_RUNNING_VISIBLE_MS - elapsed);
+      }
     },
     reset() {
-      queue = [];
-      processing = false;
+      for (const k of Object.keys(pendingTimers)) {
+        clearTimeout(pendingTimers[k]);
+        delete pendingTimers[k];
+      }
       for (const k of Object.keys(runningStartedAt)) delete runningStartedAt[k];
     },
   };
