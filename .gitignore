@@ -48,6 +48,7 @@ fail.txt
 out.txt
 build_out.txt
 vitest_out.txt
+scripts/timing_out.txt
 
 # TypeScript build cache
 *.tsbuildinfo
