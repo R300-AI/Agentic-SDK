@@ -294,8 +294,10 @@ async def test_sse_chunks_match_node_event_order_for_full_workflow(
         async for chunk in _sse_event_stream(handler, workflow_id):
             if not chunk.startswith(b"data:"):
                 continue
-            payload = chunk[len(b"data: "):-2].decode()
-            received.append(json.loads(payload))
+            data_line = next(
+                line for line in chunk.split(b"\n\n") if line.startswith(b"data:")
+            )
+            received.append(json.loads(data_line[len(b"data: "):].decode()))
             # 收到終止 finish（無 next_node）就結束
             if (
                 received[-1].get("event_name") == EVENT_NODE_FINISH
@@ -441,7 +443,10 @@ async def test_plan_start_precedes_thought_in_realtime_sse(
             async for chunk in _sse_event_stream(handler, workflow_id):
                 if not chunk.startswith(b"data:"):
                     continue
-                ev = json.loads(chunk[len(b"data: "):-2])
+                data_line = next(
+                    line for line in chunk.split(b"\n\n") if line.startswith(b"data:")
+                )
+                ev = json.loads(data_line[len(b"data: "):])
                 name = ev.get("event_name")
                 node = ev.get("workflow_node")
                 visit = ev.get("workflow_node_visit", 1)

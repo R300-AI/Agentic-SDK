@@ -149,11 +149,11 @@ async def get_workflow_result(workflow_id: str) -> dict[str, Any]:
 _TERMINAL_EVENTS = {EVENT_WORKFLOW_FALLBACK}
 _SSE_POLL_INTERVAL_SEC = 0.05
 _SSE_MAX_DURATION_SEC = 600.0
-# Cloud Run / GFE 預設會 buffer SSE；X-Accel-Buffering 只對 nginx 有效。
-# 每秒丟一個 SSE comment（「: 」開頭代表 comment）作為 heartbeat，
-# 透過讓 chunk 足夠頻繁地出現來逼中間層不能垊積。
-# 例如 Plan 的 LLM 要 20+ 秒，沒心跳的話 node.start(plan) 會跟着被 buffer 到那個時候才送出。
+# Cloud Run / GFE 會將小型 SSE chunk 合併後才轉發給瀏覽器，造成 node.start 事件
+# 延遲數秒才抵達前端。實測單一事件 payload 約 200 byte 會被卡住，附加 2KB padding
+# comment 後可讓 chunk 超過 GFE flush 閾值並立即推送。
 _SSE_HEARTBEAT_INTERVAL_SEC = 1.0
+_SSE_FLUSH_PADDING = b": " + (b"x" * 2048) + b"\n\n"
 
 
 def _is_terminal_event(event: dict[str, Any]) -> bool:
@@ -172,7 +172,7 @@ async def _sse_event_stream(ring, workflow_id: str, start_offset: int = 0) -> As
 
     # 立刻送出一個 padding chunk，讓前端 EventSource 能頻繁 onopen，並迫使
     # 中間層建立 response stream、不再等到 first 有意義的 chunk。
-    yield b": ready\n\n"
+    yield b": ready\n\n" + _SSE_FLUSH_PADDING
 
     while True:
         snapshot = ring.snapshot()
@@ -182,18 +182,21 @@ async def _sse_event_stream(ring, workflow_id: str, start_offset: int = 0) -> As
         for ev in new_events:
             if ev.get("workflow_id") != workflow_id:
                 continue
-            yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8")
+            yield (
+                f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8")
+                + _SSE_FLUSH_PADDING
+            )
             last_emit = asyncio.get_event_loop().time()
             if _is_terminal_event(ev):
                 return
 
         now = asyncio.get_event_loop().time()
         if now - last_emit >= _SSE_HEARTBEAT_INTERVAL_SEC:
-            yield b": keep-alive\n\n"
+            yield _SSE_FLUSH_PADDING
             last_emit = now
 
         if now - loop_started > _SSE_MAX_DURATION_SEC:
-            yield b'data: {"event_name": "workflow.stream.timeout"}\n\n'
+            yield b'data: {"event_name": "workflow.stream.timeout"}\n\n' + _SSE_FLUSH_PADDING
             return
 
         await asyncio.sleep(_SSE_POLL_INTERVAL_SEC)
