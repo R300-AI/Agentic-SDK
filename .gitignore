@@ -45,3 +45,12 @@ chroma_db/
 pytest_*.log
 pytest_*.txt
 fail.txt
+out.txt
+build_out.txt
+vitest_out.txt
+
+# TypeScript build cache
+*.tsbuildinfo
+
+# Node modules
+node_modules/

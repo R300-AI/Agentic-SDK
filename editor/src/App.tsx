@@ -34,6 +34,7 @@ import type { NodeSpec, WorkflowConfig } from "./types";
 import { FIVE_NODE_NAMES } from "./types";
 import type { ChatMessage, NodeStatus, TelemetryEvent } from "./runtime/types";
 import { runWorkflow, subscribeStream, fetchWorkflowResult } from "./runtime/api";
+import { createNodeAnimator } from "./runtime/nodeAnimator";
 import {
   EVENT_NODE_DELTA,
   EVENT_NODE_FINISH,
@@ -189,7 +190,10 @@ function EditorRoot() {
 
       resetAllNodeStatus();
       animator.reset();
-      // 不做樂觀更新：節點黃燈只能由後端真實 SSE 事件驅動。
+      // 樂觀亮起 entry 節點黃燈,給「我送出了」即時視覺反饋。
+      // 嚴格序列 animator dedupe 相同 status,後端真實 start(entry) 不會重複套用。
+      const entryNodeId = config.entry || "perceive";
+      animator.enqueue(entryNodeId, "running");
       setIsRunning(true);
       startTimeRef.current = performance.now();
 

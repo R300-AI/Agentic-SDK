@@ -168,8 +168,13 @@ function EditorRoot() {
 
       resetAllNodeStatus();
       animator.reset();
-      // 不做樂觀更新：節點黃燈只能由後端真實 SSE 事件驅動，不能「預如」它已經開始。
-      // ChatPanel 的「執行中...」占位才是「我送出了」的即時反饋，工作流圖代表「後端現狀」。
+      // 樂觀亮起 entry 節點黃燈，給「我送出了」即時視覺反饋。
+      // 安全性:嚴格序列 animator 會 dedupe 相同 status，因此後端真實送來
+      // start(entry) 時不會重複套用；finish(entry) 抵達後才會接著走 green。
+      // 即使 Cloud Run cold start 長達 10+ 秒，使用者也持續看到 entry 黃燈
+      // 而非死寂的畫面。
+      const entryNodeId = config.entry || "perceive";
+      animator.enqueue(entryNodeId, "running");
       setIsRunning(true);
       startTimeRef.current = performance.now();
 

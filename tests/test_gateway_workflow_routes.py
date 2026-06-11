@@ -181,3 +181,185 @@ async def test_sse_stream_filters_by_workflow_id_and_terminates() -> None:
     assert workflow_id in text_all
     assert "perceive" in text_all
     assert "reflect" in text_all
+
+
+@pytest.mark.asyncio
+async def test_sse_stream_first_chunk_is_ready_padding_for_proxy_flush() -> None:
+    """前端 onopen 與中間層 chunked transfer 都需要立刻看到第一個 byte，
+    否則 Cloud Run / GFE 會等到第一個有意義事件才 flush，導致首次 SSE
+    抵達延遲到節點全部跑完。"""
+    ring = _FakeRing()
+    workflow_id = "wid-ready"
+    received: list[bytes] = []
+
+    async def _consumer():
+        async for chunk in _sse_event_stream(ring, workflow_id):
+            received.append(chunk)
+            if len(received) >= 1:
+                return
+
+    await asyncio.wait_for(_consumer(), timeout=1.0)
+    assert received[0].startswith(b":")  # SSE comment (ready padding)
+
+
+@pytest.mark.asyncio
+async def test_sse_stream_emits_keepalive_when_idle() -> None:
+    """當後端無新事件時 SSE 仍需 ≥1Hz 送 keep-alive comment，
+    確保 Cloud Run / GFE 不會 buffer 整個 response。"""
+    ring = _FakeRing()
+    workflow_id = "wid-idle"
+    received: list[bytes] = []
+
+    async def _consumer():
+        async for chunk in _sse_event_stream(ring, workflow_id):
+            received.append(chunk)
+            # 收集 2.5 秒,期間沒有任何 data 事件
+            if len(received) >= 4:  # ready + 2 keep-alive 至少
+                return
+
+    async def _terminate():
+        await asyncio.sleep(2.5)
+        # 注入終止事件讓 stream 結束
+        ring.append({
+            "event_name": EVENT_NODE_FINISH,
+            "workflow_id": workflow_id,
+            "workflow_node": "action",
+        })
+
+    await asyncio.gather(_terminate(), asyncio.wait_for(_consumer(), timeout=4.0))
+
+    comment_chunks = [c for c in received if c.startswith(b":")]
+    # 2.5 秒內預期至少 ready + 2 個 keep-alive
+    assert len(comment_chunks) >= 3, f"expected ≥3 SSE comments, got {len(comment_chunks)}: {received}"
+
+
+# ── 端到端:真實 workflow.run() → SSE chunks 順序契約 ─────────────────────────
+
+
+@pytest.mark.asyncio
+async def test_sse_chunks_match_node_event_order_for_full_workflow(
+    test_settings, respx_mock,
+) -> None:
+    """
+    跑一次完整 5 節點工作流，驗證 SSE consumer 觀察到的事件順序是
+    perceive.start → perceive.finish → plan.start → plan.thought →
+    plan.finish → retrieve.start → retrieve.finish → plan.start →
+    plan.thought → plan.finish → action.start → action.delta×N →
+    action.finish。
+
+    這是前端動畫的真實合約：UI 嚴格依照這個順序逐一顯示節點顏色。
+    任何事件亂序或缺失，前端動畫就會錯位。
+    """
+    import httpx
+    import json
+
+    from agentic_sdk.observability import (
+        EVENT_NODE_START,
+        EVENT_NODE_FINISH,
+        configure_observability,
+    )
+    from agentic_sdk.observability.events import (
+        EVENT_NODE_THOUGHT,
+        EVENT_NODE_DELTA,
+    )
+    from agentic_sdk.workflow import Workflow
+    from agentic_sdk.workflow.llm import MockFoundryClient
+    from agentic_sdk.workflow.nodes.action import CompletionAction
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan
+    import logging
+
+    handler = configure_observability(test_settings)
+    try:
+        respx_mock.post("http://upstream.test/v1/chat/completions").mock(
+            return_value=httpx.Response(200, json={
+                "id": "cmpl-1", "object": "chat.completion", "created": 0,
+                "model": "gemma3-4b-npu",
+                "choices": [{"index": 0, "message": {"role": "assistant", "content": "hello world"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+            })
+        )
+
+        wf = Workflow(
+            plan=ReActPlan(foundry_client=MockFoundryClient()),
+            action=CompletionAction(backend="upstream", settings=test_settings, model="gemma3-4b-npu"),
+            settings=test_settings,
+        )
+        workflow_id = "wid-e2e"
+        result = await asyncio.to_thread(wf.run, "hi e2e", workflow_id=workflow_id)
+        assert not result.aborted, f"workflow aborted: {result.abort_reason}"
+
+        # 用 _sse_event_stream 把 handler ring 取出（offset=0，因為單一 workflow_id 已分隔）
+        received: list[dict[str, Any]] = []
+        async for chunk in _sse_event_stream(handler, workflow_id):
+            if not chunk.startswith(b"data:"):
+                continue
+            payload = chunk[len(b"data: "):-2].decode()
+            received.append(json.loads(payload))
+            # 收到終止 finish（無 next_node）就結束
+            if (
+                received[-1].get("event_name") == EVENT_NODE_FINISH
+                and "workflow_next_node" not in received[-1]
+            ):
+                break
+
+        # ── 驗證 1：所有事件 workflow_id 一致 ────────────────────
+        assert {ev["workflow_id"] for ev in received} == {workflow_id}
+
+        # ── 驗證 2：node.start 與 node.finish 數量配對（含 plan 兩次） ──
+        starts = [ev for ev in received if ev["event_name"] == EVENT_NODE_START]
+        finishes = [ev for ev in received if ev["event_name"] == EVENT_NODE_FINISH]
+        assert len(starts) == 5, f"expected 5 starts, got {len(starts)}: {[s['workflow_node'] for s in starts]}"
+        assert len(finishes) == 5
+
+        # ── 驗證 3：節點順序符合預期路徑 ──────────────────────────
+        assert [s["workflow_node"] for s in starts] == ["perceive", "plan", "retrieve", "plan", "action"]
+        assert [f["workflow_node"] for f in finishes] == ["perceive", "plan", "retrieve", "plan", "action"]
+
+        # ── 驗證 4：每個 start 都緊接其 finish（中間可有 thought / delta） ──
+        # 把事件依時間索引拆，逐節點檢查 start 與其對應 finish 之間
+        # 不會出現「另一個節點的 start/finish」（嚴格不交錯）
+        node_visits = []  # [(node, start_idx, finish_idx), ...]
+        open_stack: list[tuple[str, int]] = []
+        for idx, ev in enumerate(received):
+            if ev["event_name"] == EVENT_NODE_START:
+                open_stack.append((ev["workflow_node"], idx))
+            elif ev["event_name"] == EVENT_NODE_FINISH:
+                assert open_stack, f"finish without matching start at idx {idx}"
+                node, start_idx = open_stack.pop()
+                assert node == ev["workflow_node"], (
+                    f"finish node {ev['workflow_node']} doesn't match open start {node}"
+                )
+                node_visits.append((node, start_idx, idx))
+        assert not open_stack, f"unclosed starts: {open_stack}"
+
+        # ── 驗證 5：Plan 與 Action 之間的 thought / delta 也在對應 span 內 ──
+        for node, s_idx, f_idx in node_visits:
+            inner = received[s_idx + 1:f_idx]
+            for ev in inner:
+                name = ev["event_name"]
+                if name == EVENT_NODE_THOUGHT:
+                    assert node == "plan", f"thought event inside non-plan node {node}"
+                elif name == EVENT_NODE_DELTA:
+                    assert node == "action", f"delta event inside non-action node {node}"
+                else:
+                    # 不應有別的 start/finish
+                    assert name not in (EVENT_NODE_START, EVENT_NODE_FINISH), (
+                        f"nested {name} inside {node}"
+                    )
+
+        # ── 驗證 6：Plan 兩次造訪都有 thought 事件 ────────────────
+        plan_visits = [v for v in node_visits if v[0] == "plan"]
+        assert len(plan_visits) == 2
+        for _, s_idx, f_idx in plan_visits:
+            inner_names = [ev["event_name"] for ev in received[s_idx + 1:f_idx]]
+            assert EVENT_NODE_THOUGHT in inner_names, (
+                f"plan span [{s_idx}..{f_idx}] missing thought event"
+            )
+
+        # ── 驗證 7：Action 造訪在 span 內可有 delta（streaming 後端才會）
+        #          至少要有對應的 start / finish 配對 ────────────────────
+        action_visit = [v for v in node_visits if v[0] == "action"]
+        assert len(action_visit) == 1
+
+    finally:
+        logging.getLogger("agentic_sdk").removeHandler(handler)
