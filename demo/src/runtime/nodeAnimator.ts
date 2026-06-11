@@ -1,12 +1,15 @@
 /**
  * 節點狀態動畫佇列。
  *
- * 後端 SSE 採 50 ms poll；mock LLM 模式下 perceive/plan/retrieve 可能在同一個 poll
- * cycle 內全部完成，事件被打包送來，React 把連續的 setState batch 成最終態，
- * 中間的 "running" 永遠不會被渲染 → 工作流視覺進程被吞掉。
+ * 快節點（RuleBasedPerceive / Retrieve / Reflect 等規則式、JSON lookup等
+ * 純 CPU 動作）的實際執行時長遠小於一個瀏覽器 frame（~16ms@60Hz）。
+ * 同一個 frame 內 setState(running) -> setState(ok) 的兩次狀態變更
+ * 只會产生一次 paint，中間的 running 狀態永遠不會被看見。
+ * （這與 React batching / SSE poll cycle 無關；慢節點如 Plan / Action
+ *  本來就跨多個 frame，沒有這個問題。）
  *
- * 此佇列保證每個節點的 running 狀態至少維持 MIN_RUNNING_VISIBLE_MS，
- * 把後端時序映射成符合直覺的逐節點黃→綠動畫。
+ * 本佇列在慢節點零影響：running 已經露面足夠久就不 sleep。
+ * 只為快節點補上 MIN_RUNNING_VISIBLE_MS，讓黃色至少被 paint 一次。
  */
 
 import type { NodeStatus } from "./types";
