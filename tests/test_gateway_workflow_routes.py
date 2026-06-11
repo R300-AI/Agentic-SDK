@@ -363,3 +363,99 @@ async def test_sse_chunks_match_node_event_order_for_full_workflow(
 
     finally:
         logging.getLogger("agentic_sdk").removeHandler(handler)
+
+@pytest.mark.asyncio
+async def test_plan_start_precedes_thought_in_realtime_sse(
+    test_settings, respx_mock,
+) -> None:
+    """
+    「plan 先黃後綠」時序合約的即時驗證。
+
+    現有 test_sse_chunks_match_node_event_order_for_full_workflow 只驗證事件順序——
+    它先跑完整個 workflow，再讀 ring buffer，兩個事件都已在 ring 裡，
+    無法驗證「LLM 執行期間 plan.start 是否已可被 SSE consumer 讀到」。
+
+    本測試使用 SlowPlanFoundryClient（第一次 plan.chat 延遲 2 秒），
+    並行讀 SSE stream，量測：
+      - timestamps["plan_start"]: SSE consumer 收到 plan.start 的時刻
+      - timestamps["plan_thought"]: SSE consumer 收到 plan.thought 的時刻
+    斷言：plan_thought - plan_start >= 1.5s，
+    即「consumer 看到黃燈」比「看到 LLM 輸出」早至少 1.5 秒。
+    """
+    import json
+    import time
+    import httpx
+
+    from agentic_sdk.observability import configure_observability
+    from agentic_sdk.observability.events import EVENT_NODE_START, EVENT_NODE_THOUGHT, EVENT_NODE_FINISH
+    from agentic_sdk.workflow import Workflow
+    from agentic_sdk.workflow.llm import MockFoundryClient, FoundryResponse
+    from agentic_sdk.workflow.nodes.action import CompletionAction
+    from agentic_sdk.workflow.nodes.plan.react import ReActPlan
+    import logging
+
+    class SlowPlanFoundryClient(MockFoundryClient):
+        """第一次 plan 節點的 chat() 延遲 2 秒，模擬慢 LLM；其餘節點不延遲。"""
+        def __init__(self) -> None:
+            super().__init__()
+            self._plan_slow_done = False
+
+        def chat(self, *, system: str, user: str, temperature: float = 0.0) -> FoundryResponse:
+            if system.startswith("PLAN") and not self._plan_slow_done:
+                self._plan_slow_done = True
+                time.sleep(2.0)   # 在 asyncio.to_thread 內，time.sleep 不阻塞 event loop
+            return super().chat(system=system, user=user, temperature=temperature)
+
+    respx_mock.post("http://upstream.test/v1/chat/completions").mock(
+        return_value=httpx.Response(200, json={
+            "id": "cmpl-timing", "object": "chat.completion", "created": 0,
+            "model": "gemma3-4b-npu",
+            "choices": [{"index": 0, "message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 1, "total_tokens": 6},
+        })
+    )
+
+    handler = configure_observability(test_settings)
+    try:
+        wf = Workflow(
+            plan=ReActPlan(foundry_client=SlowPlanFoundryClient()),
+            action=CompletionAction(backend="upstream", settings=test_settings, model="gemma3-4b-npu"),
+            settings=test_settings,
+        )
+        workflow_id = "wid-timing-realtime"
+        timestamps: dict[str, float] = {}
+        t0 = time.monotonic()
+
+        async def collect_plan_timing() -> None:
+            async for chunk in _sse_event_stream(handler, workflow_id):
+                if not chunk.startswith(b"data:"):
+                    continue
+                ev = json.loads(chunk[len(b"data: "):-2])
+                name = ev.get("event_name")
+                node = ev.get("workflow_node")
+                visit = ev.get("workflow_node_visit", 1)
+                if name == EVENT_NODE_START and node == "plan" and visit == 1:
+                    timestamps["plan_start"] = time.monotonic() - t0
+                elif name == EVENT_NODE_THOUGHT and node == "plan" and visit == 1:
+                    timestamps["plan_thought"] = time.monotonic() - t0
+                    return  # plan 第一次 thought 到手即可，不用等 action 完成
+                # 安全出口：action 跑完代表 workflow 已結束（plan.thought 應已收到）
+                elif name == EVENT_NODE_FINISH and node == "action":
+                    return
+
+        wf_task = asyncio.ensure_future(
+            asyncio.to_thread(wf.run, "slow plan timing test", workflow_id=workflow_id)
+        )
+        sse_task = asyncio.ensure_future(collect_plan_timing())
+        await asyncio.gather(wf_task, sse_task)
+
+        assert "plan_start" in timestamps, "未收到 plan.start（黃燈），SSE 時序測試無效"
+        assert "plan_thought" in timestamps, "未收到 plan.thought（LLM 輸出），SlowMock 未正確觸發"
+
+        gap = timestamps["plan_thought"] - timestamps["plan_start"]
+        assert gap >= 1.5, (
+            f"plan.start → plan.thought 間距僅 {gap:.2f}s，"
+            "期望 ≥ 1.5s（代表 LLM 執行中 consumer 已看到黃燈）"
+        )
+    finally:
+        logging.getLogger("agentic_sdk").removeHandler(handler)
