@@ -149,6 +149,11 @@ async def get_workflow_result(workflow_id: str) -> dict[str, Any]:
 _TERMINAL_EVENTS = {EVENT_WORKFLOW_FALLBACK}
 _SSE_POLL_INTERVAL_SEC = 0.05
 _SSE_MAX_DURATION_SEC = 600.0
+# Cloud Run / GFE 預設會 buffer SSE；X-Accel-Buffering 只對 nginx 有效。
+# 每秒丟一個 SSE comment（「: 」開頭代表 comment）作為 heartbeat，
+# 透過讓 chunk 足夠頻繁地出現來逼中間層不能垊積。
+# 例如 Plan 的 LLM 要 20+ 秒，沒心跳的話 node.start(plan) 會跟着被 buffer 到那個時候才送出。
+_SSE_HEARTBEAT_INTERVAL_SEC = 1.0
 
 
 def _is_terminal_event(event: dict[str, Any]) -> bool:
@@ -163,6 +168,12 @@ def _is_terminal_event(event: dict[str, Any]) -> bool:
 async def _sse_event_stream(ring, workflow_id: str, start_offset: int = 0) -> AsyncIterator[bytes]:
     seen = start_offset
     loop_started = asyncio.get_event_loop().time()
+    last_emit = loop_started
+
+    # 立刻送出一個 padding chunk，讓前端 EventSource 能頻繁 onopen，並迫使
+    # 中間層建立 response stream、不再等到 first 有意義的 chunk。
+    yield b": ready\n\n"
+
     while True:
         snapshot = ring.snapshot()
         new_events = snapshot[seen:]
@@ -172,10 +183,16 @@ async def _sse_event_stream(ring, workflow_id: str, start_offset: int = 0) -> As
             if ev.get("workflow_id") != workflow_id:
                 continue
             yield f"data: {json.dumps(ev, ensure_ascii=False)}\n\n".encode("utf-8")
+            last_emit = asyncio.get_event_loop().time()
             if _is_terminal_event(ev):
                 return
 
-        if asyncio.get_event_loop().time() - loop_started > _SSE_MAX_DURATION_SEC:
+        now = asyncio.get_event_loop().time()
+        if now - last_emit >= _SSE_HEARTBEAT_INTERVAL_SEC:
+            yield b": keep-alive\n\n"
+            last_emit = now
+
+        if now - loop_started > _SSE_MAX_DURATION_SEC:
             yield b'data: {"event_name": "workflow.stream.timeout"}\n\n'
             return
 

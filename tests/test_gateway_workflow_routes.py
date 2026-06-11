@@ -172,9 +172,11 @@ async def test_sse_stream_filters_by_workflow_id_and_terminates() -> None:
 
     await asyncio.gather(_producer(), asyncio.wait_for(_consumer(), timeout=2.0))
 
-    # 該收到 2 筆:target 的 node.start + node.finish(終止)
-    assert len(received) == 2
-    text_all = b"".join(received).decode()
+    # 過濾掉 SSE comment （「: 」開頭，例如 ready / keep-alive 心跳）後應收到
+    # 2 筆:target 的 node.start + node.finish（終止）
+    data_chunks = [c for c in received if c.startswith(b"data:")]
+    assert len(data_chunks) == 2
+    text_all = b"".join(data_chunks).decode()
     assert "wid-other" not in text_all  # 別的 workflow 不出現
     assert workflow_id in text_all
     assert "perceive" in text_all
