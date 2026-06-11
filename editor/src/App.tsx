@@ -114,6 +114,9 @@ function EditorRoot() {
     setNodes((curr) => curr.map((n) => ({ ...n, data: { ...n.data, status: "idle" } })));
   }, [setNodes]);
 
+  // 動畫佇列:保證每個節點的 running 狀態都有最低可見時長,不被 React/SSE batching 吞掉
+  const animator = useMemo(() => createNodeAnimator(updateNodeStatus), [updateNodeStatus]);
+
   // ── 屬性面板更新 ──────────────────────────────────────────────────────────
   const handleSpecUpdate = useCallback(
     (nodeId: string, newSpec: NodeSpec) => {
@@ -185,6 +188,8 @@ function EditorRoot() {
       closeStreamRef.current = null;
 
       resetAllNodeStatus();
+      animator.reset();
+      animator.enqueue("perceive", "running");
       setIsRunning(true);
       startTimeRef.current = performance.now();
 
@@ -258,18 +263,18 @@ function EditorRoot() {
           if (!node || !FIVE_NODE_NAMES.includes(node as (typeof FIVE_NODE_NAMES)[number])) return;
 
           if (ev.event_name === EVENT_NODE_START) {
-            updateNodeStatus(node, "running");
+            animator.enqueue(node, "running");
           } else if (ev.event_name === EVENT_NODE_FINISH) {
             const status: NodeStatus =
               ev.workflow_status === "ok" || ev.workflow_status === undefined ? "ok" : "fail";
-            updateNodeStatus(node, status);
+            animator.enqueue(node, status);
             if (ev.gen_ai_response_model) lastModel = ev.gen_ai_response_model;
             if (typeof ev.gen_ai_usage_input_tokens === "number")
               lastInputTokens = ev.gen_ai_usage_input_tokens;
             if (typeof ev.gen_ai_usage_output_tokens === "number")
               lastOutputTokens = ev.gen_ai_usage_output_tokens;
           } else if (ev.event_name === EVENT_WORKFLOW_FALLBACK) {
-            updateNodeStatus(node, "fail");
+            animator.enqueue(node, "fail");
           }
         },
         () => {
@@ -297,7 +302,7 @@ function EditorRoot() {
         }
       );
     },
-    [config, nodes, resetAllNodeStatus, updateNodeStatus]
+    [config, nodes, resetAllNodeStatus, animator]
   );
 
   useEffect(() => {
