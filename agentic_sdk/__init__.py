@@ -3,6 +3,11 @@
 __version__ = "0.0.1"
 
 from agentic_sdk.config import Settings, get_settings
+from agentic_sdk.capabilities import (
+    KnowledgeBaseRegistry,
+    RetrieveStrategyRegistry,
+    build_capability_document,
+)
 from agentic_sdk.workflow import (
     Gates,
     Node,
@@ -23,5 +28,8 @@ __all__ = [
     "Node",
     "NodeOutput",
     "Gates",
+    "KnowledgeBaseRegistry",
+    "RetrieveStrategyRegistry",
+    "build_capability_document",
     "__version__",
 ]

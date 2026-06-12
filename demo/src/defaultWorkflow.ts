@@ -28,7 +28,9 @@ nodes:
   retrieve:
     type: builtin.retrieve
     params:
-      knowledge_base: examples/knowledge/shoe_store.json
+      retrieve_template_ref: shoe_store_catalog_search
+      retrieve_strategy_ref: lexical_file_kb
+      knowledge_base_ref: shoe_store
       top_k: 3
       similarity_weight: 0.5
       recency_weight: 0.3
@@ -82,7 +84,9 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
     retrieve: {
       type: "builtin.retrieve",
       params: {
-        knowledge_base: "examples/knowledge/shoe_store.json",
+        retrieve_template_ref: "shoe_store_catalog_search",
+        retrieve_strategy_ref: "lexical_file_kb",
+        knowledge_base_ref: "shoe_store",
         top_k: 3,
         similarity_weight: 0.5,
         recency_weight: 0.3,

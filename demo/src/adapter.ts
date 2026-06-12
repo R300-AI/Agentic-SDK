@@ -188,7 +188,9 @@ function defaultParamsFor(name: string): Record<string, unknown> | undefined {
       "只回 JSON，欄位：thought (string)、next_node ('retrieve' 或 'action')。",
   };
   if (name === "retrieve") return {
-    knowledge_base: "examples/knowledge/shoe_store.json",
+    retrieve_template_ref: "shoe_store_catalog_search",
+    retrieve_strategy_ref: "lexical_file_kb",
+    knowledge_base_ref: "shoe_store",
     top_k: 3,
     similarity_weight: 0.5,
     recency_weight: 0.3,

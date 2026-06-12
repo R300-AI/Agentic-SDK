@@ -12,6 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ArchivedStore
 from agentic_sdk.gateway.routes_chat import router as chat_router
+from agentic_sdk.gateway.routes_capabilities import router as capabilities_router
 from agentic_sdk.gateway.routes_context import router as context_router
 from agentic_sdk.gateway.routes_models import router as models_router
 from agentic_sdk.gateway.routes_telemetry import router as telemetry_router
@@ -93,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
 
     app.include_router(models_router)
+    app.include_router(capabilities_router)
     app.include_router(chat_router)
     app.include_router(telemetry_router)
     app.include_router(context_router)

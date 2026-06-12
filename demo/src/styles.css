@@ -126,6 +126,35 @@ html, body, #root {
 .left-tools button:hover, .left-tools .file-button:hover { border-color: var(--accent); }
 .file-button input { display: none; }
 
+.deploy-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+.deploy-file-list code {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: var(--bg-elev2);
+  color: var(--text);
+}
+.deploy-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+}
+.deploy-actions button { flex: 1; }
+.deploy-secondary {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--bg-elev2);
+  color: var(--text);
+  cursor: pointer;
+}
+.deploy-secondary:hover { border-color: var(--accent); }
+
 .right-column {
   flex: 1 1 0;
   display: flex;
@@ -245,6 +274,27 @@ html, body, #root {
   font-size: 15px;
 }
 .prop-row small { color: var(--text-muted); font-size: 16px; }
+.inline-action-row {
+  display: flex;
+  gap: 8px;
+}
+.inline-action-row input { flex: 1; min-width: 0; }
+.inline-action-row button { flex-shrink: 0; }
+.preview-hit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.preview-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--bg-elev2);
+}
+.preview-hit small { font-size: 13px; }
 
 /* ── Chat Panel ─────────────────────────────────────── */
 

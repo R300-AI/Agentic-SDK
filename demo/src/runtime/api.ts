@@ -4,6 +4,33 @@ import type { Attachment } from "../types";
 import type { TelemetryEvent } from "./types";
 import { getGatewayUrl } from "./gatewayUrl";
 
+export interface CapabilityRef {
+  ref: string;
+  label?: string;
+  enabled?: boolean;
+  [key: string]: unknown;
+}
+
+export interface NodeDefinition {
+  type: string;
+  role: string;
+  label: string;
+  params_schema: Record<string, unknown>;
+}
+
+export interface CapabilityDocument {
+  schema_version: number;
+  node_definitions: NodeDefinition[];
+  provider_refs: CapabilityRef[];
+  profile_refs: CapabilityRef[];
+  retrieve_strategy_refs: CapabilityRef[];
+  retrieve_template_refs: CapabilityRef[];
+  knowledge_base_refs: CapabilityRef[];
+  execution_env_refs: CapabilityRef[];
+  export_capabilities: Record<string, unknown>;
+  feature_flags: Record<string, boolean>;
+}
+
 interface RunResponse {
   workflow_id: string;
   stream_url: string;
@@ -16,6 +43,44 @@ export interface WorkflowResultData {
   abort_reason?: string;
   visit_counts?: Record<string, number>;
   usage?: { model?: string; input_tokens?: number; output_tokens?: number };
+}
+
+export interface KnowledgeBasePreviewHit {
+  id: string;
+  title: string;
+  score: number;
+  source: string;
+}
+
+export interface KnowledgeBasePreviewData {
+  knowledge_base_ref: string;
+  query: string;
+  hits: KnowledgeBasePreviewHit[];
+}
+
+export async function fetchCapabilities(): Promise<CapabilityDocument> {
+  const resp = await fetch(`${getGatewayUrl()}/v1/capabilities`);
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`GET /v1/capabilities 失敗 (${resp.status}):${text}`);
+  }
+  return resp.json();
+}
+
+export async function previewKnowledgeBase(
+  knowledgeBaseRef: string,
+  query: string,
+  topK = 3
+): Promise<KnowledgeBasePreviewData> {
+  const params = new URLSearchParams({ query, top_k: String(topK) });
+  const resp = await fetch(
+    `${getGatewayUrl()}/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview?${params}`
+  );
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`GET /v1/knowledge-bases/${knowledgeBaseRef}/preview 失敗 (${resp.status}):${text}`);
+  }
+  return resp.json();
 }
 
 export async function runWorkflow(

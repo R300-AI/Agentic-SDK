@@ -66,25 +66,54 @@ gw.stdout.on("data", (d) => printPrefixed("gateway", cyan, d));
 gw.stderr.on("data", (d) => printPrefixed("gateway", cyan, d));
 gw.on("error", (e) => process.stderr.write(`[gateway] spawn error: ${e.message}\n`));
 
-// ── Vite（以 npm 自帶的 node 執行，不依賴全域 PATH）────────────────
-const viteEntry = join(demoRoot, "node_modules", "vite", "bin", "vite.js");
-const vite = spawn(process.execPath, [viteEntry], {
-  cwd: demoRoot,
-  stdio: "inherit",
-  env: { ...process.env, FORCE_COLOR: "1" },
-});
-vite.on("error", (e) => process.stderr.write(`[demo] spawn error: ${e.message}\n`));
+let vite = null;
 
-process.stdout.write(
-  `${green}[demo]${reset} Gateway: http://localhost:8080 / Demo UI: http://localhost:5173\n`
-);
+async function waitForGateway(timeoutMs = 30000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const resp = await fetch("http://127.0.0.1:8080/healthz");
+      if (resp.ok) return true;
+    } catch {
+      // Gateway process is still booting.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  }
+  return false;
+}
+
+async function startVite() {
+  const ready = await waitForGateway();
+  if (!ready) {
+    process.stderr.write(`[gateway] Gateway 未於 30 秒內回應 /healthz，仍啟動 Demo UI。\n`);
+  }
+
+  // ── Vite（以 npm 自帶的 node 執行，不依賴全域 PATH）────────────────
+  const viteEntry = join(demoRoot, "node_modules", "vite", "bin", "vite.js");
+  vite = spawn(process.execPath, [viteEntry], {
+    cwd: demoRoot,
+    stdio: "inherit",
+    env: { ...process.env, FORCE_COLOR: "1" },
+  });
+  vite.on("error", (e) => process.stderr.write(`[demo] spawn error: ${e.message}\n`));
+  vite.on("exit", (code) => { gw.kill(); process.exit(code ?? 0); });
+
+  process.stdout.write(
+    `${green}[demo]${reset} Gateway: http://localhost:8080 / Demo UI: http://localhost:5173\n`
+  );
+}
+
+startVite().catch((e) => {
+  process.stderr.write(`[demo] startup error: ${e.message}\n`);
+  gw.kill();
+  process.exit(1);
+});
 
 // ── 退出清理 ──────────────────────────────────────────────────────
 const cleanup = () => {
   gw.kill("SIGTERM");
-  vite.kill("SIGTERM");
+  vite?.kill("SIGTERM");
 };
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
-vite.on("exit", (code) => { gw.kill(); process.exit(code ?? 0); });
 gw.on("exit", (code) => { if (code !== 0) process.stderr.write(`[gateway] exited with code ${code}\n`); });

@@ -262,6 +262,7 @@ def _build_node_from_spec(
             retrieve_spec = config.nodes.get("retrieve")
             if retrieve_spec is not None:
                 kb = retrieve_spec.params.get("knowledge_base")
+                kb_ref = retrieve_spec.params.get("knowledge_base_ref")
                 if isinstance(kb, str):
                     try:
                         from agentic_sdk.knowledge import KnowledgeBase
@@ -269,6 +270,14 @@ def _build_node_from_spec(
                         plan_params.setdefault("retrieve_name", kb_obj.name)
                         plan_params.setdefault("retrieve_description", kb_obj.description)
                     except (FileNotFoundError, OSError, ValueError):
+                        pass
+                elif isinstance(kb_ref, str):
+                    try:
+                        from agentic_sdk.capabilities import KnowledgeBaseRegistry
+                        kb_obj = KnowledgeBaseRegistry().load(kb_ref)
+                        plan_params.setdefault("retrieve_name", kb_obj.name)
+                        plan_params.setdefault("retrieve_description", kb_obj.description)
+                    except (KeyError, FileNotFoundError, OSError, ValueError):
                         pass
         # 若 YAML 指定 deployment 且與全域不同，建立 override foundry client
         plan_foundry = foundry_client
@@ -285,9 +294,17 @@ def _build_node_from_spec(
         return DEFAULT(**kw)
 
     if t == "builtin.retrieve":
+        from agentic_sdk.capabilities import KnowledgeBaseRegistry
         from agentic_sdk.knowledge import KnowledgeBase
         from agentic_sdk.workflow.nodes.retrieve import DEFAULT
-        retrieve_params = {k: v for k, v in spec.params.items() if k != "enable_vision_query"}
+        retrieve_params = {
+            k: v
+            for k, v in spec.params.items()
+            if k not in ("enable_vision_query", "retrieve_template_ref", "retrieve_strategy_ref")
+        }
+        kb_ref = retrieve_params.pop("knowledge_base_ref", None)
+        if isinstance(kb_ref, str):
+            retrieve_params["knowledge_base"] = KnowledgeBaseRegistry().load(kb_ref)
         if isinstance(retrieve_params.get("knowledge_base"), str):
             retrieve_params["knowledge_base"] = KnowledgeBase.from_file(retrieve_params["knowledge_base"])
         return DEFAULT(**retrieve_params)

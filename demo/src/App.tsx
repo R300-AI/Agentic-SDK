@@ -22,6 +22,7 @@ import { AccordionPanel } from "./panels/AccordionPanel";
 import { PythonModal } from "./panels/NodePalette";
 import { ChatPanel } from "./panels/ChatPanel";
 import { DEFAULT_WORKFLOW, DEFAULT_WORKFLOW_YAML } from "./defaultWorkflow";
+import { buildBundleFiles, type BundleFile } from "./bundleExport";
 import { configToPython } from "./export";
 import {
   configToFlow,
@@ -32,7 +33,13 @@ import {
 import type { NodeSpec, WorkflowConfig } from "./types";
 import { FIVE_NODE_NAMES } from "./types";
 import type { ChatMessage, NodeStatus, TelemetryEvent } from "./runtime/types";
-import { runWorkflow, subscribeStream, fetchWorkflowResult } from "./runtime/api";
+import {
+  fetchCapabilities,
+  runWorkflow,
+  subscribeStream,
+  fetchWorkflowResult,
+  type CapabilityDocument,
+} from "./runtime/api";
 import { getGatewayUrl, setGatewayUrl } from "./runtime/gatewayUrl";
 import { createNodeAnimator } from "./runtime/nodeAnimator";
 import {
@@ -62,6 +69,34 @@ function EditorRoot() {
   const [isRunning, setIsRunning] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [gatewayUrl, setGatewayUrlState] = useState(() => getGatewayUrl());
+  const [capabilities, setCapabilities] = useState<CapabilityDocument | null>(null);
+  const [capabilityError, setCapabilityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    const loadCapabilities = async () => {
+      let lastError: unknown = null;
+      for (let attempt = 0; attempt < 5; attempt++) {
+        try {
+          const doc = await fetchCapabilities();
+          if (!alive) return;
+          setCapabilities(doc);
+          setCapabilityError(null);
+          return;
+        } catch (err) {
+          lastError = err;
+          await new Promise((resolve) => setTimeout(resolve, 250 * (attempt + 1)));
+        }
+      }
+        if (!alive) return;
+        setCapabilities(null);
+        setCapabilityError(lastError instanceof Error ? lastError.message : String(lastError));
+    };
+    void loadCapabilities();
+    return () => {
+      alive = false;
+    };
+  }, [gatewayUrl]);
 
   const handleGatewayUrlChange = useCallback((url: string) => {
     setGatewayUrl(url);
@@ -72,6 +107,7 @@ function EditorRoot() {
 
   // ── M6-10 Python 程式碼 modal ─────────────────────────────────────────────
   const [pythonCode, setPythonCode] = useState<string | null>(null);
+  const [bundleFiles, setBundleFiles] = useState<BundleFile[]>([]);
 
   // ── M7-3 面板拖曳縮放 / M8-1 LEFT 為主面板 ─────────────────────────────
   const [leftWidth, setLeftWidth] = useState(360);
@@ -106,8 +142,10 @@ function EditorRoot() {
   }, []);
   const handleShowPython = useCallback(() => {
     const merged = flowToConfig(nodes, config);
-    setPythonCode(configToPython(merged));
-  }, [nodes, config]);
+    const code = configToPython(merged);
+    setPythonCode(code);
+    setBundleFiles(buildBundleFiles(merged, code, capabilities));
+  }, [nodes, config, capabilities]);
 
   const updateNodeStatus = useCallback(
     (nodeId: string, status: NodeStatus) => {
@@ -341,6 +379,8 @@ function EditorRoot() {
         <AccordionPanel
           selectedNodeId={selectedId}
           specs={nodeSpecs}
+          capabilities={capabilities}
+          capabilityError={capabilityError}
           onUpdate={handleSpecUpdate}
           onShowPython={handleShowPython}
         />
@@ -381,7 +421,7 @@ function EditorRoot() {
         </footer>
       </div>
       {pythonCode !== null && (
-        <PythonModal code={pythonCode} onClose={() => setPythonCode(null)} />
+        <PythonModal code={pythonCode} bundleFiles={bundleFiles} onClose={() => setPythonCode(null)} />
       )}
     </div>
   );

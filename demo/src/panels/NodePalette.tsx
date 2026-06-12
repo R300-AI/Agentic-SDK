@@ -3,6 +3,7 @@
  */
 
 import { useState } from "react";
+import type { BundleFile } from "../bundleExport";
 
 interface Props {
   onDownload: () => void;
@@ -50,6 +51,7 @@ export function NodePalette({ onDownload, onLoad, onShowPython }: Props) {
 
 interface PythonModalProps {
   code: string;
+  bundleFiles: BundleFile[];
   onClose: () => void;
 }
 
@@ -153,7 +155,7 @@ function highlightLine(line: string): string {
   return tokens.join("");
 }
 
-export function PythonModal({ code, onClose }: PythonModalProps) {
+export function PythonModal({ code, bundleFiles, onClose }: PythonModalProps) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = async () => {
@@ -173,6 +175,20 @@ export function PythonModal({ code, onClose }: PythonModalProps) {
     }
   };
 
+  const downloadBundle = () => {
+    for (const file of bundleFiles) {
+      const blob = new Blob([file.content], { type: file.mime });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.path;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+  };
+
   return (
     <div className="modal-backdrop" onClick={onClose}>
       <div className="deploy-modal" onClick={(e) => e.stopPropagation()}>
@@ -181,8 +197,14 @@ export function PythonModal({ code, onClose }: PythonModalProps) {
         <div className="deploy-icon">⬇</div>
         <h2 className="deploy-title">部署到 Python 環境</h2>
         <p className="deploy-subtitle">
-          複製以下程式碼到您的 Python 專案，即可執行此工作流。
+          下載 bundle 檔案或複製 Python 主程式，即可在本地 Python 環境執行此工作流。
         </p>
+
+        <div className="deploy-file-list">
+          {bundleFiles.map((file) => (
+            <code key={file.path}>{file.path}</code>
+          ))}
+        </div>
 
         <div className="deploy-code-card">
           <div className="deploy-code-lang">python</div>
@@ -202,9 +224,12 @@ export function PythonModal({ code, onClose }: PythonModalProps) {
           <span>請確認 <code>.env</code> 已設定模型對應的 API 金鑰與端點。</span>
         </div>
 
-        <button className="deploy-primary" onClick={handleCopy}>
-          {copied ? "已複製到剪貼簿" : "複製程式碼"}
-        </button>
+        <div className="deploy-actions">
+          <button className="deploy-primary" onClick={downloadBundle}>下載 Bundle 檔案</button>
+          <button className="deploy-secondary" onClick={handleCopy}>
+            {copied ? "已複製到剪貼簿" : "複製主程式"}
+          </button>
+        </div>
       </div>
     </div>
   );

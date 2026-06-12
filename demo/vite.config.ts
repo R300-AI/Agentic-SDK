@@ -10,6 +10,14 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
+      "/v1/capabilities": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
+      "/v1/knowledge-bases": {
+        target: "http://localhost:8080",
+        changeOrigin: true,
+      },
       "/v1/workflow": {
         target: "http://localhost:8080",
         changeOrigin: true,

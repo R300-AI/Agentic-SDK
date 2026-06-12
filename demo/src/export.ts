@@ -65,8 +65,16 @@ function perceiveNodePy(params: Record<string, unknown>): NodePy {
 }
 
 function retrieveNodePy(params: Record<string, unknown>): NodePy {
-  const { knowledge_base, enable_vision_query, ...rest } = params as Record<string, unknown>;
+  const {
+    knowledge_base,
+    knowledge_base_ref,
+    retrieve_template_ref: _templateRef,
+    retrieve_strategy_ref: _strategyRef,
+    enable_vision_query,
+    ...rest
+  } = params as Record<string, unknown>;
   const kbPath = typeof knowledge_base === "string" ? knowledge_base.trim() : "";
+  const kbRef = typeof knowledge_base_ref === "string" ? knowledge_base_ref.trim() : "";
   const wantVision = enable_vision_query === true || enable_vision_query === "true";
   const kw = buildKwargs(rest);
   const imports = ["from agentic_sdk.workflow.nodes.retrieve import SemanticRetrieve"];
@@ -75,6 +83,9 @@ function retrieveNodePy(params: Record<string, unknown>): NodePy {
   if (kbPath) {
     imports.push("from agentic_sdk.knowledge import KnowledgeBase");
     extraLines.push(`        knowledge_base=KnowledgeBase.from_file(${toPyStr(kbPath)}),`);
+  } else if (kbRef) {
+    imports.push("from agentic_sdk import KnowledgeBaseRegistry");
+    extraLines.push(`        knowledge_base=KnowledgeBaseRegistry().load(${toPyStr(kbRef)}),`);
   }
   if (wantVision) {
     imports.push("from agentic_sdk.workflow.nodes.retrieve.vision_query import FoundryVisionQuery");
