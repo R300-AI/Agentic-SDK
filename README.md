@@ -26,14 +26,6 @@ Azure AI Foundry（模型部署）
 
 ---
 
-## 快速上手（使用者）
-
-直接開啟 Playground，無需任何本機設定：
-
-👉 **[https://agentic-sdk-playground.azurewebsites.net](https://agentic-sdk-playground.azurewebsites.net)**
-
----
-
 ## 快速上手（本機開發）
 
 ### 前置需求
