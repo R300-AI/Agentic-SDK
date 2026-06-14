@@ -8,14 +8,16 @@ Playground 啟動時自動掃描並組成可用的模型池，對應前端模型
 
 ## 事前準備
 
-本指南所使用的 Azure 資源已由訂閱管理員預先建立於資源群組 **agentic-sdk** 下：
+本指南所使用的 Azure 資源由本專案的 GitHub CI/CD 工作流程自動建立，
+並部署於資源群組 **agentic-sdk** 下：
 
-| 資源類型 | 名稱 |
-|---|---|
-| Key Vault | **agentic-sdk-model-registry** |
-| App Service | **agentic-sdk-playground** |
+| 資源類型 | 名稱 | 建立方式 |
+|---|---|---|
+| Key Vault | **agentic-sdk-model-registry** | CI/CD 自動建立 |
+| App Service | **agentic-sdk-playground** | CI/CD 自動建立 |
 
-> 若上述資源尚不存在，請聯繫訂閱管理員，依 `.github/azure-deploy-config.yml` 中的建立指令完成初始化後再繼續。
+> 若上述資源尚不存在，表示工作流程尚未執行或執行失敗。
+> 請參考 [GitHub CI/CD 工作流程說明](github_cicd_workflow.md) 完成初次部署後再繼續。
 
 開始之前，請確認：
 

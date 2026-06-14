@@ -1,32 +1,18 @@
-# ============================================================
-# Agentic SDK — Azure 資源架構定義
-# ============================================================
-# 本檔是唯一的部署參數來源，同時作為 Azure 資源的設計文件。
-# 靜態參數同步寫入 workflows/deploy-gateway.yml 的頂層 env: 區段；
-# 異動時請同步更新兩處。
-# ============================================================
+# Agentic SDK — Azure 部署參數
+# 詳細架構說明與操作指引：docs/github_cicd_workflow.md
+# 模型管理操作指引：docs/setup_default_models.md
 
-# ── 1. 訂閱與資源群組 ─────────────────────────────────────
 azure:
   subscription: eosl-r3-aihub
   resource_group: agentic-sdk
   region: southeastasia
 
-# ── 2. 資源清單（需手動於 Azure Portal / az CLI 建立） ────
 resources:
 
   app_service_plan:
     name: agentic-sdk-plan
     sku: B2
     os: Linux
-    # 建立指令：
-    # az appservice plan create \
-    #   --name agentic-sdk-plan \
-    #   --resource-group agentic-sdk \
-    #   --subscription eosl-r3-aihub \
-    #   --sku B2 \
-    #   --is-linux \
-    #   --location southeastasia
 
   app_service:
     name: agentic-sdk-playground
@@ -35,70 +21,17 @@ resources:
     port: 8000
     startup_command: "python -m agentic_sdk.gateway"
     url: https://agentic-sdk-playground.azurewebsites.net
-    system_managed_identity: true   # 必須開啟，才能讀取 Key Vault
-    # 建立指令：
-    # az webapp create \
-    #   --name agentic-sdk-playground \
-    #   --resource-group agentic-sdk \
-    #   --subscription eosl-r3-aihub \
-    #   --plan agentic-sdk-plan \
-    #   --runtime "PYTHON:3.12"
-    # az webapp identity assign \
-    #   --name agentic-sdk-playground \
-    #   --resource-group agentic-sdk \
-    #   --subscription eosl-r3-aihub
+    system_managed_identity: true
 
   key_vault:
-    # Key Vault 作為「Model Endpoint Registry」
-    # 儲存所有部署至 Azure AI Foundry 的模型端點與金鑰。
-    # Gateway 啟動時掃描 model-* 前綴，動態組出可用模型池，
-    # 對應 /v1/models 與 /v1/capabilities 端點。
     name: agentic-sdk-model-registry
     sku: standard
-    # ── Secret 命名規則 ──────────────────────────────────────
-    # 每個模型由 4 個 secret 組成，前綴統一為 model-{id}-
-    # {id} 為小寫英數字（如 gpt4o, phi4, llama3）
-    # 實際值在 Azure Portal 手動填入，不進 git。
-    #
-    # 操作路徑（Portal）：
-    #   Key Vaults → agentic-sdk-model-registry → Secrets → Generate/Import
-    #
-    # 開發者權限需求（由訂閱管理員授予）：
-    #   az role assignment create \
-    #     --role "Key Vault Secrets Officer" \
-    #     --assignee <developer-email> \
-    #     --scope /subscriptions/.../resourceGroups/agentic-sdk/providers/Microsoft.KeyVault/vaults/agentic-sdk-model-registry
-    #
     secret_schema:
-      - model-{id}-name        # 前端顯示名稱（如 GPT-4o, Phi-4）
+      - model-{id}-name        # 前端顯示名稱
       - model-{id}-endpoint    # Azure AI Foundry endpoint URL
       - model-{id}-key         # API key
-      - model-{id}-deployment  # Foundry 部署名稱（如 gpt-4o, Phi-4）
-    #
-    # 範例（gpt-4o）：
-    #   model-gpt4o-name        → GPT-4o
-    #   model-gpt4o-endpoint    → https://xxx.openai.azure.com/
-    #   model-gpt4o-key         → sk-...
-    #   model-gpt4o-deployment  → gpt-4o
-    #
-    # Gateway 啟動時掃描所有 model-*-name secret，
-    # 以其 {id} 為鍵逐一讀取完整四欄，動態組出模型池。
-    # App Service Managed Identity 需授予 Key Vault Secrets User 角色：
-    # az keyvault set-policy \
-    #   --name agentic-sdk-model-registry \
-    #   --resource-group agentic-sdk \
-    #   --subscription eosl-r3-aihub \
-    #   --object-id <app-service-managed-identity-object-id> \
-    #   --secret-permissions get list
-    # 建立指令：
-    # az keyvault create \
-    #   --name agentic-sdk-model-registry \
-    #   --resource-group agentic-sdk \
-    #   --subscription eosl-r3-aihub \
-    #   --location southeastasia \
-    #   --sku standard
+      - model-{id}-deployment  # Foundry 部署名稱
 
-# ── 3. GitHub Pages ────────────────────────────────────────
 github_pages:
   repo: R300-AI/Agentic-SDK
   base_path: /Agentic-SDK/
@@ -106,32 +39,6 @@ github_pages:
     - https://r300-ai.github.io
     - http://localhost:5173
 
-# ── 4. CI/CD 身分驗證（OIDC，零 secret） ─────────────────
-# GitHub Actions 透過 OIDC Federated Identity 向 Azure 驗證，
-# 不需要任何密碼或 Service Principal JSON 存入 GitHub。
-#
-# 設定步驟（一次性，在 Azure Portal 操作）：
-#   1. Azure AD → App registrations → New registration
-#      Name: agentic-sdk-github-actions
-#   2. 建立後進入 → Certificates & secrets → Federated credentials
-#      → Add credential → GitHub Actions
-#      Organization: R300-AI
-#      Repository: Agentic-SDK
-#      Entity: Branch → main
-#   3. 於 Subscription IAM 授予 Contributor 角色（限定 resource group）
-#   4. 將以下三個值設為 GitHub Repository Variables（非 Secrets，公開無害）：
-oidc_github_variables:
-  - name: AZURE_CLIENT_ID
-    description: "App registration 的 Application (client) ID"
-  - name: AZURE_TENANT_ID
-    description: "Azure AD Tenant ID"
-  - name: AZURE_SUBSCRIPTION_ID
-    description: "訂閱 ID（eosl-r3-aihub 對應的 GUID）"
+# GitHub Repository Variables（非 Secrets）用於 OIDC 登入：
+#   AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID
 
-# ── 5. 敏感資料管理原則 ────────────────────────────────────
-# 所有 API key 與 endpoint 只存在 Key Vault，不存在：
-#   ✗ 原始碼
-#   ✗ GitHub Secrets / Variables
-#   ✗ App Service appsettings 明文
-# App Service 透過 Managed Identity 在 runtime 讀取 Key Vault。
-# 此設計使整個 repository 可安全開源。
