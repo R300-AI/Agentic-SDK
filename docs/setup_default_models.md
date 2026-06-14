@@ -1,28 +1,29 @@
-# 新增與管理預設模型（Azure AI Foundry + Key Vault）
+﻿# 新增與管理預設模型（Azure AI Foundry + Key Vault）
 
 本指南說明如何為 Agentic SDK Playground 新增、修改或移除預設模型。
-所有模型端點資訊統一存放於 Azure Key Vault（**agentic-sdk-model-registry**），
-Playground 啟動時自動掃描並組成可用的模型池，對應前端模型選單。
+所有模型端點資訊統一存放於您在 GitHub Variables 中指定的 Key Vault，
+Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單。
+
+完成首次新增模型約需 **15 分鐘**。
 
 ---
 
 ## 事前準備
 
-本指南所使用的 Azure 資源由本專案的 GitHub CI/CD 工作流程自動建立，
-並部署於資源群組 **agentic-sdk** 下：
+本指南所使用的 Azure 資源由本專案的 GitHub CI/CD 工作流程自動部署建立。
+在繼續之前，請確認工作流程至少已成功執行一次，且以下資源已存在於您指定的資源群組下：
 
-| 資源類型 | 名稱 | 建立方式 |
-|---|---|---|
-| Key Vault | **agentic-sdk-model-registry** | CI/CD 自動建立 |
-| App Service | **agentic-sdk-playground** | CI/CD 自動建立 |
+| 資源類型 | 本專案使用的名稱 |
+|---|---|
+| Key Vault | 您在 `AZURE_RESOURCE_GROUP` 中指定的資源群組內的 Key Vault（`agentic-sdk-model-registry`） |
+| App Service | 您在 `AZURE_WEBAPP_NAME` 中指定的 App Service（`agentic-sdk-playground`） |
 
-> 若上述資源尚不存在，表示工作流程尚未執行或執行失敗。
-> 請參考 [GitHub CI/CD 工作流程說明](github_cicd_workflow.md) 完成初次部署後再繼續。
+> 若上述資源尚不存在，請先完成 [GitHub CI/CD 工作流程說明](github_cicd_workflow.md) 中的初次設定，再回到本指南。
 
 開始之前，請確認：
 
-- 您擁有 Azure 訂閱 **eosl-r3-aihub** 的存取權
-- 您的帳號已被授予 Key Vault **agentic-sdk-model-registry** 的 **Key Vault Secrets Officer** 角色（如尚未取得，請聯繫訂閱管理員）
+- 您擁有存取 Azure 訂閱的權限
+- 您的帳號已被授予上述 Key Vault 的 **Key Vault Secrets Officer** 角色（如尚未取得，請聯繫訂閱管理員）
 - 您已有一個 Azure AI Foundry 專案（Hub）可供部署模型
 
 ---
@@ -63,7 +64,7 @@ Playground 啟動時自動掃描並組成可用的模型池，對應前端模型
 
 1. 開啟 [Azure Portal](https://portal.azure.com)。
 
-2. 在頂部搜尋列輸入 `agentic-sdk-model-registry`，選取搜尋結果中的 **Key vault**。
+2. 在頂部搜尋列輸入您指定的 Key Vault 名稱（本專案為 `agentic-sdk-model-registry`），選取搜尋結果中的 **Key vault**。
 
 3. 在左側導覽列選取 **Secrets**。
 
@@ -121,20 +122,19 @@ Playground 啟動時自動掃描並組成可用的模型池，對應前端模型
 新增 secret 後，**不需要重新部署**，Gateway 下次冷啟動時會自動讀取。
 若需要立即生效，請重啟 App Service：
 
-1. 在 Azure Portal 搜尋 **agentic-sdk-playground**，選取該 **App Service**。
+1. 在 Azure Portal 搜尋您指定的 App Service 名稱（本專案為 `agentic-sdk-playground`），選取該 **App Service**。
 
 2. 在左側導覽列選取 **Overview**。
 
 3. 選取頂部的 **Restart**，確認提示後等待約 30 秒。
 
-4. 前往前端網址（`https://r300-ai.github.io/Agentic-SDK/`），
-   在模型選單中確認新模型已出現。
+4. 前往前端網址，在模型選單中確認新模型已出現。
 
 ---
 
 ## 修改現有模型
 
-1. 前往 **Key Vault** → **agentic-sdk-model-registry** → **Secrets**。
+1. 前往 Azure Portal，進入您指定的 Key Vault → **Secrets**。
 
 2. 選取要修改的 secret（如 `model-phi4-endpoint`）。
 
@@ -150,7 +150,7 @@ Playground 啟動時自動掃描並組成可用的模型池，對應前端模型
 
 ## 移除模型
 
-1. 前往 **Key Vault** → **agentic-sdk-model-registry** → **Secrets**。
+1. 前往 Azure Portal，進入您指定的 Key Vault → **Secrets**。
 
 2. 選取 `model-{id}-name`，選取 **Delete**，確認刪除。
 
