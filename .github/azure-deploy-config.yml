@@ -1,44 +1,8 @@
-# Agentic SDK — Azure 部署參數
-# 詳細架構說明與操作指引：docs/github_cicd_workflow.md
-# 模型管理操作指引：docs/setup_default_models.md
+# Agentic SDK — GitHub Actions 部署參數
+# 詳細架構說明：docs/github_cicd_workflow.md
 
-azure:
-  subscription: eosl-r3-aihub
-  resource_group: agentic-sdk
-  region: southeastasia
-
-resources:
-
-  app_service_plan:
-    name: agentic-sdk-plan
-    sku: B2
-    os: Linux
-
-  app_service:
-    name: agentic-sdk-playground
-    plan: agentic-sdk-plan
-    python_version: "3.12"
-    port: 8000
-    startup_command: "python -m agentic_sdk.gateway"
-    url: https://agentic-sdk-playground.azurewebsites.net
-    system_managed_identity: true
-
-  key_vault:
-    name: agentic-sdk-model-registry
-    sku: standard
-    secret_schema:
-      - model-{id}-name        # 前端顯示名稱
-      - model-{id}-endpoint    # Azure AI Foundry endpoint URL
-      - model-{id}-key         # API key
-      - model-{id}-deployment  # Foundry 部署名稱
-
-github_pages:
-  repo: R300-AI/Agentic-SDK
-  base_path: /Agentic-SDK/
-  cors_origins:
-    - https://r300-ai.github.io
-    - http://localhost:5173
-
-# GitHub Repository Variables（非 Secrets）用於 OIDC 登入：
-#   AZURE_CLIENT_ID / AZURE_TENANT_ID / AZURE_SUBSCRIPTION_ID
+AZURE_WEBAPP_NAME: agentic-sdk-playground
+AZURE_RESOURCE_GROUP: agentic-sdk
+GATEWAY_URL: https://agentic-sdk-playground.azurewebsites.net
+CORS_ORIGINS: "https://r300-ai.github.io,http://localhost:5173"
 
