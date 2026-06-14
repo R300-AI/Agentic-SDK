@@ -41,41 +41,72 @@ jobs:
             PLAN="${WEBAPP}-plan"
 
             # Resource Group
-            az group create --name "$RG" --location "$REGION" --output none
+            echo "▶ [1/6] Resource Group: $RG"
+            if az group show --name "$RG" --output none 2>/dev/null; then
+              echo "  ✔ 已存在，略過建立"
+            else
+              az group create --name "$RG" --location "$REGION" --output none
+              echo "  ✔ 已建立"
+            fi
 
-            # App Service Plan (B2 Linux)
-            az appservice plan create \
-              --name "$PLAN" --resource-group "$RG" \
-              --sku B2 --is-linux --location "$REGION" \
-              --output none
+            # App Service Plan
+            echo "▶ [2/6] App Service Plan: $PLAN (B2 Linux)"
+            if az appservice plan show --name "$PLAN" --resource-group "$RG" --output none 2>/dev/null; then
+              echo "  ✔ 已存在，略過建立"
+            else
+              az appservice plan create \
+                --name "$PLAN" --resource-group "$RG" \
+                --sku B2 --is-linux --location "$REGION" \
+                --output none
+              echo "  ✔ 已建立"
+            fi
 
             # App Service
-            az webapp create \
-              --name "$WEBAPP" --resource-group "$RG" \
-              --plan "$PLAN" --runtime "PYTHON:3.12" \
-              --output none
+            echo "▶ [3/6] App Service: $WEBAPP"
+            if az webapp show --name "$WEBAPP" --resource-group "$RG" --output none 2>/dev/null; then
+              echo "  ✔ 已存在，將於後續步驟更新程式碼與設定"
+            else
+              az webapp create \
+                --name "$WEBAPP" --resource-group "$RG" \
+                --plan "$PLAN" --runtime "PYTHON:3.12" \
+                --output none
+              echo "  ✔ 已建立"
+            fi
 
             # Managed Identity
+            echo "▶ [4/6] Managed Identity: $WEBAPP"
             az webapp identity assign \
               --name "$WEBAPP" --resource-group "$RG" \
               --output none
+            echo "  ✔ 已確認啟用"
 
             # Key Vault
-            az keyvault create \
-              --name "$KV" --resource-group "$RG" \
-              --location "$REGION" --sku standard \
-              --output none
+            echo "▶ [5/6] Key Vault: $KV"
+            if az keyvault show --name "$KV" --output none 2>/dev/null; then
+              echo "  ✔ 已存在，略過建立"
+            else
+              az keyvault create \
+                --name "$KV" --resource-group "$RG" \
+                --location "$REGION" --sku standard \
+                --output none
+              echo "  ✔ 已建立"
+            fi
 
-            # 授予 App Service MI 讀取 Key Vault secrets 的權限（已存在則跳過）
+            # Key Vault Role Assignment
+            echo "▶ [6/6] Key Vault 角色授權：Key Vault Secrets User → $WEBAPP Managed Identity"
             PRINCIPAL_ID=$(az webapp identity show \
               --name "$WEBAPP" --resource-group "$RG" \
               --query principalId -o tsv)
             KV_ID=$(az keyvault show --name "$KV" --query id -o tsv)
             az role assignment create \
               --role "Key Vault Secrets User" \
-              --assignee "$PRINCIPAL_ID" \
+              --assignee-object-id "$PRINCIPAL_ID" \
+              --assignee-principal-type ServicePrincipal \
               --scope "$KV_ID" \
               --output none 2>/dev/null || true
+            echo "  ✔ 已確認授權"
+            echo ""
+            echo "✅ 所有 Azure 資源佈建完成"
 
       - name: 設定 Python 3.12
         uses: actions/setup-python@v5
