@@ -66,7 +66,7 @@ jobs:
               --location "$REGION" --sku standard \
               --output none
 
-            # 授予 App Service MI 讀取 Key Vault secrets 的權限
+            # 授予 App Service MI 讀取 Key Vault secrets 的權限（已存在則跳過）
             PRINCIPAL_ID=$(az webapp identity show \
               --name "$WEBAPP" --resource-group "$RG" \
               --query principalId -o tsv)
@@ -75,7 +75,7 @@ jobs:
               --role "Key Vault Secrets User" \
               --assignee "$PRINCIPAL_ID" \
               --scope "$KV_ID" \
-              --output none
+              --output none 2>/dev/null || true
 
       - name: 設定 Python 3.12
         uses: actions/setup-python@v5
