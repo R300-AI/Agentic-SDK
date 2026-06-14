@@ -25,7 +25,6 @@ YAML 格式範例::
         type: completion
         params:
           backend: foundry
-          deployment: gpt-5.2
     gates:
       max_node_hops: 50
       max_revisit: 5
