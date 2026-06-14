@@ -98,7 +98,7 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   const isProduction = !import.meta.env.DEV;
-  const gwMissing = isProduction && !gatewayUrl;
+  const gwMissing = false; // same-origin 部署時空字串即合法，不顯示警告
 
   const handleGwSubmit = (e: FormEvent) => {
     e.preventDefault();
