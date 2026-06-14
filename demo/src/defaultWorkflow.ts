@@ -20,10 +20,6 @@ nodes:
     compute_target: local_cpu
   plan:
     type: builtin.plan
-    params:
-      model: gpt-5.2
-      deployment: gpt-5.2
-      endpoint: "https://<resource>.services.ai.azure.com"
     compute_target: azure_foundry
   retrieve:
     type: builtin.retrieve
@@ -74,11 +70,7 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
     },
     plan: {
       type: "builtin.plan",
-      params: {
-        model: "gpt-5.2",
-        deployment: "gpt-5.2",
-        endpoint: "https://<resource>.services.ai.azure.com",
-      },
+      params: {},
       compute_target: "azure_foundry",
     },
     retrieve: {

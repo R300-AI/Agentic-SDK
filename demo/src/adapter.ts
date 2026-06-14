@@ -175,9 +175,6 @@ function defaultParamsFor(name: string): Record<string, unknown> | undefined {
     importance: 1.0,
   };
   if (name === "plan") return {
-    model: "gpt-5.2",
-    endpoint: "https://<resource>.services.ai.azure.com",
-    deployment: "gpt-5.2",
     system_prompt:
       "PLAN. 你是 Agent 工作流的規劃節點，依據 has_retrieved_context、has_attachment、perceived_intent、user_message 決定下一個節點。\n" +
       "規則（必須按優先順序判斷）：\n" +
@@ -198,9 +195,6 @@ function defaultParamsFor(name: string): Record<string, unknown> | undefined {
     enable_vision_query: true,
   };
   if (name === "action") return {
-    model: "gpt-5.2",
-    endpoint: "https://<resource>.services.ai.azure.com",
-    deployment: "gpt-5.2",
     temperature: 0.2,
     system_prompt: "你是親切專業的鞋店門市專員。請根據檢索到的產品資訊，用口語化的方式推薦給客人，列出建議的產品名稱與連結，並主動詢問是否需要更多協助。",
   };

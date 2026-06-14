@@ -57,12 +57,12 @@ export interface ModelPreset {
 
 export const MODEL_PRESETS: ModelPreset[] = [
   {
-    value: "gpt-5.2",
-    label: "GPT-5.2",
+    value: "agentic-sdk-gpt-5.4",
+    label: "GPT-5.4",
     platform: "Azure AI Foundry",
     compute_target: "cloud",
-    endpoint: "https://<resource>.services.ai.azure.com",
-    deployment: "gpt-5.2",
+    endpoint: "https://agentic-sdk-foundry.cognitiveservices.azure.com/",
+    deployment: "agentic-sdk-gpt-5.4",
   },
   {
     value: "gemma-3-4b",
