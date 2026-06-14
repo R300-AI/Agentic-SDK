@@ -89,11 +89,15 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
 
 3. 選取左側 **Access control (IAM)**，再選取 **+ Add** → **Add role assignment**。
 
-4. 在 **Role** 分頁選取 **Contributor**，選取 **Next**。
+4. 在 **Role** 分頁搜尋並選取 **Contributor**，選取 **Next**。
 
 5. 在 **Members** 分頁，**Assign access to** 選取 **User, group, or service principal**，選取 **+ Select members**，搜尋並選取 `agentic-sdk-github-actions`。
 
 6. 選取 **Review + assign**，完成授權。
+
+7. 重複步驟 3–6，再指派一次 **User Access Administrator** 角色給同一個 `agentic-sdk-github-actions`。
+
+   > **為什麼需要兩個角色？** Contributor 負責建立資源，User Access Administrator 負責讓工作流程能將 Managed Identity 授權給 Key Vault（`roleAssignments/write` 操作）。
 
 ---
 
