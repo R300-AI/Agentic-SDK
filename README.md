@@ -40,8 +40,7 @@ Azure AI Foundry（模型部署）
 
 | 工具 | 版本 | 安裝 |
 |---|---|---|
-| Python | 3.12+ | 由 `uv` 代管，不必另裝 |
-| `uv` | 最新版 | `winget install astral-sh.uv` |
+| Python | 3.12+ | [python.org](https://www.python.org/downloads/) |
 | Node.js | 22+ | `winget install OpenJS.NodeJS.LTS` |
 
 ### 安裝
@@ -50,43 +49,24 @@ Azure AI Foundry（模型部署）
 git clone https://github.com/R300-AI/Agentic-SDK.git
 cd Agentic-SDK
 
-# Python 環境
-uv sync --extra dev
+# Python 套件
+pip install -r requirements.txt
 
 # 前端套件
 cd demo && npm ci && cd ..
 ```
 
-### 啟動 Gateway（本機）
-
-```bash
-uv run python -m agentic_sdk.gateway
-```
-
-Gateway 預設監聽 `http://127.0.0.1:8080`。健康確認：
-
-```bash
-curl http://127.0.0.1:8080/healthz
-```
-
-### 啟動前端（本機，連本機 Gateway）
+### 一鍵啟動（Gateway + 前端）
 
 ```bash
 cd demo
-npm run dev
+npm start
 ```
 
-瀏覽器開啟 [http://localhost:5173](http://localhost:5173)。
+- Gateway：`http://localhost:8080`
+- Demo UI：`http://localhost:5173`
 
 > 本機 Gateway 需設定環境變數（`AZURE_FOUNDRY_ENDPOINT`、`AZURE_FOUNDRY_API_KEY`、`AZURE_FOUNDRY_DEPLOYMENT`），或改用 `WORKFLOW_FORCE_MOCK_FOUNDRY=true` 離線執行。
-
-### 執行前端型別檢查
-
-```bash
-cd demo
-npx tsc --noEmit
-npm test   # vitest
-```
 
 ### 呼叫 Gateway（OpenAI SDK 相容）
 
