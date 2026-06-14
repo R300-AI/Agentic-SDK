@@ -10,10 +10,7 @@
 使用者瀏覽器
     │
     ▼
-GitHub Pages（Playground 前端）
-    │  API 呼叫
-    ▼
-Azure App Service（FastAPI Gateway）
+Azure App Service（FastAPI Gateway + React 前端）
     │  執行時讀取
     ▼
 Azure Key Vault（模型端點 Registry）
@@ -22,7 +19,7 @@ Azure Key Vault（模型端點 Registry）
 Azure AI Foundry（模型部署）
 ```
 
-- **前端**：React + Vite，部署於 GitHub Pages，無需本機啟動任何服務即可使用。
+- **前端**：React + Vite，build 後由 FastAPI 靜態 serve，與後端同一個 App Service。
 - **後端**：FastAPI Gateway，部署於 Azure App Service，對外提供 OpenAI 相容 API。
 - **模型端點 Registry**：Azure Key Vault，統一管理所有模型的 endpoint / key / deployment，Gateway 啟動時自動掃描。
 - **推論後端**：Azure AI Foundry，支援多模型橫向部署。
@@ -83,10 +80,12 @@ npm run dev
 
 > 本機 Gateway 需設定環境變數（`AZURE_FOUNDRY_ENDPOINT`、`AZURE_FOUNDRY_API_KEY`、`AZURE_FOUNDRY_DEPLOYMENT`），或改用 `WORKFLOW_FORCE_MOCK_FOUNDRY=true` 離線執行。
 
-### 執行測試
+### 執行前端型別檢查
 
 ```bash
-uv run pytest
+cd demo
+npx tsc --noEmit
+npm test   # vitest
 ```
 
 ### 呼叫 Gateway（OpenAI SDK 相容）
@@ -108,7 +107,7 @@ print(response.choices[0].message.content)
 
 | 文件 | 說明 |
 |---|---|
-| [docs/github_cicd_workflow.md](docs/github_cicd_workflow.md) | CI/CD 初次設定：OIDC、GitHub Variables、GitHub Pages 啟用 |
+| [docs/github_cicd_workflow.md](docs/github_cicd_workflow.md) | CI/CD 初次設定：OIDC、GitHub Variables |
 | [docs/setup_default_models.md](docs/setup_default_models.md) | 新增 / 修改 / 移除模型端點（Azure AI Foundry + Key Vault） |
 
 ---
