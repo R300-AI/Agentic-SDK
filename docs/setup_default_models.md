@@ -23,7 +23,15 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 開始之前，請確認：
 
 - 您擁有存取 Azure 訂閱的權限
-- 您的帳號已被授予上述 Key Vault 的 **Key Vault Secrets Officer** 角色（如尚未取得，請聯繫訂閱管理員）
+- 您的帳號已被授予上述 Key Vault 的 **Key Vault Secrets Officer** 角色
+
+  若尚未取得，請訂閱管理員依下列步驟授予：
+
+  1. 前往 [Azure Portal](https://portal.azure.com)，搜尋並開啟 Key Vault **`agentic-sdk-models`**。
+  2. 選取左側 **Access control (IAM)**，再選取 **+ Add → Add role assignment**。
+  3. 在 **Role** 分頁搜尋並選取 **Key Vault Secrets Officer**，選取 **Next**。
+  4. 在 **Members** 分頁，選取 **+ Select members**，搜尋並選取需要授權的使用者帳號。
+  5. 選取 **Review + assign**，完成授權（角色傳播約需 1–2 分鐘）。
 
 ---
 
