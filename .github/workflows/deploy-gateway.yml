@@ -29,6 +29,54 @@ jobs:
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
+      - name: 佈建 Azure 資源（冪等，已存在則略過）
+        uses: azure/CLI@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+            WEBAPP="${{ vars.AZURE_WEBAPP_NAME }}"
+            KV="${{ vars.KEY_VAULT_NAME }}"
+            REGION="${{ vars.AZURE_REGION }}"
+            PLAN="${WEBAPP}-plan"
+
+            # Resource Group
+            az group create --name "$RG" --location "$REGION" --output none
+
+            # App Service Plan (B2 Linux)
+            az appservice plan create \
+              --name "$PLAN" --resource-group "$RG" \
+              --sku B2 --is-linux --location "$REGION" \
+              --output none
+
+            # App Service
+            az webapp create \
+              --name "$WEBAPP" --resource-group "$RG" \
+              --plan "$PLAN" --runtime "PYTHON:3.12" \
+              --output none
+
+            # Managed Identity
+            az webapp identity assign \
+              --name "$WEBAPP" --resource-group "$RG" \
+              --output none
+
+            # Key Vault
+            az keyvault create \
+              --name "$KV" --resource-group "$RG" \
+              --location "$REGION" --sku standard \
+              --output none
+
+            # 授予 App Service MI 讀取 Key Vault secrets 的權限
+            PRINCIPAL_ID=$(az webapp identity show \
+              --name "$WEBAPP" --resource-group "$RG" \
+              --query principalId -o tsv)
+            KV_ID=$(az keyvault show --name "$KV" --query id -o tsv)
+            az role assignment create \
+              --role "Key Vault Secrets User" \
+              --assignee "$PRINCIPAL_ID" \
+              --scope "$KV_ID" \
+              --output none
+
       - name: 設定 Python 3.12
         uses: actions/setup-python@v5
         with:
