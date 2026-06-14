@@ -1,11 +1,6 @@
 name: Deploy Gateway + GitHub Pages
 
-# ── 靜態部署參數：與 .github/azure-deploy-config.yml 保持同步 ──
-env:
-  AZURE_WEBAPP_NAME: agentic-sdk-playground
-  AZURE_RESOURCE_GROUP: agentic-sdk
-  GATEWAY_URL: https://agentic-sdk-playground.azurewebsites.net
-  CORS_ORIGINS: "https://r300-ai.github.io,http://localhost:5173"
+# 所有部署參數來自 GitHub Repository Variables，設定清單見 .github/azure-deploy-config.yml
 
 on:
   push:
@@ -47,7 +42,7 @@ jobs:
       - name: 部署至 Azure App Service
         uses: azure/webapps-deploy@v3
         with:
-          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
           package: .
 
       - name: 設定 App Service 啟動指令與基礎參數
@@ -59,17 +54,17 @@ jobs:
           azcliversion: latest
           inlineScript: |
             az webapp config set \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --name ${{ vars.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
               --startup-file "python -m agentic_sdk.gateway"
 
             az webapp config appsettings set \
-              --name ${{ env.AZURE_WEBAPP_NAME }} \
-              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --name ${{ vars.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
               --settings \
                 PORT=8000 \
                 WORKFLOW_ACTION_BACKEND=foundry \
-                GATEWAY_CORS_ORIGINS="${{ env.CORS_ORIGINS }}" \
+                GATEWAY_CORS_ORIGINS="${{ vars.CORS_ORIGINS }}" \
                 SCM_DO_BUILD_DURING_DEPLOYMENT=true \
                 KEY_VAULT_NAME=agentic-sdk-model-registry
 
@@ -91,7 +86,7 @@ jobs:
       - name: Build Vite app
         env:
           VITE_BASE: /Agentic-SDK/
-          VITE_GATEWAY_URL: ${{ env.GATEWAY_URL }}
+          VITE_GATEWAY_URL: ${{ vars.GATEWAY_URL }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
