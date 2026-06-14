@@ -129,11 +129,20 @@ jobs:
           npm ci
           npm run build
 
+      - name: 打包部署包（只含必要檔案，排除 node_modules 等）
+        run: |
+          zip -r deploy.zip \
+            agentic_sdk/ \
+            demo/dist/ \
+            pyproject.toml \
+            requirements.txt \
+            -x "*.pyc" -x "*/__pycache__/*"
+
       - name: 部署至 Azure App Service（後端 + 前端靜態檔案）
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.AZURE_WEBAPP_NAME }}
-          package: .
+          package: deploy.zip
 
       - name: 設定 App Service 啟動指令與基礎參數
         # 敏感資料（Foundry key/endpoint）由 App Service Managed Identity
