@@ -1,0 +1,50 @@
+# ============================================================
+# Azure 部署參數集中設定
+# ============================================================
+# 本檔為唯一的部署參數來源。非 GitHub Actions workflow；
+# 靜態參數同步寫入 workflows/deploy-gateway.yml 的頂層 env: 區段。
+# 異動時請同步更新兩處。
+# ============================================================
+
+deployment:
+  azure:
+    subscription: eosl-r3-aihub
+    resource_group: agentic-sdk
+    app_service_name: agentic-sdk-playground
+    region: southeastasia
+    python_version: "3.12"
+    # Azure App Service 透過 PORT appsetting 決定監聽埠
+    app_port: 8000
+    startup_command: "python -m agentic_sdk.gateway"
+    # App Service URL 固定，不像 Cloud Run 每次動態產生
+    url: https://agentic-sdk-playground.azurewebsites.net
+
+  github_pages:
+    repo: R300-AI/Agentic-SDK
+    base_path: /Agentic-SDK/
+    cors_origins:
+      - https://r300-ai.github.io
+      - http://localhost:5173
+
+# ============================================================
+# 需在 GitHub 儲存庫 Settings → Secrets and variables → Actions
+# 設定以下 Repository secrets：
+# ============================================================
+required_github_secrets:
+  - name: AZURE_CREDENTIALS
+    description: >
+      Service Principal JSON，以下指令產生：
+      az ad sp create-for-rbac
+        --name agentic-sdk-deploy
+        --role contributor
+        --scopes /subscriptions/<subscription-id>/resourceGroups/agentic-sdk
+        --sdk-auth
+
+  - name: AZURE_FOUNDRY_ENDPOINT
+    description: "Azure AI Foundry endpoint URL（含尾斜線）"
+
+  - name: AZURE_FOUNDRY_API_KEY
+    description: "Azure AI Foundry API key"
+
+  - name: AZURE_FOUNDRY_DEPLOYMENT
+    description: "Azure AI Foundry 模型部署名稱（如 gpt-4o-mini）"

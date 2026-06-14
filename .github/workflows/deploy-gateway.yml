@@ -1,5 +1,13 @@
 name: Deploy Gateway + GitHub Pages
 
+# ── 靜態部署參數：與 .github/azure-deploy-config.yml 保持同步 ──
+env:
+  AZURE_WEBAPP_NAME: agentic-sdk-playground
+  AZURE_RESOURCE_GROUP: agentic-sdk
+  AZURE_SUBSCRIPTION: eosl-r3-aihub
+  GATEWAY_URL: https://agentic-sdk-playground.azurewebsites.net
+  CORS_ORIGINS: "https://r300-ai.github.io,http://localhost:5173"
+
 on:
   push:
     branches: [main]
@@ -17,44 +25,53 @@ concurrency:
 jobs:
   deploy-gateway:
     runs-on: ubuntu-latest
-    outputs:
-      gateway_url: ${{ steps.get-url.outputs.url }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: 驗證 GCP 身分
-        uses: google-github-actions/auth@v2
+      - name: Azure 登入
+        uses: azure/login@v2
         with:
-          credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - uses: google-github-actions/setup-gcloud@v2
+      - name: 設定 Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
 
-      - name: Deploy to Cloud Run (source)
-        env:
-          FOUNDRY_ENDPOINT: ${{ secrets.AZURE_FOUNDRY_ENDPOINT }}
-          FOUNDRY_KEY: ${{ secrets.AZURE_FOUNDRY_API_KEY }}
-          FOUNDRY_DEPLOYMENT: ${{ secrets.AZURE_FOUNDRY_DEPLOYMENT }}
+      - name: 產生 requirements.txt（鎖定版本）
         run: |
-          CORS='https://markovchenitri.github.io,https://R300-AI.github.io,http://localhost:5173'
-          gcloud run deploy agentic-sdk-gateway \
-            --source . \
-            --region asia-east1 \
-            --project eternal-insight-423516-m3 \
-            --platform managed \
-            --allow-unauthenticated \
-            --clear-base-image \
-            --set-env-vars "^|^AZURE_FOUNDRY_ENDPOINT=${FOUNDRY_ENDPOINT}|AZURE_FOUNDRY_API_KEY=${FOUNDRY_KEY}|AZURE_FOUNDRY_DEPLOYMENT=${FOUNDRY_DEPLOYMENT}|GATEWAY_CORS_ORIGINS=${CORS}|WORKFLOW_ACTION_BACKEND=foundry" \
-            --quiet
+          pip install uv --quiet
+          uv pip compile pyproject.toml -o requirements.txt
 
-      - name: Get service URL
-        id: get-url
-        run: |
-          URL=$(gcloud run services describe agentic-sdk-gateway \
-            --region asia-east1 \
-            --project eternal-insight-423516-m3 \
-            --format 'value(status.url)')
-          echo "url=${URL}" >> $GITHUB_OUTPUT
-          echo "===== GATEWAY URL: $URL ====="
+      - name: 部署至 Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
+          package: .
+
+      - name: 設定 App Service 環境變數與啟動指令
+        uses: azure/CLI@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az webapp config set \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --subscription ${{ env.AZURE_SUBSCRIPTION }} \
+              --startup-file "python -m agentic_sdk.gateway"
+
+            az webapp config appsettings set \
+              --name ${{ env.AZURE_WEBAPP_NAME }} \
+              --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+              --subscription ${{ env.AZURE_SUBSCRIPTION }} \
+              --settings \
+                PORT=8000 \
+                AZURE_FOUNDRY_ENDPOINT="${{ secrets.AZURE_FOUNDRY_ENDPOINT }}" \
+                AZURE_FOUNDRY_API_KEY="${{ secrets.AZURE_FOUNDRY_API_KEY }}" \
+                AZURE_FOUNDRY_DEPLOYMENT="${{ secrets.AZURE_FOUNDRY_DEPLOYMENT }}" \
+                WORKFLOW_ACTION_BACKEND=foundry \
+                GATEWAY_CORS_ORIGINS="${{ env.CORS_ORIGINS }}" \
+                SCM_DO_BUILD_DURING_DEPLOYMENT=true
 
   build-pages:
     needs: deploy-gateway
@@ -74,7 +91,7 @@ jobs:
       - name: Build Vite app
         env:
           VITE_BASE: /Agentic-SDK/
-          VITE_GATEWAY_URL: ${{ needs.deploy-gateway.outputs.gateway_url }}
+          VITE_GATEWAY_URL: ${{ env.GATEWAY_URL }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
