@@ -3,8 +3,6 @@
 本文件說明 Agentic SDK 的自動化部署架構，包含初次設定步驟、工作流程結構，
 以及各 Azure 資源的建立時機與方式。
 
-完成初次設定約需 **20 分鐘**。
-
 ---
 
 ## 概覽
@@ -104,7 +102,9 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，不需要
 
 3. 選取 **Variables** 分頁（注意：是 Variables，不是 Secrets）。
 
-4. 依序選取 **New repository variable**，新增以下三個變數：
+4. 依序選取 **New repository variable**，新增以下七個變數：
+
+   **OIDC 身分驗證（值來自步驟 1-1 與 1-4）：**
 
    | 變數名稱 | 值 |
    |---|---|
@@ -112,7 +112,14 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，不需要
    | **AZURE_TENANT_ID** | 步驟 1-1 取得的 Directory (tenant) ID |
    | **AZURE_SUBSCRIPTION_ID** | 步驟 1-4 取得的 Subscription ID |
 
-   > 這三個值為公開無害的識別碼，存為 Variables 而非 Secrets。
+   **部署目標參數：**
+
+   | 變數名稱 | 值 |
+   |---|---|
+   | **AZURE_WEBAPP_NAME** | `agentic-sdk-playground` |
+   | **AZURE_RESOURCE_GROUP** | `agentic-sdk` |
+   | **GATEWAY_URL** | `https://agentic-sdk-playground.azurewebsites.net` |
+   | **CORS_ORIGINS** | `https://r300-ai.github.io,http://localhost:5173` |
 
 ---
 
