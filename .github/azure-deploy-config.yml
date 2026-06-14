@@ -1,8 +1,14 @@
 # Agentic SDK — GitHub Actions 部署參數
 # 詳細架構說明：docs/github_cicd_workflow.md
 
+# workflow env: 參數
 AZURE_WEBAPP_NAME: agentic-sdk-playground
 AZURE_RESOURCE_GROUP: agentic-sdk
 GATEWAY_URL: https://agentic-sdk-playground.azurewebsites.net
 CORS_ORIGINS: "https://r300-ai.github.io,http://localhost:5173"
+
+# GitHub Repository Variables（OIDC 登入，需手動設定，設定步驟見 docs/github_cicd_workflow.md）
+# AZURE_CLIENT_ID
+# AZURE_TENANT_ID
+# AZURE_SUBSCRIPTION_ID
 
