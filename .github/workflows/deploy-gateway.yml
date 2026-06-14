@@ -108,16 +108,6 @@ jobs:
             echo ""
             echo "✅ 所有 Azure 資源佈建完成"
 
-      - name: 設定 Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: 產生 requirements.txt（鎖定版本）
-        run: |
-          pip install uv --quiet
-          uv pip compile pyproject.toml -o requirements.txt
-
       - name: 建置前端（Vite → demo/dist/）
         uses: actions/setup-node@v4
         with:
