@@ -162,5 +162,5 @@ jobs:
               --settings \
                 PORT=8000 \
                 WORKFLOW_ACTION_BACKEND=foundry \
-                SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+                SCM_DO_BUILD_DURING_DEPLOYMENT=true \
                 KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}
