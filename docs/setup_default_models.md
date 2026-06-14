@@ -190,6 +190,7 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 | Secret 名稱 | 內容範例 | 用途 |
 |---|---|---|
 | `model-{id}-name` | `Phi-4` | 前端顯示名稱 |
-| `model-{id}-endpoint` | `https://xxx.inference.ai.azure.com/` | Foundry endpoint |
-| `model-{id}-key` | `sk-...` | API 金鑰 |
-| `model-{id}-deployment` | `phi-4` | Foundry 部署名稱 |
+| `model-{id}-endpoint` | `https://xxx.cognitiveservices.azure.com/` | Foundry endpoint |
+| `model-{id}-key` | `BgNw...` | API 金鑰 |
+| `model-{id}-deployment` | `agentic-sdk-gpt-5.4` | Foundry 部署名稱 |
+| `model-{id}-api-version` | `2024-12-01-preview` | Azure OpenAI API 版本 |

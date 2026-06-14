@@ -65,6 +65,7 @@ def load_first_model_from_keyvault(settings) -> None:
         endpoint = _get("endpoint")
         api_key = _get("key")
         deployment = _get("deployment")
+        api_version = _get("api-version")
 
         if endpoint:
             settings.azure_foundry_endpoint = endpoint
@@ -72,11 +73,14 @@ def load_first_model_from_keyvault(settings) -> None:
             settings.azure_foundry_api_key = api_key
         if deployment:
             settings.azure_foundry_deployment = deployment
+        if api_version:
+            settings.azure_foundry_api_version = api_version
 
         logger.info(
-            "Key Vault 載入完成: endpoint=%s deployment=%s",
+            "Key Vault 載入完成: endpoint=%s deployment=%s api_version=%s",
             bool(endpoint),
             deployment,
+            api_version or "(使用預設)",
         )
 
     except Exception as exc:
