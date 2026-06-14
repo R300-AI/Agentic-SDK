@@ -24,29 +24,43 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 - 您擁有存取 Azure 訂閱的權限
 - 您的帳號已被授予上述 Key Vault 的 **Key Vault Secrets Officer** 角色（如尚未取得，請聯繫訂閱管理員）
-- 您已有一個 Azure AI Foundry 專案（Hub）可供部署模型
 
 ---
 
 ## 第一節：在 Azure AI Foundry 部署模型
 
+### 步驟 1-1：建立 Azure AI Foundry Hub 與專案（若尚未建立）
+
+> 若您已有現成的 Foundry Hub 與專案，可跳至[步驟 1-2](#步驟-1-2部署模型)。
+
+1. 前往 [Azure AI Foundry](https://ai.azure.com)，並以您的 Azure 帳號登入。
+
+2. 選取 **+ Create project**。
+
+3. 填入以下欄位：
+
+   - **Project name**：輸入此 Foundry 專案的名稱
+   - **Hub**：選取 **Create new hub**，並填入 Hub 名稱與您使用的訂閱及資源群組
+
+4. 選取 **Create**，等待建立完成（約 2–5 分鐘）。
+
+### 步驟 1-2：部署模型
+
 > 若模型已部署完畢並取得 endpoint，可跳至[第二節](#第二節在-key-vault-新增模型-secret)。
 
-1. 開啟瀏覽器，前往 [Azure AI Foundry](https://ai.azure.com)，並以您的 Azure 帳號登入。
+1. 在左側導覽列選取 **Models + endpoints**，再選取 **Deploy model**。
 
-2. 在左側導覽列選取 **Models + endpoints**，再選取 **Deploy model**。
+2. 在模型清單中，選取您要部署的模型（如 **Phi-4** 或 **GPT-4o**），然後選取 **Confirm**。
 
-3. 在模型清單中，選取您要部署的模型（如 **Phi-4** 或 **GPT-4o**），然後選取 **Confirm**。
-
-4. 在部署設定頁面，填入以下欄位：
+3. 在部署設定頁面，填入以下欄位：
 
    - **Deployment name**：輸入一個辨識用的名稱（如 `phi-4`）。請記下此名稱，後續步驟會用到。
    - **Deployment type**：依需求選擇（建議選 **Standard**）
    - 其餘設定保持預設即可
 
-5. 選取 **Deploy**，等待部署完成（約 1–3 分鐘）。
+4. 選取 **Deploy**，等待部署完成（約 1–3 分鐘）。
 
-6. 部署完成後，在模型詳細頁面找到並記錄以下資訊：
+5. 部署完成後，在模型詳細頁面找到並記錄以下資訊：
 
    - **Target URI**（即 endpoint URL，格式為 `https://....inference.ai.azure.com/`）
    - **Key**（選取 **Show** 後複製）
