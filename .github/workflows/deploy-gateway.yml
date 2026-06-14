@@ -1,6 +1,6 @@
 name: Deploy Gateway + GitHub Pages
 
-# 所有部署參數來自 GitHub Repository Variables，設定清單見 .github/azure-deploy-config.yml
+# 所有部署參數來自 GitHub Repository Variables，設定步驟見 docs/github_cicd_workflow.md
 
 on:
   push:

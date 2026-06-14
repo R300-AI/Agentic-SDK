@@ -37,7 +37,7 @@
 [3] deploy-pages ── 發佈至 GitHub Pages
 ```
 
-所有部署目標（App Service 名稱、Resource Group、URL 等）均來自您在 GitHub Repository Variables 中設定的值，清單見 `.github/azure-deploy-config.yml`。
+所有部署目標（App Service 名稱、Resource Group、URL 等）均來自您在 GitHub Repository Variables 中設定的值，設定步驟見[第三節](#第三節設定-github-repository-variables)。
 
 ---
 
@@ -235,4 +235,3 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
 | `.github/workflows/deploy-gateway.yml` | 主工作流程：三階段串聯部署 |
 | `.github/workflows/deploy-pages.yml` | 緊急備用：僅重新部署前端（手動觸發） |
 | `.github/workflows/ci.yml` | 每次 PR/push 執行 Python 測試與 TypeScript 型別檢查 |
-| `.github/azure-deploy-config.yml` | Repository Variables 清單與預設值速查 |
