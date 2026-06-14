@@ -5,7 +5,6 @@
   "type": "module",
   "description": "Phase 5 圖形編排 UI:拖曳設計、即時動畫、對話框輸出。後端走 Agentic SDK Gateway。",
   "scripts": {
-    "dev": "vite",
     "start": "node scripts/start.mjs",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
