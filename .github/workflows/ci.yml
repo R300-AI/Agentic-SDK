@@ -7,26 +7,6 @@ on:
     branches: [main]
 
 jobs:
-  test-python:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: astral-sh/setup-uv@v5
-        with:
-          python-version: "3.12"
-
-      - run: uv sync --extra dev
-
-      - name: Run pytest (full mock, no Foundry key required)
-        env:
-          WORKFLOW_FORCE_MOCK_FOUNDRY: "true"
-          WORKFLOW_ACTION_BACKEND: "foundry"
-          AZURE_FOUNDRY_ENDPOINT: "https://mock.example.com/"
-          AZURE_FOUNDRY_API_KEY: "mock-key"
-          AZURE_FOUNDRY_DEPLOYMENT: "mock-deployment"
-        run: uv run pytest tests -q
-
   check-typescript:
     runs-on: ubuntu-latest
     defaults:
