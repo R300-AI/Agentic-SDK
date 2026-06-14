@@ -25,7 +25,7 @@ jobs:
           AZURE_FOUNDRY_ENDPOINT: "https://mock.example.com/"
           AZURE_FOUNDRY_API_KEY: "mock-key"
           AZURE_FOUNDRY_DEPLOYMENT: "mock-deployment"
-        run: uv run pytest tests --ignore=tests/test_dashboard_app.py -q
+        run: uv run pytest tests -q
 
   check-typescript:
     runs-on: ubuntu-latest

@@ -19,10 +19,6 @@ class Settings(BaseSettings):
     gateway_host: str = Field(default="127.0.0.1")
     gateway_port: int = Field(default=8080, ge=1, le=65535)
 
-    dashboard_port: int = Field(default=8501, ge=1, le=65535)
-    dashboard_refresh_sec: float = Field(default=2.0, gt=0)
-    dashboard_snapshot_limit: int = Field(default=500, ge=1, le=10000)
-
     upstream_api_base_url: str = Field(default="http://localhost:8000/v1")
     upstream_api_key: str = Field(default="not-needed")
     upstream_healthcheck_timeout_sec: float = Field(default=5.0, gt=0)
