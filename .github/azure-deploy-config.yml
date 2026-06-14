@@ -55,12 +55,34 @@ resources:
     # 對應 /v1/models 與 /v1/capabilities 端點。
     name: agentic-sdk-model-registry
     sku: standard
-    # 命名規則：model-{model-id}-{endpoint|key|deployment}
-    # 範例 secret 結構（實際值在 Azure Portal 手動填入，不進 git）：
+    # ── Secret 命名規則 ──────────────────────────────────────
+    # 每個模型由 4 個 secret 組成，前綴統一為 model-{id}-
+    # {id} 為小寫英數字（如 gpt4o, phi4, llama3）
+    # 實際值在 Azure Portal 手動填入，不進 git。
+    #
+    # 操作路徑（Portal）：
+    #   Key Vaults → agentic-sdk-model-registry → Secrets → Generate/Import
+    #
+    # 開發者權限需求（由訂閱管理員授予）：
+    #   az role assignment create \
+    #     --role "Key Vault Secrets Officer" \
+    #     --assignee <developer-email> \
+    #     --scope /subscriptions/.../resourceGroups/agentic-sdk/providers/Microsoft.KeyVault/vaults/agentic-sdk-model-registry
+    #
     secret_schema:
+      - model-{id}-name        # 前端顯示名稱（如 GPT-4o, Phi-4）
       - model-{id}-endpoint    # Azure AI Foundry endpoint URL
       - model-{id}-key         # API key
-      - model-{id}-deployment  # 部署名稱（如 gpt-4o, Phi-4）
+      - model-{id}-deployment  # Foundry 部署名稱（如 gpt-4o, Phi-4）
+    #
+    # 範例（gpt-4o）：
+    #   model-gpt4o-name        → GPT-4o
+    #   model-gpt4o-endpoint    → https://xxx.openai.azure.com/
+    #   model-gpt4o-key         → sk-...
+    #   model-gpt4o-deployment  → gpt-4o
+    #
+    # Gateway 啟動時掃描所有 model-*-name secret，
+    # 以其 {id} 為鍵逐一讀取完整四欄，動態組出模型池。
     # App Service Managed Identity 需授予 Key Vault Secrets User 角色：
     # az keyvault set-policy \
     #   --name agentic-sdk-model-registry \
