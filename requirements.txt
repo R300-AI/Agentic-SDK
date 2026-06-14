@@ -1,5 +1,7 @@
 # 手動維護。新增/修改套件後直接更新此檔案並 commit。
 # Oryx 在 Azure App Service 部署時執行 pip install -r requirements.txt。
+azure-identity==1.19.0
+azure-keyvault-secrets==4.9.0
 annotated-doc==0.0.4
     # via fastapi
 annotated-types==0.7.0

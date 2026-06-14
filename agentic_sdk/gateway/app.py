@@ -14,6 +14,7 @@ from fastapi.staticfiles import StaticFiles
 
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ArchivedStore
+from agentic_sdk.gateway.keyvault_loader import load_first_model_from_keyvault
 from agentic_sdk.gateway.routes_chat import router as chat_router
 from agentic_sdk.gateway.routes_capabilities import router as capabilities_router
 from agentic_sdk.gateway.routes_context import router as context_router
@@ -44,6 +45,7 @@ async def _periodic_upstream_health(app: FastAPI, interval_sec: float) -> None:
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     settings: Settings = app.state.settings
+    load_first_model_from_keyvault(settings)
     upstream_required = (settings.workflow_action_backend or "upstream").lower() == "upstream"
 
     if upstream_required:
