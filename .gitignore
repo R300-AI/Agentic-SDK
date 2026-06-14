@@ -55,5 +55,3 @@ scripts/timing_out.txt
 
 # Node modules
 node_modules/
-pyproject.toml
-.python-version
