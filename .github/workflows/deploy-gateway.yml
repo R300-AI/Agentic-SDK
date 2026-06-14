@@ -88,6 +88,7 @@ jobs:
               az keyvault create \
                 --name "$KV" --resource-group "$RG" \
                 --location "$REGION" --sku standard \
+                --enable-rbac-authorization true \
                 --output none
               echo "  ✔ 已建立"
             fi
