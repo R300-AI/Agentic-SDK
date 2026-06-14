@@ -49,7 +49,7 @@ function resolvePython() {
     }
   }
   process.stderr.write(
-    `[gateway] 找不到 Python。請先建立 venv（uv sync）或安裝 Python。\n`
+    `[gateway] 找不到 Python。請先安裝 Python 並執行 pip install -r requirements.txt。\n`
   );
   process.exit(1);
 }
