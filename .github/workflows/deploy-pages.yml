@@ -32,7 +32,7 @@ jobs:
       - name: Build Vite app
         env:
           VITE_BASE: /Agentic-SDK/
-          VITE_GATEWAY_URL: https://agentic-sdk-playground.azurewebsites.net
+          VITE_GATEWAY_URL: ${{ vars.GATEWAY_URL }}
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
