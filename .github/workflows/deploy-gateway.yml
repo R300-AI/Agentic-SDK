@@ -4,7 +4,6 @@ name: Deploy Gateway + GitHub Pages
 env:
   AZURE_WEBAPP_NAME: agentic-sdk-playground
   AZURE_RESOURCE_GROUP: agentic-sdk
-  AZURE_SUBSCRIPTION: eosl-r3-aihub
   GATEWAY_URL: https://agentic-sdk-playground.azurewebsites.net
   CORS_ORIGINS: "https://r300-ai.github.io,http://localhost:5173"
 
@@ -16,7 +15,7 @@ on:
 permissions:
   contents: read
   pages: write
-  id-token: write
+  id-token: write   # OIDC 登入 Azure 必要
 
 concurrency:
   group: pages
@@ -28,10 +27,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure 登入
+      - name: Azure 登入（OIDC，無 secret）
         uses: azure/login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       - name: 設定 Python 3.12
         uses: actions/setup-python@v5
@@ -49,7 +50,10 @@ jobs:
           app-name: ${{ env.AZURE_WEBAPP_NAME }}
           package: .
 
-      - name: 設定 App Service 環境變數與啟動指令
+      - name: 設定 App Service 啟動指令與基礎參數
+        # 敏感資料（Foundry key/endpoint）由 App Service Managed Identity
+        # 從 Key Vault（agentic-sdk-model-registry）在 runtime 讀取。
+        # 此步驟只設定非敏感的執行環境參數。
         uses: azure/CLI@v2
         with:
           azcliversion: latest
@@ -57,21 +61,17 @@ jobs:
             az webapp config set \
               --name ${{ env.AZURE_WEBAPP_NAME }} \
               --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --subscription ${{ env.AZURE_SUBSCRIPTION }} \
               --startup-file "python -m agentic_sdk.gateway"
 
             az webapp config appsettings set \
               --name ${{ env.AZURE_WEBAPP_NAME }} \
               --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-              --subscription ${{ env.AZURE_SUBSCRIPTION }} \
               --settings \
                 PORT=8000 \
-                AZURE_FOUNDRY_ENDPOINT="${{ secrets.AZURE_FOUNDRY_ENDPOINT }}" \
-                AZURE_FOUNDRY_API_KEY="${{ secrets.AZURE_FOUNDRY_API_KEY }}" \
-                AZURE_FOUNDRY_DEPLOYMENT="${{ secrets.AZURE_FOUNDRY_DEPLOYMENT }}" \
                 WORKFLOW_ACTION_BACKEND=foundry \
                 GATEWAY_CORS_ORIGINS="${{ env.CORS_ORIGINS }}" \
-                SCM_DO_BUILD_DURING_DEPLOYMENT=true
+                SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+                KEY_VAULT_NAME=agentic-sdk-model-registry
 
   build-pages:
     needs: deploy-gateway
