@@ -2,20 +2,26 @@
 
 本指南說明如何為 Agentic SDK Playground 新增、修改或移除預設模型。
 所有模型端點資訊統一存放於 Azure Key Vault（**agentic-sdk-model-registry**），
-Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單。
-
-完成本指南約需 **15 分鐘**。
+Playground 啟動時自動掃描並組成可用的模型池，對應前端模型選單。
 
 ---
 
 ## 事前準備
 
+本指南所使用的 Azure 資源已由訂閱管理員預先建立於資源群組 **agentic-sdk** 下：
+
+| 資源類型 | 名稱 |
+|---|---|
+| Key Vault | **agentic-sdk-model-registry** |
+| App Service | **agentic-sdk-playground** |
+
+> 若上述資源尚不存在，請聯繫訂閱管理員，依 `.github/azure-deploy-config.yml` 中的建立指令完成初始化後再繼續。
+
 開始之前，請確認：
 
-- 您擁有 Azure 訂閱 **eosl-r3-aihub** 的存取權，且角色為 **Contributor** 或以上
-- 您的帳號已被授予 Key Vault **agentic-sdk-model-registry** 的 **Key Vault Secrets Officer** 角色
-  （如尚未取得，請聯繫訂閱管理員）
-- 您已有一個目標模型可於 Azure AI Foundry 部署
+- 您擁有 Azure 訂閱 **eosl-r3-aihub** 的存取權
+- 您的帳號已被授予 Key Vault **agentic-sdk-model-registry** 的 **Key Vault Secrets Officer** 角色（如尚未取得，請聯繫訂閱管理員）
+- 您已有一個 Azure AI Foundry 專案（Hub）可供部署模型
 
 ---
 
