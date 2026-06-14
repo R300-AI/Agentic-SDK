@@ -20,23 +20,22 @@
 
 ## 概覽
 
-每次推送至 **main** 分支，工作流程會依序執行三個階段：
+每次推送至 **main** 分支，工作流程會執行單一部署 job：
 
 ```
 推送至 main
     │
     ▼
-[1] deploy-gateway
+[deploy]
     ├─ 以 OIDC 登入您指定的 Azure 訂閱
     ├─ 自動佈建所需 Azure 資源（冪等，已存在則略過）
-    └─ 部署 Python 後端至您指定的 App Service
-    │
-    ▼
-[2] build-pages ── 以您設定的 Gateway URL 建置 Vite 前端
-    │
-    ▼
-[3] deploy-pages ── 發佈至 GitHub Pages
+    ├─ 建置 Vite 前端（npm run build → demo/dist/）
+    ├─ 部署整包（Python 後端 + 前端靜態檔案）至 App Service
+    └─ 設定 App Service 啟動指令與環境參數
 ```
+
+前後端統一由同一個 App Service 對外服務，瀏覽位置即為
+`https://{AZURE_WEBAPP_NAME}.azurewebsites.net`。
 
 所有 Azure 資源（Resource Group、App Service Plan、App Service、Key Vault）
 均由工作流程在首次執行時自動建立，無需手動操作。
@@ -107,7 +106,7 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
 
 2. 在左側選取 **Secrets and variables** → **Actions**。
 
-3. 選取 **Variables** 分頁，依序選取 **New repository variable**，新增以下九個變數：
+3. 選取 **Variables** 分頁，依序選取 **New repository variable**，新增以下七個變數：
 
    **OIDC 身分驗證（值來自第一節）：**
 
@@ -125,30 +124,19 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
    | **AZURE_RESOURCE_GROUP** | 資源群組名稱 | `agentic-sdk` |
    | **AZURE_WEBAPP_NAME** | App Service 名稱 | `agentic-sdk-playground` |
    | **KEY_VAULT_NAME** | Key Vault 名稱（模型端點儲存庫） | `agentic-sdk-models` |
-   | **GATEWAY_URL** | 後端公開 URL | `https://{AZURE_WEBAPP_NAME}.azurewebsites.net` |
-   | **CORS_ORIGINS** | 允許的前端 Origin | `https://r300-ai.github.io,http://localhost:5173` |
 
 4. 完成後，推送任何變更至 **main** 分支即可觸發工作流程，Azure 資源將自動建立。
 
 ---
 
-## 第三節：啟用 GitHub Pages
-
-1. 前往 GitHub 儲存庫 `R300-AI/Agentic-SDK`，選取 **Settings**。
-
-2. 在左側選取 **Pages**。
-
-3. 在 **Source** 下拉選單選取 **GitHub Actions**，選取 **Save**。
-
----
-
 ## 附錄：工作流程階段說明
 
-| 階段 | 說明 |
+| 步驟 | 說明 |
 |---|---|
-| **deploy-gateway** | 以 OIDC 登入、佈建 Azure 資源、產生 requirements.txt、部署原始碼、設定 App Service 執行參數 |
-| **build-pages** | 以 `GATEWAY_URL` 建置 Vite 前端靜態資源 |
-| **deploy-pages** | 發佈靜態資源至 GitHub Pages |
+| 佈建 Azure 資源 | 以 OIDC 登入、冪等建立 Resource Group / App Service Plan / App Service / Key Vault |
+| 建置前端 | `npm ci` + `npm run build`，產生 `demo/dist/` |
+| 部署 | 整包（Python + 靜態前端）部署至 App Service |
+| 設定啟動參數 | 設定 startup-file、PORT、KEY_VAULT_NAME 等非敏感參數 |
 
 > 敏感資料（模型 API key）不經過 CI/CD，App Service 在執行時透過 Managed Identity 從 Key Vault 讀取。詳見 [setup_default_models.md](setup_default_models.md)。
 
@@ -156,6 +144,5 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
 
 | 檔案 | 用途 |
 |---|---|
-| `.github/workflows/deploy-gateway.yml` | 主工作流程：三階段串聯部署 |
-| `.github/workflows/deploy-pages.yml` | 緊急備用：僅重新部署前端（手動觸發） |
+| `.github/workflows/deploy-gateway.yml` | 主工作流程：佈建 + build 前端 + 部署 |
 | `.github/workflows/ci.yml` | 每次 PR/push 執行 Python 測試與 TypeScript 型別檢查 |

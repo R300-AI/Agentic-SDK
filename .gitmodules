@@ -1,6 +1,0 @@
-[submodule ".claude"]
-	path = .claude
-	url = https://github.com/MarkovChenITRI/.claude.git
-[submodule "amd-ryzen-ai-benchmark"]
-	path = amd-ryzen-ai-benchmark
-	url = https://github.com/R300-AI/amd-ryzen-ai-benchmark

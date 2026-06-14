@@ -33,7 +33,7 @@ Azure AI Foundry（模型部署）
 
 直接開啟 Playground，無需任何本機設定：
 
-👉 **[https://r300-ai.github.io/Agentic-SDK/](https://r300-ai.github.io/Agentic-SDK/)**
+👉 **[https://agentic-sdk-playground.azurewebsites.net](https://agentic-sdk-playground.azurewebsites.net)**
 
 ---
 

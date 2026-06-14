@@ -1,4 +1,4 @@
-name: Deploy Gateway + GitHub Pages
+name: Deploy to Azure App Service
 
 # 所有部署參數來自 GitHub Repository Variables，設定步驟見 docs/github_cicd_workflow.md
 
@@ -9,15 +9,14 @@ on:
 
 permissions:
   contents: read
-  pages: write
   id-token: write   # OIDC 登入 Azure 必要
 
 concurrency:
-  group: pages
+  group: deploy
   cancel-in-progress: true
 
 jobs:
-  deploy-gateway:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -119,7 +118,18 @@ jobs:
           pip install uv --quiet
           uv pip compile pyproject.toml -o requirements.txt
 
-      - name: 部署至 Azure App Service
+      - name: 建置前端（Vite → demo/dist/）
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: npm ci + build
+        working-directory: demo
+        run: |
+          npm ci
+          npm run build
+
+      - name: 部署至 Azure App Service（後端 + 前端靜態檔案）
         uses: azure/webapps-deploy@v3
         with:
           app-name: ${{ vars.AZURE_WEBAPP_NAME }}
@@ -127,8 +137,7 @@ jobs:
 
       - name: 設定 App Service 啟動指令與基礎參數
         # 敏感資料（Foundry key/endpoint）由 App Service Managed Identity
-        # 從 Key Vault（agentic-sdk-models）在 runtime 讀取。
-        # 此步驟只設定非敏感的執行環境參數。
+        # 從 Key Vault 在 runtime 讀取，不經過 CI/CD。
         uses: azure/CLI@v2
         with:
           azcliversion: latest
@@ -144,45 +153,5 @@ jobs:
               --settings \
                 PORT=8000 \
                 WORKFLOW_ACTION_BACKEND=foundry \
-                GATEWAY_CORS_ORIGINS="${{ vars.CORS_ORIGINS }}" \
-                SCM_DO_BUILD_DURING_DEPLOYMENT=true \
+                SCM_DO_BUILD_DURING_DEPLOYMENT=false \
                 KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}
-
-  build-pages:
-    needs: deploy-gateway
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: demo
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-
-      - run: npm ci
-
-      - name: Build Vite app
-        env:
-          VITE_BASE: /Agentic-SDK/
-          VITE_GATEWAY_URL: ${{ vars.GATEWAY_URL }}
-        run: npm run build
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: demo/dist
-
-  deploy-pages:
-    needs: build-pages
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/deploy-pages@v4
-        id: deployment
