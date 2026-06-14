@@ -124,7 +124,6 @@ jobs:
           zip -r deploy.zip \
             agentic_sdk/ \
             demo/dist/ \
-            pyproject.toml \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*"
 
