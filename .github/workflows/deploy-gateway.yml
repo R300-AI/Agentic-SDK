@@ -95,7 +95,7 @@ jobs:
 
       - name: 設定 App Service 啟動指令與基礎參數
         # 敏感資料（Foundry key/endpoint）由 App Service Managed Identity
-        # 從 Key Vault（agentic-sdk-model-registry）在 runtime 讀取。
+        # 從 Key Vault（agenticsdk-models）在 runtime 讀取。
         # 此步驟只設定非敏感的執行環境參數。
         uses: azure/CLI@v2
         with:
@@ -114,7 +114,7 @@ jobs:
                 WORKFLOW_ACTION_BACKEND=foundry \
                 GATEWAY_CORS_ORIGINS="${{ vars.CORS_ORIGINS }}" \
                 SCM_DO_BUILD_DURING_DEPLOYMENT=true \
-                KEY_VAULT_NAME=agentic-sdk-model-registry
+                KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}
 
   build-pages:
     needs: deploy-gateway

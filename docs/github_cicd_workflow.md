@@ -122,7 +122,7 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
    | **AZURE_REGION** | 部署區域 | `southeastasia` |
    | **AZURE_RESOURCE_GROUP** | 資源群組名稱 | `agentic-sdk` |
    | **AZURE_WEBAPP_NAME** | App Service 名稱 | `agentic-sdk-playground` |
-   | **KEY_VAULT_NAME** | Key Vault 名稱（模型端點儲存庫） | `agentic-sdk-model-registry` |
+   | **KEY_VAULT_NAME** | Key Vault 名稱（模型端點儲存庫） | `agenticsdk-models` |
    | **GATEWAY_URL** | 後端公開 URL | `https://{AZURE_WEBAPP_NAME}.azurewebsites.net` |
    | **CORS_ORIGINS** | 允許的前端 Origin | `https://r300-ai.github.io,http://localhost:5173` |
 

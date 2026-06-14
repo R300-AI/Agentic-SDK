@@ -15,7 +15,7 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 | 資源類型 | 本專案使用的名稱 |
 |---|---|
-| Key Vault | 您在 `AZURE_RESOURCE_GROUP` 中指定的資源群組內的 Key Vault（`agentic-sdk-model-registry`） |
+| Key Vault | 您在 `AZURE_RESOURCE_GROUP` 中指定的資源群組內的 Key Vault（`agenticsdk-models`） |
 | App Service | 您在 `AZURE_WEBAPP_NAME` 中指定的 App Service（`agentic-sdk-playground`） |
 
 > 若上述資源尚不存在，請先完成 [GitHub CI/CD 工作流程說明](github_cicd_workflow.md) 中的初次設定，再回到本指南。
@@ -78,7 +78,7 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 1. 開啟 [Azure Portal](https://portal.azure.com)。
 
-2. 在頂部搜尋列輸入您指定的 Key Vault 名稱（本專案為 `agentic-sdk-model-registry`），選取搜尋結果中的 **Key vault**。
+2. 在頂部搜尋列輸入您指定的 Key Vault 名稱（本專案為 `agenticsdk-models`），選取搜尋結果中的 **Key vault**。
 
 3. 在左側導覽列選取 **Secrets**。
 
