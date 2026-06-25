@@ -2,7 +2,7 @@
 
 import type { Attachment } from "../types";
 import type { TelemetryEvent } from "./types";
-import { getGatewayUrl } from "./gatewayUrl";
+import { getGatewayUrl, getManagedAgentId, getRuntimeMode, type RuntimeMode } from "./gatewayUrl";
 
 export interface CapabilityRef {
   ref: string;
@@ -34,6 +34,27 @@ export interface CapabilityDocument {
 interface RunResponse {
   workflow_id: string;
   stream_url: string;
+  result_url?: string;
+}
+
+export interface AgentSummary {
+  agent_id: string;
+  agent_name: string;
+  description: string;
+  execution_backend: string;
+  updated_at: string | null;
+  last_run_at: string | null;
+}
+
+export interface AgentDetail extends AgentSummary {
+  workflow_yaml: string;
+  entry_node?: string;
+  owner_username?: string;
+  created_at?: string | null;
+}
+
+export interface AgentListResponse {
+  items: AgentSummary[];
 }
 
 export interface WorkflowResultData {
@@ -58,8 +79,26 @@ export interface KnowledgeBasePreviewData {
   hits: KnowledgeBasePreviewHit[];
 }
 
+function getApiBase(mode: RuntimeMode): string {
+  return mode === "managed" ? "/api/me/agent-playground" : getGatewayUrl();
+}
+
+function getRunBase(mode: RuntimeMode, agentId: string): string {
+  return mode === "managed" ? `/api/me/agents/${encodeURIComponent(agentId)}` : getGatewayUrl();
+}
+
+function requireManagedAgentId(): string {
+  const agentId = getManagedAgentId().trim();
+  if (!agentId) {
+    throw new Error("Managed mode 需要先選擇或建立一個已保存的 Agent。");
+  }
+  return agentId;
+}
+
 export async function fetchCapabilities(): Promise<CapabilityDocument> {
-  const resp = await fetch(`${getGatewayUrl()}/v1/capabilities`);
+  const mode = getRuntimeMode();
+  const url = mode === "managed" ? `${getApiBase(mode)}/capabilities` : `${getGatewayUrl()}/v1/capabilities`;
+  const resp = await fetch(url);
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`GET /v1/capabilities 失敗 (${resp.status}):${text}`);
@@ -72,13 +111,15 @@ export async function previewKnowledgeBase(
   query: string,
   topK = 3
 ): Promise<KnowledgeBasePreviewData> {
+  const mode = getRuntimeMode();
   const params = new URLSearchParams({ query, top_k: String(topK) });
-  const resp = await fetch(
-    `${getGatewayUrl()}/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview?${params}`
-  );
+  const baseUrl = mode === "managed"
+    ? `${getApiBase(mode)}/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview`
+    : `${getGatewayUrl()}/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview`;
+  const resp = await fetch(`${baseUrl}?${params}`);
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`GET /v1/knowledge-bases/${knowledgeBaseRef}/preview 失敗 (${resp.status}):${text}`);
+    throw new Error(`GET knowledge base preview 失敗 (${resp.status}):${text}`);
   }
   return resp.json();
 }
@@ -88,21 +129,28 @@ export async function runWorkflow(
   userMessage: string,
   attachments?: Attachment[]
 ): Promise<RunResponse> {
+  const mode = getRuntimeMode();
+  const managedAgentId = mode === "managed" ? requireManagedAgentId() : "";
   const body: Record<string, unknown> = {
-    workflow_yaml: workflowYaml,
     user_message: userMessage,
   };
+  if (mode !== "managed") {
+    body.workflow_yaml = workflowYaml;
+  }
   if (attachments && attachments.length > 0) {
     body.attachments = attachments;
   }
-  const resp = await fetch(`${getGatewayUrl()}/v1/workflow/run`, {
+  const runUrl = mode === "managed"
+    ? `${getRunBase(mode, managedAgentId)}/run`
+    : `${getGatewayUrl()}/v1/workflow/run`;
+  const resp = await fetch(runUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
     const text = await resp.text();
-    throw new Error(`POST /v1/workflow/run 失敗 (${resp.status}):${text}`);
+    throw new Error(`POST runWorkflow 失敗 (${resp.status}):${text}`);
   }
   return resp.json();
 }
@@ -111,12 +159,17 @@ export async function runWorkflow(
 export async function fetchWorkflowResult(
   workflowId: string
 ): Promise<WorkflowResultData> {
+  const mode = getRuntimeMode();
+  const managedAgentId = mode === "managed" ? requireManagedAgentId() : "";
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   for (let attempt = 0; attempt < 5; attempt++) {
-    const resp = await fetch(`${getGatewayUrl()}/v1/workflow/${workflowId}/result`);
+    const resultUrl = mode === "managed"
+      ? `${getRunBase(mode, managedAgentId)}/runs/${encodeURIComponent(workflowId)}/result`
+      : `${getGatewayUrl()}/v1/workflow/${workflowId}/result`;
+    const resp = await fetch(resultUrl);
     if (resp.ok) return resp.json();
     if (resp.status !== 404) {
-      throw new Error(`GET /v1/workflow/${workflowId}/result 失敗 (${resp.status})`);
+      throw new Error(`GET workflow result 失敗 (${resp.status})`);
     }
     await sleep(100 * (attempt + 1));
   }
@@ -130,7 +183,11 @@ export function subscribeStream(
   onError?: (err: Event) => void,
   onClose?: () => void
 ): () => void {
-  const url = `${getGatewayUrl()}/v1/workflow/${workflowId}/stream`;
+  const mode = getRuntimeMode();
+  const managedAgentId = mode === "managed" ? requireManagedAgentId() : "";
+  const url = mode === "managed"
+    ? `${getRunBase(mode, managedAgentId)}/runs/${encodeURIComponent(workflowId)}/stream`
+    : `${getGatewayUrl()}/v1/workflow/${workflowId}/stream`;
   const es = new EventSource(url);
 
   let closed = false;
@@ -155,4 +212,64 @@ export function subscribeStream(
   };
 
   return close;
+}
+
+export async function listAgents(): Promise<AgentListResponse> {
+  const resp = await fetch('/api/me/agents');
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`GET /api/me/agents 失敗 (${resp.status}):${text}`);
+  }
+  return resp.json();
+}
+
+export async function loadAgent(agentId: string): Promise<AgentDetail> {
+  const resp = await fetch(`/api/me/agents/${encodeURIComponent(agentId)}`);
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`GET /api/me/agents/${agentId} 失敗 (${resp.status}):${text}`);
+  }
+  return resp.json();
+}
+
+export async function saveAgent(payload: {
+  agentId?: string;
+  agentName: string;
+  description: string;
+  workflowYaml: string;
+  executionBackend: string;
+  csrfToken?: string;
+}): Promise<AgentDetail> {
+  const resp = await fetch(
+    payload.agentId ? `/api/me/agents/${encodeURIComponent(payload.agentId)}` : '/api/me/agents',
+    {
+      method: payload.agentId ? 'PUT' : 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(payload.csrfToken ? { 'X-CSRF-Token': payload.csrfToken } : {}),
+      },
+      body: JSON.stringify({
+        agent_name: payload.agentName,
+        description: payload.description,
+        workflow_yaml: payload.workflowYaml,
+        execution_backend: payload.executionBackend,
+      }),
+    }
+  );
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`SAVE /api/me/agents 失敗 (${resp.status}):${text}`);
+  }
+  return resp.json();
+}
+
+export async function deleteAgent(agentId: string, csrfToken?: string): Promise<void> {
+  const resp = await fetch(`/api/me/agents/${encodeURIComponent(agentId)}`, {
+    method: 'DELETE',
+    headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+  });
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`DELETE /api/me/agents/${agentId} 失敗 (${resp.status}):${text}`);
+  }
 }

@@ -4,25 +4,56 @@
  */
 
 const STORAGE_KEY = "agentic_sdk.gateway_url";
+const MODE_KEY = "agentic_sdk.runtime_mode";
+const AGENT_ID_KEY = "agentic_sdk.agent_id";
+const MEMORY_STORAGE = new Map<string, string>();
 
 /** 建置時注入的預設值；可透過 VITE_GATEWAY_URL 設定。 */
 const ENV_DEFAULT: string = (import.meta.env.VITE_GATEWAY_URL as string | undefined) ?? "";
 
-export function getGatewayUrl(): string {
+export type RuntimeMode = "gateway" | "managed";
+
+function readStorage(key: string): string {
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored && stored.length > 0 ? stored : ENV_DEFAULT;
+    return localStorage.getItem(key) ?? "";
   } catch {
-    return ENV_DEFAULT;
+    return MEMORY_STORAGE.get(key) ?? "";
   }
 }
 
-export function setGatewayUrl(url: string): void {
+function writeStorage(key: string, value: string): void {
   try {
-    const trimmed = url.replace(/\/+$/, ""); // 移除結尾斜線
-    if (trimmed) localStorage.setItem(STORAGE_KEY, trimmed);
-    else localStorage.removeItem(STORAGE_KEY);
+    if (value) localStorage.setItem(key, value);
+    else localStorage.removeItem(key);
   } catch {
-    /* localStorage 不可用時靜默失敗 */
+    if (value) MEMORY_STORAGE.set(key, value);
+    else MEMORY_STORAGE.delete(key);
   }
+}
+
+export function getGatewayUrl(): string {
+  const stored = readStorage(STORAGE_KEY);
+  return stored && stored.length > 0 ? stored : ENV_DEFAULT;
+}
+
+export function setGatewayUrl(url: string): void {
+  const trimmed = url.replace(/\/+$/, "");
+  writeStorage(STORAGE_KEY, trimmed);
+}
+
+export function getRuntimeMode(): RuntimeMode {
+  const stored = readStorage(MODE_KEY);
+  return stored === "managed" ? "managed" : "gateway";
+}
+
+export function setRuntimeMode(mode: RuntimeMode): void {
+  writeStorage(MODE_KEY, mode);
+}
+
+export function getManagedAgentId(): string {
+  return readStorage(AGENT_ID_KEY);
+}
+
+export function setManagedAgentId(agentId: string): void {
+  writeStorage(AGENT_ID_KEY, agentId.trim());
 }

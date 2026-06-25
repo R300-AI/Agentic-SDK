@@ -10,6 +10,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { marked } from "marked";
 import type { ChatMessage } from "../runtime/types";
 import type { Attachment, NodeSpec, PerceiveOption } from "../types";
+import type { RuntimeMode } from "../runtime/gatewayUrl";
 
 interface Props {
   messages: ChatMessage[];
@@ -18,6 +19,8 @@ interface Props {
   perceiveSpec: NodeSpec | null;
   gatewayUrl: string;
   onGatewayUrlChange: (url: string) => void;
+  runtimeMode: RuntimeMode;
+  onRuntimeModeChange: (mode: RuntimeMode) => void;
 }
 
 async function fileToAttachment(file: File): Promise<Attachment> {
@@ -41,7 +44,7 @@ function lastRoleIs(messages: ChatMessage[], role: "user" | "assistant") {
   return messages[messages.length - 1].role === role;
 }
 
-export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUrl, onGatewayUrlChange }: Props) {
+export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUrl, onGatewayUrlChange, runtimeMode, onRuntimeModeChange }: Props) {
   const [input, setInput] = useState("");
   const [pending, setPending] = useState<Attachment[]>([]);
   const [lightbox, setLightbox] = useState<string | null>(null);
@@ -116,6 +119,18 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
 
       {/* ── Gateway URL 列 ── */}
       <div className={`chat-gateway-bar ${gwMissing ? "chat-gateway-bar--warn" : ""}`}>
+        <div className="chat-mode-switch" role="group" aria-label="runtime mode switch">
+          <button
+            type="button"
+            className={`chat-mode-btn${runtimeMode === "gateway" ? " active" : ""}`}
+            onClick={() => onRuntimeModeChange("gateway")}
+          >Gateway</button>
+          <button
+            type="button"
+            className={`chat-mode-btn${runtimeMode === "managed" ? " active" : ""}`}
+            onClick={() => onRuntimeModeChange("managed")}
+          >Managed</button>
+        </div>
         {gwEditing ? (
           <form className="chat-gateway-form" onSubmit={handleGwSubmit}>
             <input
@@ -132,10 +147,14 @@ export function ChatPanel({ messages, isRunning, onSend, perceiveSpec, gatewayUr
         ) : (
           <span
             className="chat-gateway-label"
-            onClick={() => setGwEditing(true)}
+            onClick={() => {
+              if (runtimeMode === "gateway") setGwEditing(true);
+            }}
             title="點擊修改 Gateway URL"
           >
-            {gwMissing
+            {runtimeMode === "managed"
+              ? `Managed AI Hub mode • build ${__BUILD_TIME__}`
+              : gwMissing
               ? "⚠ 未設定 Gateway URL，點此輸入（如 http://localhost:8080）"
               : `Gateway: ${gatewayUrl || "dev proxy"} • build ${__BUILD_TIME__}`}
           </span>

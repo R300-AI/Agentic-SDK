@@ -29,18 +29,32 @@ import {
   configToYaml,
   flowToConfig,
   isLegalEdge,
+  yamlToConfig,
 } from "./adapter";
 import type { NodeSpec, WorkflowConfig } from "./types";
 import { FIVE_NODE_NAMES } from "./types";
 import type { ChatMessage, NodeStatus, TelemetryEvent } from "./runtime/types";
 import {
+  deleteAgent,
   fetchCapabilities,
+  listAgents,
+  loadAgent,
   runWorkflow,
+  saveAgent,
   subscribeStream,
   fetchWorkflowResult,
+  type AgentSummary,
   type CapabilityDocument,
 } from "./runtime/api";
-import { getGatewayUrl, setGatewayUrl } from "./runtime/gatewayUrl";
+import {
+  getGatewayUrl,
+  getManagedAgentId,
+  getRuntimeMode,
+  setGatewayUrl,
+  setManagedAgentId,
+  setRuntimeMode,
+  type RuntimeMode,
+} from "./runtime/gatewayUrl";
 import { createNodeAnimator } from "./runtime/nodeAnimator";
 import {
   EVENT_NODE_DELTA,
@@ -64,6 +78,14 @@ function EditorRoot() {
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>(initial.nodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>(initial.edges);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [runtimeMode, setRuntimeModeState] = useState<RuntimeMode>(() => getRuntimeMode());
+  const [managedAgentId, setManagedAgentIdState] = useState(() => getManagedAgentId());
+  const [agentName, setAgentName] = useState(() => DEFAULT_WORKFLOW.name ?? "demo");
+  const [agentDescription, setAgentDescription] = useState("");
+  const [agentList, setAgentList] = useState<AgentSummary[]>([]);
+  const [agentStatus, setAgentStatus] = useState<string | null>(null);
+  const [agentError, setAgentError] = useState<string | null>(null);
+  const [csrfToken, setCsrfToken] = useState("");
 
   // ── 動畫 + 對話框狀態 ────────────────────────────────────────────────────
   const [isRunning, setIsRunning] = useState(false);
@@ -71,6 +93,17 @@ function EditorRoot() {
   const [gatewayUrl, setGatewayUrlState] = useState(() => getGatewayUrl());
   const [capabilities, setCapabilities] = useState<CapabilityDocument | null>(null);
   const [capabilityError, setCapabilityError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const configEl = document.getElementById("agentPlaygroundConfig");
+    if (!configEl?.textContent) return;
+    try {
+      const parsed = JSON.parse(configEl.textContent) as { csrfToken?: string };
+      setCsrfToken(parsed.csrfToken ?? "");
+    } catch {
+      setCsrfToken("");
+    }
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -96,12 +129,106 @@ function EditorRoot() {
     return () => {
       alive = false;
     };
-  }, [gatewayUrl]);
+  }, [gatewayUrl, runtimeMode]);
+
+  const applyWorkflowConfig = useCallback((nextConfig: WorkflowConfig) => {
+    const flow = configToFlow(nextConfig);
+    setConfig(nextConfig);
+    setNodes(flow.nodes);
+    setEdges(flow.edges);
+  }, [setEdges, setNodes]);
+
+  const refreshManagedAgents = useCallback(async (preferredAgentId?: string) => {
+    try {
+      const payload = await listAgents();
+      setAgentList(payload.items);
+      setAgentError(null);
+      if (preferredAgentId !== undefined) {
+        setManagedAgentId(preferredAgentId);
+        setManagedAgentIdState(preferredAgentId);
+      }
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : String(error));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (runtimeMode !== "managed") return;
+    void refreshManagedAgents(managedAgentId || undefined);
+  }, [runtimeMode, managedAgentId, refreshManagedAgents]);
+
+  const handleRuntimeModeChange = useCallback((mode: RuntimeMode) => {
+    setRuntimeMode(mode);
+    setRuntimeModeState(mode);
+    setAgentStatus(null);
+    setAgentError(null);
+  }, []);
 
   const handleGatewayUrlChange = useCallback((url: string) => {
     setGatewayUrl(url);
     setGatewayUrlState(url.replace(/\/+$/, ""));
   }, []);
+
+  const handleAgentSelectionChange = useCallback(async (agentId: string) => {
+    setManagedAgentId(agentId);
+    setManagedAgentIdState(agentId);
+    if (!agentId) {
+      setAgentStatus("已切回未保存草稿。");
+      return;
+    }
+    try {
+      const detail = await loadAgent(agentId);
+      applyWorkflowConfig(yamlToConfig(detail.workflow_yaml));
+      setAgentName(detail.agent_name);
+      setAgentDescription(detail.description || "");
+      setAgentStatus(`已載入 Agent: ${detail.agent_name}`);
+      setAgentError(null);
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : String(error));
+    }
+  }, [applyWorkflowConfig]);
+
+  const handleSaveManagedAgent = useCallback(async () => {
+    try {
+      const merged = flowToConfig(nodes, config);
+      const workflowYaml = configToYaml(merged);
+      const saved = await saveAgent({
+        agentId: managedAgentId || undefined,
+        agentName,
+        description: agentDescription,
+        workflowYaml,
+        executionBackend: String(config.nodes.action?.params?.backend ?? "upstream"),
+        csrfToken,
+      });
+      setManagedAgentId(saved.agent_id);
+      setManagedAgentIdState(saved.agent_id);
+      setAgentName(saved.agent_name);
+      setAgentDescription(saved.description || "");
+      setAgentStatus(`已保存 Agent: ${saved.agent_name}`);
+      setAgentError(null);
+      await refreshManagedAgents(saved.agent_id);
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : String(error));
+    }
+  }, [agentDescription, agentName, config, csrfToken, managedAgentId, nodes, refreshManagedAgents]);
+
+  const handleDeleteManagedAgent = useCallback(async () => {
+    if (!managedAgentId) return;
+    if (!window.confirm("確定要刪除這個 Agent 嗎？刪除後將直接從正式資料庫移除。")) return;
+    try {
+      await deleteAgent(managedAgentId, csrfToken);
+      setManagedAgentId("");
+      setManagedAgentIdState("");
+      applyWorkflowConfig(DEFAULT_WORKFLOW);
+      setAgentName(DEFAULT_WORKFLOW.name ?? "demo");
+      setAgentDescription("");
+      setAgentStatus("Agent 已刪除。已切回預設草稿。");
+      setAgentError(null);
+      await refreshManagedAgents("");
+    } catch (error) {
+      setAgentError(error instanceof Error ? error.message : String(error));
+    }
+  }, [applyWorkflowConfig, csrfToken, managedAgentId, refreshManagedAgents]);
   const closeStreamRef = useRef<(() => void) | null>(null);
   const startTimeRef = useRef<number>(0);
 
@@ -388,6 +515,41 @@ function EditorRoot() {
       <div className="resize-v" onMouseDown={startResizeV} />
       <div className="right-column">
         <main className="canvas-area">
+          {runtimeMode === "managed" && (
+            <section className="managed-toolbar">
+              <div className="managed-toolbar__main">
+                <input
+                  className="managed-toolbar__input managed-toolbar__input--name"
+                  value={agentName}
+                  onChange={(event) => setAgentName(event.target.value)}
+                  placeholder="Agent 名稱"
+                />
+                <input
+                  className="managed-toolbar__input"
+                  value={agentDescription}
+                  onChange={(event) => setAgentDescription(event.target.value)}
+                  placeholder="描述"
+                />
+                <select
+                  className="managed-toolbar__select"
+                  value={managedAgentId}
+                  onChange={(event) => void handleAgentSelectionChange(event.target.value)}
+                >
+                  <option value="">未保存草稿</option>
+                  {agentList.map((agent) => (
+                    <option key={agent.agent_id} value={agent.agent_id}>{agent.agent_name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="managed-toolbar__actions">
+                <button type="button" className="managed-toolbar__button" onClick={() => void handleSaveManagedAgent()}>保存</button>
+                <button type="button" className="managed-toolbar__button managed-toolbar__button--danger" onClick={() => void handleDeleteManagedAgent()} disabled={!managedAgentId}>刪除</button>
+              </div>
+              {(agentStatus || agentError) && (
+                <div className={`managed-toolbar__status${agentError ? " is-error" : ""}`}>{agentError ?? agentStatus}</div>
+              )}
+            </section>
+          )}
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -417,6 +579,8 @@ function EditorRoot() {
             perceiveSpec={nodeSpecs["perceive"]}
             gatewayUrl={gatewayUrl}
             onGatewayUrlChange={handleGatewayUrlChange}
+            runtimeMode={runtimeMode}
+            onRuntimeModeChange={handleRuntimeModeChange}
           />
         </footer>
       </div>

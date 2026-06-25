@@ -1,7 +1,20 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchCapabilities, previewKnowledgeBase } from "./api";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  deleteAgent,
+  fetchCapabilities,
+  listAgents,
+  previewKnowledgeBase,
+  runWorkflow,
+  saveAgent,
+} from "./api";
+import { setManagedAgentId, setRuntimeMode } from "./gatewayUrl";
 
 describe("Gateway capability API", () => {
+  beforeEach(() => {
+    setRuntimeMode("gateway");
+    setManagedAgentId("");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -54,5 +67,89 @@ describe("Gateway capability API", () => {
 
     expect(fetchMock).toHaveBeenCalledWith("/v1/knowledge-bases/shoe_store/preview?query=%E4%B9%85%E7%AB%99&top_k=2");
     expect(preview.hits[0].title).toBe("StablePro 機能健走鞋");
+  });
+
+  it("uses managed capability proxy when runtime mode is managed", async () => {
+    setRuntimeMode("managed");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        schema_version: 1,
+        node_definitions: [],
+        provider_refs: [],
+        profile_refs: [],
+        retrieve_strategy_refs: [],
+        retrieve_template_refs: [],
+        knowledge_base_refs: [],
+        execution_env_refs: [],
+        export_capabilities: {},
+        feature_flags: {},
+      }),
+    } as Response);
+
+    await fetchCapabilities();
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/me/agent-playground/capabilities");
+  });
+
+  it("runs workflow through managed agent route", async () => {
+    setRuntimeMode("managed");
+    setManagedAgentId("agt_001");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ workflow_id: "wf_001", stream_url: "/api/me/agents/agt_001/runs/wf_001/stream" }),
+    } as Response);
+
+    await runWorkflow("name: demo", "hello");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/me/agents/agt_001/run",
+      expect.objectContaining({ method: "POST" })
+    );
+  });
+
+  it("lists and saves agents through AI Hub APIs", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ items: [] }),
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ agent_id: "agt_001", agent_name: "demo", description: "", workflow_yaml: "name: demo", execution_backend: "upstream", updated_at: null, last_run_at: null }),
+      } as Response);
+
+    await listAgents();
+    await saveAgent({
+      agentName: "demo",
+      description: "",
+      workflowYaml: "name: demo",
+      executionBackend: "upstream",
+      csrfToken: "csrf",
+    });
+
+    expect(fetchMock).toHaveBeenNthCalledWith(1, "/api/me/agents");
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/me/agents",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "X-CSRF-Token": "csrf" }),
+      })
+    );
+  });
+
+  it("deletes agent through AI Hub API", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
+      ok: true,
+      text: async () => "",
+    } as Response);
+
+    await deleteAgent("agt_001", "csrf");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/me/agents/agt_001",
+      expect.objectContaining({ method: "DELETE", headers: { "X-CSRF-Token": "csrf" } })
+    );
   });
 });
