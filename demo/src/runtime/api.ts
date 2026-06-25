@@ -2,7 +2,14 @@
 
 import type { Attachment } from "../types";
 import type { TelemetryEvent } from "./types";
-import { getGatewayUrl, getManagedAgentId, getRuntimeMode, type RuntimeMode } from "./gatewayUrl";
+import {
+  getGatewayUrl,
+  getManagedAgentId,
+  getManagedApiBase,
+  getManagedBridgeToken,
+  getRuntimeMode,
+  type RuntimeMode,
+} from "./gatewayUrl";
 
 export interface CapabilityRef {
   ref: string;
@@ -79,12 +86,38 @@ export interface KnowledgeBasePreviewData {
   hits: KnowledgeBasePreviewHit[];
 }
 
-function getApiBase(mode: RuntimeMode): string {
-  return mode === "managed" ? "/api/me/agent-playground" : getGatewayUrl();
+function getManagedCollectionBase(): string {
+  const apiBase = getManagedApiBase();
+  if (!apiBase) {
+    throw new Error("Managed mode 缺少 AI Hub API base。請從 AI Hub 管理頁重新開啟 Playground。");
+  }
+  return `${apiBase}/api/agent-workspace-bridge/agents`;
 }
 
-function getRunBase(mode: RuntimeMode, agentId: string): string {
-  return mode === "managed" ? `/api/me/agents/${encodeURIComponent(agentId)}` : getGatewayUrl();
+function getManagedAgentBase(agentId: string): string {
+  return `${getManagedCollectionBase()}/${encodeURIComponent(agentId)}`;
+}
+
+function getManagedHeaders(): HeadersInit {
+  const token = getManagedBridgeToken();
+  if (!token) {
+    throw new Error("Managed mode 缺少 bridge token。請從 AI Hub 管理頁重新開啟 Playground。");
+  }
+  return { "X-Agent-Workspace-Token": token };
+}
+
+function withManagedStreamToken(url: string): string {
+  const token = getManagedBridgeToken();
+  if (!token) {
+    throw new Error("Managed mode 缺少 bridge token。請從 AI Hub 管理頁重新開啟 Playground。");
+  }
+  const next = new URL(url, window.location.href);
+  next.searchParams.set("token", token);
+  return next.toString();
+}
+
+async function fetchJson(url: string, options?: RequestInit): Promise<Response> {
+  return options ? fetch(url, options) : fetch(url);
 }
 
 function requireManagedAgentId(): string {
@@ -96,8 +129,7 @@ function requireManagedAgentId(): string {
 }
 
 export async function fetchCapabilities(): Promise<CapabilityDocument> {
-  const mode = getRuntimeMode();
-  const url = mode === "managed" ? `${getApiBase(mode)}/capabilities` : `${getGatewayUrl()}/v1/capabilities`;
+  const url = `${getGatewayUrl()}/v1/capabilities`;
   const resp = await fetch(url);
   if (!resp.ok) {
     const text = await resp.text();
@@ -111,11 +143,8 @@ export async function previewKnowledgeBase(
   query: string,
   topK = 3
 ): Promise<KnowledgeBasePreviewData> {
-  const mode = getRuntimeMode();
   const params = new URLSearchParams({ query, top_k: String(topK) });
-  const baseUrl = mode === "managed"
-    ? `${getApiBase(mode)}/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview`
-    : `${getGatewayUrl()}/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview`;
+  const baseUrl = `${getGatewayUrl()}/v1/knowledge-bases/${encodeURIComponent(knowledgeBaseRef)}/preview`;
   const resp = await fetch(`${baseUrl}?${params}`);
   if (!resp.ok) {
     const text = await resp.text();
@@ -141,11 +170,14 @@ export async function runWorkflow(
     body.attachments = attachments;
   }
   const runUrl = mode === "managed"
-    ? `${getRunBase(mode, managedAgentId)}/run`
+    ? `${getManagedAgentBase(managedAgentId)}/run`
     : `${getGatewayUrl()}/v1/workflow/run`;
   const resp = await fetch(runUrl, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(mode === "managed" ? getManagedHeaders() : {}),
+    },
     body: JSON.stringify(body),
   });
   if (!resp.ok) {
@@ -164,9 +196,9 @@ export async function fetchWorkflowResult(
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   for (let attempt = 0; attempt < 5; attempt++) {
     const resultUrl = mode === "managed"
-      ? `${getRunBase(mode, managedAgentId)}/runs/${encodeURIComponent(workflowId)}/result`
+      ? `${getManagedAgentBase(managedAgentId)}/runs/${encodeURIComponent(workflowId)}/result`
       : `${getGatewayUrl()}/v1/workflow/${workflowId}/result`;
-    const resp = await fetch(resultUrl);
+      const resp = await fetchJson(resultUrl, mode === "managed" ? { headers: getManagedHeaders() } : undefined);
     if (resp.ok) return resp.json();
     if (resp.status !== 404) {
       throw new Error(`GET workflow result 失敗 (${resp.status})`);
@@ -186,7 +218,7 @@ export function subscribeStream(
   const mode = getRuntimeMode();
   const managedAgentId = mode === "managed" ? requireManagedAgentId() : "";
   const url = mode === "managed"
-    ? `${getRunBase(mode, managedAgentId)}/runs/${encodeURIComponent(workflowId)}/stream`
+    ? withManagedStreamToken(`${getManagedAgentBase(managedAgentId)}/runs/${encodeURIComponent(workflowId)}/stream`)
     : `${getGatewayUrl()}/v1/workflow/${workflowId}/stream`;
   const es = new EventSource(url);
 
@@ -215,7 +247,8 @@ export function subscribeStream(
 }
 
 export async function listAgents(): Promise<AgentListResponse> {
-  const resp = await fetch('/api/me/agents');
+  const mode = getRuntimeMode();
+  const resp = await fetchJson(mode === "managed" ? getManagedCollectionBase() : '/api/me/agents', mode === "managed" ? { headers: getManagedHeaders() } : undefined);
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`GET /api/me/agents 失敗 (${resp.status}):${text}`);
@@ -224,7 +257,9 @@ export async function listAgents(): Promise<AgentListResponse> {
 }
 
 export async function loadAgent(agentId: string): Promise<AgentDetail> {
-  const resp = await fetch(`/api/me/agents/${encodeURIComponent(agentId)}`);
+  const mode = getRuntimeMode();
+  const url = mode === "managed" ? getManagedAgentBase(agentId) : `/api/me/agents/${encodeURIComponent(agentId)}`;
+  const resp = await fetchJson(url, mode === "managed" ? { headers: getManagedHeaders() } : undefined);
   if (!resp.ok) {
     const text = await resp.text();
     throw new Error(`GET /api/me/agents/${agentId} 失敗 (${resp.status}):${text}`);
@@ -240,12 +275,17 @@ export async function saveAgent(payload: {
   executionBackend: string;
   csrfToken?: string;
 }): Promise<AgentDetail> {
+  const mode = getRuntimeMode();
+  const url = mode === "managed"
+    ? (payload.agentId ? getManagedAgentBase(payload.agentId) : getManagedCollectionBase())
+    : (payload.agentId ? `/api/me/agents/${encodeURIComponent(payload.agentId)}` : '/api/me/agents');
   const resp = await fetch(
-    payload.agentId ? `/api/me/agents/${encodeURIComponent(payload.agentId)}` : '/api/me/agents',
+    url,
     {
       method: payload.agentId ? 'PUT' : 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...(mode === "managed" ? getManagedHeaders() : {}),
         ...(payload.csrfToken ? { 'X-CSRF-Token': payload.csrfToken } : {}),
       },
       body: JSON.stringify({
@@ -264,9 +304,13 @@ export async function saveAgent(payload: {
 }
 
 export async function deleteAgent(agentId: string, csrfToken?: string): Promise<void> {
-  const resp = await fetch(`/api/me/agents/${encodeURIComponent(agentId)}`, {
+  const mode = getRuntimeMode();
+  const resp = await fetch(mode === "managed" ? getManagedAgentBase(agentId) : `/api/me/agents/${encodeURIComponent(agentId)}`, {
     method: 'DELETE',
-    headers: csrfToken ? { 'X-CSRF-Token': csrfToken } : {},
+    headers: {
+      ...(mode === "managed" ? getManagedHeaders() : {}),
+      ...(csrfToken ? { 'X-CSRF-Token': csrfToken } : {}),
+    },
   });
   if (!resp.ok) {
     const text = await resp.text();
