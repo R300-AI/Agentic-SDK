@@ -8,7 +8,6 @@ import {
   getManagedApiBase,
   getManagedBridgeToken,
   getRuntimeMode,
-  type RuntimeMode,
 } from "./gatewayUrl";
 
 export interface CapabilityRef {
