@@ -60,3 +60,4 @@ node_modules/
 .github/*
 !.github/workflows
 !.github/workflows/**
+/ai-hub-webui
