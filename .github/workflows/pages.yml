@@ -1,0 +1,105 @@
+﻿name: Docs Pages
+
+on:
+  pull_request:
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+      - 'README.md'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+      - 'README.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: docs-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build static docs site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v5
+        with:
+          name: github-pages
+          path: docs
+
+  deploy:
+    name: Deploy GitHub Pages
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment_attempt_1.outputs.page_url || steps.deployment_attempt_2.outputs.page_url || steps.deployment_attempt_3.outputs.page_url }}
+    steps:
+      - name: Deploy Pages artifact (attempt 1)
+        id: deployment_attempt_1
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages
+          timeout: 600000
+          error_count: 20
+          reporting_interval: 10000
+
+      - name: Wait before retry 2
+        if: steps.deployment_attempt_1.outcome == 'failure'
+        run: sleep 15
+
+      - name: Deploy Pages artifact (attempt 2)
+        if: steps.deployment_attempt_1.outcome == 'failure'
+        id: deployment_attempt_2
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages
+          timeout: 600000
+          error_count: 20
+          reporting_interval: 10000
+
+      - name: Wait before retry 3
+        if: steps.deployment_attempt_1.outcome == 'failure' && steps.deployment_attempt_2.outcome == 'failure'
+        run: sleep 30
+
+      - name: Deploy Pages artifact (attempt 3)
+        if: steps.deployment_attempt_1.outcome == 'failure' && steps.deployment_attempt_2.outcome == 'failure'
+        id: deployment_attempt_3
+        continue-on-error: true
+        uses: actions/deploy-pages@v5
+        with:
+          artifact_name: github-pages
+          timeout: 600000
+          error_count: 20
+          reporting_interval: 10000
+
+      - name: Publish deployed URL to summary
+        if: steps.deployment_attempt_1.outcome == 'success' || steps.deployment_attempt_2.outcome == 'success' || steps.deployment_attempt_3.outcome == 'success'
+        run: |
+          PAGE_URL="${{ steps.deployment_attempt_1.outputs.page_url || steps.deployment_attempt_2.outputs.page_url || steps.deployment_attempt_3.outputs.page_url }}"
+          echo "## GitHub Pages" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Deployed URL: $PAGE_URL" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Fail if all deploy attempts fail
+        if: steps.deployment_attempt_1.outcome == 'failure' && steps.deployment_attempt_2.outcome == 'failure' && steps.deployment_attempt_3.outcome == 'failure'
+        run: |
+          echo "GitHub Pages deployment failed after 3 attempts. This usually indicates a transient GitHub Pages service-side failure rather than an invalid site artifact."
+          exit 1
