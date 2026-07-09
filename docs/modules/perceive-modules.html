@@ -1,0 +1,173 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perceive Modules - Agentic SDK Docs</title>
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-badge">A</span>
+        <span class="brand-copy">
+          <strong>Agentic SDK Docs</strong>
+          <small>SDK reference for advanced developers</small>
+        </span>
+      </a>
+      <nav class="top-links" aria-label="Top links">
+        <a href="../index.html">Home</a>
+        <a href="../workflow-overview.html">Workflow</a>
+        <a href="../memory-contract.html">Memory</a>
+      </nav>
+      <button class="mobile-nav-toggle" data-mobile-nav-toggle>展開導覽</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="nav-section">
+          <h2>Overview</h2>
+          <div class="nav-list">
+            <a href="../index.html">Home</a>
+            <a href="../workflow-overview.html">Workflow Overview</a>
+            <a href="../memory-contract.html">Memory Contract</a>
+          </div>
+        </div>
+        <div class="nav-section">
+          <h2>Modules</h2>
+          <div class="nav-list">
+            <a href="../module-families.html">Module Families</a>
+            <a class="active" href="perceive-modules.html">Perceive Modules</a>
+            <a href="plan-modules.html">Plan Modules</a>
+            <a href="retrieve-modules.html">Retrieve Modules</a>
+            <a href="action-modules.html">Action Modules</a>
+            <a href="reflect-modules.html">Reflect Modules</a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <article class="panel">
+        <section class="hero" id="perceive-overview">
+          <span class="eyebrow">Perceive</span>
+          <h1>Perceive Modules</h1>
+          <p>Perceive 模組負責接住原始輸入，整理成 workflow 後續節點可直接使用的理解結果。MVP 先提供一個 README 最小入口，外加一個正式模型型感知模組。</p>
+        </section>
+
+        <section class="section" id="perceive-summary">
+          <h2>MVP 模組</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>模組</th>
+                  <th>需要模型</th>
+                  <th>讀取</th>
+                  <th>寫入</th>
+                  <th>定位</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>InputPerceive</td>
+                  <td>否</td>
+                  <td><code class="inline">input</code></td>
+                  <td><code class="inline">perceived_input</code></td>
+                  <td>README 最小入口</td>
+                </tr>
+                <tr>
+                  <td>LLM Perceive</td>
+                  <td>是</td>
+                  <td><code class="inline">input</code></td>
+                  <td><code class="inline">perceived_input</code>、<code class="inline">query</code></td>
+                  <td>正式文字理解模組</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="input-perceive">
+          <h2>InputPerceive</h2>
+          <p>這是 README 範例用來建立第一條 workflow 的最小感知模組。它不要求模型，只負責把外部傳入的主輸入交給後續節點。</p>
+          <div class="spec-grid">
+            <div class="spec-card">
+              <h3>建構參數</h3>
+              <p>無必填模型參數。MVP 公開敘事只保證它能接住輸入並轉成 <code class="inline">perceived_input</code>。</p>
+            </div>
+            <div class="spec-card">
+              <h3>輸入契約</h3>
+              <p>必須可讀取 <code class="inline">input</code>。</p>
+            </div>
+            <div class="spec-card">
+              <h3>輸出契約</h3>
+              <p>至少寫入 <code class="inline">perceived_input</code>。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="llm-perceive">
+          <h2>LLM Perceive</h2>
+          <div class="callout"><strong>模型規格：</strong>此模組一律使用 <code class="inline">OpenAI SDK form</code>，不以供應商專屬呼叫格式寫入公開文件。</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>參數</th>
+                  <th>是否必填</th>
+                  <th>說明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code class="inline">client</code></td>
+                  <td>是</td>
+                  <td>OpenAI SDK client 實例。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">model</code></td>
+                  <td>是</td>
+                  <td>模型名稱，沿用 OpenAI SDK 的模型指定方式。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">system_prompt</code></td>
+                  <td>否</td>
+                  <td>定義輸入理解任務與輸出邊界。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">output_schema</code></td>
+                  <td>否</td>
+                  <td>限制感知結果結構，讓後續節點更容易穩定讀取。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>LLM Perceive 通常會從 <code class="inline">input</code> 生成較乾淨的 <code class="inline">perceived_input</code>，必要時也可同步產出給 retrieve 使用的 <code class="inline">query</code>。</p>
+        </section>
+
+        <footer class="page-footer">
+          如果你只是想搭出 README 的第一條流程，用 InputPerceive 即可；若需要穩定文字理解，再升級成 LLM Perceive。
+        </footer>
+      </article>
+    </main>
+
+    <aside class="toc">
+      <div class="panel">
+        <h2>On This Page</h2>
+        <div class="toc-list">
+          <a href="#perceive-overview">頁面定位</a>
+          <a href="#perceive-summary">MVP 模組</a>
+          <a href="#input-perceive">InputPerceive</a>
+          <a href="#llm-perceive">LLM Perceive</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../assets/site.js"></script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Memory Contract - Agentic SDK Docs</title>
+  <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="index.html">
+        <span class="brand-badge">A</span>
+        <span class="brand-copy">
+          <strong>Agentic SDK Docs</strong>
+          <small>SDK reference for advanced developers</small>
+        </span>
+      </a>
+      <nav class="top-links" aria-label="Top links">
+        <a href="index.html">Home</a>
+        <a href="workflow-overview.html">Workflow</a>
+        <a href="module-families.html">Modules</a>
+      </nav>
+      <button class="mobile-nav-toggle" data-mobile-nav-toggle>展開導覽</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="nav-section">
+          <h2>Overview</h2>
+          <div class="nav-list">
+            <a href="index.html">Home</a>
+            <a href="workflow-overview.html">Workflow Overview</a>
+            <a class="active" href="memory-contract.html">Memory Contract</a>
+          </div>
+        </div>
+        <div class="nav-section">
+          <h2>Modules</h2>
+          <div class="nav-list">
+            <a href="module-families.html">Module Families</a>
+            <a href="modules/perceive-modules.html">Perceive Modules</a>
+            <a href="modules/plan-modules.html">Plan Modules</a>
+            <a href="modules/retrieve-modules.html">Retrieve Modules</a>
+            <a href="modules/action-modules.html">Action Modules</a>
+            <a href="modules/reflect-modules.html">Reflect Modules</a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <article class="panel">
+        <section class="hero" id="memory-contract">
+          <span class="eyebrow">Memory</span>
+          <h1>Memory Contract</h1>
+          <p>這一頁定義 workflow 節點之間共享資料的最小公開契約。它不是內部資料結構教科書，而是文件站所有範例與模組規格共同依賴的對接面。</p>
+          <p>如果某個模組需要模型能力，那個模組仍遵守 <code class="inline">OpenAI SDK form</code> 的接入規格；但模型 client 本身不直接寫入 memory，真正寫入或讀取 memory 的是各功能模組。</p>
+        </section>
+
+        <section class="section" id="principles">
+          <h2>公開 memory 慣例</h2>
+          <div class="cards">
+            <div class="card">
+              <h3>Prose-first 契約</h3>
+              <p>本頁只定義跨模組共享的 key 與意義，不暴露當前程式內部實作細節。</p>
+            </div>
+            <div class="card">
+              <h3>最小 key 集</h3>
+              <p>README 與文件站示例都以同一組最小 key 命名，避免每頁自行發明欄位名稱。</p>
+            </div>
+            <div class="card">
+              <h3>可擴充但不可漂移</h3>
+              <p>你可以在專案內加自己的 key，但不應任意改寫這組最小公開 key 的語意。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="section" id="keys">
+          <h2>最小公開 key</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Key</th>
+                  <th>由誰寫入</th>
+                  <th>誰會讀取</th>
+                  <th>內容說明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code class="inline">input</code></td>
+                  <td>呼叫端</td>
+                  <td>Perceive</td>
+                  <td>原始使用者輸入或上游系統傳入的主要問題。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">perceived_input</code></td>
+                  <td>Perceive</td>
+                  <td>Plan、Retrieve、Action</td>
+                  <td>感知後的整理結果，可是原文直通，也可以是較乾淨的理解版本。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">plan</code></td>
+                  <td>Plan</td>
+                  <td>Retrieve、Action、Reflect</td>
+                  <td>規劃後的路徑、步驟或執行意圖。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">query</code></td>
+                  <td>Perceive 或 Plan</td>
+                  <td>Retrieve</td>
+                  <td>供檢索模組使用的查詢文字或查詢條件。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">retrieved_items</code></td>
+                  <td>Retrieve</td>
+                  <td>Action、Reflect</td>
+                  <td>命中的知識條目、文件片段或整理後的檢索結果。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">draft_answer</code></td>
+                  <td>Action</td>
+                  <td>Reflect</td>
+                  <td>尚未最終提交的候選答案，供反思模組評估。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">final_answer</code></td>
+                  <td>Action 或 Reflect</td>
+                  <td>呼叫端</td>
+                  <td>流程最終輸出的回答內容。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">reflection</code></td>
+                  <td>Reflect</td>
+                  <td>Plan、Action</td>
+                  <td>對上一輪答案的評估結果、修正建議或重試訊號。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="flow">
+          <h2>典型流向</h2>
+          <pre><code>input
+  -> perceived_input
+  -> query
+  -> retrieved_items
+  -> draft_answer
+  -> final_answer</code></pre>
+          <p>若 workflow 納入 planner，<code class="inline">plan</code> 會出現在 <code class="inline">perceived_input</code> 與 <code class="inline">query</code> / <code class="inline">draft_answer</code> 之間；若納入 reflect，<code class="inline">reflection</code> 會作為下一輪規劃或重寫輸入。</p>
+        </section>
+
+        <footer class="page-footer">
+          這組 key 是文件站與範例的一致命名。各模組頁會在此基礎上補充自己的讀寫要求。
+        </footer>
+      </article>
+    </main>
+
+    <aside class="toc">
+      <div class="panel">
+        <h2>On This Page</h2>
+        <div class="toc-list">
+          <a href="#memory-contract">頁面定位</a>
+          <a href="#principles">公開慣例</a>
+          <a href="#keys">最小公開 key</a>
+          <a href="#flow">典型流向</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="assets/site.js"></script>
+</body>
+</html>

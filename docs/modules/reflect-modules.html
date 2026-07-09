@@ -1,0 +1,144 @@
+﻿<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Reflect Modules - Agentic SDK Docs</title>
+  <link rel="stylesheet" href="../assets/site.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="brand" href="../index.html">
+        <span class="brand-badge">A</span>
+        <span class="brand-copy">
+          <strong>Agentic SDK Docs</strong>
+          <small>SDK reference for advanced developers</small>
+        </span>
+      </a>
+      <nav class="top-links" aria-label="Top links">
+        <a href="../index.html">Home</a>
+        <a href="../workflow-overview.html">Workflow</a>
+        <a href="../memory-contract.html">Memory</a>
+      </nav>
+      <button class="mobile-nav-toggle" data-mobile-nav-toggle>展開導覽</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="panel">
+        <div class="nav-section">
+          <h2>Overview</h2>
+          <div class="nav-list">
+            <a href="../index.html">Home</a>
+            <a href="../workflow-overview.html">Workflow Overview</a>
+            <a href="../memory-contract.html">Memory Contract</a>
+          </div>
+        </div>
+        <div class="nav-section">
+          <h2>Modules</h2>
+          <div class="nav-list">
+            <a href="../module-families.html">Module Families</a>
+            <a href="perceive-modules.html">Perceive Modules</a>
+            <a href="plan-modules.html">Plan Modules</a>
+            <a href="retrieve-modules.html">Retrieve Modules</a>
+            <a href="action-modules.html">Action Modules</a>
+            <a class="active" href="reflect-modules.html">Reflect Modules</a>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <article class="panel">
+        <section class="hero" id="reflect-overview">
+          <span class="eyebrow">Reflect</span>
+          <h1>Reflect Modules</h1>
+          <p>Reflect 模組負責檢查 action 產出的候選答案，判斷是否已可交付，或是否應回饋新的修正方向給 workflow 下一輪使用。</p>
+        </section>
+
+        <section class="section" id="reflect-summary">
+          <h2>MVP 模組</h2>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>模組</th>
+                  <th>需要模型</th>
+                  <th>讀取</th>
+                  <th>寫入</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Reflexion Reflect</td>
+                  <td>是</td>
+                  <td><code class="inline">draft_answer</code>、<code class="inline">retrieved_items</code>、<code class="inline">plan</code></td>
+                  <td><code class="inline">reflection</code> 或 <code class="inline">final_answer</code></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="section" id="reflexion-reflect">
+          <h2>Reflexion Reflect</h2>
+          <div class="callout"><strong>模型規格：</strong>Reflect 家族在這一版 MVP 只公開一個正式模組，且統一以 <code class="inline">OpenAI SDK form</code> 表達模型接入方式。</div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>參數</th>
+                  <th>是否必填</th>
+                  <th>說明</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><code class="inline">client</code></td>
+                  <td>是</td>
+                  <td>OpenAI SDK client。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">model</code></td>
+                  <td>是</td>
+                  <td>反思與評估用模型名稱。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">system_prompt</code></td>
+                  <td>否</td>
+                  <td>定義評估標準、回饋格式與何時可直接放行答案。</td>
+                </tr>
+                <tr>
+                  <td><code class="inline">max_retries</code></td>
+                  <td>否</td>
+                  <td>限制 workflow 因反思而重試的次數。</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>當反思判定答案已足夠時，可直接提升為 <code class="inline">final_answer</code>；若仍需修正，則應寫出 <code class="inline">reflection</code> 供下一輪 planner 或 action 使用。</p>
+        </section>
+
+        <footer class="page-footer">
+          Reflect 並不是所有 workflow 都必備，但只要你需要重試、品質檢查或自我修正，它就會變成關鍵節點。
+        </footer>
+      </article>
+    </main>
+
+    <aside class="toc">
+      <div class="panel">
+        <h2>On This Page</h2>
+        <div class="toc-list">
+          <a href="#reflect-overview">頁面定位</a>
+          <a href="#reflect-summary">MVP 模組</a>
+          <a href="#reflexion-reflect">Reflexion Reflect</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="../assets/site.js"></script>
+</body>
+</html>
