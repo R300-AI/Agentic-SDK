@@ -1,0 +1,70 @@
+site_name: Agentic SDK 文件網站
+site_description: Agentic SDK 開發者文件站
+repo_url: https://github.com/R300-AI/Agentic-SDK
+repo_name: R300-AI/Agentic-SDK
+docs_dir: docs-site
+site_dir: site
+
+theme:
+  name: material
+  language: zh-TW
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: blue grey
+      accent: cyan
+  font:
+    text: Noto Sans Traditional Chinese
+    code: JetBrains Mono
+
+nav:
+  - 首頁: index.md
+  - Workflow:
+    - 總覽: workflow-overview.md
+    - 引擎選項: workflow-engines.md
+  - Modules:
+    - 總覽: module-families.md
+    - Perceive Modules: modules/perceive-modules.md
+    - Plan Modules: modules/plan-modules.md
+    - Retrieve Modules: modules/retrieve-modules.md
+    - Action Modules: modules/action-modules.md
+    - Reflect Modules: modules/reflect-modules.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search:
+      lang:
+        - en
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/R300-AI/Agentic-SDK
+
+copyright: Copyright &copy; Agentic SDK maintainers
