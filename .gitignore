@@ -55,3 +55,8 @@ scripts/timing_out.txt
 
 # Node modules
 node_modules/
+
+# Workspace-local agent runtime
+.github/*
+!.github/workflows
+!.github/workflows/**

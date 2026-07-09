@@ -1,73 +1,69 @@
 # Agentic SDK
 
-如果你是 Python 開發者，想先把 Agentic SDK 安裝起來、跑出第一條 workflow、看懂內建節點怎麼組合，然後再決定什麼時候接模型節點，這一頁就是入口。這份 README 只做兩件事：先帶你完成安裝，再用三個由淺到深的 quickstart 範例帶你理解 SDK 的基本用法。
+當你要把 Agent 接進實際應用時，往往需要把輸入處理、資料查詢、外部工具與回應流程一起串起來。這些步驟若各自分散實作，後續要調整流程、替換模組或接進既有系統時，整合成本會很快上升。本專案聚焦這類需求，提供一套可在 Python 應用程式中組裝 Agent workflow 的統一框架，讓開發者在整合不同系統時，不必每次都從頭重寫相似的流程骨架。
 
-## 安裝
+## Agentic SDK 是什麼
 
-1. 先依 [Git 官方安裝頁](https://git-scm.com/downloads) 完成安裝，然後確認終端機能找到 Git。
+Agentic SDK 是一套用於在 Python 應用程式中組裝 Agent workflow 的 SDK。你可以透過 `Workflow` 串接感知、檢索、執行等模組，並把自訂模型或既有系統整合進同一條流程。
+
+### 核心概念
+
+一條 Agent workflow 通常由幾類節點組成，各自負責不同工作：
+
+- 感知（Perceive）負責整理使用者輸入，形成後續節點可用的結構化理解。
+- 規劃（Plan）負責根據當前狀態判斷下一步應前往的節點。
+- 檢索（Retrieve）負責補充相關內容、命中條目或其他可用證據。
+- 執行（Action）負責產生主要輸出或最終回應。
+- 反思（Reflect）負責檢查結果是否可接受，並決定結束或重試。
+
+## 安裝環境
+
+若你要跟著本頁範例實際跑一次 Agentic SDK，請先準備 Python 3.12 環境。下列步驟會帶你完成 repo 下載、依賴安裝與模組匯入確認。若要執行第二個範例，再另外準備 OpenAI-compatible 端點。
+
+1. 依 [Git 官方安裝頁](https://git-scm.com/downloads) 完成安裝。
+
+2. 依 [Python 官方安裝頁](https://www.python.org/downloads/) 安裝 Python 3.12。
+
+3. 複製這個 repo，並切換到專案目錄。
 
    ```bash
-   git --version
-   ```
-
-2. 再依 [Python 官方安裝頁](https://www.python.org/downloads/) 安裝 Python 3.12，然後確認版本正確。
-
-   ```bash
-   python --version
-   ```
-
-3. 依 [uv 官方安裝說明](https://docs.astral.sh/uv/getting-started/installation/) 安裝 `uv`，然後確認終端機能找到 `uv`。
-
-   ```bash
-   uv --version
-   ```
-
-4. 複製這個 repo，並切換到專案目錄。
-
-   ```bash
-   git clone https://github.com/<your-org>/Agentic-SDK.git
+   git clone https://github.com/R300-AI/Agentic-SDK.git
    cd Agentic-SDK
    ```
 
-5. 安裝專案依賴。
+4. 安裝閱讀原始碼與檢查模組匯入所需的 Python 依賴。
 
    ```bash
-   uv sync --extra dev
+   python -m pip install -r requirements.txt
    ```
 
-6. 驗證安裝結果，確認 Python 已經能 import 這個套件。
+5. 執行 import 檢查，以確認 Python 可載入 `agentic_sdk`。
 
    ```bash
    python -c "import agentic_sdk; print('Agentic SDK import ok')"
    ```
 
-7. 只有在你要跑 `demo/` 時，才需要依 [Node.js 官方安裝頁](https://nodejs.org/en/download) 安裝 Node.js 22 以上，然後確認版本。
-
-   ```bash
-   node --version
-   ```
 
 ## 快速開始
 
-### 1. 本地知識查詢基本範例
+你可以先照著第一個範例跑出一條最小 workflow，再把模型能力接進同一條流程，最後只替換需要客製化的節點。以下三個範例就依照這個順序安排，讓你逐步熟悉 Agentic SDK 的導入方式。
 
-這個 agent workflow 會先接住使用者問題，再從你本地準備好的條目中找答案，最後直接把命中的內容回傳出去。它的用途不是展示模型能力，而是先讓你用最小成本看懂：就算完全不接模型，Agentic SDK 也可以先組出一條可執行、可驗證的 workflow。
+### 1. 用最少的三類節點組出第一條 workflow
 
-```python
+第一個範例會帶你建立第一條可執行流程。你會先用最少的節點組合完成輸入整理、內容命中與回應生成，並熟悉 Agentic SDK 的基本組裝方式。
+
+```text
+# 公開介面範例
 from agentic_sdk import Workflow
-from agentic_sdk.nodes.perceive import RuleBasedPerceive
-from agentic_sdk.nodes.retrieve import StubRetrieve
-from agentic_sdk.nodes.action import ContentAction
+from agentic_sdk.modules import DirectAnswerAction, InputPerceive, KeywordRetrieve
 
 workflow = Workflow(
-    perceive=RuleBasedPerceive(
-        welcome_message="你好，我可以回答 Agentic SDK 的基本問題。",
-    ),
-    retrieve=StubRetrieve(
+    perceive=InputPerceive(),
+    retrieve=KeywordRetrieve(
         items=[
             {
                 "keywords": ["agentic sdk", "sdk"],
-                "content": "Agentic SDK 是一個可組裝 Agents Workflow 的 Python 開發庫。",
+                "content": "Agentic SDK 是一個以 workflow 組裝 agent 行為的 Python library。",
             },
             {
                 "keywords": ["tsip"],
@@ -75,49 +71,43 @@ workflow = Workflow(
             },
         ],
     ),
-    action=ContentAction(
-        fallback_answer="目前沒有命中知識庫條目。",
-    ),
+    action=DirectAnswerAction(),
 )
 
 result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-如果設定正確，你應該看到：
+`InputPerceive` 會先讀取使用者問題。`KeywordRetrieve` 會從 `items` 條目中比對 `keywords`，命中後取回對應的 `content`。`DirectAnswerAction` 則直接把前面取回的內容組成回應。`Workflow` 會把這些中間資料保留下來，讓後面的步驟可以直接使用。
 
-> TSiP 是工研院主導的國產 AI 晶片落地藍圖。
+### 2. 把 OpenAI SDK client 注入需要模型的節點
 
-### 2. 用內建節點接 OpenAI-compatible 模型 API 範例
+第二個範例會把模型能力接進既有 workflow，並示範如何把 OpenAI SDK client 注入需要模型的節點。
 
-這個 agent workflow 示範的重點不是某一個特定 provider，而是你如何直接沿用 Agentic SDK 內建節點，同時把模型呼叫交給你自己建立的 OpenAI SDK client。這比較符合平台的核心定位：不同加速器包出來的模型服務只要對外長得像 OpenAI-compatible API，使用者就能自己決定要接哪個端點。
-
-先確認你的 OpenAI-compatible 模型服務已經啟動。以下用 Ollama 當例子：
+以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。
 
 ```bash
 ollama pull llama3.1:8b
 ollama serve
 ```
 
-接著把你建立好的 OpenAI client 直接交給 `CompletionAction`：
+`OpenAI(...)` 建立完成後，直接將 client 交給 `CompletionAction`：
 
-```python
+```text
+# 公開介面範例
 from openai import OpenAI
 
 from agentic_sdk import Workflow
-from agentic_sdk.nodes.action import CompletionAction
-from agentic_sdk.nodes.perceive import RuleBasedPerceive
-from agentic_sdk.nodes.retrieve import StubRetrieve
-
+from agentic_sdk.modules import CompletionAction, InputPerceive, KeywordRetrieve
 
 openai_client = OpenAI(
+    api_key="not-needed",
     base_url="http://localhost:11434/v1",
 )
 
-
 workflow = Workflow(
-    perceive=RuleBasedPerceive(),
-    retrieve=StubRetrieve(
+    perceive=InputPerceive(),
+    retrieve=KeywordRetrieve(
         items=[
             {
                 "keywords": ["tsip"],
@@ -134,49 +124,49 @@ result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-這個範例的重點是：模型服務不需要先被包進 Agentic SDK。只要你最後交給 `CompletionAction` 的物件具備 OpenAI client 常用的呼叫形狀，例如 `chat.completions.create(...)`，你就可以先用 `OpenAI(...)` 建 client，再把它直接交給 Agentic SDK 內建節點。若你的 endpoint 本身已經綁定模型，`CompletionAction` 也可以省略 `model`。
+此一範例保留原本的輸入處理與條目查詢方式，僅將輸出步驟改為透過 OpenAI Python client 呼叫模型端點。對 AI Hub 而言，重點不在特定 provider，而在模型服務與 Agent workflow 皆沿用 OpenAI SDK 介面。當模型端點遵循同一協定時，模型封裝與 Agent 功能即可使用一致的調用方式，降低不同生態各自定義呼叫介面的整合成本。
 
-### 3. 把 Azure Foundry client 注入同一個 CompletionAction 範例
+### 3. 用最小 custom node 替換內建 Action
 
-這題示範的是另一種情境：當 Azure Foundry 端的連線與 deployment 綁定已經在你的應用程式裡處理好時，Agentic SDK 只需要接收最後要用的 client。README 只保留注入方式，不在這裡展開 adapter 細節。
+到這一步，你已經可以保留前段流程，只把最後的輸出節點換成自己的程式邏輯。
 
-```python
+```text
+# 公開介面範例
 from agentic_sdk import Workflow
-from agentic_sdk.nodes.action import CompletionAction
-from agentic_sdk.nodes.perceive import RuleBasedPerceive
-from agentic_sdk.nodes.retrieve import StubRetrieve
+from agentic_sdk.modules import InputPerceive, KeywordRetrieve
 
-
-# 你的應用程式先把 Azure Foundry client 整理成 CompletionAction 可用的 OpenAI-style 物件
-foundry_client = build_foundry_openai_client()
-
+class SummaryAction:
+    def __call__(self, memory):
+        summary = memory.lookup("latest_retrieved_content") or "沒有命中任何條目。"
+        return f"自訂 Action 回傳：{summary}"
 
 workflow = Workflow(
-    perceive=RuleBasedPerceive(),
-    retrieve=StubRetrieve(
+    perceive=InputPerceive(),
+    retrieve=KeywordRetrieve(
         items=[
             {
-                "keywords": ["tsip"],
-                "content": "TSiP is the ITRI-led domestic AI chip landing blueprint.",
+                "keywords": ["agentic sdk", "sdk"],
+                "content": "Agentic SDK 讓你用 workflow 組裝 agent 行為。",
             },
         ],
     ),
-    action=CompletionAction(
-        client=foundry_client,
-    ),
+    action=SummaryAction(),
 )
 
-result = workflow.run("What is TSiP?")
+result = workflow.run("請介紹 Agentic SDK")
 print(result.final_message)
 ```
 
-這個範例的重點是：第二題在示範「直接交 OpenAI client」，第三題在示範「先在應用程式側完成 Azure Foundry 整合，再把整理好的 OpenAI-style client 注入 `CompletionAction`」。如果你要看注入節點實例的正式入口，可以接著看 docs 裡的 `node_overrides` 範例。
+`SummaryAction` 直接接收 `Workflow` 建立的 `InContextMemory`，並自記憶體讀取前面模組留下的內容，再組成輸出。這樣你可以保留既有流程，只替換最後的輸出邏輯。
 
+> 這個範例會用到兩個 memory 約定。
+>
+> - `memory` 是 `Workflow` 建立的 `InContextMemory`。
+> - `latest_retrieved_content` 表示最近一次檢索模組命中的主要內容，供後續 `Action` 模組直接讀取。
 
-If you want more detail:
+## 下一步
 
-1. Docs index: [docs/README.md](docs/README.md)
-2. Python SDK integration: [docs/05-api-reference/python-sdk-integration.md](docs/05-api-reference/python-sdk-integration.md)
-3. Workflow engine: [agentic_sdk/workflow/engine.py](agentic_sdk/workflow/engine.py)
-4. Demo app: [demo/README.md](demo/README.md)
+相關文件如下。
 
+1. 瀏覽器介面操作流程：[demo/README.md](demo/README.md)。
+2. 設計藍圖與分階段交付內容：[sdk_blueprint/README.md](sdk_blueprint/README.md)。
