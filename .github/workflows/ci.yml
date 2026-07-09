@@ -1,17 +1,31 @@
-name: CI
+﻿name: CI
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'agentic_sdk/**'
+      - 'demo_old/**'
+      - 'examples_old/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'agentic_sdk/**'
+      - 'demo_old/**'
+      - 'examples_old/**'
+      - 'pyproject.toml'
+      - 'requirements.txt'
+      - '.github/workflows/ci.yml'
 
 jobs:
   check-typescript:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: demo
+        working-directory: demo_old
     steps:
       - uses: actions/checkout@v4
 

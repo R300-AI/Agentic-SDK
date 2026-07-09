@@ -1,10 +1,16 @@
-name: Deploy to Azure App Service
+﻿name: Deploy to Azure App Service
 
 # 所有部署參數來自 GitHub Repository Variables，設定步驟見 docs/github_cicd_workflow.md
 
 on:
   push:
     branches: [main]
+    paths:
+      - 'agentic_sdk/**'
+      - 'demo_old/**'
+      - 'examples_old/**'
+      - 'requirements.txt'
+      - '.github/workflows/deploy-gateway.yml'
   workflow_dispatch:
 
 permissions:
@@ -108,13 +114,13 @@ jobs:
             echo ""
             echo "✅ 所有 Azure 資源佈建完成"
 
-      - name: 建置前端（Vite → demo/dist/）
+      - name: 建置前端（Vite → demo_old/dist/）
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: npm ci + build
-        working-directory: demo
+        working-directory: demo_old
         run: |
           npm ci
           npm run build
@@ -123,8 +129,8 @@ jobs:
         run: |
           zip -r deploy.zip \
             agentic_sdk/ \
-            demo/dist/ \
-            examples/ \
+            demo_old/dist/ \
+            examples_old/ \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*"
 
