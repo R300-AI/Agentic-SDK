@@ -52,7 +52,7 @@ Agentic SDK 是一套用於在 Python 應用程式中組裝 Agent workflow 的 S
 
 第一個範例會帶你建立第一條可執行流程。你會先用最少的節點組合完成輸入整理、內容命中與回應生成，並熟悉 Agentic SDK 的基本組裝方式。
 
-```text
+```python
 # 公開介面範例
 from agentic_sdk import Workflow
 from agentic_sdk.modules import DirectAnswerAction, InputPerceive, KeywordRetrieve
@@ -93,7 +93,7 @@ ollama serve
 
 `OpenAI(...)` 建立完成後，直接將 client 交給 `CompletionAction`：
 
-```text
+```python
 # 公開介面範例
 from openai import OpenAI
 
@@ -130,7 +130,7 @@ print(result.final_message)
 
 到這一步，你已經可以保留前段流程，只把最後的輸出節點換成自己的程式邏輯。
 
-```text
+```python
 # 公開介面範例
 from agentic_sdk import Workflow
 from agentic_sdk.modules import InputPerceive, KeywordRetrieve
