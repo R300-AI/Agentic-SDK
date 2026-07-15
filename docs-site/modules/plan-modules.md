@@ -1,12 +1,12 @@
 # Plan
 
-Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一步。文件標準名將這個家族統一寫成 `NextStepPlan`，用來強調它交出的核心結果是下一節點決策，而不是論文策略名稱。
+Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一步。這一頁先把 Plan 家族的核心責任收斂成「交出下一節點決策」，再用單一標準名 `NextStepPlan` 來承接這個角色。
 
 ## NextStepPlan
 
 舊名對應：`ReActPlan`
 
-`NextStepPlan` 根據感知摘要與已有上下文，決定下一步要查資料還是直接回答。文件上的 MVP 邊界先只處理單輪決策，因此標準輸出固定只交出 `next_node`、`retrieve_query` 與 `plan_reason`。
+`NextStepPlan` 根據感知摘要與已有上下文，決定下一步要查資料還是直接回答。閱讀這個模組時，可以把它理解成一個明確的路由點：先看它讀進哪些線索，再看它交出哪些決策欄位給後續節點使用。
 
 ### 標準輸入參數
 
@@ -22,7 +22,7 @@ Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一�
 
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `plan_mode` | `string` | `"single_step"` | 本輪規劃模式；MVP 固定為單步決策。 |
+| `plan_mode` | `string` | `"single_step"` | 本輪規劃模式；目前定義以單步決策為主。 |
 | `next_node` | `string` | `"retrieve"` | 只允許 `retrieve` 或 `action`。 |
 | `retrieve_query` | `string` | `"久站 鞋款 推薦"` | 當 `next_node` 為 `retrieve` 時，交給檢索節點使用的查詢字串。 |
 | `plan_reason` | `string` | `"需要先查鞋款條目再組成推薦"` | 說明本輪為何走這個分支。 |

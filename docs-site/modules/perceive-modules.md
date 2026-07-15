@@ -1,12 +1,12 @@
 # Perceive
 
-Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁使用文件標準名來定義 Perceive 家族的 MVP 邊界；輸入來源只包含純文字、結構化欄位與圖片檔，圖片檔只接受 `image/png`、`image/jpeg`、`image/webp`。目前保留的是實際在 README 或三個 use case 中有使用到的感知模組。
+Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的四個標準模組。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`；目前保留的是實際在 README 或三個 use case 中有使用到的感知模組。
 
 ## PassThroughPerceive
 
 舊名對應：`InputPerceive`
 
-`PassThroughPerceive` 將原始文字輸入直接轉成查詢內容，不做額外判讀。它適合 README 的最小流程，也適合作為所有文字型流程的最小入口。
+`PassThroughPerceive` 將原始文字輸入直接整理成查詢內容，交給後續節點接手。它適合 README 的最小流程，也適合作為文字型流程的直接入口。這個模組代表的是最短路徑：收到文字後，先把可查詢的內容穩定交出去。
 
 ### 標準輸入參數
 
@@ -28,7 +28,7 @@ README 最小流程、README 自訂 Action 流程。
 
 舊名對應：`LLMBasedPerceive`
 
-`TextPerceive` 依文字內容做語意判讀，將輸入整理成後續可用的查詢、標籤與摘要。它適合需求表達較長、較依賴文字語意理解的流程。
+`TextPerceive` 依文字內容做語意判讀，將輸入整理成後續可用的查詢、標籤與摘要。當流程需要的不只是原句，而是對需求做一次語意整理時，就會接到這個模組。
 
 ### 標準輸入參數
 
@@ -58,7 +58,7 @@ LaNew 的自然語言鞋款需求、BCI 的訓練情境描述、ICOPE 的追蹤�
 
 舊名對應：`StructuredPerceive`
 
-`StructuredPerceive` 將結構化欄位整理成後續可用的查詢與摘要。它適合以欄位資料為主的流程，不要求使用者先把資訊寫成完整自然語言。
+`StructuredPerceive` 將結構化欄位整理成後續可用的查詢與摘要。當流程的主要輸入來自欄位資料時，這個模組會把欄位內容直接組成查詢與需求摘要。
 
 ### 標準輸入參數
 
@@ -88,7 +88,7 @@ LaNew 足測欄位、ICOPE 六大能力欄位輸入。
 
 舊名對應：`MultimodalPerceive`
 
-`TextImagePerceive` 將文字與圖片內容一起整理成後續可用的查詢與摘要。這個標準名只處理圖片檔，不延伸到任意附件格式。
+`TextImagePerceive` 將文字與圖片內容一起整理成後續可用的查詢與摘要。當流程同時需要讀取文字與圖片時，這個模組會把兩類資訊整合成後續可用的感知結果，支援 `image/png`、`image/jpeg`、`image/webp` 三種格式。
 
 ### 標準輸入參數
 
