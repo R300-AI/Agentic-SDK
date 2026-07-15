@@ -18,11 +18,16 @@
 
 說明 `Workflow` 預設如何用 `InContextMemory` 承接執行中的狀態資料，以及之後可替換或注入哪些引擎層。
 
+### Use Case 實施例
+
+用兩個具體場景說明如何把 `Workflow`、`Module Family` 與資料來源組合成可落地的 agent 實施例。
+
 ## 主要入口
 
 - [Workflow Overview](workflow-overview.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
 - [Module Family](modules/index.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
 - [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 預設使用的 `InContextMemory`，以及可注入的其他引擎層。
+- [Use Case](use-cases/index.md)：查看 LaNew 售鞋顧問與 BCI 射箭教練兩個實施例，理解場景拆法與模組組合。
 
 ## 模組總表
 

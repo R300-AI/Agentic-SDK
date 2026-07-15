@@ -38,6 +38,10 @@ nav:
     - Retrieve: modules/retrieve-modules.md
     - Action: modules/action-modules.md
     - Reflect: modules/reflect-modules.md
+  - Use Case:
+    - use-cases/index.md
+    - LaNew 售鞋顧問: use-cases/lanew-footwear-advisor.md
+    - BCI 射箭教練: use-cases/bci-archery-coach.md
 
 markdown_extensions:
   - admonition
