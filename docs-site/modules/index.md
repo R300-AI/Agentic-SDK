@@ -1,26 +1,26 @@
 # 模組家族
 
-這一頁整理 Agentic SDK 的五個模組家族，幫你先判斷一個需求應該交給哪一類模組接手。這份總覽處理的是家族層級的分工；當你確認需求所屬的家族之後，再進對應頁面查模組清單、初始化參數與輸入輸出格式。
+這一頁整理 Agentic SDK 的五個模組家族，幫你先判斷一個需求應該交給哪一類模組接手。這份總覽處理的是家族層級的分工；當你確認需求所屬的家族之後，再進對應頁面查模組清單、初始化參數與輸入輸出格式。不同 workflow 可以只用其中一部分家族，單次執行也不一定會走完整五段流程。
 
 ## 概觀
 
-一輪 workflow 會依序經過輸入整理、作業安排、資料補回、內容起草與草稿驗收。這五段工作分別由 `Perceive`、`Plan`、`Retrieve`、`Action` 與 `Reflect` 接手，形成一條能夠往前推進，也能回頭補資料與重寫內容的處理流程，如圖 1 所示。
+一輪 workflow 會依序經過輸入整理、作業安排、資料補回、內容生成與輸出檢查。這五段工作分別由 `Perceive`、`Plan`、`Retrieve`、`Action` 與 `Reflect` 接手，形成一條能夠往前推進，也能回頭補資料與重寫內容的處理流程，如圖 1 所示。
 
 ![Framework](../assets/framework.png)
 
-圖 1、五個模組家族在 workflow 中的接手順序。
+圖 1：五個模組家族在 workflow 中的接手順序。
 
-表 1 將五個家族放在同一張對照表裡，方便直接比較它們在 workflow 中各自接手的時點與交付的成果。閱讀這張表時，重點不是先記模組名稱，而是先看一個模組接手的是流程中的哪一段工作，再看它交出去的是摘要、指示、資料、草稿，還是驗收結果。只要先抓住這條判讀順序，五個家族之間的責任邊界就會自然拉開。
+表 1 將五個家族放在同一張對照表裡，方便直接比較它們在 workflow 中各自接手的時點與交付的成果。閱讀這張表時，重點不是先記模組名稱，而是先看一個模組接手的是流程中的哪一段工作，再看它交出去的是結構化輸入摘要、下一節點決策、命中內容與檢索結果、對外回應內容，還是通過或退回的檢查判定。只要先抓住這條判讀順序，五個家族之間的責任邊界就會自然拉開。
 
 | 家族 | 模組列表 | 接手時機 | 交付成果 | 主要工作 |
 | --- | --- | --- | --- | --- |
-| Perceive | InputPerceive、LLMBasedPerceive、RuleBasedPerceive | 收到新輸入或上一輪補充資料時 | 輸入摘要 | 整理提問、欄位、量測值與本輪要保留的重點。 |
-| Plan | ReActPlan | 收到輸入摘要或查回資料時 | 下一步作業指示 | 決定先補欄位、先查資料、先起草，或送交驗收。 |
-| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve | 收到查找指示時 | 證據資料 | 查回商品內容、歷史紀錄、知識條目或檢索結果。 |
-| Action | DirectAnswerAction、CompletionAction | 收到可用材料時 | 輸出草稿 | 組成推薦說明、訓練建議、評估摘要等對外內容。 |
-| Reflect | RuleBasedReflect、ReflexionReflect | 收到輸出草稿時 | 驗收結果與修正方向 | 檢查漏答、資料引用與格式，決定送出或退回補強。 |
+| Perceive | InputPerceive、LLMBasedPerceive、RuleBasedPerceive | 收到新輸入或上一輪補充資料時 | 結構化輸入摘要 | 整理提問、欄位、量測值與本輪要保留的重點。 |
+| Plan | ReActPlan | 收到輸入摘要或查回資料時 | 下一節點決策 | 決定下一步交給 `Retrieve` 還是 `Action`。 |
+| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve | 收到查找指示時 | 命中內容與檢索結果 | 查回商品內容、歷史紀錄、知識條目或檢索結果，供後續節點使用。 |
+| Action | DirectAnswerAction、CompletionAction | 收到可用材料時 | 對外回應內容 | 組成推薦說明、訓練建議、評估摘要等對外內容。 |
+| Reflect | RuleBasedReflect、ReflexionReflect | 收到 Action 結果或錯誤時 | 通過或退回判定 | 檢查漏答、資料引用與格式，決定送出或退回補強。 |
 
-表 1、五個模組家族的接手時機、交付成果與主要工作對照表。
+表 1：五個模組家族的接手時機、交付成果與主要工作對照表。
 
 ## 建議閱讀順序
 
