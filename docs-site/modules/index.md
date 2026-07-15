@@ -14,13 +14,15 @@
 
 | 家族 | 模組列表 | 接手時機 | 交付成果 | 主要工作 |
 | --- | --- | --- | --- | --- |
-| Perceive | InputPerceive、LLMBasedPerceive、RuleBasedPerceive | 收到新輸入或上一輪補充資料時 | 結構化輸入摘要 | 整理提問、欄位、量測值與本輪要保留的重點。 |
+| Perceive | InputPerceive、RuleBasedPerceive、LLMBasedPerceive、StructuredPerceive、MultimodalPerceive | 收到新輸入或上一輪補充資料時 | 結構化輸入摘要 | 整理提問、欄位、量測值與本輪要保留的重點。 |
 | Plan | ReActPlan | 收到輸入摘要或查回資料時 | 下一節點決策 | 決定下一步交給 `Retrieve` 還是 `Action`。 |
-| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve | 收到查找指示時 | 命中內容與檢索結果 | 查回商品內容、歷史紀錄、知識條目或檢索結果，供後續節點使用。 |
-| Action | DirectAnswerAction、CompletionAction | 收到可用材料時 | 對外回應內容 | 組成推薦說明、訓練建議、評估摘要等對外內容。 |
-| Reflect | RuleBasedReflect、ReflexionReflect | 收到 Action 結果或錯誤時 | 通過或退回判定 | 檢查漏答、資料引用與格式，決定送出或退回補強。 |
+| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve、HybridRetrieve | 收到查找指示時 | 命中內容與檢索結果 | 查回商品內容、歷史紀錄、知識條目或檢索結果，供後續節點使用。 |
+| Action | DirectAnswerAction、CompletionAction、StructuredOutputAction | 收到可用材料時 | 對外回應內容 | 組成推薦說明、訓練建議、評估摘要等對外內容。 |
+| Reflect | RuleBasedReflect、ReflexionReflect、EvidenceCheckReflect | 收到 Action 結果或錯誤時 | 通過或退回判定 | 檢查漏答、資料引用與格式，決定送出或退回補強。 |
 
 表 1：五個模組家族的接手時機、交付成果與主要工作對照表。
+
+表 1 同時列出 SDK 內建類別，以及這份文件會反覆使用的模組型態名稱。若你要確認某個名稱的初始化方式、輸入輸出格式，或是否已有可直接使用的類別，請再進對應家族頁面查看。
 
 ## 建議閱讀順序
 

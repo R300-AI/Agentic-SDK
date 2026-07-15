@@ -1,6 +1,6 @@
 # Retrieve
 
-Retrieve 模組負責把 workflow 需要的知識內容取回來。依這套文件的流程定義，Retrieve 完成後會將結果交回 Plan，再由 Plan 決定後續路徑。現行程式碼中已實作 `KeywordRetrieve`、`StubRetrieve` 與 `SemanticRetrieve` 三個節點；另外還有 `FoundryVisionQuery` 作為圖像附件轉檢索查詢的輔助元件。
+Retrieve 模組負責把 workflow 需要的知識內容取回來。依這套文件與目前程式物件的定義，Retrieve 完成後的去向取決於節點本身：`KeywordRetrieve` 會直接交給 `Action`，`SemanticRetrieve` 則會將結果交回 `Plan` 再做一次決策。這一頁先列出可直接使用的 `KeywordRetrieve`、`StubRetrieve`、`SemanticRetrieve` 與輔助元件 `FoundryVisionQuery`，再補上 `HybridRetrieve` 這種常見的混合檢索物件型態，方便你定義自訂模組。
 
 ## KeywordRetrieve
 
@@ -52,3 +52,18 @@ Retrieve 模組負責把 workflow 需要的知識內容取回來。依這套文�
 | `endpoint` | `str | None` | `None` | 覆蓋 Azure Foundry endpoint。 |
 | `api_key` | `str | None` | `None` | 覆蓋 Azure Foundry API key。 |
 | `max_keywords_chars` | `int` | `60` | 限制回傳關鍵字字串的最大長度。 |
+
+## HybridRetrieve
+
+`HybridRetrieve` 會混合 keyword、semantic 與結構化欄位條件來取回結果，適合 LaNew、BCI 與 ICOPE 這三類同時需要欄位比對與語意補證據的流程。方法方向可參考 Self-RAG [Arxiv](https://arxiv.org/abs/2310.11511) 與 CRAG [Arxiv](https://arxiv.org/abs/2401.15884)。
+
+### 初始化參數
+
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `top_k` | `int` | `5` | 最多取回幾筆結果。 |
+| `keyword_weight` | `float` | `0.4` | 關鍵字命中權重。 |
+| `semantic_weight` | `float` | `0.4` | 語意相似度權重。 |
+| `field_weight` | `float` | `0.2` | 結構化欄位條件權重。 |
+| `knowledge_base` | `KnowledgeBase | None` | `None` | 靜態知識來源。 |
+| `memory_store` | `MemoryStore | None` | `None` | 對話或歷史記憶來源。 |

@@ -1,6 +1,6 @@
 # Action
 
-Action 模組負責把前面節點收集到的資訊轉成回應內容。依這套文件的流程定義，Action 完成後會將流程交回 `Perceive`，開始下一輪理解。現行程式碼中可直接使用的 Action 節點只有兩個：`DirectAnswerAction` 與 `CompletionAction`。
+Action 模組負責把前面節點收集到的資訊轉成回應內容。依這套文件與目前程式物件的定義，Action 會在這一步產生本輪輸出；之後是否直接結束，或再交給 Reflect 檢查，取決於 workflow 的接法。這一頁先列出可直接使用的 `DirectAnswerAction` 與 `CompletionAction`，再補上 `StructuredOutputAction` 這種常見的結構化輸出物件型態，方便你定義自訂模組。
 
 ## DirectAnswerAction
 
@@ -32,3 +32,16 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。依這�
 | `temperature` | `float | None` | `None` | 若提供，會傳給 completion API。 |
 | `system_prompt` | `str | None` | 內建 `DEFAULT_SYSTEM_PROMPT` | 覆蓋預設 system prompt。 |
 | `idle_timeout_sec` | `float` | `30.0` | foundry 串流路徑的 read idle timeout。 |
+
+## StructuredOutputAction
+
+`StructuredOutputAction` 會依照指定 schema 產生穩定格式的對外回應，適合 LaNew 的推薦說明、BCI 的訓練建議與 ICOPE 的追蹤建議。方法方向可參考 Toolformer [Arxiv](https://arxiv.org/abs/2302.04761) 與 ReAct [Arxiv](https://arxiv.org/abs/2210.03629)。
+
+### 初始化參數
+
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `client` | `Any` | `None` | 生成模型 client。 |
+| `output_schema` | `dict | None` | `None` | 輸出欄位與格式定義。 |
+| `system_prompt` | `str | None` | `None` | 控制輸出格式與語氣。 |
+| `include_evidence` | `bool` | `True` | 是否要求輸出中帶入證據欄位。 |
