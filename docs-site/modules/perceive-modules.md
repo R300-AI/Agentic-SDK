@@ -1,4 +1,4 @@
-# Perceive Modules
+# Perceive
 
 Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的理解結果。現行程式碼中已實作 `InputPerceive`、`RuleBasedPerceive` 與 `LLMBasedPerceive` 三種路徑，從最小轉接到模型型理解皆有覆蓋。
 

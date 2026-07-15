@@ -33,11 +33,11 @@ nav:
     - 引擎選項: workflow-engines.md
   - Modules:
     - 總覽: module-families.md
-    - Perceive Modules: modules/perceive-modules.md
-    - Plan Modules: modules/plan-modules.md
-    - Retrieve Modules: modules/retrieve-modules.md
-    - Action Modules: modules/action-modules.md
-    - Reflect Modules: modules/reflect-modules.md
+    - Perceive: modules/perceive-modules.md
+    - Plan: modules/plan-modules.md
+    - Retrieve: modules/retrieve-modules.md
+    - Action: modules/action-modules.md
+    - Reflect: modules/reflect-modules.md
 
 markdown_extensions:
   - admonition

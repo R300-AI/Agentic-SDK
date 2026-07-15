@@ -1,4 +1,4 @@
-# Plan Modules
+# Plan
 
 Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一步。現行程式碼中真正實作的 planner 只有 `ReActPlan` 一個類別；舊文件中的 Chain-of-Thought 與 Plan-and-Solve 不是獨立 class，而是同一個 planner 內部可切換的 prompt strategy。
 

@@ -2,7 +2,7 @@
 
 這套文件站以 SDK reference 為主，目標是讓進階開發者快速查到 `Workflow` 的公開組裝模型、五大功能的模組分類、各模組的參數與輸入輸出契約，以及 `Workflow` 在執行時可以搭配哪些引擎選項。
 
-這一版 MVP 只聚焦 README 已定稿的公開敘事，不展開 deployment、demo 操作導覽或內部替身實作。所有需要模型的模組，都以 `OpenAI SDK form` 作為統一接入規格。
+這一版文件只聚焦 README 已定稿的公開敘事，不展開 deployment、demo 操作導覽或內部替身實作。所有需要模型的模組，都以 `OpenAI SDK form` 作為統一接入規格。
 
 ## 這個文件站回答什麼
 
@@ -12,7 +12,7 @@
 
 ### 模組與參數
 
-列出 MVP 納入的模組、其建構參數、輸入輸出定義與適用情境。
+列出目前文件涵蓋的模組、其初始化參數與適用情境。
 
 ### Workflow 引擎選項
 
@@ -21,10 +21,10 @@
 ## 主要入口
 
 - [Workflow Overview](workflow-overview.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
-- [Module Families](module-families.md)：查看 MVP 納入的模組總表，再分流到各功能頁查規格。
+- [Module Families](module-families.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
 - [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 預設使用的 `InContextMemory`，以及可注入的其他引擎層。
 
-## MVP 模組總表
+## 模組總表
 
 <table>
   <thead>
@@ -105,4 +105,4 @@
   </tbody>
 </table>
 
-這一版首頁只負責文件站導覽與 MVP 範圍，模組細節請進各功能頁查看。
+這一版首頁只負責文件站導覽與目前文件範圍，模組細節請進各功能頁查看。

@@ -4,15 +4,15 @@
 
 ## 先判斷你要解什麼問題
 
-- 要理解輸入：先看 [Perceive Modules](modules/perceive-modules.md)。
-- 要決定流程路徑：先看 [Plan Modules](modules/plan-modules.md)。
-- 要取回知識：先看 [Retrieve Modules](modules/retrieve-modules.md)。
-- 要產出回應：先看 [Action Modules](modules/action-modules.md)。
-- 要做自我檢查：先看 [Reflect Modules](modules/reflect-modules.md)。
+- 要理解輸入：先看 [Perceive](modules/perceive-modules.md)。
+- 要決定流程路徑：先看 [Plan](modules/plan-modules.md)。
+- 要取回知識：先看 [Retrieve](modules/retrieve-modules.md)。
+- 要產出回應：先看 [Action](modules/action-modules.md)。
+- 要做自我檢查：先看 [Reflect](modules/reflect-modules.md)。
 
 ## 功能家族矩陣
 
-| 家族 | MVP 模組 | 主要讀取 key | 主要寫入 key | 模型接入規格 |
+| 家族 | 模組 | 主要讀取 key | 主要寫入 key | 模型接入規格 |
 | --- | --- | --- | --- | --- |
 | Perceive | InputPerceive、LLM Perceive | `input` | `perceived_input`、`query` | 模型型模組使用 OpenAI SDK form |
 | Plan | Chain-of-Thought Planner、ReAct Planner、Plan-and-Solve Planner | `perceived_input`、`reflection` | `plan`、`query` | OpenAI SDK form |

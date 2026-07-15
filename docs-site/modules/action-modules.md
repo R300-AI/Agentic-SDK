@@ -1,4 +1,4 @@
-# Action Modules
+# Action
 
 Action 模組負責把前面節點收集到的資訊轉成 workflow 的最終輸出。現行程式碼中可直接使用的 Action 節點只有兩個：`DirectAnswerAction` 與 `CompletionAction`。
 

@@ -1,4 +1,4 @@
-# Retrieve Modules
+# Retrieve
 
 Retrieve 模組負責把 workflow 需要的知識內容取回來。現行程式碼中已實作 `KeywordRetrieve`、`StubRetrieve` 與 `SemanticRetrieve` 三個節點；另外還有 `FoundryVisionQuery` 作為圖像附件轉檢索查詢的輔助元件。
 
