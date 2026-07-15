@@ -1,69 +1,126 @@
 # Retrieve
 
-Retrieve 模組負責把 workflow 需要的知識內容取回來。依這套文件與目前程式物件的定義，Retrieve 完成後的去向取決於節點本身：`KeywordRetrieve` 會直接交給 `Action`，`SemanticRetrieve` 則會將結果交回 `Plan` 再做一次決策。這一頁先列出可直接使用的 `KeywordRetrieve`、`StubRetrieve`、`SemanticRetrieve` 與輔助元件 `FoundryVisionQuery`，再補上 `HybridRetrieve` 這種常見的混合檢索物件型態，方便你定義自訂模組。
+Retrieve 模組負責把 workflow 需要的內容取回來。這一頁使用文件標準名來定義 Retrieve 家族的輸入輸出格式，並把原本的輔助元件與主模組分開處理。Retrieve 的標準輸入固定是查詢字串與篩選條件，標準輸出固定是命中條目、摘要片段、命中數與檢索來源。
 
 ## KeywordRetrieve
 
-`KeywordRetrieve` 是 README 第一與第三個快速開始範例使用的最小檢索模組。它會用 `query` 或 `perceived_input` 與每個條目的 `keywords` 做字串包含比對；這是工程上易懂的 lexical baseline，概念上接近傳統關鍵字檢索，可參考經典 IR 基線 [Arxiv](https://arxiv.org/abs/cmp-lg/9606016)。
+舊名對應：`KeywordRetrieve`
 
-### 初始化參數
+`KeywordRetrieve` 依關鍵字規則取回內容，適合 README 的最小流程與條目式知識查找。
 
-| 參數 | 型態 | 預設值 | 說明 |
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `items` | `list[dict] | None` | `None` | 可搜尋條目列表；每筆通常包含 `keywords: list[str]` 與 `content: str`。 |
+| `retrieve_query` | `string` | `"TSiP 定義"` | 檢索查詢字串。 |
+| `retrieve_filters` | `object` | `{}` | 篩選條件；沒有條件時固定 `{}`。 |
 
-## StubRetrieve
+### 標準輸出參數
 
-`StubRetrieve` 會對內建字典語料做最小關鍵字命中，主要用途是讓 planner / retrieve / reflect 的開發與測試在沒有外部知識庫時仍可跑通。它是 PoC 用的工程基線，沒有直接對應單一研究論文。
-
-### 初始化參數
-
-| 參數 | 型態 | 預設值 | 說明 |
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `corpus` | `dict[str, str] | None` | 內建 `_DEFAULT_CORPUS` | 可選的測試語料字典；key 為關鍵字，value 為回傳片段。 |
+| `retrieved_items` | `array<object>` | `[{"id":"doc-001","title":"TSiP 說明","content":"TSiP 是工研院主導的國產 AI 晶片落地藍圖。","score":1.0,"source":"keyword","metadata":{}}]` | 命中的條目清單；沒有命中時固定 `[]`。 |
+| `retrieved_snippet` | `string` | `"TSiP 是工研院主導的國產 AI 晶片落地藍圖。"` | 給後續節點直接使用的文字摘要。 |
+| `retrieved_hit_count` | `integer` | `1` | 命中數。 |
+| `retrieved_source` | `string` | `"keyword"` | 檢索來源標記。 |
+
+### 對應 use case
+
+README 最小流程、README 自訂 Action 流程、LaNew 條目型鞋款查找。
+
+## StaticRetrieve
+
+舊名對應：`StubRetrieve`
+
+`StaticRetrieve` 從固定資料集回傳內容，用於展示、測試與固定知識場景。它和 `KeywordRetrieve` 的輸入輸出格式相同，但資料來源是預先定好的靜態語料。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `retrieve_query` | `string` | `"agentic sdk"` | 檢索查詢字串。 |
+| `retrieve_filters` | `object` | `{}` | 篩選條件；沒有條件時固定 `{}`。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `retrieved_items` | `array<object>` | `[{"id":"stub-001","title":"固定語料","content":"Agentic SDK 提供五節點工作流。","score":1.0,"source":"static","metadata":{}}]` | 命中的條目清單；沒有命中時固定 `[]`。 |
+| `retrieved_snippet` | `string` | `"Agentic SDK 提供五節點工作流。"` | 給後續節點直接使用的文字摘要。 |
+| `retrieved_hit_count` | `integer` | `1` | 命中數。 |
+| `retrieved_source` | `string` | `"static"` | 檢索來源標記。 |
+
+### 對應 use case
+
+文件範例、測試語料流程、固定詞典場景。
 
 ## SemanticRetrieve
 
-`SemanticRetrieve` 會先選擇性地用圖像附件改寫查詢，再優先檢索 `KnowledgeBase`，最後檢索 `MemoryStore`，並把命中結果整合成單一 `retrieved_snippet`。它屬於 retrieval-augmented memory / dense retrieval 風格，可參考 Dense Passage Retrieval 的代表作 [Arxiv](https://arxiv.org/abs/2004.04906)。
+舊名對應：`SemanticRetrieve`
 
-### 初始化參數
+`SemanticRetrieve` 依語意相似度從知識來源取回內容。它適合條目比對不夠用、需要從較長知識片段中找相關內容的流程。
 
-| 參數 | 型態 | 預設值 | 說明 |
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `top_k` | `int` | `3` | Knowledge Base 與 Memory Stream 各自最多取回幾筆結果。 |
-| `similarity_weight` | `float` | `0.5` | 記憶排序中的語意相似度權重。 |
-| `recency_weight` | `float` | `0.3` | 記憶排序中的時間新近性權重。 |
-| `importance_weight` | `float` | `0.2` | 記憶排序中的 importance 權重。 |
-| `embedder` | `Embedder | None` | `None` | 若注入，Memory Stream 搜尋會先產生 query embedding。 |
-| `knowledge_base` | `KnowledgeBase | None` | `None` | 靜態知識來源；若存在會先查 Knowledge Base。 |
-| `vision_query` | `VisionQueryBuilder | None` | `None` | 若同時有 image attachments，先將圖文改寫為較適合檢索的查詢。 |
+| `retrieve_query` | `string` | `"足弓支撐 久站 鞋款 推薦"` | 檢索查詢字串。 |
+| `retrieve_filters` | `object` | `{"category":["shoe"],"tags":[]}` | 篩選條件；沒有條件時固定 `{}`。 |
 
-## Retrieve 輔助元件：FoundryVisionQuery
+### 標準輸出參數
 
-`FoundryVisionQuery` 不是獨立的 workflow 節點，而是 `SemanticRetrieve` 可選的圖像查詢改寫器。它會把文字與圖片附件送到 vision-capable Foundry deployment，輸出一段短關鍵字查詢，適合多模態檢索前處理；方法上可視為 vision-language query rewriting，沒有直接對應單一固定論文。
-
-### 初始化參數
-
-| 參數 | 型態 | 預設值 | 說明 |
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `settings` | `Settings | None` | `get_settings()` | 預設設定來源。 |
-| `client` | `Any` | `None` | 可直接注入 Azure OpenAI-compatible client。 |
-| `deployment` | `str | None` | `settings.azure_foundry_deployment` | 使用的 vision-capable deployment。 |
-| `endpoint` | `str | None` | `None` | 覆蓋 Azure Foundry endpoint。 |
-| `api_key` | `str | None` | `None` | 覆蓋 Azure Foundry API key。 |
-| `max_keywords_chars` | `int` | `60` | 限制回傳關鍵字字串的最大長度。 |
+| `retrieved_items` | `array<object>` | `[{"id":"shoe-001","title":"支撐型慢跑鞋","content":"適合久站與足弓支撐需求。","score":0.91,"source":"semantic","metadata":{"category":"shoe"}}]` | 命中的條目清單；沒有命中時固定 `[]`。 |
+| `retrieved_snippet` | `string` | `"支撐型慢跑鞋適合久站與足弓支撐需求。"` | 給後續節點直接使用的文字摘要。 |
+| `retrieved_hit_count` | `integer` | `1` | 命中數。 |
+| `retrieved_source` | `string` | `"semantic"` | 檢索來源標記。 |
+
+### 對應 use case
+
+LaNew 語意型鞋款推薦、BCI 歷史訓練片段比對、ICOPE 追蹤紀錄查找。
 
 ## HybridRetrieve
 
-`HybridRetrieve` 會混合 keyword、semantic 與結構化欄位條件來取回結果，適合 LaNew、BCI 與 ICOPE 這三類同時需要欄位比對與語意補證據的流程。方法方向可參考 Self-RAG [Arxiv](https://arxiv.org/abs/2310.11511) 與 CRAG [Arxiv](https://arxiv.org/abs/2401.15884)。
+舊名對應：`HybridRetrieve`
 
-### 初始化參數
+`HybridRetrieve` 混合關鍵字、語意與欄位條件取回內容。它適合同時需要欄位比對與語意補證據的流程。
 
-| 參數 | 型態 | 預設值 | 說明 |
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `top_k` | `int` | `5` | 最多取回幾筆結果。 |
-| `keyword_weight` | `float` | `0.4` | 關鍵字命中權重。 |
-| `semantic_weight` | `float` | `0.4` | 語意相似度權重。 |
-| `field_weight` | `float` | `0.2` | 結構化欄位條件權重。 |
-| `knowledge_base` | `KnowledgeBase | None` | `None` | 靜態知識來源。 |
-| `memory_store` | `MemoryStore | None` | `None` | 對話或歷史記憶來源。 |
+| `retrieve_query` | `string` | `"足弓支撐 久站 鞋款 推薦"` | 檢索查詢字串。 |
+| `retrieve_filters` | `object` | `{"category":["shoe"],"date_from":"","date_to":"","tags":[]}` | 篩選條件；沒有條件時固定 `{}`。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `retrieved_items` | `array<object>` | `[{"id":"shoe-001","title":"支撐型慢跑鞋","content":"適合久站與足弓支撐需求。","score":0.95,"source":"hybrid","metadata":{"category":"shoe"}}]` | 命中的條目清單；沒有命中時固定 `[]`。 |
+| `retrieved_snippet` | `string` | `"支撐型慢跑鞋適合久站與足弓支撐需求。"` | 給後續節點直接使用的文字摘要。 |
+| `retrieved_hit_count` | `integer` | `1` | 命中數。 |
+| `retrieved_source` | `string` | `"hybrid"` | 檢索來源標記。 |
+
+### 對應 use case
+
+LaNew 欄位加語意鞋款推薦、BCI 歷史片段與標註混合查找、ICOPE 能力面向加紀錄比對。
+
+## Retrieve 輔助元件：VisionQueryBuilder
+
+舊名對應：`FoundryVisionQuery`
+
+`VisionQueryBuilder` 不是獨立 workflow 節點，而是 `ImageAwarePerceive` 或 `SemanticRetrieve` 前面的查詢改寫器。它的責任是把圖片與文字整理成一段可檢索的查詢字串。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `string` | `"請根據這張足測圖推薦鞋款"` | 使用者原始文字。 |
+| `input_images` | `array<object>` | `[{"mime_type":"image/png","name":"foot_scan.png","content_ref":"blob://foot_scan.png"}]` | 圖片清單；只允許 `image/png`、`image/jpeg`、`image/webp`。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `retrieve_query` | `string` | `"足測圖 足弓支撐 鞋款 推薦"` | 給後續檢索節點使用的查詢字串。 |

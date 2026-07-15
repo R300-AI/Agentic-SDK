@@ -1,47 +1,90 @@
 # Action
 
-Action 模組負責把前面節點收集到的資訊轉成回應內容。依這套文件與目前程式物件的定義，Action 會在這一步產生本輪輸出；之後是否直接結束，或再交給 Reflect 檢查，取決於 workflow 的接法。這一頁先列出可直接使用的 `DirectAnswerAction` 與 `CompletionAction`，再補上 `StructuredOutputAction` 這種常見的結構化輸出物件型態，方便你定義自訂模組。
+Action 模組負責把前面節點收集到的資訊轉成回應內容。這一頁使用文件標準名來定義 Action 家族的 MVP 邊界；標準輸入固定包含使用者問題、感知摘要、檢索摘要與檢索條目，標準輸出固定包含狀態、文字回應、結構化資料與錯誤訊息。
 
 ## DirectAnswerAction
 
-`DirectAnswerAction` 是 README 第一個快速開始範例使用的最小輸出模組。它不依賴生成模型，只會讀取 `latest_retrieved_content`，然後把該內容原樣提升為回應內容；這屬於 deterministic answer composition 的工程型基線，沒有對應單一研究論文。
+舊名對應：`DirectAnswerAction`
 
-### 初始化參數
+`DirectAnswerAction` 直接根據取回內容組成最終回應，不再做額外生成。它適合 README 最小流程與條目式固定回答。
 
-| 參數 | 型態 | 預設值 | 說明 |
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `（無）` | `-` | `-` | `DirectAnswerAction` 沒有 `__init__` 配置參數。 |
+| `user_message` | `string` | `"TSiP 是什麼？"` | 使用者單輪原始文字。 |
+| `perceive_summary` | `string` | `"使用者想知道 TSiP 的定義"` | 感知摘要。 |
+| `retrieved_snippet` | `string` | `"TSiP 是工研院主導的國產 AI 晶片落地藍圖。"` | 檢索摘要。 |
+| `retrieved_items` | `array<object>` | `[{"id":"doc-001","title":"TSiP 說明","content":"TSiP 是工研院主導的國產 AI 晶片落地藍圖。","score":1.0,"source":"keyword","metadata":{}}]` | 檢索條目；沒有命中時固定 `[]`。 |
+| `response_schema` | `object` | `{"type":"text","fields":[]}` | 回應格式定義。 |
 
-## CompletionAction
+### 標準輸出參數
 
-`CompletionAction` 會把使用者問題與最近一次檢索上下文組成 chat completion 請求，交給 OpenAI-compatible client、AMD upstream，或 Azure Foundry deployment 生成自然語言回應。它屬於 generative completion 類型的節點，論文背景可參考 GPT 類 few-shot/completion 範式的代表作 [Arxiv](https://arxiv.org/abs/2005.14165)。
-
-### 初始化參數
-
-| 參數 | 型態 | 預設值 | 說明 |
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `backend` | `str | None` | `settings.workflow_action_backend`，再退回 `"upstream"` | 後端模式，只接受 `upstream` 或 `foundry`。 |
-| `settings` | `Settings | None` | `get_settings()` | 設定來源；未提供時讀全域設定。 |
-| `model` | `str | None` | `None` | 顯式指定模型名。upstream 下會傳給 OpenAI-compatible API；foundry 下會作為 model selector 使用。 |
-| `upstream` | `UpstreamClient | None` | `None` | upstream 專用。注入 SDK 自己的 `UpstreamClient`；與 `base_url`、`client` 互斥。 |
-| `base_url` | `str | None` | `None` | upstream 專用。用此 URL 建立內部 `UpstreamClient`；與 `upstream`、`client` 互斥。 |
-| `client` | `Any` | `None` | 可直接注入 chat completions client。README 的 `openai_client` 就是走這個參數；在 upstream 下代表 OpenAI-compatible client，在 foundry 下可注入既有 Azure OpenAI client。 |
-| `endpoint` | `str | None` | `None` | foundry 專用。覆蓋 Azure Foundry endpoint。 |
-| `deployment` | `str | None` | `None` | foundry 專用。覆蓋 deployment；upstream 下若 `model` 未給，會被拿來當 model fallback。 |
-| `api_key` | `str | None` | `None` | foundry 專用。覆蓋 Azure Foundry API key。 |
-| `temperature` | `float | None` | `None` | 若提供，會傳給 completion API。 |
-| `system_prompt` | `str | None` | 內建 `DEFAULT_SYSTEM_PROMPT` | 覆蓋預設 system prompt。 |
-| `idle_timeout_sec` | `float` | `30.0` | foundry 串流路徑的 read idle timeout。 |
+| `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
+| `final_message` | `string` | `"TSiP 是工研院主導的國產 AI 晶片落地藍圖。"` | 對外回應文字。 |
+| `final_data` | `object|null` | `null` | 純文字回應時固定 `null`。 |
+| `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
 
-## StructuredOutputAction
+### 對應 use case
 
-`StructuredOutputAction` 會依照指定 schema 產生穩定格式的對外回應，適合 LaNew 的推薦說明、BCI 的訓練建議與 ICOPE 的追蹤建議。方法方向可參考 Toolformer [Arxiv](https://arxiv.org/abs/2302.04761) 與 ReAct [Arxiv](https://arxiv.org/abs/2210.03629)。
+README 最小流程、條目型 FAQ、固定知識回覆。
 
-### 初始化參數
+## GenerativeAction
 
-| 參數 | 型態 | 預設值 | 說明 |
+舊名對應：`CompletionAction`
+
+`GenerativeAction` 根據輸入摘要與取回內容生成最終回應。它適合需要把多筆條目、歷史紀錄或摘要整合成自然語言輸出的流程。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `client` | `Any` | `None` | 生成模型 client。 |
-| `output_schema` | `dict | None` | `None` | 輸出欄位與格式定義。 |
-| `system_prompt` | `str | None` | `None` | 控制輸出格式與語氣。 |
-| `include_evidence` | `bool` | `True` | 是否要求輸出中帶入證據欄位。 |
+| `user_message` | `string` | `"請幫我推薦適合久站的鞋"` | 使用者單輪原始文字。 |
+| `perceive_summary` | `string` | `"使用者想找適合久站情境的鞋款推薦"` | 感知摘要。 |
+| `retrieved_snippet` | `string` | `"支撐型慢跑鞋適合久站與足弓支撐需求。"` | 檢索摘要。 |
+| `retrieved_items` | `array<object>` | `[{"id":"shoe-001","title":"支撐型慢跑鞋","content":"適合久站與足弓支撐需求。","score":0.91,"source":"semantic","metadata":{"category":"shoe"}}]` | 檢索條目；沒有命中時固定 `[]`。 |
+| `response_schema` | `object` | `{"type":"text","fields":[]}` | 回應格式定義。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
+| `final_message` | `string` | `"建議優先考慮支撐型慢跑鞋，因為較適合久站與足弓支撐需求。"` | 對外回應文字。 |
+| `final_data` | `object|null` | `null` | 純文字回應時固定 `null`。 |
+| `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
+
+### 對應 use case
+
+README 模型型輸出流程、LaNew 推薦說明、BCI 訓練建議、ICOPE 追蹤建議。
+
+## StructuredAction
+
+舊名對應：`StructuredOutputAction`
+
+`StructuredAction` 依固定欄位規格輸出結構化結果。它適合後續還要把回應交給別的系統處理，或需要將推薦理由、建議與證據拆成固定欄位的流程。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `string` | `"請幫我推薦適合久站的鞋"` | 使用者單輪原始文字。 |
+| `perceive_summary` | `string` | `"使用者想找適合久站情境的鞋款推薦"` | 感知摘要。 |
+| `retrieved_snippet` | `string` | `"支撐型慢跑鞋適合久站與足弓支撐需求。"` | 檢索摘要。 |
+| `retrieved_items` | `array<object>` | `[{"id":"shoe-001","title":"支撐型慢跑鞋","content":"適合久站與足弓支撐需求。","score":0.91,"source":"semantic","metadata":{"category":"shoe"}}]` | 檢索條目；沒有命中時固定 `[]`。 |
+| `response_schema` | `object` | `{"type":"json","fields":[{"name":"recommendation","value_type":"string"},{"name":"reason","value_type":"string"}]}` | 結構化輸出格式定義。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
+| `final_message` | `string` | `"建議優先考慮支撐型慢跑鞋。"` | 對外回應文字；若只需要結構化資料也仍保留摘要文字。 |
+| `final_data` | `object|null` | `{"recommendation":"支撐型慢跑鞋","reason":"較適合久站與足弓支撐需求"}` | 結構化輸出資料。 |
+| `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
+
+### 對應 use case
+
+LaNew 固定欄位推薦、BCI 訓練建議欄位化、ICOPE 追蹤建議欄位化。

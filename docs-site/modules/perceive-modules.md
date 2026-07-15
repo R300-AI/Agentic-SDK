@@ -1,63 +1,145 @@
 # Perceive
 
-Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的理解結果。依這套文件的流程定義，Perceive 完成後會交給下一個節點；若 workflow 有接 `Plan`，則通常由 `Plan` 決定後續路徑。這一頁先列出可直接使用的 `InputPerceive`、`RuleBasedPerceive` 與 `LLMBasedPerceive`，再補上 `StructuredPerceive` 與 `MultimodalPerceive` 這兩種常見的感知物件型態，方便你定義自訂模組。
+Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁使用文件標準名來定義 Perceive 家族的 MVP 邊界；輸入來源只包含純文字、結構化欄位與圖片檔，圖片檔只接受 `image/png`、`image/jpeg`、`image/webp`。
 
-## InputPerceive
+## PassThroughPerceive
 
-`InputPerceive` 是 README 第一與第三個快速開始範例使用的最小感知模組。它不做語意推理，只會將 `user_message` 直接整理成 `perceived_input` 與 `query` 供後續檢索使用；這是 SDK 的工程型入口，沒有對應單一研究論文。
+舊名對應：`InputPerceive`
 
-### 初始化參數
+`PassThroughPerceive` 將原始文字輸入直接轉成查詢內容，不做額外判讀。它適合 README 的最小流程，也適合作為所有文字型流程的最小入口。
 
-| 參數 | 型態 | 預設值 | 說明 |
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `（無）` | `-` | `-` | `InputPerceive` 沒有 `__init__` 配置參數。 |
+| `user_message` | `string` | `"請介紹 TSiP"` | 使用者單輪原始文字。 |
 
-## RuleBasedPerceive
+### 標準輸出參數
 
-`RuleBasedPerceive` 以輕量規則將輸入分成 `question`、`diagnose` 或 `general` 等 intent，適合不依賴外部模型的基線流程。它屬於 heuristic intent classification，沒有直接對應單一論文。
-
-### 初始化參數
-
-| 參數 | 型態 | 預設值 | 說明 |
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `welcome_message` | `str` | `""` | 若提供，會寫入 `PERCEIVED` metadata，供 UI 顯示初始提示。 |
-| `options` | `list[dict] | None` | `None` | 可選選項列表；若 user input 剛好命中 `label` 或 `value`，會優先採用該 option 的 `intent` 或 `value`。 |
-| `importance` | `float` | `1.0` | 若 workflow 有接 `memory_store`，此值會寫入 `MemoryEntry.importance`。 |
+| `query` | `string` | `"請介紹 TSiP"` | 直接給後續檢索節點使用的查詢字串。 |
 
-## LLMBasedPerceive
+### 對應 use case
 
-`LLMBasedPerceive` 會把使用者輸入與可選項目一起交給 LLM，要求模型只回 JSON，輸出 `intent` 與 `summary`。這屬於 LLM-based intent understanding，可參考 in-context/few-shot 類生成式理解方法的代表作 [Arxiv](https://arxiv.org/abs/2005.14165)。
+README 最小流程、README 自訂 Action 流程。
 
-### 初始化參數
+## PatternPerceive
 
-| 參數 | 型態 | 預設值 | 說明 |
+舊名對應：`RuleBasedPerceive`
+
+`PatternPerceive` 依固定模式、關鍵詞或選項命中來整理輸入重點。它的責任是把輸入轉成可以讓後續 `Plan` 判斷分支的路由標籤。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `welcome_message` | `str` | `""` | 若提供，會寫入 `PERCEIVED` metadata，供 UI 顯示初始提示。 |
-| `options` | `list[dict] | None` | `None` | 可選選項列表，會作為 `available_options` 背景資訊送給 LLM。 |
-| `importance` | `float` | `1.0` | 若 workflow 有接 `memory_store`，此值會寫入 `MemoryEntry.importance`。 |
-| `foundry_client` | `FoundryClient | None` | `get_foundry_client()` | 注入既有 Foundry client；未提供時會自建。 |
+| `user_message` | `string` | `"請幫我推薦適合久站的鞋"` | 使用者單輪原始文字。 |
+| `input_options` | `array<object>` | `[{"label":"鞋款推薦","value":"shoe_recommendation","hint":"recommendation"}]` | UI 提供的選項清單；沒有選項時固定 `[]`。 |
+| `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
+| `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `perceive_type` | `string` | `"pattern"` | 標記本次使用模式比對路徑。 |
+| `perceive_query` | `string` | `"推薦適合久站的鞋"` | 後續檢索或規劃可直接使用的查詢字串。 |
+| `perceive_label` | `string` | `"shoe_recommendation"` | 供 `Plan` 判斷分支的標籤。 |
+| `perceive_summary` | `string` | `"使用者想找適合久站情境的鞋款推薦"` | 對本輪需求的一句摘要。 |
+| `perceive_fields` | `object` | `{}` | 摘出的結構化欄位。 |
+| `perceive_images` | `array<object>` | `[]` | 本輪保留的圖片資訊。 |
+
+### 對應 use case
+
+LaNew 的選項導流、BCI 的快速問題分流、ICOPE 的評估入口分流。
+
+## SemanticPerceive
+
+舊名對應：`LLMBasedPerceive`
+
+`SemanticPerceive` 依語意判讀來整理輸入內容與重點。它和 `PatternPerceive` 的輸出格式相同，但適合需求表達較長、較依賴語意理解的流程。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `string` | `"我最近久站後足弓很酸，想找比較有支撐的鞋"` | 使用者單輪原始文字。 |
+| `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
+| `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
+| `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `perceive_type` | `string` | `"semantic"` | 標記本次使用語意理解路徑。 |
+| `perceive_query` | `string` | `"足弓支撐 久站 鞋款 推薦"` | 後續檢索或規劃可直接使用的查詢字串。 |
+| `perceive_label` | `string` | `"shoe_recommendation"` | 供 `Plan` 判斷分支的標籤。 |
+| `perceive_summary` | `string` | `"使用者想找適合久站且足弓支撐較好的鞋款"` | 對本輪需求的一句摘要。 |
+| `perceive_fields` | `object` | `{}` | 摘出的結構化欄位。 |
+| `perceive_images` | `array<object>` | `[]` | 本輪保留的圖片資訊。 |
+
+### 對應 use case
+
+LaNew 的自然語言鞋款需求、BCI 的訓練情境描述、ICOPE 的追蹤建議需求。
 
 ## StructuredPerceive
 
-`StructuredPerceive` 會把表單欄位、量測欄位、補充觀察或其他結構化輸入整理成統一的輸入摘要，適合 LaNew 與 ICOPE 這類以欄位資料為主的流程。方法定位上可視為把結構化輸入轉成後續 reasoning 可用的摘要，流程設計可參考 ReAct 的輸入整理思路 [Arxiv](https://arxiv.org/abs/2210.03629)。
+舊名對應：`StructuredPerceive`
 
-### 初始化參數
+`StructuredPerceive` 將結構化欄位整理成後續可用的查詢與摘要。它適合以欄位資料為主的流程，不要求使用者先把資訊寫成完整自然語言。
 
-| 參數 | 型態 | 預設值 | 說明 |
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `field_schema` | `list[dict] | None` | `None` | 欄位定義與欄位順序，用來決定哪些輸入要保留。 |
-| `required_fields` | `list[str] | None` | `None` | 需要優先檢查的欄位名稱。 |
-| `summary_template` | `str | None` | `None` | 若提供，控制輸入摘要的輸出格式。 |
+| `user_message` | `string` | `""` | 沒有自由輸入時固定空字串。 |
+| `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
+| `input_fields` | `object` | `{"age":72,"left_foot_length_mm":250,"pain":true}` | 欄位資料；沒有欄位時固定 `{}`。 |
+| `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
 
-## MultimodalPerceive
+### 標準輸出參數
 
-`MultimodalPerceive` 會把文字、圖片、附件或其他多模態輸入整理成統一感知結果，適合 LaNew 的足測報表與 BCI 的多模態輸入。多模態感知的做法可參考 BLIP-2 [Arxiv](https://arxiv.org/abs/2301.12597) 與 LLaVA [Arxiv](https://arxiv.org/abs/2304.08485)。
-
-### 初始化參數
-
-| 參數 | 型態 | 預設值 | 說明 |
+| 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `client` | `Any` | `None` | 視覺或多模態模型 client。 |
-| `system_prompt` | `str | None` | `None` | 控制多模態感知摘要的輸出方式。 |
-| `attachment_policy` | `str` | `"images_only"` | 附件處理策略，例如只讀圖片、讀全文或忽略附件。 |
-| `max_summary_chars` | `int` | `500` | 控制輸入摘要長度。 |
+| `perceive_type` | `string` | `"structured"` | 標記本次使用欄位整理路徑。 |
+| `perceive_query` | `string` | `"72歲 左足長250mm 足弓疼痛 鞋款建議"` | 將欄位轉成後續可搜尋的查詢字串。 |
+| `perceive_label` | `string` | `"structured_assessment"` | 供 `Plan` 判斷分支的標籤。 |
+| `perceive_summary` | `string` | `"使用者提供了年齡、足長與疼痛欄位，需整理成建議"` | 對欄位內容的一句摘要。 |
+| `perceive_fields` | `object` | `{"age":72,"left_foot_length_mm":250,"pain":true}` | 摘出的結構化欄位。 |
+| `perceive_images` | `array<object>` | `[]` | 本輪保留的圖片資訊。 |
+
+### 對應 use case
+
+LaNew 足測欄位、ICOPE 六大能力欄位輸入。
+
+## ImageAwarePerceive
+
+舊名對應：`MultimodalPerceive`
+
+`ImageAwarePerceive` 將文字與圖片內容整理成後續可用的查詢與摘要。這個標準名只處理圖片檔，不延伸到任意附件格式。
+
+### 標準輸入參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `string` | `"請根據這張足測圖推薦鞋款"` | 使用者單輪原始文字。 |
+| `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
+| `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
+| `input_images` | `array<object>` | `[{"mime_type":"image/png","name":"foot_scan.png","content_ref":"blob://foot_scan.png"}]` | 圖片清單；只允許 `image/png`、`image/jpeg`、`image/webp`。 |
+
+### 標準輸出參數
+
+| 參數 | 型態 | 格式 | 說明 |
+| --- | --- | --- | --- |
+| `perceive_type` | `string` | `"image_aware"` | 標記本次使用圖像感知路徑。 |
+| `perceive_query` | `string` | `"足測圖 足弓支撐 鞋款 推薦"` | 將圖文內容整理成後續可搜尋的查詢字串。 |
+| `perceive_label` | `string` | `"image_based_recommendation"` | 供 `Plan` 判斷分支的標籤。 |
+| `perceive_summary` | `string` | `"使用者附上足測圖，希望得到鞋款推薦"` | 對圖文輸入的一句摘要。 |
+| `perceive_fields` | `object` | `{}` | 摘出的結構化欄位。 |
+| `perceive_images` | `array<object>` | `[{"mime_type":"image/png","name":"foot_scan.png","content_ref":"blob://foot_scan.png"}]` | 本輪保留的圖片資訊。 |
+
+### 對應 use case
+
+LaNew 足測圖、BCI 視覺輔助輸入。
