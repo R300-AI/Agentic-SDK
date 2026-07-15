@@ -8,7 +8,7 @@
 - [BCI 射箭教練](bci-archery-coach.md)：用腦機介面輔助訓練場景，說明 Agentic SDK 如何把多模態訊號整理成教練可採取的訓練建議。
 - [ICOPE 六力評估助手](icope-six-capacity-assistant.md)：用高齡照護六力評估場景，說明 Agentic SDK 如何把六力結果、追蹤紀錄與照護建議串成可持續推進的評估流程。
 
-如果你要從案例快速回頭對照模組家族，可以直接看下面這張交互參照表。表的欄位是三個 use case，列則是五個模組家族；你可以從案例往左看流程組成，也可以從家族往右看哪些案例採用了哪一個標準模組。
+如果你要復刻這些案例，可以直接看下面這張模組配置表。表的欄位是三個 use case，列則是五個模組家族；你可以把每一欄視為一套完整配置，依序選用對應的 `Perceive`、`Plan`、`Retrieve`、`Action`、`Reflect` 模組來重建同一條流程。
 
 | 模組家族 | [LaNew 售鞋顧問](lanew-footwear-advisor.md) | [BCI 射箭教練](bci-archery-coach.md) | [ICOPE 六力評估助手](icope-six-capacity-assistant.md) |
 | --- | --- | --- | --- |
@@ -18,7 +18,7 @@
 | [Action](../modules/action-modules.md) | StructuredAction | GenerativeAction | StructuredAction |
 | [Reflect](../modules/reflect-modules.md) | EvidenceCheckReflect | ResponseCheckReflect | EvidenceCheckReflect |
 
-表 1：三個 use case 與五個模組家族之間的交互參照表。
+表 1：三個 use case 的五大模組家族配置表，可依欄位重現對應流程。
 
 ## 閱讀方式
 
