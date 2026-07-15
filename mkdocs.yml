@@ -31,8 +31,8 @@ nav:
   - Workflow:
     - 總覽: workflow-overview.md
     - 引擎選項: workflow-engines.md
-  - Modules:
-    - 總覽: module-families.md
+  - Module Family:
+    - modules/index.md
     - Perceive: modules/perceive-modules.md
     - Plan: modules/plan-modules.md
     - Retrieve: modules/retrieve-modules.md

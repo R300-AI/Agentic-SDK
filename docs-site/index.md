@@ -21,7 +21,7 @@
 ## 主要入口
 
 - [Workflow Overview](workflow-overview.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
-- [Module Families](module-families.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
+- [Module Family](modules/index.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
 - [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 預設使用的 `InContextMemory`，以及可注入的其他引擎層。
 
 ## 模組總表

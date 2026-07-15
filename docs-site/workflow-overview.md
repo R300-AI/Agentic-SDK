@@ -66,8 +66,8 @@ Workflow(
 
 | 你現在要做的事 | 先看哪一頁 | 再看哪一頁 |
 | --- | --- | --- |
-| 理解 workflow 怎麼組 | Workflow Overview | [Module Families](module-families.md) |
+| 理解 workflow 怎麼組 | Workflow Overview | [Module Family](modules/index.md) |
 | 理解 workflow 預設使用哪個引擎 | [Workflow 引擎選項](workflow-engines.md) | 對應的功能模組頁 |
-| 直接找某一類模組規格 | [Module Families](module-families.md) | 3.1 到 3.5 對應頁面 |
+| 直接找某一類模組規格 | [Module Family](modules/index.md) | 3.1 到 3.5 對應頁面 |
 
 下一步建議先看 [Workflow 引擎選項](workflow-engines.md)，再進各功能模組頁查參數與輸入輸出定義。
