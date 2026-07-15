@@ -7,39 +7,25 @@
 下圖先把五大家族的銜接關係畫成一個循環。若你先想理解整體流向，再進各模組頁，這張圖會比逐列讀表更快。
 
 ```mermaid
-flowchart TB
-	subgraph row1[ ]
-		direction LR
-		spacer1[ ]
-		retrieve[Retrieve]
-		spacer2[ ]
-	end
+architecture-beta
+	group top(cloud)[ ]
+	group center(cloud)[ ]
+	group bottom(cloud)[ ]
 
-	subgraph row2[ ]
-		direction LR
-		perceive[Perceive]
-		plan[Plan]
-		action[Action]
-	end
+	service retrieve(database)[Retrieve] in top
+	service perceive(server)[Perceive] in center
+	service plan(server)[Plan] in center
+	service action(server)[Action] in center
+	service reflect(server)[Reflect] in bottom
 
-	subgraph row3[ ]
-		direction LR
-		spacer3[ ]
-		reflect[Reflect]
-		spacer4[ ]
-	end
-
-	classDef spacer fill:transparent,stroke:transparent,color:transparent;
-	class spacer1,spacer2,spacer3,spacer4 spacer;
-
-	perceive --> plan
-	plan --> retrieve
-	plan --> action
-	plan --> reflect
-	retrieve --> plan
-	reflect --> retrieve
-	reflect --> action
-	action --> perceive
+	perceive:R -- L:plan
+	plan:T -- B:retrieve
+	plan:R -- L:action
+	plan:B -- T:reflect
+	retrieve:B -- T:plan
+	reflect:T -- B:retrieve
+	reflect:R -- L:action
+	action:L -- R:perceive
 ```
 
 從文件定義來看，`Perceive` 是每一輪的入口，先把輸入整理成後續可消費的理解結果。`Plan` 接著判斷這一輪應該先取資料、直接回答，或先進入反思判斷。`Retrieve` 不直接結束流程，而是把取回的內容交還給 `Plan`，讓 `Plan` 依新上下文再做一次決策。
