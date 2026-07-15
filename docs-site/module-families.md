@@ -12,18 +12,18 @@
 
 ## 功能家族矩陣
 
-| 家族 | 模組 | 主要讀取 key | 主要寫入 key | 模型接入規格 |
+| 家族 | 模組 | 流程角色 | 下一步 | 是否支援OpenAI SDK |
 | --- | --- | --- | --- | --- |
-| Perceive | InputPerceive、LLM Perceive | `input` | `perceived_input`、`query` | 模型型模組使用 OpenAI SDK form |
-| Plan | Chain-of-Thought Planner、ReAct Planner、Plan-and-Solve Planner | `perceived_input`、`reflection` | `plan`、`query` | OpenAI SDK form |
-| Retrieve | KeywordRetrieve、Semantic Search Retrieve | `query`、`plan` | `retrieved_items` | 模型型模組使用 OpenAI SDK form |
-| Action | DirectAnswerAction、CompletionAction | `perceived_input`、`retrieved_items`、`plan` | `draft_answer`、`final_answer` | 模型型模組使用 OpenAI SDK form |
-| Reflect | Reflexion Reflect | `draft_answer`、`retrieved_items` | `reflection`、`final_answer` | OpenAI SDK form |
+| Perceive | InputPerceive、LLMBasedPerceive、RuleBasedPerceive | 理解目前輸入，整理成後續可用的理解結果 | 固定交給 `Plan` | 僅模型型模組支援 |
+| Plan | ReActPlan | 根據目前上下文決定下一步流程 | 可導向 `Retrieve`、`Action` 或 `Reflect` | 是 |
+| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve | 取回條目、上下文或知識內容 | 固定交回 `Plan` | 僅模型型模組支援 |
+| Action | DirectAnswerAction、CompletionAction | 產出回應內容 | 固定交回 `Perceive` | 僅模型型模組支援 |
+| Reflect | RuleBasedReflect、ReflexionReflect | 檢查目前回應是否需要修正 | 可導向 `Retrieve` 或 `Action` | 僅模型型模組支援 |
 
 ## 建議閱讀順序
 
 1. 先看 [Workflow Overview](workflow-overview.md)，確認五大功能的角色。
 2. 再看 [Workflow 引擎選項](workflow-engines.md)，掌握預設 InContextMemory 與可替換引擎層。
-3. 最後進入你要的功能頁，查模組參數與輸入輸出規格。
+3. 最後進入你要的功能頁，查模組的初始化參數與流程角色。
 
 這頁是索引頁，不重複展開每個模組的細節。細節請進五個模組專頁。

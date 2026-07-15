@@ -22,6 +22,28 @@ Workflow(
 
 在這套文件站的概念裡，`Workflow` 不只串接節點，也決定本輪執行用哪個引擎保存狀態。預設情況下，會以 `InContextMemory` 作為 workflow 的引擎，承接輸入、中繼結果與本輪推進所需的暫時資料。
 
+下圖用 `architecture-beta` 示意這套文件定義中的流程循環：
+
+```mermaid
+architecture-beta
+    group cycle(cloud)[Workflow]
+
+    service perceive(server)[Perceive] in cycle
+    service plan(server)[Plan] in cycle
+    service retrieve(database)[Retrieve] in cycle
+    service reflect(server)[Reflect] in cycle
+    service action(server)[Action] in cycle
+
+    perceive:R -- L:plan
+    plan:B -- T:retrieve
+    plan:R -- L:action
+    plan:T -- B:reflect
+    retrieve:T -- B:plan
+    reflect:L -- R:retrieve
+    reflect:B -- T:action
+    action:L -- R:perceive
+```
+
 ## 五大功能的角色
 
 ### Perceive
@@ -30,29 +52,29 @@ Workflow(
 
 ### Plan
 
-決定下一步要進入哪個功能節點，並以 reasoning strategy 將問題拆解成可執行的工作流路徑。
+決定下一步要進入哪個功能節點，並以 reasoning strategy 將問題拆解成可執行的工作流路徑；在這套文件定義中，Plan 可將流程導向 Retrieve、Action 或 Reflect。
 
 ### Retrieve
 
-根據查詢條件取回條目、上下文或知識內容。這一版文件聚焦在最小條目命中與語意檢索。
+根據查詢條件取回條目、上下文或知識內容。依這套文件的流程定義，Retrieve 完成後會將結果交回 Plan，再由 Plan 決定下一步。這一版文件聚焦在最小條目命中與語意檢索。
 
 ### Action
 
-產出最終回應。最小模組可直接組裝答案，模型型模組則透過 completion client 生成輸出。
+產出回應內容。依這套文件的流程定義，Action 完成後會將流程交回 Perceive，開始下一輪理解；最小模組可直接組裝答案，模型型模組則透過 completion client 生成輸出。
 
 ### Reflect
 
-檢查 action 結果是否可接受，並在需要時提供下一輪改進方向或重試信號。
+檢查 action 結果是否可接受，並在需要時提供下一輪改進方向或重試信號；在這套文件定義中，Reflect 可將流程導向 Retrieve 或 Action。
 
 ## 最小流程與進階流程
 
 ### README 最小流程
 
-`InputPerceive` → `KeywordRetrieve` → `DirectAnswerAction`。這條路徑用來說明如何用最少節點建立第一條 workflow。
+`InputPerceive` → `Plan` → `KeywordRetrieve` → `Plan` → `DirectAnswerAction` → `Perceive`。這條路徑用來說明如何用最少節點建立第一條 workflow。
 
 ### 模型型輸出流程
 
-沿用最小流程的前段，將 action 換成 `CompletionAction`，並透過 OpenAI SDK client 接入模型能力。
+沿用最小流程的前段，將最後的 action 換成 `CompletionAction`，並透過 OpenAI SDK client 接入模型能力，再回到下一輪 `Perceive`。
 
 ### 進階規劃流程
 

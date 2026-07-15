@@ -1,12 +1,12 @@
 # Retrieve
 
-Retrieve 模組負責把 workflow 需要的知識內容取回來。現行程式碼中已實作 `KeywordRetrieve`、`StubRetrieve` 與 `SemanticRetrieve` 三個節點；另外還有 `FoundryVisionQuery` 作為圖像附件轉檢索查詢的輔助元件。
+Retrieve 模組負責把 workflow 需要的知識內容取回來。依這套文件的流程定義，Retrieve 完成後會將結果交回 Plan，再由 Plan 決定後續路徑。現行程式碼中已實作 `KeywordRetrieve`、`StubRetrieve` 與 `SemanticRetrieve` 三個節點；另外還有 `FoundryVisionQuery` 作為圖像附件轉檢索查詢的輔助元件。
 
 ## 已實作模組
 
-| 模組 | 需要模型 | 下一節點 | 主要用途 |
+| 模組 | 是否支援OpenAI SDK | 下一節點 | 主要用途 |
 | --- | --- | --- | --- |
-| `KeywordRetrieve` | 否 | `action` | README 最小檢索，直接比對關鍵字條目 |
+| `KeywordRetrieve` | 否 | `plan` | README 最小檢索，直接比對關鍵字條目 |
 | `StubRetrieve` | 否 | `plan` | 內建測試語料的 PoC 檢索基線 |
 | `SemanticRetrieve` | 視設定而定 | `plan` | 從 Knowledge Base 與 Memory Stream 做語意/記憶檢索 |
 
