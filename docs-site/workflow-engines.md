@@ -12,18 +12,26 @@
 - 節點之間共享狀態的預設承接層
 - 沒有額外外部存儲時，workflow 內建的執行引擎
 
-這一層通常承接的資料包括：
+這一層通常承接的資料，會對應到文件裡定義的 `Entities` 物件。例如：
 
-- `input`
-- `perceived_input`
-- `plan`
-- `query`
+- `user_message`
+- `perceive_query`
+- `perceive_label`
+- `perceive_summary`
+- `next_node`
+- `retrieve_query`
+- `plan_reason`
 - `retrieved_items`
-- `draft_answer`
-- `final_answer`
-- `reflection`
+- `retrieved_snippet`
+- `retrieved_hit_count`
+- `retrieved_source`
+- `action_status`
+- `final_message`
+- `action_error`
+- `reflect_verdict`
+- `reflect_reason`
 
-這些欄位仍然重要，但它們應被理解成預設 workflow 引擎內常見的狀態資料，而不是另外抽離成一張獨立的 memory 契約頁。
+這些欄位應被理解成預設 workflow 引擎內承接的狀態資料，而不是另外脫離模組頁、再獨立定一套不同名稱的 memory 契約。
 
 ## Workflow 可注入的其他引擎層
 
@@ -47,6 +55,6 @@
 
 模組頁負責回答每個節點做什麼、需要哪些參數、讀寫哪些狀態。
 
-這一頁負責回答 `Workflow` 在執行時預設使用哪個引擎，以及這些狀態是由哪一層引擎承接。
+這一頁負責回答 `Workflow` 在執行時預設使用哪個引擎，以及 `Entities` 這類中間狀態是由哪一層引擎承接。
 
 如果你現在要先理解 workflow 如何組裝，先看 [Workflow Overview](workflow-overview.md)。如果你接下來要看各節點如何讀寫這些狀態，再進對應模組頁。
