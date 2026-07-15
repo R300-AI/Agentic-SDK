@@ -22,27 +22,9 @@ Workflow(
 
 在這套文件站的概念裡，`Workflow` 不只串接節點，也決定本輪執行用哪個引擎保存狀態。預設情況下，會以 `InContextMemory` 作為 workflow 的引擎，承接輸入、中繼結果與本輪推進所需的暫時資料。
 
-下圖用 `architecture-beta` 示意這套文件定義中的流程循環：
+下圖示意這套文件定義中的流程循環：
 
-```mermaid
-architecture-beta
-    group cycle(cloud)[Workflow]
-
-    service perceive(server)[Perceive] in cycle
-    service plan(server)[Plan] in cycle
-    service retrieve(database)[Retrieve] in cycle
-    service reflect(server)[Reflect] in cycle
-    service action(server)[Action] in cycle
-
-    perceive:R -- L:plan
-    plan:B -- T:retrieve
-    plan:R -- L:action
-    plan:T -- B:reflect
-    retrieve:T -- B:plan
-    reflect:L -- R:retrieve
-    reflect:B -- T:action
-    action:L -- R:perceive
-```
+![Framework](assets/framework.png)
 
 ## 五大功能的角色
 
