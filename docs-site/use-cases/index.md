@@ -6,6 +6,7 @@
 
 - [LaNew 售鞋顧問](lanew-footwear-advisor.md)：用門市購鞋與足型建議場景，說明 Agentic SDK 如何把商品知識、顧客需求與推薦話術串成可重複使用的顧問流程。
 - [BCI 射箭教練](bci-archery-coach.md)：用腦機介面輔助訓練場景，說明 Agentic SDK 如何把多模態訊號整理成教練可採取的訓練建議。
+- [ICOPE 六力評估助手](icope-six-capacity-assistant.md)：用高齡照護六力評估場景，說明 Agentic SDK 如何把六力結果、追蹤紀錄與照護建議串成可持續推進的評估流程。
 
 ## 閱讀方式
 
