@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     azure_foundry_api_key: str = Field(default="")
     azure_foundry_deployment: str = Field(default="gpt-4o-mini")
     azure_foundry_api_version: str = Field(default="2024-12-01-preview")
+    keyvault_models: list[dict[str, str]] = Field(default_factory=list)
 
     infer_request_timeout_sec: float = Field(default=120.0, gt=0)
 

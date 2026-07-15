@@ -77,6 +77,20 @@ class WorkflowState:
         self.visit_counts[node_name] = self.visit_counts.get(node_name, 0) + 1
         return self.visit_counts[node_name]
 
+    def lookup(self, key: str) -> Any | None:
+        """Backward-compatible lookup API for baseline README examples."""
+        if key in self.payload:
+            return self.payload[key]
+        if key == "latest_retrieved_content":
+            from agentic_sdk.context import ContextEntryType
+
+            entry = self.latest_of(ContextEntryType.RETRIEVED)
+            return entry.content if entry is not None else None
+        if key == "latest_final_message":
+            result = self.last_action_result or {}
+            return result.get("content")
+        return None
+
 
 @dataclass
 class WorkflowResult:

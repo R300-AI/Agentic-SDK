@@ -15,6 +15,24 @@ def list_models(request: Request) -> dict[str, object]:
     backend = (settings.workflow_action_backend or "upstream").lower()
 
     if backend == "foundry":
+        models = settings.keyvault_models or []
+        if models:
+            created = int(time.time())
+            return {
+                "object": "list",
+                "data": [
+                    {
+                        "id": item["id"],
+                        "object": "model",
+                        "created": created,
+                        "owned_by": "azure-foundry",
+                        "display_name": item.get("name") or item["id"],
+                        "deployment": item.get("deployment") or item["id"],
+                    }
+                    for item in models
+                ],
+            }
+
         deployment = settings.azure_foundry_deployment or "agentic-sdk"
         return {
             "object": "list",

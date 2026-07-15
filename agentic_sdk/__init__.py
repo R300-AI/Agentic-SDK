@@ -10,6 +10,7 @@ from agentic_sdk.capabilities import (
 )
 from agentic_sdk.workflow import (
     Gates,
+    InContextMemory,
     Node,
     NodeOutput,
     Workflow,
@@ -17,17 +18,28 @@ from agentic_sdk.workflow import (
     WorkflowResult,
     WorkflowState,
 )
+from agentic_sdk.modules import (
+    CompletionAction,
+    DirectAnswerAction,
+    InputPerceive,
+    KeywordRetrieve,
+)
 
 __all__ = [
     "Settings",
     "get_settings",
     "Workflow",
     "WorkflowState",
+    "InContextMemory",
     "WorkflowResult",
     "WorkflowAborted",
     "Node",
     "NodeOutput",
     "Gates",
+    "InputPerceive",
+    "KeywordRetrieve",
+    "DirectAnswerAction",
+    "CompletionAction",
     "KnowledgeBaseRegistry",
     "RetrieveStrategyRegistry",
     "build_capability_document",

@@ -1,47 +1,33 @@
 # Plan Modules
 
-Plan 模組負責把感知結果轉成可執行路徑。它們的差別不在於是否會「想」，而在於用什麼 reasoning strategy 來拆問題、安排查詢與決定後續步驟。
+Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一步。現行程式碼中真正實作的 planner 只有 `ReActPlan` 一個類別；舊文件中的 Chain-of-Thought 與 Plan-and-Solve 不是獨立 class，而是同一個 planner 內部可切換的 prompt strategy。
 
-## MVP 模組
+## 已實作模組
 
-| 模組 | 主要用途 | 輸入 | 輸出 |
+| 模組 | 需要模型 | 可輸出下一節點 | 主要用途 |
 | --- | --- | --- | --- |
-| Chain-of-Thought Planner | 建立單一路徑 reasoning baseline | `perceived_input` | `plan` |
-| ReAct Planner | 在 reasoning 與後續 action 之間交替安排步驟 | `perceived_input`、`reflection` | `plan`、`query` |
-| Plan-and-Solve Planner | 先拆步驟，再生成後續執行路徑 | `perceived_input` | `plan` |
+| `ReActPlan` | 是 | `retrieve` / `action` | 根據目前上下文決定先查詢還是直接回答 |
 
-## Chain-of-Thought Planner
+## ReActPlan
 
-**對應論文：** [Chain-of-Thought Prompting Elicits Reasoning in Large Language Models](https://arxiv.org/abs/2201.11903)
+`ReActPlan` 是目前唯一的規劃節點實作，基礎策略對應 [Arxiv](https://arxiv.org/abs/2210.03629)；同一份 class 也內建了 Chain-of-Thought 風格提示 [Arxiv](https://arxiv.org/abs/2201.11903) 與 Plan-and-Solve 風格提示 [Arxiv](https://arxiv.org/abs/2305.04091) 的模板變體，但對外仍是一個 `ReActPlan` 模組。
 
-| 參數 | 是否必填 | 說明 |
+### 輸入參數
+
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `str` | 無 | 使用者原始輸入，會直接放入 planner prompt。 |
+| `perceived_intent` | `str` | `"general"` | 從最近一筆 `PERCEIVED` context 的 metadata 讀取；若不存在則退回 `general`。 |
+| `has_retrieved_context` | `bool` | `False` | 由最近是否存在 `RETRIEVED` context 推導。 |
+| `has_attachment` | `bool` | `False` | 由 `len(state.attachments) > 0` 推導。 |
+
+### 輸出格式
+
+| 欄位 | 型態 | 說明 |
 | --- | --- | --- |
-| `client` | 是 | OpenAI SDK client。 |
-| `model` | 是 | 規劃用模型名稱。 |
-| `system_prompt` | 否 | 定義推理邊界與計畫輸出格式。 |
-
-## ReAct Planner
-
-適合需要邊思考邊決定後續查詢或步驟的情境。公開文件只保證它遵守 OpenAI SDK form 與 workflow 引擎分層，不把內部 prompt 寫法暴露成對外契約。
-
-**對應論文：** [ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)
-
-| 參數 | 是否必填 | 說明 |
-| --- | --- | --- |
-| `client` | 是 | OpenAI SDK client。 |
-| `model` | 是 | 規劃用模型名稱。 |
-| `max_iterations` | 否 | 限制規劃可展開的步數。 |
-
-## Plan-and-Solve Planner
-
-適合先把問題拆成清楚步驟，再交給後續 retrieve 或 action 執行的情境。
-
-**對應論文：** [Plan-and-Solve Prompting: Improving Zero-Shot Chain-of-Thought Reasoning by Large Language Models](https://arxiv.org/abs/2305.04091)
-
-| 參數 | 是否必填 | 說明 |
-| --- | --- | --- |
-| `client` | 是 | OpenAI SDK client。 |
-| `model` | 是 | 規劃用模型名稱。 |
-| `system_prompt` | 否 | 定義先拆步驟、後產出計畫的格式要求。 |
-
-如果你目前只需要 README 級別的簡單流程，可以暫時不接 planner；一旦需要可變路徑，再從這三個模組中挑選策略。
+| `NodeOutput.next_node` | `"retrieve" | "action"` | planner 的路由決策；若 LLM 回傳非法值，會 fallback 成 `"action"`。 |
+| `NodeOutput.payload.plan_thought` | `str` | planner 的推理摘要。 |
+| `NodeOutput.payload.plan_subtasks` | `list[str]` | 若模型回傳 `subtasks`，會整理成字串陣列；否則為空陣列。 |
+| `NodeOutput.payload._llm_usage` | `dict` | 包含 `model`、`input_tokens`、`output_tokens`。 |
+| `NodeOutput.context_updates[0].type` | `"plan_decision"` | 追加一筆 `PLAN_DECISION` context entry。 |
+| `NodeOutput.context_updates[0].metadata` | `dict` | 至少包含 `thought`、`next_node`、`fallback`、`llm`；若有 `subtasks` 也會一併保存。 |

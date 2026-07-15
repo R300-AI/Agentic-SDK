@@ -114,7 +114,7 @@ jobs:
             echo ""
             echo "✅ 所有 Azure 資源佈建完成"
 
-      - name: 建置前端（Vite → demo_old/dist/）
+      - name: 建置前端（Vite → demo_old/dist/，同步到 demo/dist/）
         uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -125,11 +125,17 @@ jobs:
           npm ci
           npm run build
 
+      - name: 同步前端產物到 demo/dist
+        run: |
+          rm -rf demo/dist
+          mkdir -p demo/dist
+          cp -R demo_old/dist/. demo/dist/
+
       - name: 打包部署包（只含必要檔案，排除 node_modules 等）
         run: |
           zip -r deploy.zip \
             agentic_sdk/ \
-            demo_old/dist/ \
+            demo/dist/ \
             examples_old/ \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*"

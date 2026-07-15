@@ -1,46 +1,73 @@
 # Perceive Modules
 
-Perceive 模組負責接住原始輸入，整理成 workflow 後續節點可直接使用的理解結果。MVP 先提供一個 README 最小入口，外加一個正式模型型感知模組。
+Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的理解結果。現行程式碼中已實作 `InputPerceive`、`RuleBasedPerceive` 與 `LLMBasedPerceive` 三種路徑，從最小轉接到模型型理解皆有覆蓋。
 
-## MVP 模組
+## 已實作模組
 
-| 模組 | 需要模型 | 讀取 | 寫入 | 定位 |
-| --- | --- | --- | --- | --- |
-| InputPerceive | 否 | `input` | `perceived_input` | README 最小入口 |
-| LLM Perceive | 是 | `input` | `perceived_input`、`query` | 正式文字理解模組 |
+| 模組 | 需要模型 | 下一節點 | 主要用途 |
+| --- | --- | --- | --- |
+| `InputPerceive` | 否 | `retrieve` | README 最小入口，直接轉交原始輸入 |
+| `RuleBasedPerceive` | 否 | `plan` | 以規則判斷基本 intent |
+| `LLMBasedPerceive` | 是 | `plan` | 用 LLM 產生 intent 與語意摘要 |
 
 ## InputPerceive
 
-這是 README 範例用來建立第一條 workflow 的最小感知模組。它不要求模型，只負責把外部傳入的主輸入交給後續節點。
+`InputPerceive` 是 README 第一與第三個快速開始範例使用的最小感知模組。它不做語意推理，只會將 `user_message` 直接整理成 `perceived_input` 與 `query` 供後續檢索使用；這是 SDK 的工程型入口，沒有對應單一研究論文。
 
-**對應論文：** 無單一對應論文；此模組屬 SDK 的最小工程入口，重點在 workflow 對接而不是特定研究方法。
+### 輸入參數
 
-### 建構參數
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `str` | 無 | `WorkflowState.user_message`；會先做 `strip()` 再寫入 payload。 |
 
-無必填模型參數。MVP 公開敘事只保證它能接住輸入並轉成 `perceived_input`。
+### 輸出格式
 
-### 輸入契約
-
-必須可讀取 `input`。
-
-### 輸出契約
-
-至少寫入 `perceived_input`。
-
-## LLM Perceive
-
-!!! info "模型規格"
-    此模組一律使用 `OpenAI SDK form`，不以供應商專屬呼叫格式寫入公開文件。
-
-**對應論文：** [Language Models are Few-Shot Learners](https://arxiv.org/abs/2005.14165)
-
-| 參數 | 是否必填 | 說明 |
+| 欄位 | 型態 | 說明 |
 | --- | --- | --- |
-| `client` | 是 | OpenAI SDK client 實例。 |
-| `model` | 是 | 模型名稱，沿用 OpenAI SDK 的模型指定方式。 |
-| `system_prompt` | 否 | 定義輸入理解任務與輸出邊界。 |
-| `output_schema` | 否 | 限制感知結果結構，讓後續節點更容易穩定讀取。 |
+| `NodeOutput.next_node` | `"retrieve"` | Perceive 結束後直接進入檢索節點。 |
+| `NodeOutput.payload.perceived_input` | `str` | 去除前後空白後的使用者輸入。 |
+| `NodeOutput.payload.query` | `str` | 與 `perceived_input` 相同，供 retrieve 模組直接使用。 |
+| `NodeOutput.context_updates[0].type` | `"perceived"` | 追加一筆 `PERCEIVED` context entry。 |
+| `NodeOutput.context_updates[0].metadata` | `dict` | 固定包含 `source="input_perceive"`。 |
 
-LLM Perceive 通常會從 `input` 生成較乾淨的 `perceived_input`，必要時也可同步產出給 retrieve 使用的 `query`。
+## RuleBasedPerceive
 
-如果你只是想搭出 README 的第一條流程，用 InputPerceive 即可；若需要穩定文字理解，再升級成 LLM Perceive。
+`RuleBasedPerceive` 以輕量規則將輸入分成 `question`、`diagnose` 或 `general` 等 intent，適合不依賴外部模型的基線流程。它屬於 heuristic intent classification，沒有直接對應單一論文。
+
+### 輸入參數
+
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `str` | 無 | 主要輸入，會先做 `strip()`，再用正則規則判斷 intent。 |
+| `available_options` | `list[dict]` | `[]` | 若模組有配置 `options`，且使用者輸入剛好等於某個 `label` 或 `value`，會優先使用該 option 的 `intent` 或 `value`。 |
+
+### 輸出格式
+
+| 欄位 | 型態 | 說明 |
+| --- | --- | --- |
+| `NodeOutput.next_node` | `"plan"` | 感知完成後交給規劃節點。 |
+| `NodeOutput.payload.perceived_intent` | `str` | 規則判斷出的 intent。 |
+| `NodeOutput.context_updates[0].type` | `"perceived"` | 追加一筆 `PERCEIVED` context entry。 |
+| `NodeOutput.context_updates[0].content` | `str` | 形如 `intent=<intent> role=user msg_len=<n>`。 |
+| `NodeOutput.context_updates[0].metadata` | `dict` | 至少包含 `intent`、`role`、`msg_len`；若有 welcome/options 也會帶入。 |
+
+## LLMBasedPerceive
+
+`LLMBasedPerceive` 會把使用者輸入與可選項目一起交給 LLM，要求模型只回 JSON，輸出 `intent` 與 `summary`。這屬於 LLM-based intent understanding，可參考 in-context/few-shot 類生成式理解方法的代表作 [Arxiv](https://arxiv.org/abs/2005.14165)。
+
+### 輸入參數
+
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `user_message` | `str` | 無 | 主要輸入，會被包進 `user_prompt` 送往 LLM。 |
+| `available_options` | `list[dict]` | `[]` | 若模組有配置 `options`，會以 JSON 陣列形式提供給 LLM 作為背景參考，但不直接覆蓋語意判斷。 |
+
+### 輸出格式
+
+| 欄位 | 型態 | 說明 |
+| --- | --- | --- |
+| `NodeOutput.next_node` | `"plan"` | 感知完成後交給規劃節點。 |
+| `NodeOutput.payload.perceived_intent` | `str` | LLM JSON 中的 `intent` 欄位。 |
+| `NodeOutput.context_updates[0].type` | `"perceived"` | 追加一筆 `PERCEIVED` context entry。 |
+| `NodeOutput.context_updates[0].content` | `str` | 形如 `intent=<intent> summary=<summary>`。 |
+| `NodeOutput.context_updates[0].metadata` | `dict` | 至少包含 `intent`、`intent_summary`、`role`、`msg_len`；若有 welcome/options 也會帶入。 |

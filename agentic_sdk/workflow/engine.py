@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from typing import Any
 
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ContextEntry, ContextEntryType
@@ -184,7 +185,8 @@ class Workflow:
                     gen_ai_system=gen_ai_system,
                     gen_ai_request_model=gen_ai_model,
                 ) as span:
-                    output: NodeOutput = node(state)
+                    raw_output: Any = node(state)
+                    output = _normalize_output(current, raw_output, state)
                     span.set_next(output.get("next_node"))
                     usage = (output.get("payload") or {}).get("_llm_usage")
                     if usage:
@@ -238,3 +240,26 @@ def _final_message_from(state: WorkflowState) -> str:
     if err:
         return f"[workflow ended with error] {err.get('message', '')}"
     return ""
+
+
+def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> NodeOutput:
+    if isinstance(raw_output, dict):
+        return raw_output
+
+    if current == "action":
+        content = "" if raw_output is None else str(raw_output)
+        state.last_action_error = None
+        state.last_action_result = {"content": content, "model": "custom-action"}
+        return NodeOutput(
+            next_node=None,
+            payload={"latest_final_message": content},
+            context_updates=[
+                ContextEntry(
+                    type=ContextEntryType.ACTION_RESULT,
+                    content=content,
+                    metadata={"ok": True, "model": "custom-action"},
+                )
+            ],
+        )
+
+    raise TypeError(f"node '{current}' returned unsupported output type: {type(raw_output).__name__}")

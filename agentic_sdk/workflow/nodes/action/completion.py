@@ -16,6 +16,7 @@ import time
 
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ContextEntry, ContextEntryType
+from agentic_sdk.gateway.keyvault_loader import resolve_foundry_model
 from agentic_sdk.gateway.upstream_client import UpstreamClient
 from agentic_sdk.observability.events import EVENT_NODE_DELTA, make_event
 from agentic_sdk.workflow.node import NodeOutput, WorkflowState
@@ -63,7 +64,12 @@ class CompletionAction:
                 raise ValueError(
                     "upstream 與 base_url 互斥；指定 upstream 表示完全外部注入，base_url 則由本物件自建 UpstreamClient"
                 )
-            self._upstream = upstream or UpstreamClient(self._settings, base_url=base_url)
+            if client is not None and (upstream is not None or base_url is not None):
+                raise ValueError(
+                    "client 與 upstream/base_url 互斥；指定 client 表示直接注入 OpenAI-compatible client"
+                )
+            self._upstream = None if client is not None else (upstream or UpstreamClient(self._settings, base_url=base_url))
+            self._upstream_openai = client if client is not None else self._upstream.openai
             self._model = model or deployment
             self._client = None
             self._mock_client = None
@@ -72,23 +78,30 @@ class CompletionAction:
 
         # backend == foundry
         self._upstream = None
-        self._model = model
-        self._deployment = deployment or self._settings.azure_foundry_deployment
+        self._upstream_openai = None
+        resolved_model = resolve_foundry_model(self._settings, model)
+        resolved_endpoint = endpoint or (resolved_model or {}).get("endpoint") or self._settings.azure_foundry_endpoint
+        resolved_api_key = api_key or (resolved_model or {}).get("api_key") or self._settings.azure_foundry_api_key
+        resolved_deployment = deployment or (resolved_model or {}).get("deployment") or self._settings.azure_foundry_deployment
+        resolved_api_version = (resolved_model or {}).get("api_version") or self._settings.azure_foundry_api_version
+
+        self._model = model or resolved_deployment
+        self._deployment = resolved_deployment
         if client is not None:
             self._client = client
             self._mock_client = None
-        elif self._settings.workflow_force_mock_foundry or not self._settings.azure_foundry_api_key:
+        elif self._settings.workflow_force_mock_foundry or not resolved_api_key:
             from agentic_sdk.workflow.llm import MockFoundryClient
             self._client = None
             self._mock_client = MockFoundryClient(deployment=self._deployment)
         else:
             from openai import AzureOpenAI
-            if not (endpoint and api_key):
+            if not (resolved_endpoint and resolved_api_key):
                 self._settings.require_azure_foundry()
             self._client = AzureOpenAI(
-                azure_endpoint=endpoint or self._settings.azure_foundry_endpoint,
-                api_key=api_key or self._settings.azure_foundry_api_key,
-                api_version=self._settings.azure_foundry_api_version,
+                azure_endpoint=resolved_endpoint,
+                api_key=resolved_api_key,
+                api_version=resolved_api_version,
                 timeout=self._settings.infer_request_timeout_sec,
             )
             self._mock_client = None
@@ -124,7 +137,7 @@ class CompletionAction:
             kwargs: dict = {"model": model, "messages": messages}
             if self._temperature is not None:
                 kwargs["temperature"] = self._temperature
-            completion = self._upstream.openai.chat.completions.create(**kwargs)
+            completion = self._upstream_openai.chat.completions.create(**kwargs)
         except Exception as exc:
             try:
                 import openai as _openai
