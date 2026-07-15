@@ -13,7 +13,11 @@ Action 模組負責把前面節點收集到的資訊轉成 workflow 的最終輸
 
 `DirectAnswerAction` 是 README 第一個快速開始範例使用的最小輸出模組。它不依賴生成模型，只會讀取 `latest_retrieved_content`，然後把該內容原樣提升為最終答案；這屬於 deterministic answer composition 的工程型基線，沒有對應單一研究論文。
 
-### 輸入參數
+### 配置參數
+
+此節點沒有 `__init__` 配置參數。
+
+### 執行時輸入
 
 | 參數 | 型態 | 預設值 | 說明 |
 | --- | --- | --- | --- |
@@ -34,14 +38,31 @@ Action 模組負責把前面節點收集到的資訊轉成 workflow 的最終輸
 
 `CompletionAction` 會把使用者問題與最近一次檢索上下文組成 chat completion 請求，交給 OpenAI-compatible client、AMD upstream，或 Azure Foundry deployment 生成自然語言答案。它屬於 generative completion 類型的節點，論文背景可參考 GPT 類 few-shot/completion 範式的代表作 [Arxiv](https://arxiv.org/abs/2005.14165)。
 
-### 輸入參數
+### 配置參數
+
+| 參數 | 型態 | 預設值 | 說明 |
+| --- | --- | --- | --- |
+| `backend` | `str | None` | `settings.workflow_action_backend`，再退回 `"upstream"` | 後端模式，只接受 `upstream` 或 `foundry`。 |
+| `settings` | `Settings | None` | `get_settings()` | 設定來源；未提供時讀全域設定。 |
+| `model` | `str | None` | `None` | 顯式指定模型名。upstream 下會傳給 OpenAI-compatible API；foundry 下會作為 model selector 使用。 |
+| `upstream` | `UpstreamClient | None` | `None` | upstream 專用。注入 SDK 自己的 `UpstreamClient`；與 `base_url`、`client` 互斥。 |
+| `base_url` | `str | None` | `None` | upstream 專用。用此 URL 建立內部 `UpstreamClient`；與 `upstream`、`client` 互斥。 |
+| `client` | `Any` | `None` | 可直接注入 chat completions client。README 的 `openai_client` 就是走這個參數；在 upstream 下代表 OpenAI-compatible client，在 foundry 下可注入既有 Azure OpenAI client。 |
+| `endpoint` | `str | None` | `None` | foundry 專用。覆蓋 Azure Foundry endpoint。 |
+| `deployment` | `str | None` | `None` | foundry 專用。覆蓋 deployment；upstream 下若 `model` 未給，會被拿來當 model fallback。 |
+| `api_key` | `str | None` | `None` | foundry 專用。覆蓋 Azure Foundry API key。 |
+| `temperature` | `float | None` | `None` | 若提供，會傳給 completion API。 |
+| `system_prompt` | `str | None` | 內建 `DEFAULT_SYSTEM_PROMPT` | 覆蓋預設 system prompt。 |
+| `idle_timeout_sec` | `float` | `30.0` | foundry 串流路徑的 read idle timeout。 |
+
+### 執行時輸入
 
 | 參數 | 型態 | 預設值 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `str` | 無 | `WorkflowState.user_message`；模型回答的主要問題來源。 |
 | `retrieved_context` | `str | None` | `None` | 最近一筆 `RETRIEVED` context 的 `content`；若存在，會被拼進 prompt 作為回答依據。 |
 | `attachments` | `list[Attachment]` | `[]` | 若 workflow 帶有圖片附件，會在支援的路徑中一併送給模型。 |
-| `model` | `str` | `"default"` | upstream 路徑下，若沒有顯式指定模型，會退回 `state.payload["model"]`，再退回字串 `"default"`。 |
+| `model` | `str | None` | `None` | upstream 路徑下，模型優先順序是建構時 `model`、`state.payload["model"]`、向上游 `models.list()` 自動解析的第一個 model，最後才退回字串 `"default"`。 |
 
 ### 輸出格式
 

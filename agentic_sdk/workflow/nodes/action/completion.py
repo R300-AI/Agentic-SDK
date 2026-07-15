@@ -71,6 +71,7 @@ class CompletionAction:
             self._upstream = None if client is not None else (upstream or UpstreamClient(self._settings, base_url=base_url))
             self._upstream_openai = client if client is not None else self._upstream.openai
             self._model = model or deployment
+            self._resolved_upstream_model: str | None = None
             self._client = None
             self._mock_client = None
             self._deployment = None
@@ -130,7 +131,7 @@ class CompletionAction:
     # ── upstream backend ────────────────────────────────────────────────
 
     def _call_upstream(self, state: WorkflowState) -> NodeOutput:
-        model = self._model or state.payload.get("model") or "default"
+        model = self._model or state.payload.get("model") or self._resolve_upstream_model() or "default"
         messages = _build_messages_upstream(state, self._system_prompt)
 
         try:
@@ -184,6 +185,20 @@ class CompletionAction:
             },
             context_updates=[entry],
         )
+
+    def _resolve_upstream_model(self) -> str | None:
+        if self._resolved_upstream_model:
+            return self._resolved_upstream_model
+        try:
+            model_list = self._upstream_openai.models.list()
+            data = getattr(model_list, "data", None) or []
+            first_model = next((item for item in data if getattr(item, "id", None)), None)
+            if first_model is not None:
+                self._resolved_upstream_model = first_model.id
+                return self._resolved_upstream_model
+        except Exception as exc:
+            logger.info("resolve upstream model failed: %s", exc)
+        return None
 
     # ── foundry backend ────────────────────────────────────────────────
 
