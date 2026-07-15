@@ -14,11 +14,11 @@
 
 | 家族 | 標準模組列表 | 接手時機 | 交付成果 | 主要工作 |
 | --- | --- | --- | --- | --- |
-| Perceive | PassThroughPerceive、PatternPerceive、SemanticPerceive、StructuredPerceive、ImageAwarePerceive | 收到新輸入時 | 感知摘要 | 把原始輸入整理成查詢、標籤與摘要。 |
+| Perceive | PassThroughPerceive、TextPerceive、StructuredPerceive、TextImagePerceive | 收到新輸入時 | 感知摘要 | 把原始輸入整理成查詢、標籤與摘要。 |
 | Plan | NextStepPlan | 收到感知摘要或查回資料時 | 下一節點決策 | 決定下一步交給 `Retrieve` 還是 `Action`。 |
-| Retrieve | KeywordRetrieve、StaticRetrieve、SemanticRetrieve、HybridRetrieve | 收到查找指示時 | 檢索結果 | 查回條目、歷史紀錄、知識內容或比對結果。 |
+| Retrieve | KeywordRetrieve、SemanticRetrieve、HybridRetrieve | 收到查找指示時 | 檢索結果 | 查回條目、歷史紀錄、知識內容或比對結果。 |
 | Action | DirectAnswerAction、GenerativeAction、StructuredAction | 收到可用材料時 | 對外回應內容 | 組成自然語言回應或固定欄位輸出。 |
-| Reflect | ErrorCheckReflect、ResponseCheckReflect、EvidenceCheckReflect | 收到 Action 結果時 | 通過或退回判定 | 檢查失敗、回應完整性與證據是否足夠。 |
+| Reflect | ResponseCheckReflect、EvidenceCheckReflect | 收到 Action 結果時 | 通過或退回判定 | 檢查回應完整性與證據是否足夠。 |
 
 表 1：五個模組家族的標準模組名、接手時機、交付成果與主要工作對照表。
 

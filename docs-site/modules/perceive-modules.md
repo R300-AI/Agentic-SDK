@@ -1,6 +1,6 @@
 # Perceive
 
-Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁使用文件標準名來定義 Perceive 家族的 MVP 邊界；輸入來源只包含純文字、結構化欄位與圖片檔，圖片檔只接受 `image/png`、`image/jpeg`、`image/webp`。
+Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁使用文件標準名來定義 Perceive 家族的 MVP 邊界；輸入來源只包含純文字、結構化欄位與圖片檔，圖片檔只接受 `image/png`、`image/jpeg`、`image/webp`。目前保留的是實際在 README 或三個 use case 中有使用到的感知模組。
 
 ## PassThroughPerceive
 
@@ -24,41 +24,11 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 
 README 最小流程、README 自訂 Action 流程。
 
-## PatternPerceive
-
-舊名對應：`RuleBasedPerceive`
-
-`PatternPerceive` 依固定模式、關鍵詞或選項命中來整理輸入重點。它的責任是把輸入轉成可以讓後續 `Plan` 判斷分支的路由標籤。
-
-### 標準輸入參數
-
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `user_message` | `string` | `"請幫我推薦適合久站的鞋"` | 使用者單輪原始文字。 |
-| `input_options` | `array<object>` | `[{"label":"鞋款推薦","value":"shoe_recommendation","hint":"recommendation"}]` | UI 提供的選項清單；沒有選項時固定 `[]`。 |
-| `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
-| `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
-
-### 標準輸出參數
-
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `perceive_type` | `string` | `"pattern"` | 標記本次使用模式比對路徑。 |
-| `perceive_query` | `string` | `"推薦適合久站的鞋"` | 後續檢索或規劃可直接使用的查詢字串。 |
-| `perceive_label` | `string` | `"shoe_recommendation"` | 供 `Plan` 判斷分支的標籤。 |
-| `perceive_summary` | `string` | `"使用者想找適合久站情境的鞋款推薦"` | 對本輪需求的一句摘要。 |
-| `perceive_fields` | `object` | `{}` | 摘出的結構化欄位。 |
-| `perceive_images` | `array<object>` | `[]` | 本輪保留的圖片資訊。 |
-
-### 對應 use case
-
-LaNew 的選項導流、BCI 的快速問題分流、ICOPE 的評估入口分流。
-
-## SemanticPerceive
+## TextPerceive
 
 舊名對應：`LLMBasedPerceive`
 
-`SemanticPerceive` 依語意判讀來整理輸入內容與重點。它和 `PatternPerceive` 的輸出格式相同，但適合需求表達較長、較依賴語意理解的流程。
+`TextPerceive` 依文字內容做語意判讀，將輸入整理成後續可用的查詢、標籤與摘要。它適合需求表達較長、較依賴文字語意理解的流程。
 
 ### 標準輸入參數
 
@@ -114,11 +84,11 @@ LaNew 的自然語言鞋款需求、BCI 的訓練情境描述、ICOPE 的追蹤�
 
 LaNew 足測欄位、ICOPE 六大能力欄位輸入。
 
-## ImageAwarePerceive
+## TextImagePerceive
 
 舊名對應：`MultimodalPerceive`
 
-`ImageAwarePerceive` 將文字與圖片內容整理成後續可用的查詢與摘要。這個標準名只處理圖片檔，不延伸到任意附件格式。
+`TextImagePerceive` 將文字與圖片內容一起整理成後續可用的查詢與摘要。這個標準名只處理圖片檔，不延伸到任意附件格式。
 
 ### 標準輸入參數
 

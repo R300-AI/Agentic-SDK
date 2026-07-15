@@ -8,6 +8,16 @@
 - [BCI 射箭教練](bci-archery-coach.md)：用腦機介面輔助訓練場景，說明 Agentic SDK 如何把多模態訊號整理成教練可採取的訓練建議。
 - [ICOPE 六力評估助手](icope-six-capacity-assistant.md)：用高齡照護六力評估場景，說明 Agentic SDK 如何把六力結果、追蹤紀錄與照護建議串成可持續推進的評估流程。
 
+## 三個個案的五大節點對照
+
+| 個案 | Perceive | Plan | Retrieve | Action | Reflect |
+| --- | --- | --- | --- | --- | --- |
+| LaNew 售鞋顧問 | TextImagePerceive | NextStepPlan | HybridRetrieve | StructuredAction | EvidenceCheckReflect |
+| BCI 射箭教練 | TextPerceive | NextStepPlan | SemanticRetrieve | GenerativeAction | ResponseCheckReflect |
+| ICOPE 六力評估助手 | StructuredPerceive | NextStepPlan | HybridRetrieve | StructuredAction | EvidenceCheckReflect |
+
+表 1：三個 use case 各自採用的一組五大節點標準模組對照表。
+
 ## 閱讀方式
 
 1. 先看案例文章，理解商業背景、導入問題與系統責任。

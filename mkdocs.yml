@@ -42,6 +42,7 @@ nav:
     - use-cases/index.md
     - LaNew 售鞋顧問: use-cases/lanew-footwear-advisor.md
     - BCI 射箭教練: use-cases/bci-archery-coach.md
+    - ICOPE 六力評估助手: use-cases/icope-six-capacity-assistant.md
 
 markdown_extensions:
   - admonition

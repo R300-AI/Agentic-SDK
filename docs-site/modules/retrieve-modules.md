@@ -1,6 +1,6 @@
 # Retrieve
 
-Retrieve 模組負責把 workflow 需要的內容取回來。這一頁使用文件標準名來定義 Retrieve 家族的輸入輸出格式，並把原本的輔助元件與主模組分開處理。Retrieve 的標準輸入固定是查詢字串與篩選條件，標準輸出固定是命中條目、摘要片段、命中數與檢索來源。
+Retrieve 模組負責把 workflow 需要的內容取回來。這一頁使用文件標準名來定義 Retrieve 家族的輸入輸出格式，並把原本的輔助元件與主模組分開處理。Retrieve 的標準輸入固定是查詢字串與篩選條件，標準輸出固定是命中條目、摘要片段、命中數與檢索來源。這一頁只保留目前在 README 或三個 use case 中實際使用到的檢索模組。
 
 ## KeywordRetrieve
 
@@ -27,32 +27,6 @@ Retrieve 模組負責把 workflow 需要的內容取回來。這一頁使用文�
 ### 對應 use case
 
 README 最小流程、README 自訂 Action 流程、LaNew 條目型鞋款查找。
-
-## StaticRetrieve
-
-舊名對應：`StubRetrieve`
-
-`StaticRetrieve` 從固定資料集回傳內容，用於展示、測試與固定知識場景。它和 `KeywordRetrieve` 的輸入輸出格式相同，但資料來源是預先定好的靜態語料。
-
-### 標準輸入參數
-
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `retrieve_query` | `string` | `"agentic sdk"` | 檢索查詢字串。 |
-| `retrieve_filters` | `object` | `{}` | 篩選條件；沒有條件時固定 `{}`。 |
-
-### 標準輸出參數
-
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `retrieved_items` | `array<object>` | `[{"id":"stub-001","title":"固定語料","content":"Agentic SDK 提供五節點工作流。","score":1.0,"source":"static","metadata":{}}]` | 命中的條目清單；沒有命中時固定 `[]`。 |
-| `retrieved_snippet` | `string` | `"Agentic SDK 提供五節點工作流。"` | 給後續節點直接使用的文字摘要。 |
-| `retrieved_hit_count` | `integer` | `1` | 命中數。 |
-| `retrieved_source` | `string` | `"static"` | 檢索來源標記。 |
-
-### 對應 use case
-
-文件範例、測試語料流程、固定詞典場景。
 
 ## SemanticRetrieve
 
@@ -110,7 +84,7 @@ LaNew 欄位加語意鞋款推薦、BCI 歷史片段與標註混合查找、ICOP
 
 舊名對應：`FoundryVisionQuery`
 
-`VisionQueryBuilder` 不是獨立 workflow 節點，而是 `ImageAwarePerceive` 或 `SemanticRetrieve` 前面的查詢改寫器。它的責任是把圖片與文字整理成一段可檢索的查詢字串。
+`VisionQueryBuilder` 不是獨立 workflow 節點，而是 `TextImagePerceive` 或 `SemanticRetrieve` 前面的查詢改寫器。它的責任是把圖片與文字整理成一段可檢索的查詢字串。
 
 ### 標準輸入參數
 
