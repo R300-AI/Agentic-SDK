@@ -2,13 +2,6 @@
 
 Action 模組負責把前面節點收集到的資訊轉成回應內容。依這套文件的流程定義，Action 完成後會將流程交回 `Perceive`，開始下一輪理解。現行程式碼中可直接使用的 Action 節點只有兩個：`DirectAnswerAction` 與 `CompletionAction`。
 
-## 已實作模組
-
-| 模組 | 是否支援OpenAI SDK | 下一節點 | 主要用途 |
-| --- | --- | --- | --- |
-| `DirectAnswerAction` | 否 | `perceive` | 直接把最近一次檢索結果整理成答案 |
-| `CompletionAction` | 是 | `perceive` | 透過 OpenAI-compatible client 或 Foundry 生成自然語言回應 |
-
 ## DirectAnswerAction
 
 `DirectAnswerAction` 是 README 第一個快速開始範例使用的最小輸出模組。它不依賴生成模型，只會讀取 `latest_retrieved_content`，然後把該內容原樣提升為回應內容；這屬於 deterministic answer composition 的工程型基線，沒有對應單一研究論文。

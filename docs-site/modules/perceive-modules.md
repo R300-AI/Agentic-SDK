@@ -2,14 +2,6 @@
 
 Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的理解結果。依這套文件的流程定義，Perceive 完成後會交給 Plan，再由 Plan 決定後續路徑。現行程式碼中已實作 `InputPerceive`、`RuleBasedPerceive` 與 `LLMBasedPerceive` 三種路徑，從最小轉接到模型型理解皆有覆蓋。
 
-## 已實作模組
-
-| 模組 | 是否支援OpenAI SDK | 主要用途 |
-| --- | --- | --- |
-| `InputPerceive` | 否 | README 最小入口，直接轉交原始輸入 |
-| `RuleBasedPerceive` | 否 | 以規則判斷基本 intent |
-| `LLMBasedPerceive` | 是 | 用 LLM 產生 intent 與語意摘要 |
-
 ## InputPerceive
 
 `InputPerceive` 是 README 第一與第三個快速開始範例使用的最小感知模組。它不做語意推理，只會將 `user_message` 直接整理成 `perceived_input` 與 `query` 供後續檢索使用；這是 SDK 的工程型入口，沒有對應單一研究論文。

@@ -12,18 +12,46 @@
 
 ## 功能家族矩陣
 
-| 家族 | 模組 | 流程角色 | 下一步 | 是否支援OpenAI SDK |
-| --- | --- | --- | --- | --- |
-| Perceive | InputPerceive、LLMBasedPerceive、RuleBasedPerceive | 理解目前輸入，整理成後續可用的理解結果 | 固定交給 `Plan` | 僅模型型模組支援 |
-| Plan | ReActPlan | 根據目前上下文決定下一步流程 | 可導向 `Retrieve`、`Action` 或 `Reflect` | 是 |
-| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve | 取回條目、上下文或知識內容 | 固定交回 `Plan` | 僅模型型模組支援 |
-| Action | DirectAnswerAction、CompletionAction | 產出回應內容 | 固定交回 `Perceive` | 僅模型型模組支援 |
-| Reflect | RuleBasedReflect、ReflexionReflect | 檢查目前回應是否需要修正 | 可導向 `Retrieve` 或 `Action` | 僅模型型模組支援 |
+| 家族 | 模組列表 | 流程角色 |
+| --- | --- | --- |
+| Perceive | InputPerceive、LLMBasedPerceive、RuleBasedPerceive | 理解目前輸入，整理成後續可用的理解結果。 |
+| Plan | ReActPlan | 根據目前上下文決定下一步流程。 |
+| Retrieve | KeywordRetrieve、StubRetrieve、SemanticRetrieve | 取回條目、上下文或知識內容。 |
+| Action | DirectAnswerAction、CompletionAction | 產出回應內容。 |
+| Reflect | RuleBasedReflect、ReflexionReflect | 檢查目前回應是否需要修正。 |
+
+## 流程示意
+
+下圖用 `architecture-beta` 把五大家族的銜接關係畫成一個循環。若你先想理解整體流向，再進各模組頁，這張圖會比逐列讀表更快。
+
+```mermaid
+architecture-beta
+	group cycle(cloud)[Module Families]
+
+	service perceive(server)[Perceive] in cycle
+	service plan(server)[Plan] in cycle
+	service retrieve(database)[Retrieve] in cycle
+	service reflect(server)[Reflect] in cycle
+	service action(server)[Action] in cycle
+
+	perceive:R -- L:plan
+	plan:B -- T:retrieve
+	plan:R -- L:action
+	plan:T -- B:reflect
+	retrieve:T -- B:plan
+	reflect:L -- R:retrieve
+	reflect:B -- T:action
+	action:L -- R:perceive
+```
+
+從文件定義來看，`Perceive` 是每一輪的入口，先把輸入整理成後續可消費的理解結果。`Plan` 接著判斷這一輪應該先取資料、直接回答，或先進入反思判斷。`Retrieve` 不直接結束流程，而是把取回的內容交還給 `Plan`，讓 `Plan` 依新上下文再做一次決策。
+
+`Reflect` 的角色則是回頭檢查目前回應是否可接受；若不夠好，就引導流程回到 `Retrieve` 或 `Action`。`Action` 負責把本輪整理出的內容轉成對外回應，完成後再回到下一輪的 `Perceive`。因此這套文件不是把 workflow 寫成單向直線，而是寫成一個持續循環的會話流。
 
 ## 建議閱讀順序
 
 1. 先看 [Workflow Overview](workflow-overview.md)，確認五大功能的角色。
 2. 再看 [Workflow 引擎選項](workflow-engines.md)，掌握預設 InContextMemory 與可替換引擎層。
-3. 最後進入你要的功能頁，查模組的初始化參數與流程角色。
+3. 最後進入你要的功能頁，查模組的初始化參數與行為定位。
 
 這頁是索引頁，不重複展開每個模組的細節。細節請進五個模組專頁。

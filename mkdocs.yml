@@ -62,6 +62,10 @@ plugins:
       lang:
         - en
 
+extra_javascript:
+  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
+  - javascripts/mermaid-init.js
+
 extra:
   social:
     - icon: fontawesome/brands/github

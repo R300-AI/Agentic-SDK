@@ -2,13 +2,6 @@
 
 Reflect 模組負責檢查 Action 產出的候選答案，判斷答案是否可直接交付，或是否應退回前面的節點修正。依這套文件的流程定義，Reflect 可能將流程導向 `Retrieve` 或 `Action`。現行程式碼中已實作 `RuleBasedReflect` 與 `ReflexionReflect`。
 
-## 已實作模組
-
-| 模組 | 是否支援OpenAI SDK | 可能下一節點 | 主要用途 |
-| --- | --- | --- | --- |
-| `RuleBasedReflect` | 否 | `retrieve` / `action` | 只根據 Action 是否報錯做最低成本判斷 |
-| `ReflexionReflect` | 是 | `retrieve` / `action` | 用 LLM 對 Action 結果做反思式評估 |
-
 ## RuleBasedReflect
 
 `RuleBasedReflect` 是最小反思基線，只會檢查 `state.last_action_error` 是否存在；若 Action 失敗，則依策略決定後續要回到檢索或重新執行回答。這屬於 deterministic fallback rule，沒有直接對應單一研究論文。

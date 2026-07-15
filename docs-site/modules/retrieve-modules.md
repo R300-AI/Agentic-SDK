@@ -2,14 +2,6 @@
 
 Retrieve 模組負責把 workflow 需要的知識內容取回來。依這套文件的流程定義，Retrieve 完成後會將結果交回 Plan，再由 Plan 決定後續路徑。現行程式碼中已實作 `KeywordRetrieve`、`StubRetrieve` 與 `SemanticRetrieve` 三個節點；另外還有 `FoundryVisionQuery` 作為圖像附件轉檢索查詢的輔助元件。
 
-## 已實作模組
-
-| 模組 | 是否支援OpenAI SDK | 下一節點 | 主要用途 |
-| --- | --- | --- | --- |
-| `KeywordRetrieve` | 否 | `plan` | README 最小檢索，直接比對關鍵字條目 |
-| `StubRetrieve` | 否 | `plan` | 內建測試語料的 PoC 檢索基線 |
-| `SemanticRetrieve` | 視設定而定 | `plan` | 從 Knowledge Base 與 Memory Stream 做語意/記憶檢索 |
-
 ## KeywordRetrieve
 
 `KeywordRetrieve` 是 README 第一與第三個快速開始範例使用的最小檢索模組。它會用 `query` 或 `perceived_input` 與每個條目的 `keywords` 做字串包含比對；這是工程上易懂的 lexical baseline，概念上接近傳統關鍵字檢索，可參考經典 IR 基線 [Arxiv](https://arxiv.org/abs/cmp-lg/9606016)。
