@@ -197,7 +197,7 @@ function EditorRoot() {
         agentName,
         description: agentDescription,
         workflowYaml,
-        executionBackend: String(config.nodes.action?.params?.backend ?? "upstream"),
+        executionBackend: String(config.nodes.action?.params?.backend ?? "openai"),
         csrfToken,
       });
       setManagedAgentId(saved.agent_id);

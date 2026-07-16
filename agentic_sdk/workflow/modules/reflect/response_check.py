@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ContextEntry, ContextEntryType
-from agentic_sdk.workflow.llm import FoundryClient, get_foundry_client
+from agentic_sdk.workflow.llm import chat_json, require_client
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 
@@ -19,23 +20,27 @@ _SYSTEM_PROMPT = (
 
 class ResponseCheckReflect:
     name = "reflect"
-    gen_ai_system = "azure_openai"
+    gen_ai_system = "openai_compatible"
 
     def __init__(
         self,
         on_failure: str = "retry_plan",
-        foundry_client: FoundryClient | None = None,
+        settings: Settings | None = None,
+        client=None,
+        model: str | None = None,
     ) -> None:
         if on_failure not in _ON_FAILURE_TO_NEXT:
             raise ValueError(
                 f"ResponseCheckReflect.on_failure={on_failure!r} 不合法，僅接受 {sorted(_ON_FAILURE_TO_NEXT)}。"
             )
         self._on_failure = on_failure
-        self._foundry = foundry_client or get_foundry_client()
+        self._settings = settings or get_settings()
+        self._client = require_client(client, self.__class__.__name__)
+        self._model = model or self._settings.openai_model
 
     @property
     def gen_ai_request_model(self) -> str:
-        return self._foundry.label
+        return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         err = state.last_action_error
@@ -48,7 +53,12 @@ class ResponseCheckReflect:
         )
 
         try:
-            response = self._foundry.chat(system=_SYSTEM_PROMPT, user=user_prompt)
+            response = chat_json(
+                self._client,
+                model=self._model,
+                system=_SYSTEM_PROMPT,
+                user=user_prompt,
+            )
             decision = response.as_json()
             verdict = str(decision.get("verdict", "fail" if err else "pass"))
             reason = str(decision.get("reason", "(no reason)"))
@@ -78,7 +88,7 @@ class ResponseCheckReflect:
         if suggestion:
             metadata["suggestion"] = suggestion
         if llm_usage:
-            metadata["llm"] = self._foundry.label
+            metadata["llm"] = response.model
 
         entry = ContextEntry(
             type=ContextEntryType.REFLECTION,

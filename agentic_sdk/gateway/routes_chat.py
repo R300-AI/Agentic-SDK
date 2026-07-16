@@ -9,7 +9,7 @@ visit_counts、是否 aborted)以 `x-agentic-metadata` response header 透出
 - 上游 `api.py` 的呼叫由 Action 節點負責,不再由 Gateway 直接 pass-through
 - 上游失敗時,Workflow 內部會 fallback 至 reflect 路徑;Gateway 對外仍回 200
   並在 metadata 標 aborted=False(reflect 走完)或 aborted=True(閘門中止)
-- 真正的「上游不可達 → 502」語義改由 `/healthz` 與 `gateway.upstream.healthcheck`
+- 真正的「端點不可達 → 502」語義改由 `/healthz` 與 `gateway.openai.healthcheck`
   事件承擔,而非 OpenAI 相容端點
 """
 
@@ -81,13 +81,7 @@ def _extract_user_input(messages: list[dict]) -> tuple[str, list[Attachment]]:
 
 
 def _build_action(settings, model: str):
-    backend = (settings.workflow_action_backend or "upstream").lower()
-    if backend not in ("upstream", "foundry"):
-        raise HTTPException(
-            status_code=500,
-            detail=f"WORKFLOW_ACTION_BACKEND={backend!r} 不支援,僅接受 upstream 或 foundry。",
-        )
-    return GenerativeAction(backend=backend, settings=settings, model=model)
+    return GenerativeAction(settings=settings, model=model)
 
 
 @router.post(_ROUTE)

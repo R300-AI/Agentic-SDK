@@ -248,7 +248,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "label": "Next-step plan",
             "params_schema": {
                 "system_prompt": {"type": "string", "ui": {"control": "textarea"}},
-                "deployment": {"type": "string", "advanced": True},
+                "model": {"type": "string", "advanced": True},
             },
         },
         {
@@ -312,8 +312,8 @@ def _module_definitions() -> list[dict[str, Any]]:
             "label": "Generative action",
             "params_schema": {
                 "provider_ref": {"type": "ref", "ref_kind": "provider"},
-                "backend": {"type": "string", "enum": ["upstream", "foundry"], "default": "upstream"},
-                "deployment": {"type": "string", "advanced": True},
+                "model": {"type": "string", "advanced": True},
+                "base_url": {"type": "string", "advanced": True},
                 "temperature": {"type": "number", "default": 0.2, "min": 0.0, "max": 2.0},
                 "secret_ref": {"type": "ref", "ref_kind": "secret"},
             },
@@ -324,8 +324,8 @@ def _module_definitions() -> list[dict[str, Any]]:
             "label": "Structured action",
             "params_schema": {
                 "provider_ref": {"type": "ref", "ref_kind": "provider"},
-                "backend": {"type": "string", "enum": ["upstream", "foundry"], "default": "upstream"},
-                "deployment": {"type": "string", "advanced": True},
+                "model": {"type": "string", "advanced": True},
+                "base_url": {"type": "string", "advanced": True},
                 "temperature": {"type": "number", "default": 0.2, "min": 0.0, "max": 2.0},
                 "secret_ref": {"type": "ref", "ref_kind": "secret"},
             },
@@ -340,8 +340,7 @@ def build_capability_document() -> dict[str, Any]:
         "schema_version": 1,
         "module_definitions": _module_definitions(),
         "provider_refs": [
-            {"ref": "upstream_default", "kind": "openai_compatible", "label": "Upstream default", "trusted": False},
-            {"ref": "foundry_default", "kind": "azure_foundry", "label": "Azure Foundry default", "trusted": False},
+            {"ref": "openai_default", "kind": "openai_compatible", "label": "OpenAI-compatible default", "trusted": False},
         ],
         "profile_refs": [
             {

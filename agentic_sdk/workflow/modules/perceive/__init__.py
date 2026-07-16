@@ -3,7 +3,7 @@ from agentic_sdk.workflow.modules.perceive.structured import StructuredPerceive
 from agentic_sdk.workflow.modules.perceive.text import TextPerceive
 from agentic_sdk.workflow.modules.perceive.text_image import TextImagePerceive
 
-DEFAULT = TextPerceive
+DEFAULT = PassThroughPerceive
 
 __all__ = [
 	"PassThroughPerceive",

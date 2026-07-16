@@ -1,6 +1,6 @@
 import type { WorkflowConfig } from "./types";
 
-/** 預設五節點工作流:Action 走 Azure Foundry,Plan 用 ReAct 模板,Reflect 失敗回 Plan。
+/** 預設五節點工作流:Action 走 OpenAI-compatible client,Plan 用 ReAct 模板,Reflect 失敗回 Plan。
  * Perceive 預設帶 welcome_message + 三個引導選項,展示 Chat Panel 由節點屬性驅動。
  * 各節點預設 compute_target,展示異質計算資源綁定可視化。
  */
@@ -20,7 +20,7 @@ nodes:
     compute_target: local_cpu
   plan:
     type: builtin.plan
-    compute_target: azure_foundry
+    compute_target: openai_compatible
   retrieve:
     type: builtin.retrieve
     params:
@@ -42,8 +42,8 @@ nodes:
   action:
     type: completion
     params:
-      backend: foundry
-    compute_target: azure_foundry
+      backend: openai
+    compute_target: openai_compatible
 gates:
   max_node_hops: 20
   max_revisit: 3
@@ -71,7 +71,7 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
     plan: {
       type: "builtin.plan",
       params: {},
-      compute_target: "azure_foundry",
+      compute_target: "openai_compatible",
     },
     retrieve: {
       type: "builtin.retrieve",
@@ -94,8 +94,8 @@ export const DEFAULT_WORKFLOW: WorkflowConfig = {
     },
     action: {
       type: "completion",
-      params: { backend: "foundry" },
-      compute_target: "azure_foundry",
+      params: { backend: "openai" },
+      compute_target: "openai_compatible",
     },
   },
   gates: { max_node_hops: 20, max_revisit: 3, timeout_sec: 300 },

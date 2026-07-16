@@ -24,7 +24,7 @@ YAML 格式範例::
       action:
                 type: GenerativeAction
         params:
-          backend: foundry
+          model: gpt-4o-mini
     gates:
       max_node_hops: 50
       max_revisit: 5
@@ -59,7 +59,7 @@ class ModuleSpec:
         傳遞給模組建構子的關鍵字參數,各模組自行解讀。
     compute_target:
         M6-3 模組異質部署宣告。MVP 階段僅作 telemetry / UI label使用,
-        SDK 端不隨此值實際 dispatch。合法值:``ryzen_ai`` / ``azure_foundry`` /
+        SDK 端不隨此值實際 dispatch。合法值:``ryzen_ai`` / ``openai_compatible`` /
         ``local_cpu``。None 表示未宣告。
     """
 
@@ -216,7 +216,6 @@ def _build_module_from_spec(
     spec: ModuleSpec,
     module_name: str,
     settings=None,
-    foundry_client=None,
     config: "WorkflowConfig | None" = None,
 ):
     """依 ModuleSpec 建構模組實例。
@@ -240,13 +239,13 @@ def _build_module_from_spec(
             "StructuredPerceive": StructuredPerceive,
             "TextImagePerceive": TextImagePerceive,
         }[t]
-        kw = {"foundry_client": foundry_client, **spec.params} if foundry_client else spec.params
-        return perceive_cls(**kw)
+        params = {k: v for k, v in spec.params.items() if k not in ("base_url", "api_key")}
+        return perceive_cls(settings=settings, **params)
 
     if t == "NextStepPlan":
         from agentic_sdk.workflow.modules.plan import NextStepPlan
         plan_params = {k: v for k, v in spec.params.items()
-                       if k not in ("model", "endpoint", "deployment")}
+                       if k not in ("base_url", "api_key")}
         # 自動帶入 retrieve 模組的 KB 名稱/描述，讓 Plan 知道「可檢索什麼」
         if "retrieve_description" not in plan_params and config is not None:
             retrieve_spec = config.modules.get("retrieve")
@@ -269,19 +268,7 @@ def _build_module_from_spec(
                         plan_params.setdefault("retrieve_description", kb_obj.description)
                     except (KeyError, FileNotFoundError, OSError, ValueError):
                         pass
-        # 若 YAML 指定 deployment 且與全域不同，建立 override foundry client
-        plan_foundry = foundry_client
-        spec_deployment = spec.params.get("deployment")
-        if spec_deployment and settings and spec_deployment != settings.azure_foundry_deployment:
-            from agentic_sdk.workflow.llm import RealFoundryClient
-            try:
-                plan_foundry = RealFoundryClient(
-                    settings.model_copy(update={"azure_foundry_deployment": spec_deployment})
-                )
-            except Exception:
-                pass  # key 未設定時退回全域 client
-        kw = {"foundry_client": plan_foundry, **plan_params} if plan_foundry else plan_params
-        return NextStepPlan(**kw)
+        return NextStepPlan(settings=settings, **plan_params)
 
     if t in {"KeywordRetrieve", "SemanticRetrieve", "HybridRetrieve"}:
         from agentic_sdk.capabilities import KnowledgeBaseRegistry
@@ -307,8 +294,9 @@ def _build_module_from_spec(
         from agentic_sdk.workflow.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
         params = dict(spec.params)
         if t == "ResponseCheckReflect":
-            kw = {"foundry_client": foundry_client, **params} if foundry_client else params
-            return ResponseCheckReflect(**kw)
+            params.pop("base_url", None)
+            params.pop("api_key", None)
+            return ResponseCheckReflect(settings=settings, **params)
         return EvidenceCheckReflect(**params)
 
     if t in {"DirectAnswerAction", "GenerativeAction", "StructuredAction"}:

@@ -21,7 +21,7 @@ from typing import Any, TypedDict
 # ----- 事件名稱常數(避免拼字錯誤;新增事件請集中在此) -----
 
 # Phase 1 已實際 emit
-EVENT_GATEWAY_UPSTREAM_HEALTHCHECK = "gateway.upstream.healthcheck"
+EVENT_GATEWAY_OPENAI_HEALTHCHECK = "gateway.openai.healthcheck"
 EVENT_GATEWAY_REQUEST_START = "gateway.request.start"
 EVENT_GATEWAY_REQUEST_FINISH = "gateway.request.finish"
 EVENT_GATEWAY_REQUEST_ERROR = "gateway.request.error"
@@ -67,10 +67,10 @@ class TelemetryEvent(TypedDict, total=False):
     error_type: str                        # exception class name
     error_message: str
 
-    # ----- 上游健康檢查專用 -----
-    upstream_url: str
-    upstream_reachable: bool
-    upstream_models: list[str]
+    # ----- OpenAI-compatible 健康檢查專用 -----
+    openai_url: str
+    openai_reachable: bool
+    openai_models: list[str]
 
     # ----- 上下文生命週期(SemConv: 自訂命名空間) -----
     context_entry_id: str                  # 被降級 / 查詢失敗的條目 ID

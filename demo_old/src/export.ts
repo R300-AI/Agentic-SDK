@@ -77,7 +77,7 @@ function retrieveNodePy(params: Record<string, unknown>): NodePy {
   const kbRef = typeof knowledge_base_ref === "string" ? knowledge_base_ref.trim() : "";
   const wantVision = enable_vision_query === true || enable_vision_query === "true";
   const kw = buildKwargs(rest);
-  const imports = ["from agentic_sdk.workflow.nodes.retrieve import SemanticRetrieve"];
+  const imports = ["from agentic_sdk.workflow.modules.retrieve import SemanticRetrieve"];
 
   const extraLines: string[] = [];
   if (kbPath) {
@@ -88,8 +88,8 @@ function retrieveNodePy(params: Record<string, unknown>): NodePy {
     extraLines.push(`        knowledge_base=KnowledgeBaseRegistry().load(${toPyStr(kbRef)}),`);
   }
   if (wantVision) {
-    imports.push("from agentic_sdk.workflow.nodes.retrieve.vision_query import FoundryVisionQuery");
-    extraLines.push("        vision_query=FoundryVisionQuery(),");
+    imports.push("from agentic_sdk.workflow.modules.retrieve.vision_query import DefaultVisionQueryBuilder");
+    extraLines.push("        vision_query=DefaultVisionQueryBuilder(),");
   }
 
   if (extraLines.length === 0 && !kw) {

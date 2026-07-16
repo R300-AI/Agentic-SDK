@@ -42,7 +42,7 @@ class Workflow:
     """五模組工作流的容器。
 
     使用方式:
-        wf = Workflow()                       # 全部 baseline + 自動依 Settings 拾 mock/real Foundry
+        wf = Workflow()                       # 最小 non-LLM baseline
         result = wf.run("hello")              # 同步執行
 
     替換變體:
@@ -65,11 +65,8 @@ class Workflow:
 
     def __post_init__(self) -> None:
         # 延遲 import 避免循環(modules/ 反過來 import Workflow 周邊)
-        from agentic_sdk.workflow.llm import get_foundry_client
         from agentic_sdk.workflow.modules.action import DEFAULT as DEFAULT_ACTION
         from agentic_sdk.workflow.modules.perceive import DEFAULT as DEFAULT_PERCEIVE
-        from agentic_sdk.workflow.modules.plan import DEFAULT as DEFAULT_PLAN
-        from agentic_sdk.workflow.modules.reflect import DEFAULT as DEFAULT_REFLECT
         from agentic_sdk.workflow.modules.retrieve import DEFAULT as DEFAULT_RETRIEVE
 
         self.settings = self.settings or get_settings()
@@ -78,16 +75,15 @@ class Workflow:
             max_revisit=self.settings.workflow_max_revisit,
             timeout_sec=self.settings.workflow_timeout_sec,
         )
-        # Plan / Action 預設依賴外部服務(Foundry / 上游 OpenAI);
-        # 明確把 Workflow 接收到的 settings 傳下去,避免它們各自
-        # 退回到 lru_cache 的全域 get_settings(會被外部 .env 污染)。
         self.modules = {
-            "perceive": self.perceive or DEFAULT_PERCEIVE(foundry_client=get_foundry_client(self.settings)),
-            "plan": self.plan or DEFAULT_PLAN(foundry_client=get_foundry_client(self.settings)),
+            "perceive": self.perceive or DEFAULT_PERCEIVE(),
             "retrieve": self.retrieve or DEFAULT_RETRIEVE(),
-            "reflect": self.reflect or DEFAULT_REFLECT(),
-            "action": self.action or DEFAULT_ACTION(settings=self.settings),
+            "action": self.action or DEFAULT_ACTION(),
         }
+        if self.plan is not None:
+            self.modules["plan"] = self.plan
+        if self.reflect is not None:
+            self.modules["reflect"] = self.reflect
 
     @classmethod
     def from_config(
@@ -100,17 +96,15 @@ class Workflow:
     ) -> "Workflow":
         """從 WorkflowConfig 建構 Workflow 實例。
 
-        - `module_overrides`:直接傳入已建構好的 module 實例(例如使用者自己 `AzureOpenAI(...)`
-          建好 client、`GenerativeAction(backend="foundry", client=...)` 包好後丟進來),優先級高於
+                - `module_overrides`:直接傳入已建構好的 module 實例(例如使用者自己 `OpenAI(...)`
+                    建好 client、`GenerativeAction(client=...)` 包好後丟進來),優先級高於
           `config.modules[name]` 中的序列化規格。這是 Python SDK 的主要擴充口。
         - 未在 `module_overrides` 也未在 `config.modules` 中指定的模組退回各自的 DEFAULT。
         - `config.gates` 覆蓋 Settings 的三道閘門預設值。
         """
         from agentic_sdk.workflow.config import _build_module_from_spec
-        from agentic_sdk.workflow.llm import get_foundry_client
 
         s = settings or get_settings()
-        fc = get_foundry_client(s)
         overrides = module_overrides or {}
 
         def _module(name: str):
@@ -119,7 +113,7 @@ class Workflow:
             spec = config.modules.get(name)
             if spec is None:
                 return None  # 交給 __post_init__ 補 DEFAULT
-            return _build_module_from_spec(spec, name, settings=s, foundry_client=fc, config=config)
+            return _build_module_from_spec(spec, name, settings=s, config=config)
 
         gates = Gates(
             max_node_hops=config.gates.max_node_hops,

@@ -357,7 +357,7 @@ function ActionEditor({
         <input
           type="text"
           value={deployment}
-          placeholder="部署名稱(Foundry)或留空"
+          placeholder="OpenAI-compatible model 名稱或留空"
           onChange={(e) => onUpdate(setParam(spec, "deployment", e.target.value))}
         />
       </div>

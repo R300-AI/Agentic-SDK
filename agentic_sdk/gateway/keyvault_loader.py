@@ -1,5 +1,5 @@
 """啟動時從 Azure Key Vault 掃描 model-{id}-* secrets，
-並將模型池保存到 Settings，同時把第一個模型注入既有 Foundry 設定。
+並將模型池保存到 Settings，同時把第一個模型注入既有 OpenAI-compatible 設定。
 
 只在 KEY_VAULT_NAME 環境變數存在時執行（本機開發不需要）。
 使用 Managed Identity（DefaultAzureCredential），不需要任何額外憑證。
@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import os
 
-_MODEL_SUFFIXES = ("name", "endpoint", "key", "deployment", "api-version")
+_MODEL_SUFFIXES = ("name", "base-url", "key", "model")
 
 logger = logging.getLogger(__name__)
 
@@ -42,49 +42,28 @@ def load_first_model_from_keyvault(settings) -> None:
         settings.keyvault_models = models
 
         if not models:
-            logger.warning("Key Vault %s 中找不到任何 model-{id}-key secret。", kv_name)
+            logger.warning("Key Vault %s 中找不到任何完整的 model-{id}-* secrets。", kv_name)
             return
 
         first_model = models[0]
         logger.info("Key Vault: 載入 %d 個模型，預設模型 id=%s", len(models), first_model["id"])
 
-        if not settings.azure_foundry_endpoint and first_model.get("endpoint"):
-            settings.azure_foundry_endpoint = first_model["endpoint"]
-        if not settings.azure_foundry_api_key and first_model.get("api_key"):
-            settings.azure_foundry_api_key = first_model["api_key"]
-        if first_model.get("deployment"):
-            settings.azure_foundry_deployment = first_model["deployment"]
-        if first_model.get("api_version"):
-            settings.azure_foundry_api_version = first_model["api_version"]
+        if not settings.openai_api_base_url and first_model.get("base_url"):
+            settings.openai_api_base_url = first_model["base_url"]
+        if not settings.openai_api_key and first_model.get("api_key"):
+            settings.openai_api_key = first_model["api_key"]
+        if first_model.get("model"):
+            settings.openai_model = first_model["model"]
 
         logger.info(
-            "Key Vault 載入完成: models=%d endpoint=%s deployment=%s api_version=%s",
+            "Key Vault 載入完成: models=%d base_url=%s model=%s",
             len(models),
-            bool(first_model.get("endpoint")),
-            first_model.get("deployment"),
-            first_model.get("api_version") or "(使用預設)",
+            bool(first_model.get("base_url")),
+            first_model.get("model"),
         )
 
     except Exception as exc:
         logger.warning("Key Vault 載入失敗（%s），Gateway 繼續以現有設定啟動。", exc)
-
-
-def resolve_foundry_model(settings, requested_model: str | None) -> dict[str, str] | None:
-    if not requested_model:
-        return settings.keyvault_models[0] if settings.keyvault_models else None
-
-    wanted = requested_model.strip().lower()
-    for model in settings.keyvault_models:
-        candidates = {
-            model.get("id", "").lower(),
-            model.get("name", "").lower(),
-            model.get("deployment", "").lower(),
-        }
-        if wanted in candidates:
-            return model
-    return None
-
-
 def _load_models(client) -> list[dict[str, str]]:
     model_ids: set[str] = set()
     for secret_prop in client.list_properties_of_secrets():
@@ -98,13 +77,12 @@ def _load_models(client) -> list[dict[str, str]]:
         model = {
             "id": model_id,
             "name": _safe_get_secret(client, model_id, "name") or model_id,
-            "endpoint": _safe_get_secret(client, model_id, "endpoint"),
+            "base_url": _safe_get_secret(client, model_id, "base-url"),
             "api_key": _safe_get_secret(client, model_id, "key"),
-            "deployment": _safe_get_secret(client, model_id, "deployment"),
-            "api_version": _safe_get_secret(client, model_id, "api-version"),
+            "model": _safe_get_secret(client, model_id, "model"),
         }
-        if not (model["endpoint"] and model["api_key"] and model["deployment"]):
-            logger.warning("Key Vault 模型 %s 缺少 endpoint/key/deployment，略過。", model_id)
+        if not (model["base_url"] and model["api_key"] and model["model"]):
+            logger.warning("Key Vault 模型 %s 缺少 base-url/key/model，略過。", model_id)
             continue
         models.append(model)
     return models

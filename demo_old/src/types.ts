@@ -59,9 +59,9 @@ export const MODEL_PRESETS: ModelPreset[] = [
   {
     value: "agentic-sdk-gpt-5.4",
     label: "GPT-5.4",
-    platform: "Azure AI Foundry",
+    platform: "OpenAI-compatible Endpoint",
     compute_target: "cloud",
-    endpoint: "https://agentic-sdk-foundry.cognitiveservices.azure.com/",
+    endpoint: "https://api.openai.com/v1",
     deployment: "agentic-sdk-gpt-5.4",
   },
   {
@@ -91,10 +91,9 @@ export const NODE_DISPLAY_ORDER: NodeName[] = [
   "reflect",
 ];
 
-/** UI 端「Action backend 下拉」與 SDK NodeSpec.params.backend 映射(同一 type=completion,依 backend 參數切)。 */
+/** UI 端 Action 設定選項。 */
 export const ACTION_BACKEND_OPTIONS = [
-  { label: "AMD NPU 上游", value: "upstream", typeString: "completion" },
-  { label: "Azure Foundry", value: "foundry", typeString: "completion" },
+  { label: "OpenAI-compatible", value: "openai", typeString: "completion" },
 ] as const;
 
 /** Plan system_prompt 三模板;與 `ReActPlan.SYSTEM_PROMPT_TEMPLATES` 一致。 */
@@ -203,7 +202,7 @@ export const NODE_CLASSES: Record<NodeName, NodeClass[]> = {
   ],
   action: [
     {
-      value: "foundry",
+      value: "openai",
       label: "CompletionAction",
       type: "completion",
       usesLLM: true,

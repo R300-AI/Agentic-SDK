@@ -123,7 +123,7 @@ describe("Gateway capability API", () => {
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ agent_id: "agt_001", agent_name: "demo", description: "", workflow_yaml: "name: demo", execution_backend: "upstream", updated_at: null, last_run_at: null }),
+        json: async () => ({ agent_id: "agt_001", agent_name: "demo", description: "", workflow_yaml: "name: demo", execution_backend: "openai", updated_at: null, last_run_at: null }),
       } as Response);
 
     await listAgents();
@@ -131,7 +131,7 @@ describe("Gateway capability API", () => {
       agentName: "demo",
       description: "",
       workflowYaml: "name: demo",
-      executionBackend: "upstream",
+      executionBackend: "openai",
       csrfToken: "csrf",
     });
 
@@ -158,7 +158,7 @@ describe("Gateway capability API", () => {
       } as Response)
       .mockResolvedValueOnce({
         ok: true,
-        json: async () => ({ agent_id: "agt_001", agent_name: "demo", description: "", workflow_yaml: "name: demo", execution_backend: "upstream", updated_at: null, last_run_at: null }),
+        json: async () => ({ agent_id: "agt_001", agent_name: "demo", description: "", workflow_yaml: "name: demo", execution_backend: "openai", updated_at: null, last_run_at: null }),
       } as Response);
 
     await listAgents();
@@ -166,7 +166,7 @@ describe("Gateway capability API", () => {
       agentName: "demo",
       description: "",
       workflowYaml: "name: demo",
-      executionBackend: "upstream",
+      executionBackend: "openai",
     });
 
     expect(fetchMock).toHaveBeenNthCalledWith(

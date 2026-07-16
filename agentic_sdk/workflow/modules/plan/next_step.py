@@ -6,7 +6,8 @@ import logging
 
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.observability.events import EVENT_MODULE_DELTA, EVENT_MODULE_THOUGHT, make_event
-from agentic_sdk.workflow.llm import FoundryClient, get_foundry_client
+from agentic_sdk.config import Settings, get_settings
+from agentic_sdk.workflow.llm import chat_stream_json, require_client
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 logger = logging.getLogger("agentic_sdk.workflow")
@@ -15,7 +16,7 @@ logger = logging.getLogger("agentic_sdk.workflow")
 _ALLOWED_NEXT = {"retrieve", "action"}
 
 _REACT_TEMPLATE = (
-    "PLAN. 你是 Agent 工作流的規劃節點，決定下一步要「查詢知識庫（retrieve）」還是「直接產回應（action）」。\n"
+    "PLAN. 你是 Agent 工作流的規劃模組，決定下一步要「查詢知識庫（retrieve）」還是「直接產回應（action）」。\n"
     "\n"
     "可查詢的知識庫：\n{retrieve_index}\n"
     "\n"
@@ -48,16 +49,20 @@ def _format_retrieve_index(name: str | None, description: str | None) -> str:
 
 class NextStepPlan:
     name = "plan"
-    gen_ai_system = "azure_openai"
+    gen_ai_system = "openai_compatible"
 
     def __init__(
         self,
-        foundry_client: FoundryClient | None = None,
+        settings: Settings | None = None,
+        client=None,
+        model: str | None = None,
         system_prompt: str | None = None,
         retrieve_description: str | None = None,
         retrieve_name: str | None = None,
     ) -> None:
-        self._foundry = foundry_client or get_foundry_client()
+        self._settings = settings or get_settings()
+        self._client = require_client(client, self.__class__.__name__)
+        self._model = model or self._settings.openai_model
         if system_prompt is not None:
             self._system_prompt = system_prompt
         else:
@@ -66,7 +71,7 @@ class NextStepPlan:
 
     @property
     def gen_ai_request_model(self) -> str:
-        return self._foundry.label
+        return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         perceived = state.latest_of(ContextEntryType.PERCEIVED)
@@ -97,11 +102,12 @@ class NextStepPlan:
                     )},
                 )
 
-        response = self._foundry.chat_stream(
+        response = chat_stream_json(
+            self._client,
+            model=self._model,
             system=self._system_prompt,
             user=user_prompt,
             on_delta=_on_delta,
-            response_format={"type": "json_object"},
         )
         decision = response.as_json()
         thought = str(decision.get("thought", "(no thought)"))
@@ -133,7 +139,7 @@ class NextStepPlan:
             "thought": thought,
             "next_module": next_module,
             "fallback": fallback,
-            "llm": self._foundry.label,
+            "llm": response.model,
         }
         if subtasks:
             metadata["subtasks"] = subtasks

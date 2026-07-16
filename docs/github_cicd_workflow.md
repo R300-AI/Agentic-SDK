@@ -20,7 +20,39 @@
 
 ## 概覽
 
-每次推送至 **main** 分支，工作流程會執行單一部署 job：
+目前倉庫的自動化流程分成兩條：一條是 PR / push 的 **CI 驗證**，另一條是 main branch 的 **部署**。
+
+CI 先執行測試金字塔驗證，再由獨立部署 workflow 處理 Azure App Service 發佈。
+
+### CI 驗證
+
+```
+PR / push 到 main
+   │
+   ▼
+[python-unit]
+   ├─ canonical config 契約測試
+   ├─ 文件模組 unit tests
+   └─ ubuntu + windows 雙平台驗證
+   │
+   ▼
+[python-integration]
+   └─ 文件中的每個標準模組至少一次被裝進 workflow 跑通
+   │
+   ▼
+[python-smoke]
+   └─ README 三條 quickstart workflow smoke tests
+   │
+   ├──────────────► [check-typescript]
+   │                 ├─ demo_old `tsc --noEmit`
+   │                 └─ vitest
+   ▼
+可作為 branch protection 必要條件
+```
+
+### 部署
+
+每次推送至 **main** 分支，部署工作流程會執行單一部署 job：
 
 ```
 推送至 main
@@ -39,6 +71,36 @@
 
 所有 Azure 資源（Resource Group、App Service Plan、App Service、Key Vault）
 均由工作流程在首次執行時自動建立，無需手動操作。
+
+---
+
+## Python 測試金字塔
+
+Agentic SDK 的 Python 測試分成三層，目標是讓文件中承諾的每個標準模組都能被驗證，而且驗證成本由低到高分層控制。
+
+| 層級 | 目標 | 檔案 | CI job |
+|---|---|---|---|
+| Unit | 驗證單一模組的輸入 / 輸出契約與本地 deterministic 行為 | `tests/test_unit_documented_modules.py`、`tests/test_workflow_canonical_config.py` | `python-unit` |
+| Integration | 驗證文件中的標準模組被組進 workflow 後可完整跑通 | `tests/test_integration_documented_workflows.py` | `python-integration` |
+| Smoke | 驗證 README quickstart 路徑仍可用 | `tests/test_smoke_readme_workflows.py` | `python-smoke` |
+
+### 文件模組覆蓋原則
+
+- Perceive：`PassThroughPerceive`、`TextPerceive`、`StructuredPerceive`、`TextImagePerceive`
+- Plan：`NextStepPlan`
+- Retrieve：`KeywordRetrieve`、`SemanticRetrieve`、`HybridRetrieve`
+- Action：`DirectAnswerAction`、`GenerativeAction`、`StructuredAction`
+- Reflect：`ResponseCheckReflect`、`EvidenceCheckReflect`
+- Retrieve 配套元件：`VisionQueryBuilder`
+
+`python-integration` 需滿足一個明確要求：上列每個文件標準模組至少一次被裝進 `Workflow(...)` 並完成一次 end-to-end 執行。若新增或替換文件模組，應同步補一個 integration case，而不是只改 unit test。
+
+### 測試設計原則
+
+- CI 不依賴外部 OpenAI-compatible 真實端點。
+- 所有 LLM 相關測試一律以 fake / scripted client 驗證，避免 flaky network failures。
+- README 範例若更新 public API，必須同步更新 smoke tests。
+- Unit tests 可跨平台擴大覆蓋；integration / smoke 維持單平台以控制時間。
 
 ---
 
@@ -145,4 +207,4 @@ GitHub Actions 透過 OIDC（OpenID Connect）向 Azure 驗證身分，無需儲
 | 檔案 | 用途 |
 |---|---|
 | `.github/workflows/deploy-gateway.yml` | 主工作流程：佈建 + build 前端 + 部署 |
-| `.github/workflows/ci.yml` | 每次 PR/push 執行 Python 測試與 TypeScript 型別檢查 |
+| `.github/workflows/ci.yml` | 每次 PR/push 執行 Python 測試金字塔與 TypeScript 檢查 |

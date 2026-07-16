@@ -1,7 +1,7 @@
 """Attachment — 多模態使用者輸入的最小資料載體。
 
 設計約束:
-- 與框架無關:不依賴 OpenAI / Foundry / Gemma 等具體 SDK 結構
+- 與框架無關:不依賴 OpenAI / Gemma 等具體 SDK 結構
 - data_url 採 RFC 2397(`data:<mime>;base64,<...>`)以避免引入 file storage
 - Gateway 與 SDK 共用同一份 dataclass,序列化由 Pydantic 在邊界完成
 """

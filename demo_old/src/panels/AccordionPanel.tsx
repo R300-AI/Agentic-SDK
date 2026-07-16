@@ -420,9 +420,9 @@ function RetrieveEditor({
         <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: "normal" }}>
           <input type="checkbox" checked={vis}
             onChange={(e) => onUpdate(setParam(spec, "enable_vision_query", e.target.checked))} />
-          使用者上傳圖片時，先由 Foundry 圖文模型萃取檢索關鍵字
+          使用者上傳圖片時，先由 OpenAI-compatible 圖文模型萃取檢索關鍵字
         </label>
-        <small className="hint">啟用後，輸出的 Python 會自動注入 FoundryVisionQuery；未上傳圖片時不會額外耗用 token。</small>
+        <small className="hint">啟用後，輸出的 Python 會自動注入 DefaultVisionQueryBuilder；未上傳圖片時不會額外耗用 token。</small>
       </div>
     </>
   );

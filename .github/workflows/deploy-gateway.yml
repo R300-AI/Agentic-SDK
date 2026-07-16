@@ -141,7 +141,7 @@ jobs:
             -x "*.pyc" -x "*/__pycache__/*"
 
       - name: 設定 App Service 啟動指令與基礎參數
-        # 敏感資料（Foundry key/endpoint）由 App Service Managed Identity
+        # 敏感資料（OpenAI-compatible base-url / key / model）由 App Service Managed Identity
         # 從 Key Vault 在 runtime 讀取，不經過 CI/CD。
         # 必須在部署前設定，確保 Oryx 在收到 zip 時已知要執行 pip install。
         uses: azure/CLI@v2
@@ -158,7 +158,6 @@ jobs:
               --resource-group ${{ vars.AZURE_RESOURCE_GROUP }} \
               --settings \
                 PORT=8000 \
-                WORKFLOW_ACTION_BACKEND=foundry \
                 SCM_DO_BUILD_DURING_DEPLOYMENT=true \
                 KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}
 

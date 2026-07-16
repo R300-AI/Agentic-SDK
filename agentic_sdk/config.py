@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -19,14 +19,20 @@ class Settings(BaseSettings):
     gateway_host: str = Field(default="127.0.0.1")
     gateway_port: int = Field(default=8080, ge=1, le=65535)
 
-    upstream_api_base_url: str = Field(default="http://localhost:8000/v1")
-    upstream_api_key: str = Field(default="not-needed")
-    upstream_healthcheck_timeout_sec: float = Field(default=5.0, gt=0)
+    openai_api_base_url: str = Field(
+        default="http://localhost:8000/v1",
+        validation_alias=AliasChoices("OPENAI_API_BASE_URL"),
+    )
+    openai_api_key: str = Field(
+        default="not-needed",
+        validation_alias=AliasChoices("OPENAI_API_KEY"),
+    )
+    openai_model: str = Field(
+        default="gpt-4o-mini",
+        validation_alias=AliasChoices("OPENAI_MODEL"),
+    )
+    openai_healthcheck_timeout_sec: float = Field(default=5.0, gt=0)
 
-    azure_foundry_endpoint: str = Field(default="")
-    azure_foundry_api_key: str = Field(default="")
-    azure_foundry_deployment: str = Field(default="gpt-4o-mini")
-    azure_foundry_api_version: str = Field(default="2024-12-01-preview")
     keyvault_models: list[dict[str, str]] = Field(default_factory=list)
 
     infer_request_timeout_sec: float = Field(default=120.0, gt=0)
@@ -37,15 +43,12 @@ class Settings(BaseSettings):
     workflow_max_node_hops: int = Field(default=50, ge=1, le=10_000)
     workflow_max_revisit: int = Field(default=5, ge=1, le=1_000)
     workflow_timeout_sec: float = Field(default=30.0, gt=0)
-    workflow_force_mock_foundry: bool = Field(default=False)
-    workflow_action_backend: str = Field(default="upstream")
-
     active_context_max_mb: float = Field(default=8.0, gt=0)
     context_idle_demote_sec: float = Field(default=300.0, gt=0)
     context_hard_ttl_sec: float = Field(default=3600.0, gt=0)
     archived_context_dir: str = Field(default=".archived_context")
 
-    upstream_health_poll_sec: float = Field(default=5.0, gt=0)
+    openai_health_poll_sec: float = Field(default=5.0, gt=0)
 
     gateway_cors_origins: str = Field(
         default="http://localhost:5173",
@@ -66,21 +69,6 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 pass
         return [s.strip() for s in raw.split(",") if s.strip()]
-
-    def require_azure_foundry(self) -> None:
-        missing = [
-            name
-            for name, value in (
-                ("AZURE_FOUNDRY_ENDPOINT", self.azure_foundry_endpoint),
-                ("AZURE_FOUNDRY_API_KEY", self.azure_foundry_api_key),
-            )
-            if not value
-        ]
-        if missing:
-            raise RuntimeError(
-                "Azure Foundry 配置缺失:" + ", ".join(missing) + "。請於 .env 補上後重啟。"
-            )
-
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

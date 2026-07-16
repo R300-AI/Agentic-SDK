@@ -1,4 +1,4 @@
-﻿# 新增與管理預設模型（Azure AI Foundry + Key Vault）
+﻿# 新增與管理預設模型（OpenAI-compatible Endpoint + Key Vault）
 
 本指南說明如何為 Agentic SDK Playground 新增、修改或移除預設模型。
 所有模型端點資訊統一存放於您在 GitHub Variables 中指定的 Key Vault，
@@ -35,45 +35,15 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 ---
 
-## 第一節：在 Azure AI Foundry 部署模型
+## 第一節：準備 OpenAI-compatible 模型端點
 
-### 步驟 1-1：建立 Azure AI Foundry Hub 與專案（若尚未建立）
+1. 準備一個可被 `from openai import OpenAI` 直接呼叫的模型端點。
 
-> 若您已有現成的 Foundry Hub 與專案，可跳至[步驟 1-2](#步驟-1-2部署模型)。
+2. 確認您已取得以下三項資訊：
 
-1. 前往 [Azure AI Foundry](https://ai.azure.com)，並以您的 Azure 帳號登入。
-
-2. 選取 **+ Create project**。
-
-3. 填入以下欄位：
-
-   - **Project name**：輸入此 Foundry 專案的名稱
-   - **Hub**：選取 **Create new hub**，並填入 Hub 名稱與您使用的訂閱及資源群組
-
-4. 選取 **Create**，等待建立完成（約 2–5 分鐘）。
-
-### 步驟 1-2：部署模型
-
-> 若模型已部署完畢並取得 endpoint，可跳至[第二節](#第二節在-key-vault-新增模型-secret)。
-
-1. 在左側導覽列選取 **Models + endpoints**，再選取 **Deploy model**。
-
-2. 在模型清單中，選取您要部署的模型（如 **Phi-4** 或 **GPT-4o**），然後選取 **Confirm**。
-
-3. 在部署設定頁面，填入以下欄位：
-
-   - **Deployment name**：輸入一個辨識用的名稱（如 `phi-4`）。請記下此名稱，後續步驟會用到。
-   - **Deployment type**：依需求選擇（建議選 **Standard**）
-   - 其餘設定保持預設即可
-
-4. 選取 **Deploy**，等待部署完成（約 1–3 分鐘）。
-
-5. 部署完成後，在模型詳細頁面找到並記錄以下資訊：
-
-   - **Target URI**（即 endpoint URL，格式為 `https://....inference.ai.azure.com/`）
-   - **Key**（選取 **Show** 後複製）
-
-   > **重要**：請妥善保存以上資訊，不要貼入原始碼或任何公開文件。
+   - **Base URL**（例如 `http://localhost:11434/v1` 或其他 OpenAI-compatible endpoint）
+   - **API Key**（若端點不需要，可用 `not-needed`）
+   - **Model 名稱**（例如 `gpt-4o-mini`、`llama3.1:8b`）
 
 ---
 
@@ -102,14 +72,14 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 3. 選取 **Create**。
 
-### 步驟 2-3：新增 `model-{id}-endpoint`
+### 步驟 2-3：新增 `model-{id}-base-url`
 
 1. 再次選取 **+ Generate/Import**。
 
 2. 填入：
 
-   - **Name**：`model-{id}-endpoint`
-   - **Secret value**：從第一節複製的 **Target URI**
+   - **Name**：`model-{id}-base-url`
+   - **Secret value**：第一節準備的 **Base URL**
 
 3. 選取 **Create**。
 
@@ -120,18 +90,18 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 2. 填入：
 
    - **Name**：`model-{id}-key`
-   - **Secret value**：從第一節複製的 **Key**
+   - **Secret value**：第一節準備的 **API Key**
 
 3. 選取 **Create**。
 
-### 步驟 2-5：新增 `model-{id}-deployment`
+### 步驟 2-5：新增 `model-{id}-model`
 
 1. 選取 **+ Generate/Import**。
 
 2. 填入：
 
-   - **Name**：`model-{id}-deployment`
-   - **Secret value**：第一節步驟 4 設定的 **Deployment name**（如 `phi-4`）
+   - **Name**：`model-{id}-model`
+   - **Secret value**：第一節準備的 **Model 名稱**（如 `gpt-4o-mini`）
 
 3. 選取 **Create**。
 
@@ -158,7 +128,7 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 1. 前往 Azure Portal，進入您指定的 Key Vault → **Secrets**。
 
-2. 選取要修改的 secret（如 `model-phi4-endpoint`）。
+2. 選取要修改的 secret（如 `model-phi4-base-url`）。
 
 3. 選取 **+ New Version**。
 
@@ -176,7 +146,7 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 
 2. 選取 `model-{id}-name`，選取 **Delete**，確認刪除。
 
-3. 對 `model-{id}-endpoint`、`model-{id}-key`、`model-{id}-deployment` 重複步驟 2。
+3. 對 `model-{id}-base-url`、`model-{id}-key`、`model-{id}-model` 重複步驟 2。
 
    > **注意**：只要 `model-{id}-name` 存在，Gateway 就會嘗試讀取該模型的其餘三欄。
    > 四個 secret 需一併移除，否則 Gateway 啟動時會記錄讀取錯誤。
@@ -190,7 +160,6 @@ Gateway 啟動時自動掃描並組成可用模型池，對應前端模型選單
 | Secret 名稱 | 內容範例 | 用途 |
 |---|---|---|
 | `model-{id}-name` | `Phi-4` | 前端顯示名稱 |
-| `model-{id}-endpoint` | `https://xxx.cognitiveservices.azure.com/` | Foundry endpoint |
+| `model-{id}-base-url` | `http://localhost:11434/v1` | OpenAI-compatible base URL |
 | `model-{id}-key` | `BgNw...` | API 金鑰 |
-| `model-{id}-deployment` | `agentic-sdk-gpt-5.4` | Foundry 部署名稱 |
-| `model-{id}-api-version` | `2024-12-01-preview` | Azure OpenAI API 版本 |
+| `model-{id}-model` | `gpt-4o-mini` | OpenAI-compatible model 名稱 |

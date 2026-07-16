@@ -1,17 +1,18 @@
-"""TextPerceive 節點：透過 LLM 理解文字輸入意圖。"""
+"""TextPerceive 模組：透過 OpenAI-compatible client 理解文字輸入意圖。"""
 
 from __future__ import annotations
 
 import json
 
+from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.memory import MemoryEntry
-from agentic_sdk.workflow.llm import FoundryClient, get_foundry_client
+from agentic_sdk.workflow.llm import chat_json, require_client
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 
 _PERCEIVE_SYSTEM = (
-    "PERCEIVE. 你是 Agent 工作流的感知節點，負責理解使用者的輸入意圖。\n"
+    "PERCEIVE. 你是 Agent 工作流的感知模組，負責理解使用者的輸入意圖。\n"
     "\n"
     "輸入欄位：\n"
     "- user_message：使用者輸入的原始文字（可能是手動輸入、點選選項或語音轉文字）。\n"
@@ -35,12 +36,16 @@ class TextPerceive:
         welcome_message: str = "",
         options: list[dict] | None = None,
         importance: float = 1.0,
-        foundry_client: FoundryClient | None = None,
+        settings: Settings | None = None,
+        client=None,
+        model: str | None = None,
     ) -> None:
+        self._settings = settings or get_settings()
         self._welcome_message = welcome_message
         self._options = options or []
         self._importance = importance
-        self._foundry = foundry_client or get_foundry_client()
+        self._client = require_client(client, self.__class__.__name__)
+        self._model = model or self._settings.openai_model
 
     @property
     def welcome_message(self) -> str:
@@ -57,7 +62,12 @@ class TextPerceive:
         if self._options:
             user_prompt += f"available_options: {json.dumps(self._options, ensure_ascii=False)}\n"
 
-        response = self._foundry.chat(system=_PERCEIVE_SYSTEM, user=user_prompt)
+        response = chat_json(
+            self._client,
+            model=self._model,
+            system=_PERCEIVE_SYSTEM,
+            user=user_prompt,
+        )
         decision = response.as_json()
         intent = str(decision.get("intent", "general"))
         summary = str(decision.get("summary", msg))

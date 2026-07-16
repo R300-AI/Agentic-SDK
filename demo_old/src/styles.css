@@ -709,7 +709,7 @@ html, body, #root {
   white-space: nowrap;
 }
 .badge-ryzen_ai { background: #d3334d; }
-.badge-azure_foundry { background: #2b80d6; }
+.badge-openai_compatible { background: #2b80d6; }
 .badge-local_cpu { background: #5a6478; }
 
 .memory-indicator {

@@ -159,7 +159,7 @@ export function yamlToConfig(yaml: string): WorkflowConfig {
 }
 
 function defaultTypeFor(name: string): string {
-  if (name === "action") return ACTION_BACKEND_OPTIONS[1].typeString; // foundry
+  if (name === "action") return ACTION_BACKEND_OPTIONS[0].typeString;
   return `builtin.${name}`;
 }
 
