@@ -7,7 +7,7 @@ on:
       - 'agentic_sdk/**'
       - 'tests/**'
       - 'demo/**'
-      - 'demo_old/**'
+      - 'playground/**'
       - 'examples_old/**'
       - 'docs/github_cicd_workflow.md'
       - 'pyproject.toml'
@@ -19,7 +19,7 @@ on:
       - 'agentic_sdk/**'
       - 'tests/**'
       - 'demo/**'
-      - 'demo_old/**'
+      - 'playground/**'
       - 'examples_old/**'
       - 'docs/github_cicd_workflow.md'
       - 'pyproject.toml'
@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: demo_old
+        working-directory: playground
     steps:
       - uses: actions/checkout@v4
 

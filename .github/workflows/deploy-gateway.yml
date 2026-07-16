@@ -7,7 +7,7 @@ on:
     branches: [main]
     paths:
       - 'agentic_sdk/**'
-      - 'demo_old/**'
+      - 'playground/**'
       - 'examples_old/**'
       - 'requirements.txt'
       - '.github/workflows/deploy-gateway.yml'
@@ -114,13 +114,13 @@ jobs:
             echo ""
             echo "✅ 所有 Azure 資源佈建完成"
 
-      - name: 建置前端（Vite → demo_old/dist/，同步到 demo/dist/）
+      - name: 建置前端（Vite playground/dist/，同步到 demo/dist/）
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: npm ci + build
-        working-directory: demo_old
+        working-directory: playground
         run: |
           npm ci
           npm run build
@@ -129,7 +129,7 @@ jobs:
         run: |
           rm -rf demo/dist
           mkdir -p demo/dist
-          cp -R demo_old/dist/. demo/dist/
+          cp -R playground/dist/. demo/dist/
 
       - name: 打包部署包（只含必要檔案，排除 node_modules 等）
         run: |
