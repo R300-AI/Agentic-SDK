@@ -87,7 +87,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(
         title="Agentic SDK Gateway",
         version="0.0.1",
-        description="OpenAI-compatible gateway proxying AMD NPU upstream and orchestrating five-node workflow.",
+        description="OpenAI-compatible gateway proxying AMD NPU upstream and orchestrating five-module workflow.",
         lifespan=_lifespan,
     )
     app.state.settings = settings

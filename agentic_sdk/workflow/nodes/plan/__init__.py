@@ -1,5 +1,5 @@
-from agentic_sdk.workflow.nodes.plan.react import ReActPlan
+from agentic_sdk.workflow.nodes.plan.next_step import NextStepPlan
 
-DEFAULT = ReActPlan
+DEFAULT = NextStepPlan
 
-__all__ = ["ReActPlan", "DEFAULT"]
+__all__ = ["NextStepPlan", "DEFAULT"]

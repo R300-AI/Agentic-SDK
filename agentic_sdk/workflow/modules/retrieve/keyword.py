@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from agentic_sdk.context import ContextEntry, ContextEntryType
-from agentic_sdk.workflow.node import NodeOutput, WorkflowState
+from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 
 class KeywordRetrieve:
@@ -10,7 +10,7 @@ class KeywordRetrieve:
     def __init__(self, items: list[dict] | None = None) -> None:
         self._items = items or []
 
-    def __call__(self, state: WorkflowState) -> NodeOutput:
+    def __call__(self, state: WorkflowState) -> ModuleOutput:
         query = str(state.lookup("query") or state.lookup("perceived_input") or state.user_message).lower()
         hits: list[dict] = []
         for item in self._items:
@@ -21,8 +21,8 @@ class KeywordRetrieve:
         contents = [str(item.get("content", "")) for item in hits if item.get("content")]
         snippet = "\n".join(contents) if contents else "沒有命中任何條目。"
 
-        return NodeOutput(
-            next_node="action",
+        return ModuleOutput(
+            next_module="action",
             payload={
                 "query": query,
                 "retrieved_items": hits,

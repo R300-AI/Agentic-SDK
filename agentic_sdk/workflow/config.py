@@ -4,25 +4,25 @@
 - `WorkflowConfig` 是 Domain 最內層物件,不依賴任何框架、UI 或執行引擎
 - YAML / JSON 雙向序列化;格式版本號碼預留向下相容空間
 - `Workflow.from_config(config)` 是唯一的執行入口(見 engine.py)
-- 自訂節點透過 Python import path 引用,builtin 節點直接用 type 字串
+- 自訂模組透過 Python import path 引用,內建模組直接用 type 字串
 
 YAML 格式範例::
 
     version: "1"
     entry: perceive
-    nodes:
+        modules:
       perceive:
-        type: builtin.perceive
+                type: TextPerceive
       plan:
-        type: builtin.plan
+                type: NextStepPlan
       retrieve:
-        type: builtin.retrieve
+                type: HybridRetrieve
         params:
-          backend: none
+                    knowledge_base_ref: default
       reflect:
-        type: builtin.reflect
+                type: ResponseCheckReflect
       action:
-        type: completion
+                type: GenerativeAction
         params:
           backend: foundry
     gates:
@@ -48,39 +48,17 @@ except ImportError:
     _HAS_YAML = False
 
 
-# ── builtin 節點類型對應表 ────────────────────────────────────────────────────
-_BUILTIN_NODE_TYPES = {
-    "builtin.perceive",
-    "builtin.plan",
-    "builtin.retrieve",
-    "builtin.reflect",
-    "builtin.action",       # alias → completion
-    "completion",
-    # 反向相容:舊 YAML 仍可用以下兩個 type,會自動映射成 completion + backend
-    "upstream_completion",
-    "foundry_completion",
-}
-
-_BUILTIN_ACTION_TYPES = {
-    "builtin.action",
-    "completion",
-    "upstream_completion",
-    "foundry_completion",
-}
-
-
 @dataclass
-class NodeSpec:
-    """單一節點的組態描述。
+class ModuleSpec:
+    """單一模組的組態描述。
 
     type:
-        - ``builtin.perceive`` / ``builtin.plan`` / ... — 內建節點
-        - ``completion`` — 內建 Action(以 ``params.backend`` 切 upstream/foundry)
-        - 完整 Python import path(如 ``mypackage.nodes.MyNode``)— 自訂節點
+        - ``TextPerceive`` / ``NextStepPlan`` / ... — 文件定義的標準模組
+        - 完整 Python import path(如 ``mypackage.modules.MyModule``)— 自訂模組
     params:
-        傳遞給節點建構子的關鍵字參數,各節點自行解讀。
+        傳遞給模組建構子的關鍵字參數,各模組自行解讀。
     compute_target:
-        M6-3 節點異質部署宣告。MVP 階段僅作 telemetry / UI label使用,
+        M6-3 模組異質部署宣告。MVP 階段僅作 telemetry / UI label使用,
         SDK 端不隨此值實際 dispatch。合法值:``ryzen_ai`` / ``azure_foundry`` /
         ``local_cpu``。None 表示未宣告。
     """
@@ -98,8 +76,8 @@ class NodeSpec:
         return d
 
     @staticmethod
-    def from_dict(d: dict) -> "NodeSpec":
-        return NodeSpec(
+    def from_dict(d: dict) -> "ModuleSpec":
+        return ModuleSpec(
             type=d["type"],
             params=d.get("params") or {},
             compute_target=d.get("compute_target"),
@@ -134,8 +112,8 @@ class GateConfig:
 class WorkflowConfig:
     """工作流的完整組態,可由 UI 或 Python SDK 建立並序列化為 YAML/JSON。
 
-    nodes 中只需列出要覆蓋預設值的節點;未列出的節點在 ``Workflow.from_config``
-    時會補回各節點的 DEFAULT。
+    modules 中只需列出要覆蓋預設值的模組;未列出的模組在 ``Workflow.from_config``
+    時會補回各模組的 DEFAULT。
 
     name 是 M6-1 Memory Stream 的隔離單位:同名 workflow 跨 run 共享記憶,
     不同名互不干擾。預設 ``default``。
@@ -143,7 +121,7 @@ class WorkflowConfig:
     version 用於未來 schema 向下相容判斷,目前只認 "1"。
     """
 
-    nodes: dict[str, NodeSpec] = field(default_factory=dict)
+    modules: dict[str, ModuleSpec] = field(default_factory=dict)
     gates: GateConfig = field(default_factory=GateConfig)
     entry: str = "perceive"
     name: str = "default"
@@ -156,7 +134,7 @@ class WorkflowConfig:
             "version": self.version,
             "name": self.name,
             "entry": self.entry,
-            "nodes": {name: spec.to_dict() for name, spec in self.nodes.items()},
+            "modules": {name: spec.to_dict() for name, spec in self.modules.items()},
             "gates": self.gates.to_dict(),
         }
 
@@ -187,13 +165,13 @@ class WorkflowConfig:
         version = str(d.get("version", "1"))
         if version != "1":
             raise ValueError(f"WorkflowConfig version={version!r} 不支援,目前僅接受 '1'。")
-        nodes = {
-            name: NodeSpec.from_dict(spec)
-            for name, spec in (d.get("nodes") or {}).items()
+        modules = {
+            name: ModuleSpec.from_dict(spec)
+            for name, spec in (d.get("modules") or {}).items()
         }
         gates = GateConfig.from_dict(d.get("gates") or {})
         return WorkflowConfig(
-            nodes=nodes,
+            modules=modules,
             gates=gates,
             entry=d.get("entry", "perceive"),
             name=d.get("name", "default"),
@@ -232,33 +210,46 @@ class WorkflowConfig:
         return WorkflowConfig.from_json(p.read_text(encoding="utf-8"))
 
 
-# ── 節點建構輔助 ─────────────────────────────────────────────────────────────
+# ── 模組建構輔助 ─────────────────────────────────────────────────────────────
 
-def _build_node_from_spec(
-    spec: NodeSpec,
-    node_name: str,
+def _build_module_from_spec(
+    spec: ModuleSpec,
+    module_name: str,
     settings=None,
     foundry_client=None,
     config: "WorkflowConfig | None" = None,
 ):
-    """依 NodeSpec 建構節點實例。
+    """依 ModuleSpec 建構模組實例。
 
-    builtin 節點直接 import 各自的 DEFAULT;custom 節點用 importlib 動態載入。
+    標準模組直接 import 對應實作;custom 模組用 importlib 動態載入。
     """
     t = spec.type
 
-    if t == "builtin.perceive":
-        from agentic_sdk.workflow.nodes.perceive import DEFAULT
-        kw = {"foundry_client": foundry_client, **spec.params} if foundry_client else spec.params
-        return DEFAULT(**kw)
+    if t == "PassThroughPerceive":
+        from agentic_sdk.workflow.modules.perceive import PassThroughPerceive
+        return PassThroughPerceive(**spec.params)
 
-    if t == "builtin.plan":
-        from agentic_sdk.workflow.nodes.plan import DEFAULT
+    if t in {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}:
+        from agentic_sdk.workflow.modules.perceive import (
+            StructuredPerceive,
+            TextImagePerceive,
+            TextPerceive,
+        )
+        perceive_cls = {
+            "TextPerceive": TextPerceive,
+            "StructuredPerceive": StructuredPerceive,
+            "TextImagePerceive": TextImagePerceive,
+        }[t]
+        kw = {"foundry_client": foundry_client, **spec.params} if foundry_client else spec.params
+        return perceive_cls(**kw)
+
+    if t == "NextStepPlan":
+        from agentic_sdk.workflow.modules.plan import NextStepPlan
         plan_params = {k: v for k, v in spec.params.items()
                        if k not in ("model", "endpoint", "deployment")}
-        # 自動帶入 retrieve 節點的 KB 名稱/描述，讓 Plan 知道「可檢索什麼」
+        # 自動帶入 retrieve 模組的 KB 名稱/描述，讓 Plan 知道「可檢索什麼」
         if "retrieve_description" not in plan_params and config is not None:
-            retrieve_spec = config.nodes.get("retrieve")
+            retrieve_spec = config.modules.get("retrieve")
             if retrieve_spec is not None:
                 kb = retrieve_spec.params.get("knowledge_base")
                 kb_ref = retrieve_spec.params.get("knowledge_base_ref")
@@ -290,12 +281,12 @@ def _build_node_from_spec(
             except Exception:
                 pass  # key 未設定時退回全域 client
         kw = {"foundry_client": plan_foundry, **plan_params} if plan_foundry else plan_params
-        return DEFAULT(**kw)
+        return NextStepPlan(**kw)
 
-    if t == "builtin.retrieve":
+    if t in {"KeywordRetrieve", "SemanticRetrieve", "HybridRetrieve"}:
         from agentic_sdk.capabilities import KnowledgeBaseRegistry
         from agentic_sdk.knowledge import KnowledgeBase
-        from agentic_sdk.workflow.nodes.retrieve import DEFAULT
+        from agentic_sdk.workflow.modules.retrieve import HybridRetrieve, KeywordRetrieve, SemanticRetrieve
         retrieve_params = {
             k: v
             for k, v in spec.params.items()
@@ -306,26 +297,28 @@ def _build_node_from_spec(
             retrieve_params["knowledge_base"] = KnowledgeBaseRegistry().load(kb_ref)
         if isinstance(retrieve_params.get("knowledge_base"), str):
             retrieve_params["knowledge_base"] = KnowledgeBase.from_file(retrieve_params["knowledge_base"])
-        return DEFAULT(**retrieve_params)
+        if t == "KeywordRetrieve":
+            return KeywordRetrieve(**retrieve_params)
+        if t == "SemanticRetrieve":
+            return SemanticRetrieve(**retrieve_params)
+        return HybridRetrieve(**retrieve_params)
 
-    if t == "builtin.reflect":
-        from agentic_sdk.workflow.nodes.reflect import ReflexionReflect, RuleBasedReflect
+    if t in {"ResponseCheckReflect", "EvidenceCheckReflect"}:
+        from agentic_sdk.workflow.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
         params = dict(spec.params)
-        mode = params.pop("mode", "rule_based")
-        if mode == "llm":
+        if t == "ResponseCheckReflect":
             kw = {"foundry_client": foundry_client, **params} if foundry_client else params
-            return ReflexionReflect(**kw)
-        return RuleBasedReflect(**params)
+            return ResponseCheckReflect(**kw)
+        return EvidenceCheckReflect(**params)
 
-    if t in _BUILTIN_ACTION_TYPES:
-        from agentic_sdk.workflow.nodes.action import CompletionAction
+    if t in {"DirectAnswerAction", "GenerativeAction", "StructuredAction"}:
+        from agentic_sdk.workflow.modules.action import DirectAnswerAction, GenerativeAction, StructuredAction
         params = dict(spec.params)
-        # YAML schema 反向相容:舊 type 名稱自動推導 backend
-        if t == "upstream_completion":
-            params.setdefault("backend", "upstream")
-        elif t == "foundry_completion":
-            params.setdefault("backend", "foundry")
-        return CompletionAction(settings=settings, **params)
+        if t == "DirectAnswerAction":
+            return DirectAnswerAction(**params)
+        if t == "StructuredAction":
+            return StructuredAction(settings=settings, **params)
+        return GenerativeAction(settings=settings, **params)
 
     # custom — 解析為 "module.path:ClassName" 或 "module.path.ClassName"
     if ":" in t:
@@ -333,12 +326,12 @@ def _build_node_from_spec(
     elif "." in t:
         module_path, class_name = t.rsplit(".", 1)
     else:
-        raise ValueError(f"NodeSpec.type={t!r} 無法解析:須為 builtin 名稱或完整 import path。")
+        raise ValueError(f"ModuleSpec.type={t!r} 無法解析:須為標準模組名稱或完整 import path。")
 
     try:
         mod = importlib.import_module(module_path)
         cls = getattr(mod, class_name)
     except (ImportError, AttributeError) as exc:
-        raise ImportError(f"無法載入自訂節點 {t!r}:{exc}") from exc
+        raise ImportError(f"無法載入自訂模組 {t!r}:{exc}") from exc
 
     return cls(**spec.params)

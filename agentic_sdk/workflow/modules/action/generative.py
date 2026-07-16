@@ -1,13 +1,4 @@
-"""統一的 Action 節點 — `CompletionAction`。
-
-對外只有一個 class，內部依 `backend` 參數分派：
-
-- ``backend="upstream"``：呼叫 AMD NPU / 任何 OpenAI 相容上游
-- ``backend="foundry"``：直接呼叫 Azure AI Foundry deployment
-
-`backend` 未顯式指定時讀 ``settings.workflow_action_backend``，預設 ``upstream``。
-失敗一律寫 ``state.last_action_error`` 並回 ``next_node=None`` 結束工作流。
-"""
+"""GenerativeAction：依 backend 分派到不同推論後端。"""
 
 from __future__ import annotations
 
@@ -18,17 +9,15 @@ from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.gateway.keyvault_loader import resolve_foundry_model
 from agentic_sdk.gateway.upstream_client import UpstreamClient
-from agentic_sdk.observability.events import EVENT_NODE_DELTA, make_event
-from agentic_sdk.workflow.node import NodeOutput, WorkflowState
+from agentic_sdk.observability.events import EVENT_MODULE_DELTA, make_event
+from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 logger = logging.getLogger("agentic_sdk.workflow")
 
 DEFAULT_SYSTEM_PROMPT = "你是 Agentic SDK 內的 Action 節點，根據 user 輸入與已檢索上下文產出最終回應。"
 
 
-class CompletionAction:
-    """單一 Action 節點，依 backend 分派到不同推論後端。"""
-
+class GenerativeAction:
     name = "action"
 
     def __init__(
@@ -37,15 +26,12 @@ class CompletionAction:
         backend: str | None = None,
         settings: Settings | None = None,
         model: str | None = None,
-        # upstream-only
         upstream: UpstreamClient | None = None,
         base_url: str | None = None,
-        # foundry-only
         client=None,
         endpoint: str | None = None,
         deployment: str | None = None,
         api_key: str | None = None,
-        # 共用
         temperature: float | None = None,
         system_prompt: str | None = None,
         idle_timeout_sec: float = 30.0,
@@ -77,7 +63,6 @@ class CompletionAction:
             self._deployment = None
             return
 
-        # backend == foundry
         self._upstream = None
         self._upstream_openai = None
         resolved_model = resolve_foundry_model(self._settings, model)
@@ -121,16 +106,14 @@ class CompletionAction:
             return self._model or self._deployment
         return self._model
 
-    def __call__(self, state: WorkflowState) -> NodeOutput:
+    def __call__(self, state: WorkflowState) -> ModuleOutput:
         if self._backend == "foundry":
             if self._mock_client is not None:
                 return self._call_foundry_mock(state)
             return self._call_foundry(state)
         return self._call_upstream(state)
 
-    # ── upstream backend ────────────────────────────────────────────────
-
-    def _call_upstream(self, state: WorkflowState) -> NodeOutput:
+    def _call_upstream(self, state: WorkflowState) -> ModuleOutput:
         model = self._model or state.payload.get("model") or self._resolve_upstream_model() or "default"
         messages = _build_messages_upstream(state, self._system_prompt)
 
@@ -159,8 +142,8 @@ class CompletionAction:
                 content=f"error:{type(exc).__name__}",
                 metadata={"ok": False, "error": detail, "model": model},
             )
-            return NodeOutput(
-                next_node=None,
+            return ModuleOutput(
+                next_module=None,
                 payload={"_llm_usage": None},
                 context_updates=[entry],
             )
@@ -174,8 +157,8 @@ class CompletionAction:
             content=choice,
             metadata={"ok": True, "model": getattr(completion, "model", model)},
         )
-        return NodeOutput(
-            next_node=None,
+        return ModuleOutput(
+            next_module=None,
             payload={
                 "_llm_usage": {
                     "model": getattr(completion, "model", model),
@@ -200,9 +183,7 @@ class CompletionAction:
             logger.info("resolve upstream model failed: %s", exc)
         return None
 
-    # ── foundry backend ────────────────────────────────────────────────
-
-    def _call_foundry(self, state: WorkflowState) -> NodeOutput:
+    def _call_foundry(self, state: WorkflowState) -> ModuleOutput:
         import httpx
 
         messages = _build_messages_foundry(state, self._system_prompt)
@@ -239,52 +220,49 @@ class CompletionAction:
                 idle_gap = now - last_token_at
                 if idle_gap > self._idle_timeout_sec:
                     raise TimeoutError(
-                        f"foundry stream idle {idle_gap:.1f}s > {self._idle_timeout_sec}s"
+                        f"foundry stream idle timeout: {idle_gap:.1f}s > {self._idle_timeout_sec:.1f}s"
                     )
                 last_token_at = now
                 chunks.append(delta)
                 logger.info(
-                    "node.delta wid=%s idx=%d", state.workflow_id, delta_index,
+                    "action.delta wid=%s idx=%d chars=%d",
+                    state.workflow_id,
+                    delta_index,
+                    len(delta),
                     extra={"event": make_event(
-                        EVENT_NODE_DELTA,
+                        EVENT_MODULE_DELTA,
                         workflow_id=state.workflow_id,
-                        workflow_node="action",
-                        delta_text=delta,
+                        workflow_module="action",
                         delta_index=delta_index,
+                        delta_text=delta,
                     )},
                 )
                 delta_index += 1
-
-            choice = "".join(chunks)
-        except httpx.ReadTimeout as exc:
-            err_msg = f"idle > {self._idle_timeout_sec}s (httpx read timeout)"
-            logger.warning("foundry action stream idle timeout: %s", err_msg)
-            state.last_action_error = {"type": "TimeoutError", "message": err_msg}
-            entry = ContextEntry(
-                type=ContextEntryType.ACTION_RESULT,
-                content="error:TimeoutError",
-                metadata={"ok": False, "error": err_msg, "model": self._deployment},
-            )
-            return NodeOutput(next_node=None, payload={"_llm_usage": None}, context_updates=[entry])
+            content = "".join(chunks)
         except Exception as exc:
-            logger.warning("foundry action call failed: %s", exc)
-            state.last_action_error = {"type": type(exc).__name__, "message": str(exc)}
+            detail = str(exc)
+            logger.warning("action foundry call failed: %s", detail)
+            state.last_action_error = {"type": type(exc).__name__, "message": detail}
             entry = ContextEntry(
                 type=ContextEntryType.ACTION_RESULT,
                 content=f"error:{type(exc).__name__}",
-                metadata={"ok": False, "error": str(exc), "model": self._deployment},
+                metadata={"ok": False, "error": detail, "model": self._deployment},
             )
-            return NodeOutput(next_node=None, payload={"_llm_usage": None}, context_updates=[entry])
+            return ModuleOutput(
+                next_module=None,
+                payload={"_llm_usage": None},
+                context_updates=[entry],
+            )
 
         state.last_action_error = None
-        state.last_action_result = {"content": choice, "model": resolved_model}
+        state.last_action_result = {"content": content, "model": resolved_model}
         entry = ContextEntry(
             type=ContextEntryType.ACTION_RESULT,
-            content=choice,
+            content=content,
             metadata={"ok": True, "model": resolved_model},
         )
-        return NodeOutput(
-            next_node=None,
+        return ModuleOutput(
+            next_module=None,
             payload={
                 "_llm_usage": {
                     "model": resolved_model,
@@ -295,81 +273,60 @@ class CompletionAction:
             context_updates=[entry],
         )
 
-    def _call_foundry_mock(self, state: WorkflowState) -> NodeOutput:
-        delta_index = 0
-
-        def on_delta(delta: str) -> None:
-            nonlocal delta_index
-            logger.info(
-                "node.delta wid=%s idx=%d", state.workflow_id, delta_index,
-                extra={"event": make_event(
-                    EVENT_NODE_DELTA,
-                    workflow_id=state.workflow_id,
-                    workflow_node="action",
-                    delta_text=delta,
-                    delta_index=delta_index,
-                )},
-            )
-            delta_index += 1
-
-        resp = self._mock_client.chat_stream(  # type: ignore[union-attr]
+    def _call_foundry_mock(self, state: WorkflowState) -> ModuleOutput:
+        response = self._mock_client.chat(
             system=self._system_prompt,
-            user=state.user_message,
-            on_delta=on_delta,
-            idle_timeout_sec=self._idle_timeout_sec,
+            user=_messages_as_text(state),
         )
-
+        content = response.text
         state.last_action_error = None
-        state.last_action_result = {"content": resp.content, "model": resp.model}
+        state.last_action_result = {"content": content, "model": response.model}
         entry = ContextEntry(
             type=ContextEntryType.ACTION_RESULT,
-            content=resp.content,
-            metadata={"ok": True, "model": resp.model},
+            content=content,
+            metadata={"ok": True, "model": response.model},
         )
-        return NodeOutput(
-            next_node=None,
-            payload={"_llm_usage": {
-                "model": resp.model,
-                "input_tokens": resp.input_tokens,
-                "output_tokens": resp.output_tokens,
-            }},
+        return ModuleOutput(
+            next_module=None,
+            payload={
+                "_llm_usage": {
+                    "model": response.model,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
+                }
+            },
             context_updates=[entry],
         )
 
 
+def _build_messages_upstream(state: WorkflowState, system_prompt: str) -> list[dict[str, str]]:
+    retrieved = state.lookup("latest_retrieved_content") or state.payload.get("retrieved_snippet") or ""
+    return [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": (
+                f"user_message: {state.user_message}\n"
+                f"retrieved_context:\n{retrieved}\n"
+            ),
+        },
+    ]
+
+
 def _build_messages_foundry(state: WorkflowState, system_prompt: str) -> list[dict]:
-    """Foundry/OpenAI 標準格式：system + 可選 retrieved + user。"""
-    retrieved = state.latest_of(ContextEntryType.RETRIEVED)
-    msgs: list[dict] = [{"role": "system", "content": system_prompt}]
-    if retrieved:
-        msgs.append({"role": "system", "content": f"檢索到的上下文:{retrieved.content}"})
-
-    if state.attachments:
-        parts: list[dict] = [{"type": "text", "text": state.user_message}]
-        for att in state.attachments:
-            if att.kind == "image":
-                parts.append({"type": "image_url", "image_url": {"url": att.data_url}})
-        msgs.append({"role": "user", "content": parts})
-    else:
-        msgs.append({"role": "user", "content": state.user_message})
-    return msgs
+    retrieved = state.lookup("latest_retrieved_content") or state.payload.get("retrieved_snippet") or ""
+    return [
+        {"role": "system", "content": system_prompt},
+        {
+            "role": "user",
+            "content": (
+                f"user_message: {state.user_message}\n"
+                f"retrieved_context:\n{retrieved}\n"
+            ),
+        },
+    ]
 
 
-def _build_messages_upstream(state: WorkflowState, system_prompt: str) -> list[dict]:
-    """Gemma3 NPU chat template 要求嚴格 user/assistant 交替，把系統提示折入 user。"""
-    retrieved = state.latest_of(ContextEntryType.RETRIEVED)
-
-    parts: list[str] = [system_prompt]
-    if retrieved:
-        parts.append(f"已檢索上下文:\n{retrieved.content}")
-    parts.append(f"user 輸入:\n{state.user_message}")
-    text_blob = "\n\n".join(parts)
-
-    if state.attachments:
-        content_parts: list[dict] = [{"type": "text", "text": text_blob}]
-        for att in state.attachments:
-            if att.kind == "image":
-                content_parts.append({"type": "image_url", "image_url": {"url": att.data_url}})
-        return [{"role": "user", "content": content_parts}]
-
-    return [{"role": "user", "content": text_blob}]
+def _messages_as_text(state: WorkflowState) -> str:
+    retrieved = state.lookup("latest_retrieved_content") or state.payload.get("retrieved_snippet") or ""
+    return f"user_message: {state.user_message}\nretrieved_context:\n{retrieved}"

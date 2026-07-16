@@ -6,7 +6,7 @@ os.chdir(REPO_ROOT)
 sys.path.insert(0, REPO_ROOT)
 
 from agentic_sdk import Workflow
-from agentic_sdk.modules import InputPerceive, KeywordRetrieve
+from agentic_sdk.modules import KeywordRetrieve, PassThroughPerceive
 
 
 class SummaryAction:
@@ -15,7 +15,7 @@ class SummaryAction:
         return f"自訂 Action 回傳：{summary}"
 
 workflow = Workflow(
-    perceive=InputPerceive(),
+    perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
             {

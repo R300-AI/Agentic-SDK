@@ -1,12 +1,12 @@
 """Workflow 套件公開 API。"""
 
-from agentic_sdk.workflow.config import GateConfig, NodeSpec, WorkflowConfig
+from agentic_sdk.workflow.config import GateConfig, ModuleSpec, WorkflowConfig
 from agentic_sdk.workflow.engine import Workflow
 from agentic_sdk.workflow.gates import Gates
-from agentic_sdk.workflow.node import (
+from agentic_sdk.workflow.module import (
     WorkflowState as InContextMemory,
-    Node,
-    NodeOutput,
+    Module,
+    ModuleOutput,
     WorkflowAborted,
     WorkflowResult,
     WorkflowState,
@@ -15,12 +15,12 @@ from agentic_sdk.workflow.node import (
 __all__ = [
     "Workflow",
     "WorkflowConfig",
-    "NodeSpec",
+    "ModuleSpec",
     "GateConfig",
     "Gates",
     "InContextMemory",
-    "Node",
-    "NodeOutput",
+    "Module",
+    "ModuleOutput",
     "WorkflowAborted",
     "WorkflowResult",
     "WorkflowState",

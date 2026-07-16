@@ -168,9 +168,9 @@ class MockFoundryClient:
     """Scripted Foundry,讓 PoC 在無 Azure 配額時也能跑全鏈路。
 
     路由策略(Plan 節點消費):
-      visit 1 → next_node="retrieve"(先補上下文)
-      visit 2 → next_node="action"(產出回應)
-      visit >=3 → next_node="action"(避免無限 Plan↔Retrieve 迴圈)
+    visit 1 → next_module="retrieve"(先補上下文)
+    visit 2 → next_module="action"(產出回應)
+    visit >=3 → next_module="action"(避免無限 Plan↔Retrieve 迴圈)
     Reflect 消費時,scripted 為 "ok",讓 reflect 走 END 路徑。
 
     輸出固定為 JSON 字串以模擬 response_format=json_object,呼叫端用 as_json() 解析。
@@ -212,17 +212,17 @@ class MockFoundryClient:
             }
         elif system.startswith("PLAN"):
             self._plan_visit_counter += 1
-            next_node = "retrieve" if self._plan_visit_counter == 1 else "action"
+            next_module = "retrieve" if self._plan_visit_counter == 1 else "action"
             payload = {
                 "thought": f"mock plan thought visit={self._plan_visit_counter}",
-                "next_node": next_node,
+                "next_module": next_module,
             }
         elif system.startswith("REFLECT"):
             # 收到「ERROR」開頭的 user → 視為失敗 → 回 plan;否則 END
             if user.startswith("ERROR"):
-                payload = {"verdict": "fail", "next_node": "plan", "reason": "mock retry"}
+                payload = {"verdict": "fail", "next_module": "plan", "reason": "mock retry"}
             else:
-                payload = {"verdict": "pass", "next_node": None, "reason": "mock ok"}
+                payload = {"verdict": "pass", "next_module": None, "reason": "mock ok"}
         else:
             payload = {"echo": user[:80]}
 

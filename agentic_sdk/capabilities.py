@@ -93,7 +93,7 @@ class KnowledgeBaseRegistry:
 @dataclass(frozen=True)
 class RetrieveStrategyDefinition:
     ref: str
-    node_type: str
+    module_type: str
     label: str
     description: str
     params_schema: dict[str, Any]
@@ -102,7 +102,7 @@ class RetrieveStrategyDefinition:
     def to_dict(self) -> dict[str, Any]:
         return {
             "ref": self.ref,
-            "type": self.node_type,
+            "type": self.module_type,
             "label": self.label,
             "description": self.description,
             "params_schema": self.params_schema,
@@ -164,10 +164,10 @@ def default_knowledge_base_definitions() -> list[KnowledgeBaseDefinition]:
 def default_retrieve_strategies() -> list[RetrieveStrategyDefinition]:
     return [
         RetrieveStrategyDefinition(
-            ref="lexical_file_kb",
-            node_type="builtin.retrieve",
-            label="Lexical file KB",
-            description="零外部依賴，使用 file-backed KnowledgeBase 與詞集相似度。",
+            ref="semantic_kb",
+            module_type="SemanticRetrieve",
+            label="Semantic KB",
+            description="使用 KnowledgeBase 與對話記憶進行語意檢索。",
             params_schema={
                 "knowledge_base_ref": {"type": "ref", "ref_kind": "knowledge_base", "required": True},
                 "top_k": {"type": "integer", "default": 3, "min": 1, "max": 20},
@@ -178,37 +178,16 @@ def default_retrieve_strategies() -> list[RetrieveStrategyDefinition]:
         ),
         RetrieveStrategyDefinition(
             ref="hybrid_memory_kb",
-            node_type="builtin.retrieve",
+            module_type="HybridRetrieve",
             label="Hybrid memory + KB",
-            description="同時查靜態 KB 與 Memory Stream，依權重合併結果。",
+            description="同時查靜態 KB 與 Memory Stream。",
             params_schema={
                 "knowledge_base_ref": {"type": "ref", "ref_kind": "knowledge_base", "required": False},
                 "top_k": {"type": "integer", "default": 3, "min": 1, "max": 20},
-                "kb_weight": _number_schema(0.6),
-                "memory_weight": _number_schema(0.4),
+                "similarity_weight": _number_schema(0.5),
+                "recency_weight": _number_schema(0.3),
+                "importance_weight": _number_schema(0.2),
             },
-        ),
-        RetrieveStrategyDefinition(
-            ref="semantic_vector_kb",
-            node_type="builtin.retrieve.vector",
-            label="Semantic vector KB",
-            description="預留向量檢索策略；二期若未配置 adapter 應顯示 disabled state。",
-            params_schema={
-                "knowledge_base_ref": {"type": "ref", "ref_kind": "knowledge_base", "required": True},
-                "top_k": {"type": "integer", "default": 5, "min": 1, "max": 50},
-            },
-            enabled=False,
-        ),
-        RetrieveStrategyDefinition(
-            ref="remote_search",
-            node_type="builtin.retrieve.remote_search",
-            label="Remote search",
-            description="預留企業文件庫或遠端搜尋策略；二期預設停用。",
-            params_schema={
-                "provider_ref": {"type": "ref", "ref_kind": "provider", "required": True},
-                "top_k": {"type": "integer", "default": 5, "min": 1, "max": 50},
-            },
-            enabled=False,
         ),
     ]
 
@@ -218,18 +197,25 @@ def default_retrieve_templates() -> list[RetrieveTemplateDefinition]:
         RetrieveTemplateDefinition(
             ref="shoe_store_catalog_search",
             label="鞋店產品型錄搜尋",
-            strategy_ref="lexical_file_kb",
+            strategy_ref="semantic_kb",
             defaults={"knowledge_base_ref": "shoe_store", "top_k": 3},
         )
     ]
 
 
-def _node_definitions() -> list[dict[str, Any]]:
+def _module_definitions() -> list[dict[str, Any]]:
     return [
         {
-            "type": "builtin.perceive",
+            "type": "PassThroughPerceive",
             "role": "perceive",
-            "label": "Rule-based perceive",
+            "label": "Pass-through perceive",
+            "params_schema": {
+            },
+        },
+        {
+            "type": "TextPerceive",
+            "role": "perceive",
+            "label": "Text perceive",
             "params_schema": {
                 "welcome_message": {"type": "string", "default": ""},
                 "options": {"type": "array", "default": []},
@@ -237,44 +223,110 @@ def _node_definitions() -> list[dict[str, Any]]:
             },
         },
         {
-            "type": "builtin.plan",
+            "type": "StructuredPerceive",
+            "role": "perceive",
+            "label": "Structured perceive",
+            "params_schema": {
+                "welcome_message": {"type": "string", "default": ""},
+                "options": {"type": "array", "default": []},
+                "importance": {"type": "number", "default": 1.0, "min": 0.0},
+            },
+        },
+        {
+            "type": "TextImagePerceive",
+            "role": "perceive",
+            "label": "Text + image perceive",
+            "params_schema": {
+                "welcome_message": {"type": "string", "default": ""},
+                "options": {"type": "array", "default": []},
+                "importance": {"type": "number", "default": 1.0, "min": 0.0},
+            },
+        },
+        {
+            "type": "NextStepPlan",
             "role": "plan",
-            "label": "ReAct planner",
+            "label": "Next-step plan",
             "params_schema": {
                 "system_prompt": {"type": "string", "ui": {"control": "textarea"}},
                 "deployment": {"type": "string", "advanced": True},
             },
         },
         {
-            "type": "builtin.retrieve",
+            "type": "KeywordRetrieve",
             "role": "retrieve",
-            "label": "Retrieve",
+            "label": "Keyword retrieve",
             "params_schema": {
-                "retrieve_template_ref": {"type": "ref", "ref_kind": "retrieve_template"},
-                "retrieve_strategy_ref": {"type": "ref", "ref_kind": "retrieve_strategy"},
-                "knowledge_base_ref": {"type": "ref", "ref_kind": "knowledge_base"},
-                "top_k": {"type": "integer", "default": 3, "min": 1, "max": 20},
+                "items": {"type": "array", "default": []},
             },
         },
         {
-            "type": "builtin.reflect",
-            "role": "reflect",
-            "label": "Reflect",
+            "type": "SemanticRetrieve",
+            "role": "retrieve",
+            "label": "Semantic retrieve",
             "params_schema": {
-                "mode": {"type": "string", "enum": ["rule_based", "llm"], "default": "rule_based"},
+                "knowledge_base_ref": {"type": "ref", "ref_kind": "knowledge_base"},
+                "top_k": {"type": "integer", "default": 3, "min": 1, "max": 20},
+                "similarity_weight": _number_schema(0.5),
+                "recency_weight": _number_schema(0.3),
+                "importance_weight": _number_schema(0.2),
+            },
+        },
+        {
+            "type": "HybridRetrieve",
+            "role": "retrieve",
+            "label": "Hybrid retrieve",
+            "params_schema": {
+                "knowledge_base_ref": {"type": "ref", "ref_kind": "knowledge_base"},
+                "top_k": {"type": "integer", "default": 3, "min": 1, "max": 20},
+                "similarity_weight": _number_schema(0.5),
+                "recency_weight": _number_schema(0.3),
+                "importance_weight": _number_schema(0.2),
+            },
+        },
+        {
+            "type": "ResponseCheckReflect",
+            "role": "reflect",
+            "label": "Response check reflect",
+            "params_schema": {
                 "on_failure": {"type": "string", "default": "retry_plan"},
             },
         },
         {
-            "type": "completion",
+            "type": "EvidenceCheckReflect",
+            "role": "reflect",
+            "label": "Evidence check reflect",
+            "params_schema": {
+                "on_failure": {"type": "string", "default": "retry_plan"},
+            },
+        },
+        {
+            "type": "DirectAnswerAction",
             "role": "action",
-            "label": "Completion action",
+            "label": "Direct answer action",
+            "params_schema": {
+            },
+        },
+        {
+            "type": "GenerativeAction",
+            "role": "action",
+            "label": "Generative action",
             "params_schema": {
                 "provider_ref": {"type": "ref", "ref_kind": "provider"},
                 "backend": {"type": "string", "enum": ["upstream", "foundry"], "default": "upstream"},
                 "deployment": {"type": "string", "advanced": True},
                 "temperature": {"type": "number", "default": 0.2, "min": 0.0, "max": 2.0},
-                "api_key": {"type": "secret", "deprecated": True},
+                "secret_ref": {"type": "ref", "ref_kind": "secret"},
+            },
+        },
+        {
+            "type": "StructuredAction",
+            "role": "action",
+            "label": "Structured action",
+            "params_schema": {
+                "provider_ref": {"type": "ref", "ref_kind": "provider"},
+                "backend": {"type": "string", "enum": ["upstream", "foundry"], "default": "upstream"},
+                "deployment": {"type": "string", "advanced": True},
+                "temperature": {"type": "number", "default": 0.2, "min": 0.0, "max": 2.0},
                 "secret_ref": {"type": "ref", "ref_kind": "secret"},
             },
         },
@@ -286,7 +338,7 @@ def build_capability_document() -> dict[str, Any]:
     retrieve_registry = RetrieveStrategyRegistry()
     return {
         "schema_version": 1,
-        "node_definitions": _node_definitions(),
+        "module_definitions": _module_definitions(),
         "provider_refs": [
             {"ref": "upstream_default", "kind": "openai_compatible", "label": "Upstream default", "trusted": False},
             {"ref": "foundry_default", "kind": "azure_foundry", "label": "Azure Foundry default", "trusted": False},
@@ -320,7 +372,5 @@ def build_capability_document() -> dict[str, Any]:
         "feature_flags": {
             "inline_python_local": True,
             "inline_python_hosted": False,
-            "semantic_vector_retrieve": False,
-            "remote_search_retrieve": False,
         },
     }

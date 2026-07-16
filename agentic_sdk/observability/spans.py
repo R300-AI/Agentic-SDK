@@ -1,7 +1,7 @@
-"""節點執行的事件埋點 helper。
+"""模組執行的事件埋點 helper。
 
-`node_span(...)` 以 context manager 形式包住節點的同步執行,前後各 emit 一次
-`workflow.node.start` / `workflow.node.finish`,並在例外路徑補上 error_type
+`module_span(...)` 以 context manager 形式包住模組的同步執行,前後各 emit 一次
+`workflow.module.start` / `workflow.module.finish`,並在例外路徑補上 error_type
 與 workflow_status=aborted。Schema 對齊 events.TelemetryEvent。
 
 本 helper 不接管路由邏輯,只負責事件曝露;呼叫端仍須自行處理例外傳播。
@@ -15,8 +15,8 @@ from contextlib import contextmanager
 from typing import Iterator
 
 from agentic_sdk.observability.events import (
-    EVENT_NODE_FINISH,
-    EVENT_NODE_START,
+    EVENT_MODULE_FINISH,
+    EVENT_MODULE_START,
     make_event,
 )
 
@@ -24,24 +24,24 @@ logger = logging.getLogger("agentic_sdk.workflow")
 
 
 @contextmanager
-def node_span(
+def module_span(
     *,
-    workflow_node: str,
+    workflow_module: str,
     workflow_id: str,
     visit: int,
     gen_ai_system: str | None = None,
     gen_ai_request_model: str | None = None,
-) -> Iterator["NodeSpanContext"]:
-    """以 with 區塊包住節點執行,自動 emit start / finish 事件。
+) -> Iterator["ModuleSpanContext"]:
+    """以 with 區塊包住模組執行,自動 emit start / finish 事件。
 
     範例:
-        with node_span(workflow_node="plan", workflow_id=wf_id, visit=1,
+        with module_span(workflow_module="plan", workflow_id=wf_id, visit=1,
                         gen_ai_system="azure_openai") as span:
             output = run_plan(state)
-            span.set_next(output.get("next_node"))
+            span.set_next(output.get("next_module"))
     """
-    ctx = NodeSpanContext(
-        workflow_node=workflow_node,
+    ctx = ModuleSpanContext(
+        workflow_module=workflow_module,
         workflow_id=workflow_id,
         visit=visit,
         gen_ai_system=gen_ai_system,
@@ -49,13 +49,13 @@ def node_span(
     )
 
     logger.info(
-        "node.start workflow_id=%s node=%s visit=%d",
-        workflow_id, workflow_node, visit,
+        "module.start workflow_id=%s module=%s visit=%d",
+        workflow_id, workflow_module, visit,
         extra={"event": make_event(
-            EVENT_NODE_START,
+            EVENT_MODULE_START,
             workflow_id=workflow_id,
-            workflow_node=workflow_node,
-            workflow_node_visit=visit,
+            workflow_module=workflow_module,
+            workflow_module_visit=visit,
             gen_ai_system=gen_ai_system,
             gen_ai_request_model=gen_ai_request_model,
         )},
@@ -67,13 +67,13 @@ def node_span(
     except Exception as exc:
         duration_ms = (time.monotonic() - started_at) * 1000
         logger.warning(
-            "node.finish (error) workflow_id=%s node=%s visit=%d error=%s",
-            workflow_id, workflow_node, visit, exc,
+            "module.finish (error) workflow_id=%s module=%s visit=%d error=%s",
+            workflow_id, workflow_module, visit, exc,
             extra={"event": make_event(
-                EVENT_NODE_FINISH,
+                EVENT_MODULE_FINISH,
                 workflow_id=workflow_id,
-                workflow_node=workflow_node,
-                workflow_node_visit=visit,
+                workflow_module=workflow_module,
+                workflow_module_visit=visit,
                 workflow_status="aborted",
                 duration_ms=duration_ms,
                 error_type=type(exc).__name__,
@@ -86,15 +86,15 @@ def node_span(
 
     duration_ms = (time.monotonic() - started_at) * 1000
     logger.info(
-        "node.finish workflow_id=%s node=%s visit=%d next=%s duration_ms=%.1f",
-        workflow_id, workflow_node, visit, ctx.next_node, duration_ms,
+        "module.finish workflow_id=%s module=%s visit=%d next=%s duration_ms=%.1f",
+        workflow_id, workflow_module, visit, ctx.next_module, duration_ms,
         extra={"event": make_event(
-            EVENT_NODE_FINISH,
+            EVENT_MODULE_FINISH,
             workflow_id=workflow_id,
-            workflow_node=workflow_node,
-            workflow_node_visit=visit,
+            workflow_module=workflow_module,
+            workflow_module_visit=visit,
             workflow_status=ctx.status,
-            workflow_next_node=ctx.next_node,
+            workflow_next_module=ctx.next_module,
             workflow_reason=ctx.reason,
             duration_ms=duration_ms,
             gen_ai_system=gen_ai_system,
@@ -106,39 +106,39 @@ def node_span(
     )
 
 
-class NodeSpanContext:
-    """span 進行中,節點實作可寫入收尾屬性供 finish 事件帶出。"""
+class ModuleSpanContext:
+    """span 進行中,模組實作可寫入收尾屬性供 finish 事件帶出。"""
 
     __slots__ = (
-        "workflow_node", "workflow_id", "visit",
+        "workflow_module", "workflow_id", "visit",
         "gen_ai_system", "gen_ai_request_model",
-        "next_node", "status", "reason",
+        "next_module", "status", "reason",
         "response_model", "usage_input_tokens", "usage_output_tokens",
     )
 
     def __init__(
         self,
         *,
-        workflow_node: str,
+        workflow_module: str,
         workflow_id: str,
         visit: int,
         gen_ai_system: str | None,
         gen_ai_request_model: str | None,
     ) -> None:
-        self.workflow_node = workflow_node
+        self.workflow_module = workflow_module
         self.workflow_id = workflow_id
         self.visit = visit
         self.gen_ai_system = gen_ai_system
         self.gen_ai_request_model = gen_ai_request_model
-        self.next_node: str | None = None
+        self.next_module: str | None = None
         self.status: str = "ok"
         self.reason: str | None = None
         self.response_model: str | None = None
         self.usage_input_tokens: int | None = None
         self.usage_output_tokens: int | None = None
 
-    def set_next(self, next_node: str | None) -> None:
-        self.next_node = next_node
+    def set_next(self, next_module: str | None) -> None:
+        self.next_module = next_module
 
     def set_fallback(self, reason: str) -> None:
         self.status = "fallback"

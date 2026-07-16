@@ -31,7 +31,7 @@ from agentic_sdk.observability.events import (
 )
 from agentic_sdk.workflow import Workflow
 from agentic_sdk.workflow.attachments import Attachment
-from agentic_sdk.workflow.nodes.action import CompletionAction
+from agentic_sdk.workflow.modules.action import GenerativeAction
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -87,7 +87,7 @@ def _build_action(settings, model: str):
             status_code=500,
             detail=f"WORKFLOW_ACTION_BACKEND={backend!r} 不支援,僅接受 upstream 或 foundry。",
         )
-    return CompletionAction(backend=backend, settings=settings, model=model)
+    return GenerativeAction(backend=backend, settings=settings, model=model)
 
 
 @router.post(_ROUTE)

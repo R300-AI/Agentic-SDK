@@ -6,10 +6,10 @@ os.chdir(REPO_ROOT)
 sys.path.insert(0, REPO_ROOT)
 
 from agentic_sdk import Workflow
-from agentic_sdk.modules import DirectAnswerAction, InputPerceive, KeywordRetrieve
+from agentic_sdk.modules import DirectAnswerAction, KeywordRetrieve, PassThroughPerceive
 
 workflow = Workflow(
-    perceive=InputPerceive(),
+    perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
             {

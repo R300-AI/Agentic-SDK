@@ -15,7 +15,7 @@ from typing import Protocol
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.knowledge import KnowledgeBase
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
-from agentic_sdk.workflow.nodes.retrieve.vision_query import VisionQueryBuilder
+from agentic_sdk.workflow.modules.retrieve.vision_query import VisionQueryBuilder
 
 
 class Embedder(Protocol):

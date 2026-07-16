@@ -2,7 +2,7 @@
 
 命名策略:
 - 事件名稱(`event.name`)採 `<domain>.<action>` 風格,對應 OTel Logs Data Model
-  的 event.name 慣例。Phase 1 領域:gateway。Phase 2 加 node、context、orchestrator。
+  的 event.name 慣例。Phase 1 領域:gateway。Phase 2 加 module、context、orchestrator。
 - 事件 attribute key 對齊 OpenTelemetry Semantic Conventions 1.27 GenAI(穩定子集)
   與 HTTP/Error 子集,例:gen_ai.request.model、http.response.status_code、error.type。
   Phase 2 升 OTel SDK 時 schema 不變,只換 emit 機制。
@@ -26,12 +26,12 @@ EVENT_GATEWAY_REQUEST_START = "gateway.request.start"
 EVENT_GATEWAY_REQUEST_FINISH = "gateway.request.finish"
 EVENT_GATEWAY_REQUEST_ERROR = "gateway.request.error"
 
-# Phase 2 才會由五節點 / 上下文層 emit;Phase 1 僅供 Dashboard mock 與面板代碼引用,
+# Phase 2 才會由五模組 / 上下文層 emit;Phase 1 僅供 Dashboard mock 與面板代碼引用,
 # 在此預先鎖定字串避免散落字面值。新增 emitter 時請同步補上對應 SemConv attribute。
-EVENT_NODE_START = "workflow.node.start"
-EVENT_NODE_FINISH = "workflow.node.finish"
-EVENT_NODE_DELTA = "workflow.node.delta"
-EVENT_NODE_THOUGHT = "workflow.node.thought"   # Plan 推理軌跡
+EVENT_MODULE_START = "workflow.module.start"
+EVENT_MODULE_FINISH = "workflow.module.finish"
+EVENT_MODULE_DELTA = "workflow.module.delta"
+EVENT_MODULE_THOUGHT = "workflow.module.thought"   # Plan 推理軌跡
 EVENT_CONTEXT_DEGRADED = "context.degraded"
 EVENT_WORKFLOW_FALLBACK = "workflow.fallback"
 
@@ -79,17 +79,17 @@ class TelemetryEvent(TypedDict, total=False):
     context_active_mb: float               # 觸發降級時 ActiveStore 的實際使用量(MB)
     context_demoted_count: int             # 本次降級寫入 Archived 的條目數
 
-    # ----- 工作流節點(SemConv: 自訂 namespace,沿用 OTel 命名慣例) -----
+    # ----- 工作流模組(SemConv: 自訂 namespace,沿用 OTel 命名慣例) -----
     workflow_id: str                       # 單次 Workflow.run() 的相關 ID
-    workflow_node: str                     # "perceive" | "plan" | "retrieve" | "reflect" | "action"
-    workflow_next_node: str                # 節點決定的下一站(None 代表 END)
-    workflow_node_visit: int               # 該節點於本次工作流的第 N 次進入
+    workflow_module: str                   # "perceive" | "plan" | "retrieve" | "reflect" | "action"
+    workflow_next_module: str              # 模組決定的下一站(None 代表 END)
+    workflow_module_visit: int             # 該模組於本次工作流的第 N 次進入
     workflow_status: str                   # "ok" | "fallback" | "aborted"
     workflow_reason: str                   # 降級/失敗的人類可讀說明
 
-    # ----- 節點串流 token 増量 -----
+    # ----- 模組串流 token 増量 -----
     delta_text: str                        # 本 chunk 新增的文字片段
-    delta_index: int                       # 本次節點內的 chunk 序號
+    delta_index: int                       # 本次模組內的 chunk 序號
 
 
 def make_event(event_name: str, **attributes: Any) -> TelemetryEvent:

@@ -3,11 +3,11 @@
 設計取捨:
 - **不用 LangGraph**:Phase 2 PoC 的轉換圖只是 sequential + 單一回環,手刻
   迴圈足以表達且零外部依賴;Phase 5 若引入 branching / checkpointing 再評估
-  遷移成本(換 engine.py 一個檔案,Node 介面不動)。
-- **同步執行**:Action 節點呼叫上游時用同步 openai SDK;Gateway 端若要併發,
+    遷移成本(換 engine.py 一個檔案,Module 介面不動)。
+- **同步執行**:Action 模組呼叫上游時用同步 openai SDK;Gateway 端若要併發,
   自行在 FastAPI handler 內 `await asyncio.to_thread(workflow.run, ...)`。
 
-每個節點透過 observability.node_span 自動 emit start/finish;Workflow 級別
+每個模組透過 observability.module_span 自動 emit start/finish;Workflow 級別
 的 fallback / abort 額外發 workflow.fallback 事件。
 """
 
@@ -20,13 +20,13 @@ from typing import Any
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ContextEntry, ContextEntryType
 from agentic_sdk.memory import MemoryStore
-from agentic_sdk.observability import make_event, node_span
+from agentic_sdk.observability import make_event, module_span
 from agentic_sdk.observability.events import EVENT_WORKFLOW_FALLBACK
 from agentic_sdk.workflow.gates import Gates
 from agentic_sdk.workflow.attachments import Attachment
-from agentic_sdk.workflow.node import (
-    Node,
-    NodeOutput,
+from agentic_sdk.workflow.module import (
+    Module,
+    ModuleOutput,
     WorkflowAborted,
     WorkflowResult,
     WorkflowState,
@@ -34,12 +34,12 @@ from agentic_sdk.workflow.node import (
 
 logger = logging.getLogger(__name__)
 
-_NODE_NAMES = ("perceive", "plan", "retrieve", "reflect", "action")
+_MODULE_NAMES = ("perceive", "plan", "retrieve", "reflect", "action")
 
 
 @dataclass
 class Workflow:
-    """五節點工作流的容器。
+    """五模組工作流的容器。
 
     使用方式:
         wf = Workflow()                       # 全部 baseline + 自動依 Settings 拾 mock/real Foundry
@@ -49,28 +49,28 @@ class Workflow:
         wf = Workflow(plan=TreeOfThoughtsPlan())   # 只換 Plan,其他 baseline
     """
 
-    perceive: Node | None = None
-    plan: Node | None = None
-    retrieve: Node | None = None
-    reflect: Node | None = None
-    action: Node | None = None
+    perceive: Module | None = None
+    plan: Module | None = None
+    retrieve: Module | None = None
+    reflect: Module | None = None
+    action: Module | None = None
     gates: Gates | None = None
     settings: Settings | None = None
     active_store: ActiveStore | None = None
     memory_store: MemoryStore | None = None
     workflow_name: str = "default"
-    entry_node: str = "perceive"
+    entry_module: str = "perceive"
 
-    nodes: dict[str, Node] = field(init=False)
+    modules: dict[str, Module] = field(init=False)
 
     def __post_init__(self) -> None:
-        # 延遲 import 避免循環(nodes/ 反過來 import Workflow 周邊)
+        # 延遲 import 避免循環(modules/ 反過來 import Workflow 周邊)
         from agentic_sdk.workflow.llm import get_foundry_client
-        from agentic_sdk.workflow.nodes.action import DEFAULT as DEFAULT_ACTION
-        from agentic_sdk.workflow.nodes.perceive import DEFAULT as DEFAULT_PERCEIVE
-        from agentic_sdk.workflow.nodes.plan import DEFAULT as DEFAULT_PLAN
-        from agentic_sdk.workflow.nodes.reflect import DEFAULT as DEFAULT_REFLECT
-        from agentic_sdk.workflow.nodes.retrieve import DEFAULT as DEFAULT_RETRIEVE
+        from agentic_sdk.workflow.modules.action import DEFAULT as DEFAULT_ACTION
+        from agentic_sdk.workflow.modules.perceive import DEFAULT as DEFAULT_PERCEIVE
+        from agentic_sdk.workflow.modules.plan import DEFAULT as DEFAULT_PLAN
+        from agentic_sdk.workflow.modules.reflect import DEFAULT as DEFAULT_REFLECT
+        from agentic_sdk.workflow.modules.retrieve import DEFAULT as DEFAULT_RETRIEVE
 
         self.settings = self.settings or get_settings()
         self.gates = self.gates or Gates(
@@ -81,7 +81,7 @@ class Workflow:
         # Plan / Action 預設依賴外部服務(Foundry / 上游 OpenAI);
         # 明確把 Workflow 接收到的 settings 傳下去,避免它們各自
         # 退回到 lru_cache 的全域 get_settings(會被外部 .env 污染)。
-        self.nodes = {
+        self.modules = {
             "perceive": self.perceive or DEFAULT_PERCEIVE(foundry_client=get_foundry_client(self.settings)),
             "plan": self.plan or DEFAULT_PLAN(foundry_client=get_foundry_client(self.settings)),
             "retrieve": self.retrieve or DEFAULT_RETRIEVE(),
@@ -96,30 +96,30 @@ class Workflow:
         settings: Settings | None = None,
         active_store: ActiveStore | None = None,
         memory_store: MemoryStore | None = None,
-        node_overrides: dict[str, Node] | None = None,
+        module_overrides: dict[str, Module] | None = None,
     ) -> "Workflow":
         """從 WorkflowConfig 建構 Workflow 實例。
 
-        - `node_overrides`:直接傳入已建構好的 node 實例(例如使用者自己 `AzureOpenAI(...)`
-          建好 client、`CompletionAction(backend="foundry", client=...)` 包好後丟進來),優先級高於
-          `config.nodes[name]` 中的序列化規格。這是 Python SDK 的主要擴充口。
-        - 未在 `node_overrides` 也未在 `config.nodes` 中指定的節點退回各自的 DEFAULT。
+        - `module_overrides`:直接傳入已建構好的 module 實例(例如使用者自己 `AzureOpenAI(...)`
+          建好 client、`GenerativeAction(backend="foundry", client=...)` 包好後丟進來),優先級高於
+          `config.modules[name]` 中的序列化規格。這是 Python SDK 的主要擴充口。
+        - 未在 `module_overrides` 也未在 `config.modules` 中指定的模組退回各自的 DEFAULT。
         - `config.gates` 覆蓋 Settings 的三道閘門預設值。
         """
-        from agentic_sdk.workflow.config import _build_node_from_spec
+        from agentic_sdk.workflow.config import _build_module_from_spec
         from agentic_sdk.workflow.llm import get_foundry_client
 
         s = settings or get_settings()
         fc = get_foundry_client(s)
-        overrides = node_overrides or {}
+        overrides = module_overrides or {}
 
-        def _node(name: str):
+        def _module(name: str):
             if name in overrides:
                 return overrides[name]
-            spec = config.nodes.get(name)
+            spec = config.modules.get(name)
             if spec is None:
                 return None  # 交給 __post_init__ 補 DEFAULT
-            return _build_node_from_spec(spec, name, settings=s, foundry_client=fc, config=config)
+            return _build_module_from_spec(spec, name, settings=s, foundry_client=fc, config=config)
 
         gates = Gates(
             max_node_hops=config.gates.max_node_hops,
@@ -128,17 +128,17 @@ class Workflow:
         )
 
         return cls(
-            perceive=_node("perceive"),
-            plan=_node("plan"),
-            retrieve=_node("retrieve"),
-            reflect=_node("reflect"),
-            action=_node("action"),
+            perceive=_module("perceive"),
+            plan=_module("plan"),
+            retrieve=_module("retrieve"),
+            reflect=_module("reflect"),
+            action=_module("action"),
             gates=gates,
             settings=s,
             active_store=active_store,
             memory_store=memory_store,
             workflow_name=config.name,
-            entry_node=config.entry,
+            entry_module=config.entry,
         )
 
     def run(
@@ -162,7 +162,7 @@ class Workflow:
         if self.active_store is not None:
             self.active_store.put(user_entry)
 
-        current: str | None = self.entry_node
+        current: str | None = self.entry_module
         total_hops = 0
         aborted = False
         abort_reason: str | None = None
@@ -173,21 +173,21 @@ class Workflow:
                 self.gates.before_visit(current, state, total_hops)
                 visit = state.increment_visit(current)
 
-                node = self.nodes.get(current)
-                if node is None:
-                    raise WorkflowAborted(f"unknown node '{current}'")
+                module = self.modules.get(current)
+                if module is None:
+                    raise WorkflowAborted(f"unknown module '{current}'")
 
-                gen_ai_system, gen_ai_model = _llm_attrs(node)
-                with node_span(
-                    workflow_node=current,
+                gen_ai_system, gen_ai_model = _llm_attrs(module)
+                with module_span(
+                    workflow_module=current,
                     workflow_id=state.workflow_id,
                     visit=visit,
                     gen_ai_system=gen_ai_system,
                     gen_ai_request_model=gen_ai_model,
                 ) as span:
-                    raw_output: Any = node(state)
+                    raw_output: Any = module(state)
                     output = _normalize_output(current, raw_output, state)
-                    span.set_next(output.get("next_node"))
+                    span.set_next(output.get("next_module"))
                     usage = (output.get("payload") or {}).get("_llm_usage")
                     if usage:
                         span.set_usage(
@@ -200,7 +200,7 @@ class Workflow:
                 if self.active_store is not None:
                     for new_entry in output.get("context_updates", []) or []:
                         self.active_store.put(new_entry)
-                current = output.get("next_node")
+                current = output.get("next_module")
 
         except WorkflowAborted as exc:
             aborted = True
@@ -224,11 +224,11 @@ class Workflow:
         )
 
 
-def _llm_attrs(node: Node) -> tuple[str | None, str | None]:
-    """節點若聲明 gen_ai_system / gen_ai_request_model,沿用之;否則 (None, None)。"""
+def _llm_attrs(module: Module) -> tuple[str | None, str | None]:
+    """模組若聲明 gen_ai_system / gen_ai_request_model,沿用之;否則 (None, None)。"""
     return (
-        getattr(node, "gen_ai_system", None),
-        getattr(node, "gen_ai_request_model", None),
+        getattr(module, "gen_ai_system", None),
+        getattr(module, "gen_ai_request_model", None),
     )
 
 
@@ -242,7 +242,7 @@ def _final_message_from(state: WorkflowState) -> str:
     return ""
 
 
-def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> NodeOutput:
+def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> ModuleOutput:
     if isinstance(raw_output, dict):
         return raw_output
 
@@ -250,8 +250,8 @@ def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> No
         content = "" if raw_output is None else str(raw_output)
         state.last_action_error = None
         state.last_action_result = {"content": content, "model": "custom-action"}
-        return NodeOutput(
-            next_node=None,
+        return ModuleOutput(
+            next_module=None,
             payload={"latest_final_message": content},
             context_updates=[
                 ContextEntry(
@@ -262,4 +262,4 @@ def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> No
             ],
         )
 
-    raise TypeError(f"node '{current}' returned unsupported output type: {type(raw_output).__name__}")
+    raise TypeError(f"module '{current}' returned unsupported output type: {type(raw_output).__name__}")

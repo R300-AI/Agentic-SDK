@@ -8,7 +8,7 @@ sys.path.insert(0, REPO_ROOT)
 from openai import OpenAI
 
 from agentic_sdk import Workflow
-from agentic_sdk.modules import CompletionAction, InputPerceive, KeywordRetrieve
+from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
 openai_client = OpenAI(
     api_key="not-needed",
@@ -16,7 +16,7 @@ openai_client = OpenAI(
 )
 
 workflow = Workflow(
-    perceive=InputPerceive(),
+    perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
             {
@@ -25,7 +25,7 @@ workflow = Workflow(
             },
         ],
     ),
-    action=CompletionAction(
+    action=GenerativeAction(
         client=openai_client,
     ),
 )

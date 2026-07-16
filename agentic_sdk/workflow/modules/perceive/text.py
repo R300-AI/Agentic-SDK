@@ -1,8 +1,4 @@
-"""M13 — LLM-based Perceive 節點：所有輸入一視同仁，透過 LLM 理解意圖。
-
-不論使用者是手動輸入、點選選項或夾帶附件，均送入 LLM 統一判斷，
-避免任何基於 pattern/keyword 的快速分流影響後續推理品質。
-"""
+"""TextPerceive 節點：透過 LLM 理解文字輸入意圖。"""
 
 from __future__ import annotations
 
@@ -11,7 +7,7 @@ import json
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.memory import MemoryEntry
 from agentic_sdk.workflow.llm import FoundryClient, get_foundry_client
-from agentic_sdk.workflow.node import NodeOutput, WorkflowState
+from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 
 _PERCEIVE_SYSTEM = (
@@ -31,7 +27,7 @@ _PERCEIVE_SYSTEM = (
 )
 
 
-class LLMBasedPerceive:
+class TextPerceive:
     name = "perceive"
 
     def __init__(
@@ -54,7 +50,7 @@ class LLMBasedPerceive:
     def options(self) -> list[dict]:
         return list(self._options)
 
-    def __call__(self, state: WorkflowState) -> NodeOutput:
+    def __call__(self, state: WorkflowState) -> ModuleOutput:
         msg = state.user_message.strip()
 
         user_prompt = f"user_message: {msg}\n"
@@ -94,8 +90,8 @@ class LLMBasedPerceive:
                 )
             )
 
-        return NodeOutput(
-            next_node="plan",
+        return ModuleOutput(
+            next_module="plan",
             payload={"perceived_intent": intent},
             context_updates=[entry],
         )

@@ -8,10 +8,10 @@ Agentic SDK 是一套用於在 Python 應用程式中組裝 Agent workflow 的 S
 
 ### 核心概念
 
-一條 Agent workflow 通常由幾類節點組成，各自負責不同工作：
+一條 Agent workflow 通常由幾類模組組成，各自負責不同工作：
 
-- 感知（Perceive）負責整理使用者輸入，形成後續節點可用的結構化理解。
-- 規劃（Plan）負責根據當前狀態判斷下一步應前往的節點。
+- 感知（Perceive）負責整理使用者輸入，形成後續模組可用的結構化理解。
+- 規劃（Plan）負責根據當前狀態判斷下一步應前往的模組。
 - 檢索（Retrieve）負責補充相關內容、命中條目或其他可用證據。
 - 執行（Action）負責產生主要輸出或最終回應。
 - 反思（Reflect）負責檢查結果是否可接受，並決定結束或重試。
@@ -46,19 +46,19 @@ Agentic SDK 是一套用於在 Python 應用程式中組裝 Agent workflow 的 S
 
 ## 快速開始
 
-你可以先照著第一個範例跑出一條最小 workflow，再把模型能力接進同一條流程，最後只替換需要客製化的節點。以下三個範例就依照這個順序安排，讓你逐步熟悉 Agentic SDK 的導入方式。
+你可以先照著第一個範例跑出一條最小 workflow，再把模型能力接進同一條流程，最後只替換需要客製化的模組。以下三個範例就依照這個順序安排，讓你逐步熟悉 Agentic SDK 的導入方式。
 
-### 1. 用最少的三類節點組出第一條 workflow
+### 1. 用最少的三類模組組出第一條 workflow
 
-第一個範例會帶你建立第一條可執行流程。你會先用最少的節點組合完成輸入整理、內容命中與回應生成，並熟悉 Agentic SDK 的基本組裝方式。
+第一個範例會帶你建立第一條可執行流程。你會先用最少的模組組合完成輸入整理、內容命中與回應生成，並熟悉 Agentic SDK 的基本組裝方式。
 
 ```python
 # 公開介面範例
 from agentic_sdk import Workflow
-from agentic_sdk.modules import DirectAnswerAction, InputPerceive, KeywordRetrieve
+from agentic_sdk.modules import DirectAnswerAction, KeywordRetrieve, PassThroughPerceive
 
 workflow = Workflow(
-    perceive=InputPerceive(),
+    perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
             {
@@ -78,11 +78,11 @@ result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-`InputPerceive` 會先讀取使用者問題。`KeywordRetrieve` 會從 `items` 條目中比對 `keywords`，命中後取回對應的 `content`。`DirectAnswerAction` 則直接把前面取回的內容組成回應。`Workflow` 會把這些中間資料保留下來，讓後面的步驟可以直接使用。
+`PassThroughPerceive` 會先讀取使用者問題。`KeywordRetrieve` 會從 `items` 條目中比對 `keywords`，命中後取回對應的 `content`。`DirectAnswerAction` 則直接把前面取回的內容組成回應。`Workflow` 會把這些中間資料保留下來，讓後面的步驟可以直接使用。
 
-### 2. 把 OpenAI SDK client 注入需要模型的節點
+### 2. 把 OpenAI SDK client 注入需要模型的模組
 
-第二個範例會把模型能力接進既有 workflow，並示範如何把 OpenAI SDK client 注入需要模型的節點。
+第二個範例會把模型能力接進既有 workflow，並示範如何把 OpenAI SDK client 注入需要模型的模組。
 
 以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。
 
@@ -91,14 +91,14 @@ ollama pull llama3.1:8b
 ollama serve
 ```
 
-`OpenAI(...)` 建立完成後，直接將 client 交給 `CompletionAction`：
+`OpenAI(...)` 建立完成後，直接將 client 交給 `GenerativeAction`：
 
 ```python
 # 公開介面範例
 from openai import OpenAI
 
 from agentic_sdk import Workflow
-from agentic_sdk.modules import CompletionAction, InputPerceive, KeywordRetrieve
+from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
 openai_client = OpenAI(
     api_key="not-needed",
@@ -106,7 +106,7 @@ openai_client = OpenAI(
 )
 
 workflow = Workflow(
-    perceive=InputPerceive(),
+    perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
             {
@@ -115,7 +115,7 @@ workflow = Workflow(
             },
         ],
     ),
-    action=CompletionAction(
+    action=GenerativeAction(
         client=openai_client,
     ),
 )
@@ -126,14 +126,14 @@ print(result.final_message)
 
 此一範例保留原本的輸入處理與條目查詢方式，僅將輸出步驟改為透過 OpenAI Python client 呼叫模型端點。對 AI Hub 而言，重點不在特定 provider，而在模型服務與 Agent workflow 皆沿用 OpenAI SDK 介面。當模型端點遵循同一協定時，模型封裝與 Agent 功能即可使用一致的調用方式，降低不同生態各自定義呼叫介面的整合成本。
 
-### 3. 用最小 custom node 替換內建 Action
+### 3. 用最小 custom module 替換內建 Action
 
-到這一步，你已經可以保留前段流程，只把最後的輸出節點換成自己的程式邏輯。
+到這一步，你已經可以保留前段流程，只把最後的輸出模組換成自己的程式邏輯。
 
 ```python
 # 公開介面範例
 from agentic_sdk import Workflow
-from agentic_sdk.modules import InputPerceive, KeywordRetrieve
+from agentic_sdk.modules import KeywordRetrieve, PassThroughPerceive
 
 class SummaryAction:
     def __call__(self, memory):
@@ -141,7 +141,7 @@ class SummaryAction:
         return f"自訂 Action 回傳：{summary}"
 
 workflow = Workflow(
-    perceive=InputPerceive(),
+    perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
             {

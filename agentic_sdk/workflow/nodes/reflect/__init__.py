@@ -1,6 +1,10 @@
-from agentic_sdk.workflow.nodes.reflect.llm_reflexion import ReflexionReflect
-from agentic_sdk.workflow.nodes.reflect.rule_based import RuleBasedReflect
+from agentic_sdk.workflow.nodes.reflect.evidence_check import EvidenceCheckReflect
+from agentic_sdk.workflow.nodes.reflect.response_check import ResponseCheckReflect
 
-DEFAULT = RuleBasedReflect
+DEFAULT = EvidenceCheckReflect
 
-__all__ = ["RuleBasedReflect", "ReflexionReflect", "DEFAULT"]
+__all__ = [
+	"ResponseCheckReflect",
+	"EvidenceCheckReflect",
+	"DEFAULT",
+]

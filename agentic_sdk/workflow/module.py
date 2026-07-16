@@ -1,9 +1,9 @@
-"""A-01 — Node Protocol、NodeOutput、WorkflowState、WorkflowResult。
+"""A-01 — Module Protocol、ModuleOutput、WorkflowState、WorkflowResult。
 
 設計約束:
-- 節點之間透過 WorkflowState 傳遞;Node 不持有 state 內容,只回傳 NodeOutput
-- NodeOutput.next_node 為 None ⇒ 工作流結束(END)
-- 同一 Node 實例可被多次重訪,內部不存可變狀態(testability)
+- 模組之間透過 WorkflowState 傳遞;Module 不持有 state 內容,只回傳 ModuleOutput
+- ModuleOutput.next_module 為 None ⇒ 工作流結束(END)
+- 同一 Module 實例可被多次重訪,內部不存可變狀態(testability)
 """
 
 from __future__ import annotations
@@ -18,26 +18,26 @@ from agentic_sdk.memory import MemoryStore
 from agentic_sdk.workflow.attachments import Attachment
 
 
-class NodeOutput(TypedDict, total=False):
-    """節點回傳契約。
+class ModuleOutput(TypedDict, total=False):
+    """模組回傳契約。
 
-    next_node:下一個節點名稱字串(對應 nodes/ 子套件),或 None 代表 END
-    payload:傳遞給下一節點的暫存資料(不寫入 Active Context)
-    context_updates:本次節點寫入 Active Context 的條目串列
+    next_module:下一個模組名稱字串,或 None 代表 END
+    payload:傳遞給下一模組的暫存資料(不寫入 Active Context)
+    context_updates:本次模組寫入 Active Context 的條目串列
     """
 
-    next_node: str | None
+    next_module: str | None
     payload: dict
     context_updates: list[ContextEntry]
 
 
 @runtime_checkable
-class Node(Protocol):
-    """所有節點實作的最小契約。"""
+class Module(Protocol):
+    """所有模組實作的最小契約。"""
 
     name: str
 
-    def __call__(self, state: "WorkflowState") -> NodeOutput: ...
+    def __call__(self, state: "WorkflowState") -> ModuleOutput: ...
 
 
 @dataclass
@@ -66,19 +66,18 @@ class WorkflowState:
                 return entry
         return None
 
-    def apply(self, output: NodeOutput) -> None:
+    def apply(self, output: ModuleOutput) -> None:
         for entry in output.get("context_updates", []) or []:
             self.append(entry)
         new_payload = output.get("payload")
         if new_payload:
             self.payload.update(new_payload)
 
-    def increment_visit(self, node_name: str) -> int:
-        self.visit_counts[node_name] = self.visit_counts.get(node_name, 0) + 1
-        return self.visit_counts[node_name]
+    def increment_visit(self, module_name: str) -> int:
+        self.visit_counts[module_name] = self.visit_counts.get(module_name, 0) + 1
+        return self.visit_counts[module_name]
 
     def lookup(self, key: str) -> Any | None:
-        """Backward-compatible lookup API for baseline README examples."""
         if key in self.payload:
             return self.payload[key]
         if key == "latest_retrieved_content":

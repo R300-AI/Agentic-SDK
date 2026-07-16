@@ -29,7 +29,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from agentic_sdk.observability.events import (
-    EVENT_NODE_FINISH,
+    EVENT_MODULE_FINISH,
     EVENT_WORKFLOW_FALLBACK,
 )
 from agentic_sdk.workflow import Workflow, WorkflowConfig
@@ -149,7 +149,7 @@ async def get_workflow_result(workflow_id: str) -> dict[str, Any]:
 _TERMINAL_EVENTS = {EVENT_WORKFLOW_FALLBACK}
 _SSE_POLL_INTERVAL_SEC = 0.05
 _SSE_MAX_DURATION_SEC = 600.0
-# Cloud Run / GFE 會將小型 SSE chunk 合併後才轉發給瀏覽器，造成 node.start 事件
+# Cloud Run / GFE 會將小型 SSE chunk 合併後才轉發給瀏覽器，造成 module.start 事件
 # 延遲數秒才抵達前端。實測單一事件 payload 約 200 byte 會被卡住，附加 2KB padding
 # comment 後可讓 chunk 超過 GFE flush 閾值並立即推送。
 _SSE_HEARTBEAT_INTERVAL_SEC = 1.0
@@ -160,7 +160,7 @@ def _is_terminal_event(event: dict[str, Any]) -> bool:
     name = event.get("event_name")
     if name in _TERMINAL_EVENTS:
         return True
-    if name == EVENT_NODE_FINISH and "workflow_next_node" not in event:
+    if name == EVENT_MODULE_FINISH and "workflow_next_module" not in event:
         return True
     return False
 
