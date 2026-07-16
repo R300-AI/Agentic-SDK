@@ -2,7 +2,7 @@ site_name: Agentic SDK 文件網站
 site_description: Agentic SDK 開發者文件站
 repo_url: https://github.com/R300-AI/Agentic-SDK
 repo_name: R300-AI/Agentic-SDK
-docs_dir: docs-site
+docs_dir: docs
 site_dir: site
 
 theme:

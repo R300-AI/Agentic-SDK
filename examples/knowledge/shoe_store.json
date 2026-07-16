@@ -1,0 +1,48 @@
+{
+  "name": "shoe_store",
+  "description": "鞋店產品型錄示例 — 用於 SDK demo。請替換為您自己的產品資料。",
+  "entries": [
+    {
+      "id": "airflex-runner",
+      "title": "AirFlex 氣墊跑鞋",
+      "content": "全掌氣墊設計，緩衝吸震，適合長時間站立、扁平足與輕度足底筋膜炎。建議鞋楦：標準～寬。建議售價 NT$2,980。產品連結：https://example.com/products/airflex-runner",
+      "metadata": {"category": "跑鞋", "size_range": "23-29", "price": 2980}
+    },
+    {
+      "id": "comfortwalk-casual",
+      "title": "ComfortWalk 寬楦休閒鞋",
+      "content": "加寬楦頭設計，適合腳寬、拇趾外翻、輕度外八使用者。鞋面透氣網布，重量輕。建議售價 NT$2,280。產品連結：https://example.com/products/comfortwalk-casual",
+      "metadata": {"category": "休閒鞋", "size_range": "23-29", "price": 2280}
+    },
+    {
+      "id": "stable-pro-walker",
+      "title": "StablePro 機能健走鞋",
+      "content": "中底加強支撐，適合高弓足與步態不穩使用者。後跟杯包覆性高，建議搭配機能鞋墊。建議售價 NT$3,480。產品連結：https://example.com/products/stable-pro-walker",
+      "metadata": {"category": "健走鞋", "size_range": "23-29", "price": 3480}
+    },
+    {
+      "id": "soft-step-leather",
+      "title": "SoftStep 全皮商務鞋",
+      "content": "全粒面皮革鞋面，內裡軟墊，適合正式場合與長時間穿著。防滑橡膠大底。建議售價 NT$3,980。產品連結：https://example.com/products/soft-step-leather",
+      "metadata": {"category": "商務鞋", "size_range": "24-29", "price": 3980}
+    },
+    {
+      "id": "kids-active-runner",
+      "title": "Active 兒童運動鞋",
+      "content": "魔鬼氈設計，孩童易穿脫。鞋頭加強耐磨，適合活潑好動的孩子。建議售價 NT$1,580。產品連結：https://example.com/products/kids-active-runner",
+      "metadata": {"category": "童鞋", "size_range": "16-22", "price": 1580}
+    },
+    {
+      "id": "outdoor-trek-boot",
+      "title": "TrekGuard 戶外健行鞋",
+      "content": "防潑水鞋面，黃金大底防滑止滑。適合郊山健行、爬山初學者。建議售價 NT$3,680。產品連結：https://example.com/products/outdoor-trek-boot",
+      "metadata": {"category": "戶外鞋", "size_range": "23-29", "price": 3680}
+    },
+    {
+      "id": "memory-foam-slipper",
+      "title": "MemoryFoam 居家拖鞋",
+      "content": "記憶棉鞋墊，回彈柔軟。適合居家穿著與輕度足底不適者。建議售價 NT$880。產品連結：https://example.com/products/memory-foam-slipper",
+      "metadata": {"category": "拖鞋", "size_range": "S/M/L/XL", "price": 880}
+    }
+  ]
+}

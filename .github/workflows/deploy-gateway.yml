@@ -8,7 +8,7 @@ on:
     paths:
       - 'agentic_sdk/**'
       - 'playground/**'
-      - 'examples_old/**'
+      - 'examples/**'
       - 'requirements.txt'
       - '.github/workflows/deploy-gateway.yml'
   workflow_dispatch:
@@ -136,7 +136,7 @@ jobs:
           zip -r deploy.zip \
             agentic_sdk/ \
             demo/dist/ \
-            examples_old/ \
+            examples/ \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*"
 
