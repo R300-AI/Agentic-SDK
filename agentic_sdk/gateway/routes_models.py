@@ -6,6 +6,8 @@ import time
 
 from fastapi import APIRouter, HTTPException, Request
 
+from agentic_sdk.gateway.openai_target import uses_placeholder_local_openai
+
 router = APIRouter()
 
 
@@ -29,6 +31,15 @@ def list_models(request: Request) -> dict[str, object]:
                 for item in models
             ],
         }
+
+    if uses_placeholder_local_openai(settings.openai_api_base_url):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "OpenAI-compatible upstream 尚未設定。"
+                "請在 App Service 對應的 Key Vault 內提供 model-{id}-base-url / key / model secrets。"
+            ),
+        )
 
     openai_client = request.app.state.openai_client
     try:

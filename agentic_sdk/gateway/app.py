@@ -17,6 +17,7 @@ from openai import OpenAI
 from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ActiveStore, ArchivedStore
 from agentic_sdk.gateway.keyvault_loader import load_first_model_from_keyvault
+from agentic_sdk.gateway.openai_target import uses_placeholder_local_openai
 from agentic_sdk.gateway.routes_chat import router as chat_router
 from agentic_sdk.gateway.routes_capabilities import router as capabilities_router
 from agentic_sdk.gateway.routes_context import router as context_router
@@ -31,8 +32,33 @@ logger = logging.getLogger(__name__)
 _STATIC_DIR = Path(__file__).parent.parent.parent / "demo" / "dist"
 
 
+def _build_openai_client(settings: Settings) -> OpenAI:
+    return OpenAI(
+        base_url=settings.openai_api_base_url,
+        api_key=settings.openai_api_key or "not-needed",
+        timeout=settings.infer_request_timeout_sec,
+    )
+
+
 def _healthcheck_openai_endpoint(settings: Settings, client: OpenAI) -> dict[str, object]:
     url = settings.openai_api_base_url.rstrip("/") + "/models"
+    if uses_placeholder_local_openai(settings.openai_api_base_url):
+        message = (
+            "OpenAI-compatible upstream 尚未設定；目前仍是預設 localhost placeholder。"
+        )
+        logger.warning(
+            "openai healthcheck skipped url=%s reason=%s",
+            url,
+            message,
+            extra={"event": make_event(
+                EVENT_GATEWAY_OPENAI_HEALTHCHECK,
+                openai_url=url,
+                openai_reachable=False,
+                error_type="OpenAIConfigurationError",
+                error_message=message,
+            )},
+        )
+        return {"reachable": False, "url": url, "error": message}
     try:
         response = httpx.get(url, timeout=settings.openai_healthcheck_timeout_sec)
         response.raise_for_status()
@@ -84,6 +110,7 @@ async def _periodic_openai_health(app: FastAPI, interval_sec: float) -> None:
 async def _lifespan(app: FastAPI):
     settings: Settings = app.state.settings
     load_first_model_from_keyvault(settings)
+    app.state.openai_client = _build_openai_client(settings)
     openai_client: OpenAI = app.state.openai_client
     health = _healthcheck_openai_endpoint(settings, openai_client)
     if not health["reachable"]:
@@ -121,11 +148,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=_lifespan,
     )
     app.state.settings = settings
-    app.state.openai_client = OpenAI(
-        base_url=settings.openai_api_base_url,
-        api_key=settings.openai_api_key or "not-needed",
-        timeout=settings.infer_request_timeout_sec,
-    )
+    app.state.openai_client = _build_openai_client(settings)
     app.state.telemetry = telemetry
     app.state.active_context = ActiveStore(
         max_mb=settings.active_context_max_mb,

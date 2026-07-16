@@ -48,10 +48,8 @@ def load_first_model_from_keyvault(settings) -> None:
         first_model = models[0]
         logger.info("Key Vault: 載入 %d 個模型，預設模型 id=%s", len(models), first_model["id"])
 
-        if not settings.openai_api_base_url and first_model.get("base_url"):
-            settings.openai_api_base_url = first_model["base_url"]
-        if not settings.openai_api_key and first_model.get("api_key"):
-            settings.openai_api_key = first_model["api_key"]
+        settings.openai_api_base_url = first_model["base_url"]
+        settings.openai_api_key = first_model["api_key"]
         if first_model.get("model"):
             settings.openai_model = first_model["model"]
 
@@ -64,6 +62,8 @@ def load_first_model_from_keyvault(settings) -> None:
 
     except Exception as exc:
         logger.warning("Key Vault 載入失敗（%s），Gateway 繼續以現有設定啟動。", exc)
+
+
 def _load_models(client) -> list[dict[str, str]]:
     model_ids: set[str] = set()
     for secret_prop in client.list_properties_of_secrets():
