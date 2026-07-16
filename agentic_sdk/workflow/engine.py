@@ -34,8 +34,6 @@ from agentic_sdk.workflow.module import (
 
 logger = logging.getLogger(__name__)
 
-_MODULE_NAMES = ("perceive", "plan", "retrieve", "reflect", "action")
-
 
 @dataclass
 class Workflow:
@@ -113,7 +111,7 @@ class Workflow:
             spec = config.modules.get(name)
             if spec is None:
                 return None  # 交給 __post_init__ 補 DEFAULT
-            return _build_module_from_spec(spec, name, settings=s, config=config)
+            return _build_module_from_spec(spec, settings=s, config=config)
 
         gates = Gates(
             max_node_hops=config.gates.max_node_hops,

@@ -214,7 +214,6 @@ class WorkflowConfig:
 
 def _build_module_from_spec(
     spec: ModuleSpec,
-    module_name: str,
     settings=None,
     config: "WorkflowConfig | None" = None,
 ):
@@ -239,13 +238,11 @@ def _build_module_from_spec(
             "StructuredPerceive": StructuredPerceive,
             "TextImagePerceive": TextImagePerceive,
         }[t]
-        params = {k: v for k, v in spec.params.items() if k not in ("base_url", "api_key")}
-        return perceive_cls(settings=settings, **params)
+        return perceive_cls(settings=settings, **spec.params)
 
     if t == "NextStepPlan":
         from agentic_sdk.workflow.modules.plan import NextStepPlan
-        plan_params = {k: v for k, v in spec.params.items()
-                       if k not in ("base_url", "api_key")}
+        plan_params = dict(spec.params)
         # 自動帶入 retrieve 模組的 KB 名稱/描述，讓 Plan 知道「可檢索什麼」
         if "retrieve_description" not in plan_params and config is not None:
             retrieve_spec = config.modules.get("retrieve")
@@ -294,8 +291,6 @@ def _build_module_from_spec(
         from agentic_sdk.workflow.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
         params = dict(spec.params)
         if t == "ResponseCheckReflect":
-            params.pop("base_url", None)
-            params.pop("api_key", None)
             return ResponseCheckReflect(settings=settings, **params)
         return EvidenceCheckReflect(**params)
 
