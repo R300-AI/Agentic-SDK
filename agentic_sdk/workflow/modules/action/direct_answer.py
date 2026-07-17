@@ -7,8 +7,18 @@ from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 class DirectAnswerAction:
     name = "action"
 
+    def __init__(
+        self,
+        memory_key: str = "latest_retrieved_content",
+        fallback: str = "沒有命中任何條目。",
+        prefix: str = "",
+    ) -> None:
+        self._memory_key = memory_key
+        self._fallback = fallback
+        self._prefix = prefix
+
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        content = str(state.lookup("latest_retrieved_content") or "沒有命中任何條目。")
+        content = f"{self._prefix}{state.lookup(self._memory_key) or self._fallback}"
         state.last_action_error = None
         state.last_action_result = {"content": content, "model": "direct-answer"}
         return ModuleOutput(

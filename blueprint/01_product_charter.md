@@ -44,6 +44,7 @@ V2 第一版不處理下列目標：
 3. Runner-centric validation: 所有流程最終都落到試跑頁驗證互動。
 4. Source-aware permissions: 能否編輯、能否看 code、能否保存，由入口來源與帳號權限決定。
 5. AI Hub boundary clarity: AI Hub 只負責驗證、配置讀取、配置保存與導流，Playground 自己負責 UI、互動、回朔與試跑。
+6. Agentic-core first: 若某個前台設計無法自然對應既有 Workflow / Modules / Python source，就不應升格為當前 MVP 的核心要求。
 
 ## 主要產出物
 
@@ -52,6 +53,19 @@ V2 的核心產出不是圖，不是 schema，而是：
 1. Python Workflow source code
 2. 對應可試跑的互動頁面狀態
 3. 可保存到 AI Hub 的 Python source string
+
+與頁面相關的任務模板、版型分類、首屏節奏等概念，都只能作為建立者配置時的輔助心智或系統推定結果，不應獨立成正式持久化 artifact。
+
+## 版本觀點
+
+在目前 Playground PoC 階段，產品先假設只有單一對外使用版本。
+
+也就是說：
+
+1. 建立者在 Builder 完成設定後，直接透過 Runner 預覽效果
+2. 若覺得可用，就將同一個 Runner 連結交給直接使用者
+
+更細的多階段發布生命週期可留待未來產品化後再補，不列入目前主藍圖硬要求。
 
 ## 使用者類型
 

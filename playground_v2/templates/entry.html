@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}AI Hub Agent 建立工具{% endblock %}
+
+{% block body %}
+<main class="entry-page" data-page="entry">
+  <section class="entry-card official-auth-card" aria-labelledby="entry-title">
+    <div class="official-brand-row">
+      <div class="brand-mark" aria-hidden="true"><span></span></div>
+      <div>
+        <p class="eyebrow">AI Hub Agent 建立工具</p>
+        <strong>Agentic SDK</strong>
+      </div>
+    </div>
+    <div class="entry-copy">
+      <h1 id="entry-title">登入以建立並測試 Agent。</h1>
+      <p class="lede">使用 AI Hub 帳戶可儲存設定；也可以先在本機試用，完成後匯出檔案。</p>
+    </div>
+
+    <div class="entry-choice-grid" aria-label="選擇進入 Playground 的方式">
+      <form class="entry-choice-card" method="post" action="{{ url_for('entry.login') }}" data-login-form>
+        <span class="choice-icon" aria-hidden="true">AI</span>
+        <h2>使用 AI Hub 登入</h2>
+        <p id="login-help">若需儲存設定到 AI Hub，請使用此模式。</p>
+        <label for="username">帳戶</label>
+        <input id="username" name="username" autocomplete="username" aria-describedby="login-help" required>
+        <label for="password">密碼</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required>
+        {% if login_error %}
+        <p id="login-error" class="inline-status error" role="alert">{{ login_error }}</p>
+        {% endif %}
+        <button class="button button-primary" type="submit" data-login-submit>登入並開始建立</button>
+        <p class="inline-status" role="status" aria-live="polite" data-login-status></p>
+      </form>
+
+      <form class="entry-choice-card quiet" method="post" action="{{ url_for('entry.start_anonymous') }}">
+        <span class="choice-icon" aria-hidden="true">PY</span>
+        <h2>不登入，先在本機試用</h2>
+        <p>先建立與測試流程；內容不會儲存到 AI Hub。</p>
+        <button class="button button-secondary" type="submit">開始本機試用</button>
+      </form>
+    </div>
+
+    <footer class="entry-footer">Agentic SDK</footer>
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/entry/entry-page.js') }}"></script>
+{% endblock %}

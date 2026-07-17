@@ -44,6 +44,8 @@
 5. `source_origin`: `manual_new` / `aihub_loaded` / `aihub_shared_readonly`
 7. `runner_scene_profile`: 可選，由當前 source 派生或 host 臨時建立
 
+`runner_scene_profile` 若存在，其定位只能是 render-time derived state，不可被當成獨立正式配置保存。
+
 ### Client scope state
 
 只保存暫時 UI 狀態，不可成為正式來源：
@@ -53,6 +55,8 @@
 3. 未送出的聊天輸入
 4. 尚未提交的附件預覽
 5. 目前啟用哪些 runner slot panel
+
+若未來引入更正式的發布生命週期，可在 host-side session 或後端資料模型中補充；目前 PoC 主藍圖不要求這套狀態。
 
 ## 狀態跳轉圖
 

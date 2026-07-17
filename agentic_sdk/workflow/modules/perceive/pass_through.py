@@ -7,8 +7,14 @@ from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 class PassThroughPerceive:
     name = "perceive"
 
+    def __init__(self, input_label: str = "") -> None:
+        self._input_label = input_label
+
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         content = state.user_message.strip()
+        metadata = {"source": "pass_through_perceive"}
+        if self._input_label:
+            metadata["input_label"] = self._input_label
         return ModuleOutput(
             next_module="retrieve",
             payload={
@@ -19,7 +25,7 @@ class PassThroughPerceive:
                 ContextEntry(
                     type=ContextEntryType.PERCEIVED,
                     content=content,
-                    metadata={"source": "pass_through_perceive"},
+                    metadata=metadata,
                 )
             ],
         )

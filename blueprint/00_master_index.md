@@ -41,31 +41,32 @@ V2 的核心定義如下：
 | `11_visual_design_tokens_motion.md` | 已建立 | 定義色彩、字體、層級、動效與模式視覺規則 |
 | `13_python_source_of_truth_spec.md` | 已建立 | 定義 code-first canonical model 與保存規則 |
 | `15_aihub_integration_contract.md` | 已建立 | 定義 AI Hub API 串接、責任邊界與風險 |
+| `20_accessibility_responsive_spec.md` | 已建立 | 定義 Builder/Runner 的可存取性與 mobile-safe 響應式規則 |
+| `21_testing_acceptance_matrix.md` | 已建立 | 定義功能驗收與基礎可用性驗收矩陣 |
 | `24_builder_persona_modes.md` | 已建立 | 定義 Builder 的資訊深度策略與建立者使用原則 |
 | `25_runner_layout_variants.md` | 已建立 | 定義 Runner 的內部版型模板與推薦規則 |
 | `26_trust_adoption_layer.md` | 已建立 | 定義回應區塊下方的信任揭露微互動原則 |
+| `29_visual_art_consistency_spec.md` | 已建立 | 定義三頁在色彩、字體、插圖、卡片、CTA 與審稿標準上的美術一致性 |
+| `30_implementation_gap_matrix.md` | 已建立 | 對照藍圖與現有 SDK/gateway/frontend 實作，標示缺口與補強方向 |
 
 ## 後續應補文件
 
 下列文件仍建議在後續批次補齊：
 
-1. `10_component_system.md`
-2. `12_content_microcopy.md`
-3. `14_code_generation_roundtrip_spec.md`
-4. `16_flask_app_architecture.md`
-5. `17_frontend_js_architecture.md`
-6. `18_runtime_execution_attachments.md`
-7. `19_security_privacy_error_states.md`
-8. `20_accessibility_responsive_spec.md`
-9. `21_testing_acceptance_matrix.md`
-10. `22_analytics_observability.md`
-11. `23_delivery_plan_pm_checklist.md`
+1. `12_content_microcopy.md`
+2. `14_code_generation_roundtrip_spec.md`
+3. `18_runtime_execution_attachments.md`
+4. `19_security_privacy_error_states.md`
+5. `22_analytics_observability.md`
+6. `23_delivery_plan_pm_checklist.md`
 
 下列文件已補齊，建議在後續設計深化時一併閱讀：
 
 1. `24_builder_persona_modes.md`
 2. `25_runner_layout_variants.md`
 3. `26_trust_adoption_layer.md`
+4. `29_visual_art_consistency_spec.md`
+5. `30_implementation_gap_matrix.md`
 
 ## 規格撰寫原則
 
@@ -86,3 +87,4 @@ V2 的核心定義如下：
 3. 若 Python code canonical model 變更，必須同步更新 `13_python_source_of_truth_spec.md`。
 4. 若 AI Hub 串接條件變更，必須同步更新 `15_aihub_integration_contract.md`。
 5. 若視覺風格、品牌語氣或外部 reference 變更，必須同步更新 `09_visual_north_star_and_references.md` 與 `11_visual_design_tokens_motion.md`。
+6. 若三頁的卡片語言、色票、字體、圖示或 CTA 規則變更，必須同步更新 `29_visual_art_consistency_spec.md`。

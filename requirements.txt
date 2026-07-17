@@ -27,6 +27,8 @@ distro==1.9.0
     # via openai
 fastapi==0.136.3
     # via agentic-sdk (pyproject.toml)
+flask==3.1.1
+    # via playground-v2
 h11==0.16.0
     # via
     #   httpcore

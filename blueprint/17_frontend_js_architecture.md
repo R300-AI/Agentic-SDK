@@ -4,6 +4,8 @@
 
 這份文件定義 Playground V2 在 Flask + HTML/JS 架構下的前端腳本組織方式。
 
+本文件提到的 `scene_profile`、`slot-registry`、`capabilities`、`task_promise` 等名稱，是前端與系統內部的實作抽象，不是前台頁面一定會以同名概念露出的內容。
+
 ## 原則
 
 1. 不把整站做成 Node/Vite SPA。
@@ -31,8 +33,14 @@ static/js/
 │  ├─ shell-layout.js
 │  ├─ scene-profile.js
 │  ├─ slot-registry.js
+│  ├─ task-promise.js
 │  ├─ input-composer.js
 │  ├─ result-surface.js
+│  ├─ adoption-state.js
+│  ├─ trust-disclosure.js
+│  ├─ recommendation-card.js
+│  ├─ reply-draft-card.js
+│  ├─ next-step-strip.js
 │  ├─ evidence-panel.js
 │  ├─ artifact-panel.js
 │  ├─ history-panel.js
@@ -72,6 +80,8 @@ Builder 的正式資料仍應由 server 或共享的 `python_source` 對應中�
 5. 當前 runner scene profile
 6. 啟用中的 capability set
 7. 各 slot panel 的展開狀態
+8. trust disclosure 展開狀態
+9. result adoption state 顯示資料
 
 ## 前後端同步原則
 
@@ -85,6 +95,8 @@ Builder 的正式資料仍應由 server 或共享的 `python_source` 對應中�
 
 Runner 前端應採 slot-based composition，而不是為每個 use case 寫獨立頁面。
 
+這是一種內部組裝方式，不代表前台必須讓建立者或直接使用者感知到 slot / scene / capability 這些概念。
+
 ### Scene Profile
 
 `scene_profile` 是 render-time 物件，可包含：
@@ -94,6 +106,11 @@ Runner 前端應採 slot-based composition，而不是為每個 use case 寫獨�
 3. `input_mode`
 4. `result_mode`
 5. `capabilities`
+6. `task_promise` // optional
+7. `adoption_state_mode` // optional
+8. `primary_input_kind`
+9. `primary_result_kind`
+10. `task_archetype`
 
 它的來源可以是：
 
@@ -112,6 +129,20 @@ Runner 前端應採 slot-based composition，而不是為每個 use case 寫獨�
 5. `evidence`
 6. `history`
 7. `actions`
+
+另外應保留幾個高優先固定前台區塊，不由任意 slot 替代：
+
+1. `task_promise`
+2. `result_adoption_state`
+3. `trust_disclosure`
+
+依 archetype 還可額外啟用：
+
+1. `recommendation_card`
+2. `reply_draft_card`
+3. `next_step_strip`
+
+其中 `primary_input_kind` 與 `primary_result_kind` 應由 Workflow / Modules 特性推定，而不是要求建立者以額外獨立設定保存。
 
 ### 設計限制
 
@@ -134,9 +165,12 @@ Runner 前端應採 slot-based composition，而不是為每個 use case 寫獨�
 2. 哪些 panel 載入
 3. 哪些操作被禁用
 
+更正式的發布生命週期若未來導入，可在 host-side 狀態模型中補充；目前 PoC 主藍圖不要求前端實作完整發布狀態管理。
+
 ## PM 驗收標準
 
 1. 不存在一個巨大的全域腳本負責所有頁面。
 2. Builder 與 Runner 腳本職責清楚。
 3. 模式權限控制不是只靠 CSS 隱藏，而是前後端共同控制。
 4. 新 Agent 的場景化需求可透過 runner slot composition 落地，而不是複製一份新 runner 頁面。
+5. Runner 前端是否具備 task promise、adoption state、trust disclosure 三類固定前台能力。

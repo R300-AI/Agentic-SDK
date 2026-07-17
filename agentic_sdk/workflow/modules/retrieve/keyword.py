@@ -7,8 +7,9 @@ from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 class KeywordRetrieve:
     name = "retrieve"
 
-    def __init__(self, items: list[dict] | None = None) -> None:
+    def __init__(self, items: list[dict] | None = None, fallback: str = "沒有命中任何條目。") -> None:
         self._items = items or []
+        self._fallback = fallback
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         query = str(state.lookup("query") or state.lookup("perceived_input") or state.user_message).lower()
@@ -19,7 +20,7 @@ class KeywordRetrieve:
                 hits.append(item)
 
         contents = [str(item.get("content", "")) for item in hits if item.get("content")]
-        snippet = "\n".join(contents) if contents else "沒有命中任何條目。"
+        snippet = "\n".join(contents) if contents else self._fallback
 
         return ModuleOutput(
             next_module="action",

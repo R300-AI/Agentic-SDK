@@ -29,6 +29,7 @@
 5. save status / export time 等外部 metadata
 6. runner scene profile
 7. runtime capability map
+8. task archetype label
 
 ## 不允許的真實來源
 
@@ -64,6 +65,8 @@ Runner 可以為不同 Agent 呈現不同程度的場景化 UI，但這種場景
 3. UI composition input
 
 它們不是 canonical artifact。
+
+同理，任務 archetype、版型模板、首屏節奏等概念，若存在，也只能作為由既有 Workflow / Modules 推導出的 UI 輔助心智，而不是獨立正式保存資料。
 
 ## Python Source 結構要求
 

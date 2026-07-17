@@ -131,6 +131,9 @@ AMD style 不應主導：
 2. Fluent 2 Components
    - https://fluent2.microsoft.design/components/web/react
    - 借用重點：表單、面板、導航、狀態控件的一致產品化做法
+3. Windows 首次設定 / OOBE 風格
+   - 參考方向：Windows 初次安裝後的逐步設定精靈語氣
+   - 借用重點：單一步驟聚焦、低壓力進度導覽、明確下一步節奏、中央大卡式設定舞台
 
 ### Runner 參考
 
@@ -160,7 +163,7 @@ AMD style 不應主導：
 應像同一套系統中的高密度工作頁。
 
 1. 結構明確
-2. 分欄穩定
+2. 以單一步驟聚焦為主，而不是三欄平均分配
 3. 表單說明清楚
 4. 不靠大量顏色標記來製造秩序
 5. 不依賴無語義 graph 視覺來製造 build agent 的錯覺

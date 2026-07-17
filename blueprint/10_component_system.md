@@ -4,6 +4,8 @@
 
 這份文件定義 Playground V2 的共用元件系統，避免不同頁面各自長出不一致的 UI 與交互。
 
+本文件中的元件名稱，多數是設計與工程用的內部抽象；它們不等於前台一定會直接顯示同名區塊或術語。
+
 ## 元件分層
 
 ### Foundation Components
@@ -31,19 +33,27 @@
 8. Run Readiness Checklist
 9. Workflow Summary Panel
 10. Runner Shell Header
-11. Runner Slot Container
-12. Input Composer
-13. Result Surface
-14. Context Side Panel
-15. Artifact Panel
-16. Evidence Panel
-17. History Panel
-18. Action Tray
-19. Chat Message Bubble
-20. Attachment Picker
-21. Code Preview Drawer
-22. Save Status Panel
-23. Powered by Agentic SDK Footer
+11. Task Promise Block
+12. Runner Slot Container
+13. Input Composer
+14. Result Surface
+15. Result Adoption State
+16. Trust Disclosure Toggle
+17. Context Side Panel
+18. Artifact Panel
+19. Evidence Panel
+20. History Panel
+21. Action Tray
+22. Recommendation Card
+23. Reply Draft Card
+24. Next Step Strip
+25. Chat Message Bubble
+26. Attachment Picker
+27. Code Preview Drawer
+28. Save Status Panel
+29. Powered by Agentic SDK Footer
+
+上述名稱是內部元件分類語言，不是頁面上必須原樣出現的使用者語言。
 
 ## 元件規格
 
@@ -80,7 +90,7 @@
 
 用途：建構頁左欄的步驟導航。
 
-步驟：
+內部結構步驟：
 
 1. Workflow Name
 2. Perceive
@@ -98,6 +108,13 @@
 
 它不只列模組名，也可列配置工作，如 Input Design、Run Readiness。
 
+前台顯示規則：
+
+1. 左欄主標不應直接裸露 `Perceive`、`Retrieve`、`Reflect` 等術語
+2. 主標應使用任務語言
+3. 內部結構名可作為次標、tooltip 或工程對應資訊
+4. 外觀應更接近 setup wizard progress rail，而不是高密度 navigation tree
+
 ### Starter Template Picker
 
 用途：幫使用者從合理的 workflow 起手式開始，而不是從空白頁亂配。
@@ -107,6 +124,8 @@
 1. 最小三模組模板
 2. OpenAI client 型模板
 3. Custom Action 型模板
+
+它也可以承載更接地的任務 archetype 命名，但這些 archetype 必須最終映射回既有 Workflow / Modules 配置，而不是另存一份獨立正式設定。
 
 ### Input Contract Designer
 
@@ -134,6 +153,17 @@
 2. 進階欄位折疊在 advanced 區
 3. 欄位錯誤需內聯顯示
 4. 若當前模組只有單一推薦路徑，應以說明 + 必要欄位為主，而不是假裝有很多選項
+5. 同一時間應以單一步驟主卡為主，不應在主舞台並列過多設定區塊
+
+### Builder Primary Step Card
+
+用途：承載 Builder 當前步驟的主要設定舞台。
+
+規則：
+
+1. 每次只聚焦一個主要任務
+2. 包含大標、短說明、核心選擇與下一步 CTA
+3. 外觀應更接近 Windows 設定精靈的大步驟卡，而不是後台設定表單
 
 ### Output Contract Panel
 
@@ -162,6 +192,29 @@
 4. 是否屬可回朔子集
 5. 是否有 run-blocking risk
 
+### Runner Shell Header
+
+用途：顯示 Agent 名稱、模式、來源與高階狀態。
+
+規則：
+
+1. 永遠存在
+2. 不依賴特定 use case 命名
+3. 可承載 agent-level subtitle 或 scene label
+
+### Task Promise Block
+
+用途：在 Runner 首屏回答三個問題：
+
+1. 這頁現在能幫你完成什麼
+2. 你要先做什麼
+3. 你會得到什麼結果
+
+規則：
+
+1. 若產品決定在首屏明確呈現，則對 direct-use 視角為高優先元件
+2. 若未顯性做成獨立區塊，仍應由頁面整體結構隱性回答這三個問題
+
 ### Workflow Summary Panel
 
 用途：建構頁右欄顯示即時摘要。
@@ -185,16 +238,6 @@
 2. assistant bubble
 3. system/error bubble
 
-### Runner Shell Header
-
-用途：顯示 Agent 名稱、模式、來源與高階狀態。
-
-規則：
-
-1. 永遠存在
-2. 不依賴特定 use case 命名
-3. 可承載 agent-level subtitle 或 scene label
-
 ### Runner Slot Container
 
 用途：承載可場景化的 runner 區塊。
@@ -204,6 +247,8 @@
 1. 每個 slot 都必須可獨立顯示或隱藏
 2. slot 開關由 `runner_scene_profile` 或 capability map 決定
 3. slot 命名必須通用，不綁特定產業案例
+
+這些 slot 是內部組裝概念；前台使用者不應感受到自己正在操作 slot-based 系統。
 
 建議 slot 類型：
 
@@ -227,6 +272,8 @@
 3. 不為單一 use case 寫死欄位
 4. 前台呈現應像任務輸入區，而不是開發者 prompt 面板
 
+同時應遵守：每個 Agent 只應有一個主輸入入口，其餘輸入能力作為輔助層。
+
 ### Result Surface
 
 用途：承載 runner 的主要輸出結果。
@@ -238,6 +285,64 @@
 3. 可顯示 artifact 列表
 4. 不假設所有結果都應以聊天泡泡呈現
 5. 優先選擇對真實使用者最自然的結果容器，而不是技術上最容易的容器
+
+同時應遵守：每個 Agent 只應有一個主結果容器，其餘結果區塊作為補充層。
+
+### Recommendation Card
+
+用途：承載推薦型 Agent 的主結果。
+
+內容可包含：
+
+1. 主要建議
+2. 簡潔理由
+3. 可選的下一句說法或下一步
+
+### Reply Draft Card
+
+用途：承載回覆助手型 Agent 的主結果。
+
+內容可包含：
+
+1. 可直接採用的回覆內容
+2. 簡短理由或依據入口
+3. 可能的下一步操作
+
+### Next Step Strip
+
+用途：在結果主體下方以輕量方式提示下一步。
+
+規則：
+
+1. 不可喧賓奪主
+2. 只顯示 1-3 個最合理的後續動作
+
+### Result Adoption State
+
+用途：在需要時，用輕量方式告知第一線目前結果的可採用程度。
+
+至少支援：
+
+1. `可直接使用`
+2. `建議人工確認`
+3. `先補資料再判斷`
+
+規則：
+
+1. 在任務風險較高的 Agent 中優先考慮
+2. 應接近結果主體顯示
+3. 不可比結果本身更搶眼
+4. 不可只靠顏色表達差異
+
+### Trust Disclosure Toggle
+
+用途：在回應或結果卡下方展開 `查看依據` / `參考來源` / `為什麼這樣建議`。
+
+規則：
+
+1. 預設收合
+2. 對不需要的使用者零干擾
+3. 展開後顯示理由摘要、來源片段或引用內容
 
 ### Context Side Panel
 
@@ -264,6 +369,8 @@
 1. 參考依據
 2. 建議原因
 3. 你可以查看的來源
+
+它通常應作為 Trust Disclosure Toggle 展開後的內容容器，而不是固定常駐大面板。
 
 ### History Panel
 
@@ -325,6 +432,8 @@ AI Hub 唯讀體驗模式下，它應比 builder 模式更明顯，但不能搶�
 3. AI Hub 唯讀模式不因隱藏功能而破壞版面平衡
 4. 場景化 runner 的差異應來自 slot 組合，不是另做一套新頁面設計
 5. Builder 的主要元件必須對應實際配置決策，而不是抽象的流程裝飾
+6. Builder 的主要編輯元件應以單一步驟主卡為中心，而不是三欄平均分散注意力
+6. Runner 首屏的 Task Promise Block、結果採用狀態與信任揭露若存在，應保持同一家族語言
 
 ## PM 驗收標準
 
@@ -333,3 +442,4 @@ AI Hub 唯讀體驗模式下，它應比 builder 模式更明顯，但不能搶�
 3. AI Hub 唯讀模式隱藏功能後，頁面仍完整而非殘缺。
 4. 新 Agent 若要場景化，不需要重畫整頁，只需重組既有 runner slots 與 panels。
 5. Builder 中至少存在 Input Contract Designer、Output Contract Panel、Run Readiness Checklist 三類高語義元件。
+6. Runner 若採用首屏承諾、結果採用等級與信任揭露，是否仍保持一致產品語言。
