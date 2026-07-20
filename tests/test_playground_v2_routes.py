@@ -270,10 +270,10 @@ def test_builder_template_step_parameters_update_runtime_source():
     assert "已查到資料：先摘要重點，再列出依據。" in custom_source
     assert "CUSTOM_ACTION_FALLBACK = \"沒有可處理內容。\"" in custom_source
     assert "CUSTOM_ACTION_PREFIX = \"處理結果：\"" in custom_source
-    assert "TextPerceive(client=openai_client" in advisor_source
+    assert "TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL" in advisor_source
     assert "welcome_message=\"請描述目標與限制。\"" in advisor_source
     assert "importance=2.5" in advisor_source
-    assert "NextStepPlan(client=openai_client, retrieve_name=\"內部支援資料\", retrieve_description=\"用來判斷下一步。\")" in advisor_source
+    assert "NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL, retrieve_name=\"內部支援資料\", retrieve_description=\"用來判斷下一步。\")" in advisor_source
 
 
 def test_new_builder_does_not_prefill_form_state():
@@ -418,7 +418,7 @@ def test_builder_expanded_module_choices_update_canonical_source():
     assert "top_k=" not in semantic_source
     assert "similarity_weight=" not in semantic_source
     assert "RETRIEVE_CONFIG" not in semantic_source
-    assert "StructuredAction(client=openai_client" in structured_source
+    assert "StructuredAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL" in structured_source
     assert "EvidenceCheckReflect(on_failure=\"end\")" in reflect_source
     assert "entry_module=\"plan\"" in readiness_source
     assert "Gates(max_node_hops=12, max_revisit=3, timeout_sec=45.0)" in readiness_source
@@ -760,12 +760,12 @@ def test_builder_module_parameters_update_canonical_source():
     assert '"content": "TSiP 供應鏈說明。"' in preview
     assert '"售後服務"' in preview
     assert '"content": "保固窗口說明。"' in preview
-    assert 'GenerativeAction(client=openai_client)' in preview
+    assert 'GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL)' in preview
     assert "ACTION_CONFIG" not in preview
     assert "請使用台灣繁體中文" not in preview
     assert "system_prompt=" not in preview
-    assert 'NextStepPlan(client=openai_client, retrieve_name="支援資料"' in preview
-    assert 'ResponseCheckReflect(client=openai_client, on_failure="retry_plan")' in preview
+    assert 'NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL, retrieve_name="支援資料"' in preview
+    assert 'ResponseCheckReflect(api_key=REFLECT_API_KEY, base_url=REFLECT_API_BASE_URL, model=REFLECT_MODEL, on_failure="retry_plan")' in preview
 
 
 def test_builder_advanced_parameters_update_canonical_source():
@@ -811,7 +811,7 @@ def test_builder_advanced_parameters_update_canonical_source():
     assert "PLAN_CONFIG" not in preview
     assert "只有需要佐證時才查詢支援資料" not in preview
     assert "system_prompt=" not in preview
-    assert 'ResponseCheckReflect(client=openai_client, on_failure="end")' in preview
+    assert 'ResponseCheckReflect(api_key=REFLECT_API_KEY, base_url=REFLECT_API_BASE_URL, model=REFLECT_MODEL, on_failure="end")' in preview
 
 
 def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
@@ -848,14 +848,14 @@ def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
 
     assert '"label": "售後服務"' in preview
     assert '"intent": "保固退換貨"' in preview
-    assert 'StructuredPerceive(client=openai_client, welcome_message="請提供需求。", options=' in preview
+    assert 'StructuredPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL, welcome_message="請提供需求。", options=' in preview
     assert 'importance=2.5' in preview
     assert "HybridRetrieve(" in preview
     assert '"keywords": [\n                          "保固"' in preview
     assert 'fallback="沒有支援資料。"' in preview
-    assert 'NextStepPlan(client=openai_client, retrieve_name="產品資料", retrieve_description="保固與售後資料。")' in preview
-    assert 'StructuredAction(client=openai_client)' in preview
-    assert 'ResponseCheckReflect(client=openai_client, on_failure="retry_plan")' in preview
+    assert 'NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL, retrieve_name="產品資料", retrieve_description="保固與售後資料。")' in preview
+    assert 'StructuredAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL)' in preview
+    assert 'ResponseCheckReflect(api_key=REFLECT_API_KEY, base_url=REFLECT_API_BASE_URL, model=REFLECT_MODEL, on_failure="retry_plan")' in preview
     for removed_config in ("TASK_CONFIG", "INPUT_CONFIG", "PERCEIVE_CONFIG", "RETRIEVE_CONFIG", "ACTION_CONFIG", "PLAN_CONFIG", "REFLECT_CONFIG"):
         assert removed_config not in preview
     for ignored_value in ("協助判斷方案", "固定欄位收件", "資料不足時才查", "請輸出 JSON", "不可捏造資料", "top_k", "similarity_weight"):
@@ -864,7 +864,6 @@ def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
     assert "plan-local" not in preview
     assert "answer-local" not in preview
     assert "reflect-local" not in preview
-    assert "model=" not in preview
     assert "temperature=" not in preview
 
 
@@ -902,12 +901,12 @@ def test_builder_readme_starter_templates_update_source():
 
     assert openai_response.status_code == 200
     assert openai_response.json["workflow_summary"]["name"] == "自然回覆 Agent"
-    assert b"from openai import OpenAI" in openai_preview.data
+    assert b"import os" in openai_preview.data
     openai_source = openai_preview.data.decode("utf-8")
-    assert "GenerativeAction(client=openai_client" in openai_source
+    assert "ACTION_API_KEY = os.environ[\"ACTION_API_KEY\"]" in openai_source
+    assert "GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL" in openai_source
     assert "ACTION_CONFIG" not in openai_source
     assert "可直接發送的正式回覆" not in openai_source
-    assert "model=" not in openai_source
     assert "temperature=" not in openai_source
     assert custom_response.json["workflow_summary"]["name"] == "規則處理 Agent"
     assert b"class BusinessRule" in custom_preview.data
@@ -928,30 +927,27 @@ def test_builder_workflow_templates_map_to_sdk_module_presets():
         review_source = client.get("/playground/source/preview").data.decode("utf-8")
 
     assert "workflow_name=\"Advisor Helper\"" in advisor_source
-    assert "TextPerceive(client=openai_client" in advisor_source
+    assert "TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL" in advisor_source
     assert "welcome_message=\"請先描述你想完成的事" in advisor_source
     assert '"label": "目標"' in advisor_source
-    assert "NextStepPlan(client=openai_client" in advisor_source
+    assert "NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL" in advisor_source
     assert "KeywordRetrieve(" in advisor_source
-    assert "GenerativeAction(client=openai_client" in advisor_source
+    assert "GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL" in advisor_source
     assert "請用一步步詢問" not in advisor_source
     assert "ACTION_CONFIG" not in advisor_source
     assert "PLAN_CONFIG" not in advisor_source
-    assert "model=" not in advisor_source
     assert "temperature=" not in advisor_source
     assert "workflow_name=\"Recommendation Helper\"" in recommendation_source
-    assert "TextPerceive(client=openai_client)" in recommendation_source
-    assert "NextStepPlan(client=openai_client" in recommendation_source
+    assert "TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL)" in recommendation_source
+    assert "NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL" in recommendation_source
     assert "HybridRetrieve(" in recommendation_source
-    assert "StructuredAction(client=openai_client)" in recommendation_source
+    assert "StructuredAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL)" in recommendation_source
     assert "請用一步步詢問" not in recommendation_source
-    assert "model=" not in recommendation_source
     assert "workflow_name=\"Review Summary Helper\"" in review_source
-    assert "TextPerceive(client=openai_client)" in review_source
+    assert "TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL)" in review_source
     assert "SemanticRetrieve(" in review_source
-    assert "GenerativeAction(client=openai_client)" in review_source
+    assert "GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL)" in review_source
     assert "請用一步步詢問" not in review_source
-    assert "model=" not in review_source
 
 
 def test_builder_advanced_action_choice_updates_source():
@@ -990,7 +986,7 @@ def test_builder_action_choice_clears_stale_action_specific_state():
     assert 'DirectAnswerAction(memory_key="latest_retrieved_content", fallback="沒有命中任何條目。", prefix="")' in reply_preview
     assert reply_profile.json["layout_variant"] == "chat_first"
     assert "class BusinessRule" not in generative_preview
-    assert "GenerativeAction(client=openai_client)" in generative_preview
+    assert "GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL)" in generative_preview
 
 
 def test_builder_document_input_choice_updates_source():

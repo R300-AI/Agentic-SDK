@@ -1,11 +1,17 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from agentic_sdk import Workflow
 from agentic_sdk.modules import DirectAnswerAction, GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
 from support import FoundryOpenAILikeClient
+
+
+TEST_MODEL = "foundry-openai-like"
+TEST_API_KEY = "test-key"
+TEST_BASE_URL = "https://example.openai.test/v1"
 
 
 class ReadmeWorkflowSmokeTests(unittest.TestCase):
@@ -27,17 +33,16 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
 
     def test_readme_example_two_path(self) -> None:
         openai_client = FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")
-        workflow = Workflow(
-            perceive=PassThroughPerceive(),
-            retrieve=KeywordRetrieve(
-                items=[
-                    {"keywords": ["tsip"], "content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"}
-                ]
-            ),
-            action=GenerativeAction(
-                client=openai_client,
-            ),
-        )
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=openai_client):
+            workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                retrieve=KeywordRetrieve(
+                    items=[
+                        {"keywords": ["tsip"], "content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"}
+                    ]
+                ),
+                action=GenerativeAction(api_key=TEST_API_KEY, base_url=TEST_BASE_URL, model=TEST_MODEL),
+            )
 
         result = workflow.run("TSiP 是什麼？")
 

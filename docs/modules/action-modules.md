@@ -1,12 +1,20 @@
 # Action
 
-Action 模組負責把前面節點收集到的資訊轉成回應內容。這一頁先整理 Action 家族的交付方式，再依序展開三種不同的回應產生模組。Action 的重點在交付什麼輸出，因此這一頁只列各模組的標準輸出參數；前段帶入的內容主要來自 `Entities`，可回到 [Module Family](index.md) 的中央定義理解。
+Action 模組負責把前面節點收集到的資訊轉成回應內容。這一頁先整理 Action 家族的交付方式，再依序展開三種不同的回應產生模組。每個模組會先列出建立物件時使用的初始化參數，再列出 Action 對外交付的標準輸出參數；前段帶入的內容主要來自 `Entities`，可回到 [Module Family](index.md) 的中央定義理解。
 
 ## DirectAnswerAction
 
 舊名對應：`DirectAnswerAction`
 
 `DirectAnswerAction` 直接根據取回內容組成最終回應，以條目內容為主完成回答。它適合 README 最小流程與條目式固定回答，也代表 Action 家族裡最直接的交付方式。
+
+### 初始化參數
+
+| 參數 | 型態 | 必填 | 預設值 | 說明 |
+| --- | --- | --- | --- | --- |
+| `memory_key` | `string` | 否 | `"latest_retrieved_content"` | 從 workflow state 讀取最終回答內容的 key。 |
+| `fallback` | `string` | 否 | `"沒有命中任何條目。"` | 指定 key 沒有內容時使用的回答文字。 |
+| `prefix` | `string` | 否 | `""` | 加在回答文字前的固定前綴。 |
 
 ### 標準輸出參數
 
@@ -23,6 +31,18 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 `GenerativeAction` 根據輸入摘要與取回內容生成最終回應。當流程要把多筆條目、歷史紀錄或摘要整合成一段自然語言時，就會接到這個模組。
 
+此模組需要明確的 OpenAI-compatible 連線設定：`api_key`、`base_url`、`model`。模組會在內部建立 OpenAI client，並在推論呼叫時使用指定的 `model`。
+
+### 初始化參數
+
+| 參數 | 型態 | 必填 | 預設值 | 說明 |
+| --- | --- | --- | --- | --- |
+| `api_key` | `string` | 是 | 無 | OpenAI-compatible 端點金鑰。 |
+| `base_url` | `string` | 是 | 無 | OpenAI-compatible API base URL。 |
+| `model` | `string` | 是 | 無 | 每次推論呼叫送出的模型名稱。 |
+| `temperature` | `number|null` | 否 | `null` | 生成溫度；`null` 時不傳此參數，交由端點預設處理。 |
+| `system_prompt` | `string|null` | 否 | `null` | 覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。 |
+
 ### 標準輸出參數
 
 | 參數 | 型態 | 格式 | 說明 |
@@ -37,6 +57,18 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 舊名對應：`StructuredOutputAction`
 
 `StructuredAction` 依固定欄位規格輸出結構化結果。當回應還要交給別的系統處理，或需要把推薦理由、建議與證據拆成固定欄位時，這個模組會把輸出整理成穩定的資料結構。
+
+此模組需要明確的 OpenAI-compatible 連線設定：`api_key`、`base_url`、`model`。不同 Action 可以使用不同端點或不同模型。
+
+### 初始化參數
+
+| 參數 | 型態 | 必填 | 預設值 | 說明 |
+| --- | --- | --- | --- | --- |
+| `api_key` | `string` | 是 | 無 | OpenAI-compatible 端點金鑰。 |
+| `base_url` | `string` | 是 | 無 | OpenAI-compatible API base URL。 |
+| `model` | `string` | 是 | 無 | 每次推論呼叫送出的模型名稱。 |
+| `temperature` | `number|null` | 否 | `null` | 生成溫度；`null` 時不傳此參數。 |
+| `system_prompt` | `string|null` | 否 | `null` | 覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。 |
 
 ### 標準輸出參數
 

@@ -24,6 +24,8 @@
 
 表 1 使用的是文件標準名。讀完這張表之後，接下來最需要補上的就是家族之間實際交換的是哪一份資料，因此下一節會把共用的 `Entities` 物件整理出來。各頁也會列出標準名對應的既有類別名稱，以及標準輸入輸出格式，方便你把家族定義對回實際實作。
 
+需要模型的標準模組會各自持有 OpenAI-compatible 連線設定。也就是每個 `TextPerceive`、`NextStepPlan`、`GenerativeAction`、`StructuredAction`、`ResponseCheckReflect` 等模組都要明確提供 `api_key`、`base_url` 與 `model`；不使用全域預設模型，也不由 SDK 自動挑選模型。
+
 ## Entities
 
 `Entities` 是 workflow 內部節點交換資料時使用的核心標準物件。`Plan`、`Retrieve`、`Reflect` 這三個家族都讀寫同一份物件；真正會因模組型態而改變的是 `Perceive` 的輸入參數與 `Action` 的輸出參數，因此留在各自模組頁定義即可。這一頁只需要掌握一件事：`Perceive` 與 `Action` 會有各自不同的參數，而 `Plan`、`Retrieve`、`Reflect` 則透過同一份 `Entities` 在 workflow 內部交換資料。

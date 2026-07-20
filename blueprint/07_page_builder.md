@@ -226,7 +226,7 @@ Builder 的九步不是單純頁面導覽，而是 `Workflow`、五個模組家�
 | 前台選項 | Workflow preset | 初始模組與參數 |
 | --- | --- | --- |
 | 基本回覆 | 最小三模組 | `PassThroughPerceive()`、`KeywordRetrieve(items=[])`、`DirectAnswerAction()` |
-| 模型回覆 | LLM 回覆 | `PassThroughPerceive()`、`KeywordRetrieve(items=[])`、`GenerativeAction(client=openai_client)` |
+| 模型回覆 | LLM 回覆 | `PassThroughPerceive()`、`KeywordRetrieve(items=[])`、`GenerativeAction(api_key=..., base_url=..., model=...)` |
 | 自訂處理 | Custom Action 出口 | `PassThroughPerceive()`、`KeywordRetrieve(items=[])`、`SummaryAction()` 範例出口 |
 | 問答引導 | 問答型 preset | `TextPerceive(...)`、`NextStepPlan(...)`、`KeywordRetrieve(...)`、`GenerativeAction(...)` |
 | 建議卡 | 推薦型 preset | `TextPerceive(...)`、`NextStepPlan(...)`、`HybridRetrieve(...)` 或 `SemanticRetrieve(...)`、`StructuredAction(...)` |
@@ -330,8 +330,8 @@ Builder 的九步不是單純頁面導覽，而是 `Workflow`、五個模組家�
 | 前台選項 | 模組 | 初始參數 |
 | --- | --- | --- |
 | 直接回覆取回內容 | `DirectAnswerAction()` | 無 |
-| 由模型整理自然語言 | `GenerativeAction(...)` | `client=openai_client`、可選 `system_prompt` |
-| 產生結構化結果 | `StructuredAction(...)` | `client=openai_client`、可選 `system_prompt` |
+| 由模型整理自然語言 | `GenerativeAction(...)` | `api_key`、`base_url`、`model`、可選 `system_prompt` |
+| 產生結構化結果 | `StructuredAction(...)` | `api_key`、`base_url`、`model`、可選 `system_prompt` |
 | 自訂處理 | 自訂 Action class | 由模板或進階設定提供 class skeleton |
 
 進階參數：

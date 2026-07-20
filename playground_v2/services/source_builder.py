@@ -1200,7 +1200,7 @@ def _build_workflow_source(config: BuilderSourceConfig) -> str:
     if config.reflect_module:
         module_names.append(config.reflect_module)
     import_block = _format_module_imports(module_names)
-    openai_block = _openai_client_block() if needs_openai_client else ""
+    openai_block = _openai_client_block(config) if needs_openai_client else ""
     plan_line = _plan_line(config) if config.plan_strategy else ""
     reflect_line = _reflect_line(config) if config.reflect_module else ""
     return f"""{_openai_import(needs_openai_client)}from agentic_sdk import Workflow
@@ -1235,7 +1235,7 @@ def _build_custom_action_source(config: BuilderSourceConfig) -> str:
     if config.reflect_module:
         module_names.append(config.reflect_module)
     import_block = _format_module_imports(module_names)
-    openai_block = _openai_client_block() if needs_openai_client else ""
+    openai_block = _openai_client_block(config) if needs_openai_client else ""
     plan_line = _plan_line(config) if config.plan_strategy else ""
     reflect_line = _reflect_line(config) if config.reflect_module else ""
     return f"""{_openai_import(needs_openai_client)}from agentic_sdk import Workflow
@@ -1297,7 +1297,7 @@ def _action_expression(config: BuilderSourceConfig) -> str:
             f"prefix={json.dumps(config.direct_answer_prefix, ensure_ascii=False)}",
         ]
         return f"DirectAnswerAction({', '.join(arguments)})"
-    return f"{action_class}(client=openai_client)"
+    return f"{action_class}({', '.join(_llm_arguments('ACTION'))})"
 
 
 def _perceive_expression(config: BuilderSourceConfig) -> str:
@@ -1305,7 +1305,7 @@ def _perceive_expression(config: BuilderSourceConfig) -> str:
         if config.perceive_input_label:
             return f"PassThroughPerceive(input_label={json.dumps(config.perceive_input_label, ensure_ascii=False)})"
         return "PassThroughPerceive()"
-    arguments = ["client=openai_client"]
+    arguments = _llm_arguments("PERCEIVE")
     if config.perceive_welcome_message:
         arguments.append(f"welcome_message={json.dumps(config.perceive_welcome_message, ensure_ascii=False)}")
     if config.perceive_options:
@@ -1335,7 +1335,7 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 def _plan_line(config: BuilderSourceConfig) -> str:
     description = _retrieve_description(config)
     arguments = [
-        "client=openai_client",
+        *_llm_arguments("PLAN"),
         f"retrieve_name={json.dumps(config.retrieve_name, ensure_ascii=False)}",
         f"retrieve_description={json.dumps(description, ensure_ascii=False)}",
     ]
@@ -1344,13 +1344,34 @@ def _plan_line(config: BuilderSourceConfig) -> str:
 
 def _reflect_line(config: BuilderSourceConfig) -> str:
     reflect_module = config.reflect_module or "ResponseCheckReflect"
-    client_argument = "client=openai_client, " if reflect_module == "ResponseCheckReflect" else ""
+    arguments = _llm_arguments("REFLECT") if reflect_module == "ResponseCheckReflect" else []
+    arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
     return (
         f"    reflect={reflect_module}("
-        f"{client_argument}"
-        f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}"
+        f"{', '.join(arguments)}"
         "),\n"
     )
+
+
+def _llm_arguments(prefix: str) -> list[str]:
+    return [
+        f"api_key={prefix}_API_KEY",
+        f"base_url={prefix}_API_BASE_URL",
+        f"model={prefix}_MODEL",
+    ]
+
+
+def _llm_env_prefixes(config: BuilderSourceConfig) -> list[str]:
+    prefixes: list[str] = []
+    if config.perceive_module in {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}:
+        prefixes.append("PERCEIVE")
+    if config.plan_strategy:
+        prefixes.append("PLAN")
+    if config.action_module in {"GenerativeAction", "StructuredAction"}:
+        prefixes.append("ACTION")
+    if config.reflect_module == "ResponseCheckReflect":
+        prefixes.append("REFLECT")
+    return prefixes
 
 
 def _retrieve_description(config: BuilderSourceConfig) -> str:
@@ -1373,16 +1394,20 @@ def _task_system_prompt(config: BuilderSourceConfig) -> str | None:
 
 
 def _openai_import(needs_openai_client: bool) -> str:
-    return "from openai import OpenAI\n\n" if needs_openai_client else ""
+    return "import os\n\n" if needs_openai_client else ""
 
 
-def _openai_client_block() -> str:
-    return """openai_client = OpenAI(
-    api_key="not-needed",
-    base_url="http://localhost:11434/v1",
-)
-
-"""
+def _openai_client_block(config: BuilderSourceConfig) -> str:
+    lines: list[str] = []
+    for prefix in _llm_env_prefixes(config):
+        lines.extend(
+            [
+                f'{prefix}_API_KEY = os.environ["{prefix}_API_KEY"]',
+                f'{prefix}_API_BASE_URL = os.environ["{prefix}_API_BASE_URL"]',
+                f'{prefix}_MODEL = os.environ["{prefix}_MODEL"]',
+            ]
+        )
+    return "\n".join(lines) + "\n\n"
 
 
 def _format_module_imports(module_names: list[str]) -> str:

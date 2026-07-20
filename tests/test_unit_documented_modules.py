@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agentic_sdk.capabilities import build_capability_document
 from agentic_sdk.context import ContextEntry, ContextEntryType
@@ -29,6 +30,15 @@ from agentic_sdk.workflow.attachments import Attachment
 from support import FoundryOpenAILikeClient, StaticVisionQueryBuilder
 
 
+TEST_MODEL = "foundry-openai-like"
+TEST_API_KEY = "test-key"
+TEST_BASE_URL = "https://example.openai.test/v1"
+
+
+def _llm_params(model: str = TEST_MODEL) -> dict[str, str]:
+    return {"api_key": TEST_API_KEY, "base_url": TEST_BASE_URL, "model": model}
+
+
 class DocumentedModuleUnitTests(unittest.TestCase):
     def test_pass_through_perceive_emits_query_payload(self) -> None:
         state = WorkflowState(user_message="  請介紹 TSiP  ")
@@ -42,7 +52,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive):
             with self.subTest(module=module_cls.__name__):
                 state = WorkflowState(user_message="幫我找支撐型鞋款")
-                module = module_cls(client=FoundryOpenAILikeClient())
+                with patch("agentic_sdk.workflow.llm.OpenAI", return_value=FoundryOpenAILikeClient()):
+                    module = module_cls(**_llm_params())
 
                 output = module(state)
 
@@ -60,7 +71,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
             )
         )
 
-        output = NextStepPlan(client=FoundryOpenAILikeClient(plan_sequence=["action"]))(state)
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=FoundryOpenAILikeClient(plan_sequence=["action"])):
+            output = NextStepPlan(**_llm_params())(state)
 
         self.assertEqual("action", output["next_module"])
         self.assertEqual("route to action", output["payload"]["plan_thought"])
@@ -129,9 +141,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
             with self.subTest(module=module_cls.__name__):
                 state = WorkflowState(user_message="TSiP 是什麼？")
                 state.payload["retrieved_snippet"] = "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"
-                module = module_cls(
-                    client=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
-                )
+                with patch("agentic_sdk.workflow.llm.OpenAI", return_value=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")):
+                    module = module_cls(**_llm_params())
 
                 output = module(state)
 
@@ -141,46 +152,76 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                     state.last_action_result["content"],
                 )
 
-    def test_llm_modules_do_not_send_per_module_model(self) -> None:
+    def test_llm_modules_send_explicit_model(self) -> None:
         perceive_client = FoundryOpenAILikeClient()
-        TextPerceive(client=perceive_client)(WorkflowState(user_message="hello"))
-        self.assertNotIn("model", perceive_client.last_create_kwargs or {})
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=perceive_client):
+            TextPerceive(**_llm_params("perceive-model"))(WorkflowState(user_message="hello"))
+        self.assertEqual("perceive-model", perceive_client.last_create_kwargs["model"])
 
         plan_client = FoundryOpenAILikeClient(plan_sequence=["action"])
         plan_state = WorkflowState(user_message="hello")
         plan_state.append(ContextEntry(type=ContextEntryType.PERCEIVED, content="intent=test", metadata={"intent": "test"}))
-        NextStepPlan(client=plan_client)(plan_state)
-        self.assertNotIn("model", plan_client.last_create_kwargs or {})
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=plan_client):
+            NextStepPlan(**_llm_params("plan-model"))(plan_state)
+        self.assertEqual("plan-model", plan_client.last_create_kwargs["model"])
 
         action_client = FoundryOpenAILikeClient(action_text="ok")
-        GenerativeAction(client=action_client)(WorkflowState(user_message="hello"))
-        self.assertNotIn("model", action_client.last_create_kwargs or {})
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=action_client):
+            GenerativeAction(**_llm_params("action-model"))(WorkflowState(user_message="hello"))
+        self.assertEqual("action-model", action_client.last_create_kwargs["model"])
 
         reflect_client = FoundryOpenAILikeClient()
         reflect_state = WorkflowState(user_message="hello")
         reflect_state.last_action_result = {"content": "ok"}
-        ResponseCheckReflect(client=reflect_client)(reflect_state)
-        self.assertNotIn("model", reflect_client.last_create_kwargs or {})
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=reflect_client):
+            ResponseCheckReflect(**_llm_params("reflect-model"))(reflect_state)
+        self.assertEqual("reflect-model", reflect_client.last_create_kwargs["model"])
 
-    def test_llm_module_constructors_reject_model_parameter(self) -> None:
+    def test_llm_module_constructors_require_model_parameter(self) -> None:
         for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, StructuredAction, ResponseCheckReflect):
             with self.subTest(module=module_cls.__name__):
-                with self.assertRaises(TypeError):
-                    module_cls(client=FoundryOpenAILikeClient(), model="gpt-4o")
+                with self.assertRaisesRegex(ValueError, "explicit model"):
+                    module_cls(api_key=TEST_API_KEY, base_url=TEST_BASE_URL)
 
-    def test_capabilities_do_not_expose_per_module_model_or_temperature(self) -> None:
+    def test_llm_modules_can_build_openai_client_from_explicit_endpoint(self) -> None:
+        with patch("agentic_sdk.workflow.llm.OpenAI") as openai_cls:
+            openai_cls.return_value = FoundryOpenAILikeClient(action_text="ok")
+
+            GenerativeAction(api_key="ollama", base_url="http://localhost:11434/v1/", model="llama3.2:1b")(
+                WorkflowState(user_message="hello")
+            )
+
+        openai_cls.assert_called_once_with(api_key="ollama", base_url="http://localhost:11434/v1/")
+
+    def test_llm_modules_require_client_or_endpoint(self) -> None:
+        with self.assertRaisesRegex(ValueError, "explicit api_key/base_url"):
+            GenerativeAction(model="llama3.2:1b")
+
+    def test_capabilities_expose_required_llm_connection_fields(self) -> None:
         document = build_capability_document()
+        llm_modules = {
+            "TextPerceive",
+            "StructuredPerceive",
+            "TextImagePerceive",
+            "NextStepPlan",
+            "GenerativeAction",
+            "StructuredAction",
+            "ResponseCheckReflect",
+        }
         for module in document["module_definitions"]:
             params = module.get("params_schema", {})
-            with self.subTest(module=module["type"]):
-                self.assertNotIn("model", params)
-                self.assertNotIn("temperature", params)
+            if module["type"] in llm_modules:
+                with self.subTest(module=module["type"]):
+                    self.assertTrue(params["api_key"]["required"])
+                    self.assertTrue(params["base_url"]["required"])
+                    self.assertTrue(params["model"]["required"])
 
     def test_response_check_reflect_and_evidence_check_reflect_can_pass(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         state.last_action_result = {"content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"}
 
-        response_output = ResponseCheckReflect(client=FoundryOpenAILikeClient())(state)
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=FoundryOpenAILikeClient()):
+            response_output = ResponseCheckReflect(**_llm_params())(state)
         evidence_output = EvidenceCheckReflect()(state)
 
         self.assertIsNone(response_output["next_module"])
@@ -197,7 +238,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
             state.workflow_name = "test-workflow"
             state.memory_store = store
 
-            TextPerceive(client=FoundryOpenAILikeClient())(state)
+            with patch("agentic_sdk.workflow.llm.OpenAI", return_value=FoundryOpenAILikeClient()):
+                TextPerceive(**_llm_params())(state)
 
             entries = store.all_for_workflow("test-workflow")
             self.assertEqual(1, len(entries))

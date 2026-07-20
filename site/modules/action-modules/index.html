@@ -731,6 +731,17 @@
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
         標準輸出參數
       
     </span>
@@ -756,7 +767,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸出參數
@@ -784,7 +806,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸出參數
@@ -1049,6 +1082,17 @@
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
         標準輸出參數
       
     </span>
@@ -1074,7 +1118,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸出參數
@@ -1102,7 +1157,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸出參數
@@ -1138,11 +1204,46 @@
 
 
 <h1 id="action">Action<a class="headerlink" href="#action" title="Permanent link">&para;</a></h1>
-<p>Action 模組負責把前面節點收集到的資訊轉成回應內容。這一頁先整理 Action 家族的交付方式，再依序展開三種不同的回應產生模組。Action 的重點在交付什麼輸出，因此這一頁只列各模組的標準輸出參數；前段帶入的內容主要來自 <code>Entities</code>，可回到 <a href="../">Module Family</a> 的中央定義理解。</p>
+<p>Action 模組負責把前面節點收集到的資訊轉成回應內容。這一頁先整理 Action 家族的交付方式，再依序展開三種不同的回應產生模組。每個模組會先列出建立物件時使用的初始化參數，再列出 Action 對外交付的標準輸出參數；前段帶入的內容主要來自 <code>Entities</code>，可回到 <a href="../">Module Family</a> 的中央定義理解。</p>
 <h2 id="directansweraction">DirectAnswerAction<a class="headerlink" href="#directansweraction" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>DirectAnswerAction</code></p>
 <p><code>DirectAnswerAction</code> 直接根據取回內容組成最終回應，以條目內容為主完成回答。它適合 README 最小流程與條目式固定回答，也代表 Action 家族裡最直接的交付方式。</p>
-<h3 id="_1">標準輸出參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<h3 id="_1">初始化參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>memory_key</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>"latest_retrieved_content"</code></td>
+<td>從 workflow state 讀取最終回答內容的 key。</td>
+</tr>
+<tr>
+<td><code>fallback</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>"沒有命中任何條目。"</code></td>
+<td>指定 key 沒有內容時使用的回答文字。</td>
+</tr>
+<tr>
+<td><code>prefix</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>""</code></td>
+<td>加在回答文字前的固定前綴。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_2">標準輸出參數<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -1182,7 +1283,57 @@
 <h2 id="generativeaction">GenerativeAction<a class="headerlink" href="#generativeaction" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>CompletionAction</code></p>
 <p><code>GenerativeAction</code> 根據輸入摘要與取回內容生成最終回應。當流程要把多筆條目、歷史紀錄或摘要整合成一段自然語言時，就會接到這個模組。</p>
-<h3 id="_2">標準輸出參數<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>。模組會在內部建立 OpenAI client，並在推論呼叫時使用指定的 <code>model</code>。</p>
+<h3 id="_3">初始化參數<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱。</td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td><code>number|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>生成溫度；<code>null</code> 時不傳此參數，交由端點預設處理。</td>
+</tr>
+<tr>
+<td><code>system_prompt</code></td>
+<td><code>string|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_4">標準輸出參數<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -1222,7 +1373,57 @@
 <h2 id="structuredaction">StructuredAction<a class="headerlink" href="#structuredaction" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>StructuredOutputAction</code></p>
 <p><code>StructuredAction</code> 依固定欄位規格輸出結構化結果。當回應還要交給別的系統處理，或需要把推薦理由、建議與證據拆成固定欄位時，這個模組會把輸出整理成穩定的資料結構。</p>
-<h3 id="_3">標準輸出參數<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>。不同 Action 可以使用不同端點或不同模型。</p>
+<h3 id="_5">初始化參數<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱。</td>
+</tr>
+<tr>
+<td><code>temperature</code></td>
+<td><code>number|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>生成溫度；<code>null</code> 時不傳此參數。</td>
+</tr>
+<tr>
+<td><code>system_prompt</code></td>
+<td><code>string|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_6">標準輸出參數<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>

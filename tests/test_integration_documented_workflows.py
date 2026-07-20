@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from unittest.mock import patch
 
 from agentic_sdk import Workflow
 from agentic_sdk.knowledge import KnowledgeBase, KnowledgeEntry
@@ -24,6 +25,15 @@ from agentic_sdk.workflow.attachments import Attachment
 from support import ActionToReflectWrapper, FoundryOpenAILikeClient, StaticVisionQueryBuilder
 
 
+TEST_MODEL = "foundry-openai-like"
+TEST_API_KEY = "test-key"
+TEST_BASE_URL = "https://example.openai.test/v1"
+
+
+def _llm_params() -> dict[str, str]:
+    return {"api_key": TEST_API_KEY, "base_url": TEST_BASE_URL, "model": TEST_MODEL}
+
+
 class DocumentedWorkflowIntegrationTests(unittest.TestCase):
     def test_minimal_readme_modules_run_in_workflow(self) -> None:
         workflow = Workflow(
@@ -45,17 +55,17 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")],
         )
         client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "action"], reflect_verdict="pass")
-        workflow = Workflow(
-            perceive=TextPerceive(client=client),
-            plan=NextStepPlan(client=client),
-            retrieve=SemanticRetrieve(knowledge_base=kb),
-            action=ActionToReflectWrapper(
-                GenerativeAction(
-                    client=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
-                )
-            ),
-            reflect=ResponseCheckReflect(client=client),
-        )
+        action_client = FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")
+        with patch("agentic_sdk.workflow.llm.OpenAI", side_effect=[client, client, action_client, client]):
+            workflow = Workflow(
+                perceive=TextPerceive(**_llm_params()),
+                plan=NextStepPlan(**_llm_params()),
+                retrieve=SemanticRetrieve(knowledge_base=kb),
+                action=ActionToReflectWrapper(
+                    GenerativeAction(**_llm_params())
+                ),
+                reflect=ResponseCheckReflect(**_llm_params()),
+            )
 
         result = workflow.run("TSiP 是什麼？")
 
@@ -72,17 +82,17 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             entries=[KnowledgeEntry(id="1", title="支撐鞋", content="建議優先考慮支撐型慢跑鞋。")],
         )
         client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "action"])
-        workflow = Workflow(
-            perceive=StructuredPerceive(client=client),
-            plan=NextStepPlan(client=client),
-            retrieve=HybridRetrieve(knowledge_base=kb),
-            action=ActionToReflectWrapper(
-                StructuredAction(
-                    client=FoundryOpenAILikeClient(action_text="建議優先考慮支撐型慢跑鞋。"),
-                )
-            ),
-            reflect=EvidenceCheckReflect(),
-        )
+        action_client = FoundryOpenAILikeClient(action_text="建議優先考慮支撐型慢跑鞋。")
+        with patch("agentic_sdk.workflow.llm.OpenAI", side_effect=[client, client, action_client]):
+            workflow = Workflow(
+                perceive=StructuredPerceive(**_llm_params()),
+                plan=NextStepPlan(**_llm_params()),
+                retrieve=HybridRetrieve(knowledge_base=kb),
+                action=ActionToReflectWrapper(
+                    StructuredAction(**_llm_params())
+                ),
+                reflect=EvidenceCheckReflect(),
+            )
 
         result = workflow.run("我最近久站後足弓很酸，想找比較有支撐的鞋")
 
@@ -95,20 +105,20 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             entries=[KnowledgeEntry(id="1", title="足測推薦", content="支撐型慢跑鞋適合足弓支撐需求。")],
         )
         client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "action"])
-        workflow = Workflow(
-            perceive=TextImagePerceive(client=client),
-            plan=NextStepPlan(client=client),
-            retrieve=SemanticRetrieve(
-                knowledge_base=kb,
-                vision_query=StaticVisionQueryBuilder("足測推薦 足弓 支撐鞋"),
-            ),
-            action=ActionToReflectWrapper(
-                GenerativeAction(
-                    client=FoundryOpenAILikeClient(action_text="支撐型慢跑鞋適合足弓支撐需求。"),
-                )
-            ),
-            reflect=EvidenceCheckReflect(),
-        )
+        action_client = FoundryOpenAILikeClient(action_text="支撐型慢跑鞋適合足弓支撐需求。")
+        with patch("agentic_sdk.workflow.llm.OpenAI", side_effect=[client, client, action_client]):
+            workflow = Workflow(
+                perceive=TextImagePerceive(**_llm_params()),
+                plan=NextStepPlan(**_llm_params()),
+                retrieve=SemanticRetrieve(
+                    knowledge_base=kb,
+                    vision_query=StaticVisionQueryBuilder("足測推薦 足弓 支撐鞋"),
+                ),
+                action=ActionToReflectWrapper(
+                    GenerativeAction(**_llm_params())
+                ),
+                reflect=EvidenceCheckReflect(),
+            )
 
         result = workflow.run(
             "請根據這張足測圖推薦鞋款",

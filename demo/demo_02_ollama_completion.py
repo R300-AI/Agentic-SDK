@@ -5,16 +5,11 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 os.chdir(REPO_ROOT)
 sys.path.insert(0, REPO_ROOT)
 
-from openai import OpenAI
-
 from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
 
-openai_client = OpenAI(
-    api_key="not-needed",
-    base_url="http://localhost:11434/v1",
-)
+ollama_model = os.environ.get("AGENTIC_OLLAMA_MODEL", "llama3.2:1b")
 
 workflow = Workflow(
     perceive=PassThroughPerceive(),
@@ -27,7 +22,9 @@ workflow = Workflow(
         ],
     ),
     action=GenerativeAction(
-        client=openai_client,
+        api_key="ollama",
+        base_url="http://localhost:11434/v1/",
+        model=ollama_model,
     ),
 )
 

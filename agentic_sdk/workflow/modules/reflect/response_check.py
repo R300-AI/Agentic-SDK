@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from agentic_sdk.context import ContextEntry, ContextEntryType
-from agentic_sdk.workflow.llm import chat_json, require_client
+from agentic_sdk.workflow.llm import chat_json, require_model, resolve_openai_client
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 
@@ -24,18 +24,26 @@ class ResponseCheckReflect:
     def __init__(
         self,
         on_failure: str = "retry_plan",
-        client=None,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
     ) -> None:
         if on_failure not in _ON_FAILURE_TO_NEXT:
             raise ValueError(
                 f"ResponseCheckReflect.on_failure={on_failure!r} 不合法，僅接受 {sorted(_ON_FAILURE_TO_NEXT)}。"
             )
         self._on_failure = on_failure
-        self._client = require_client(client, self.__class__.__name__)
+        self._model = require_model(model, self.__class__.__name__)
+        self._client = resolve_openai_client(
+            self.__class__.__name__,
+            api_key=api_key,
+            base_url=base_url,
+        )
 
     @property
-    def gen_ai_request_model(self) -> None:
-        return None
+    def gen_ai_request_model(self) -> str:
+        return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         err = state.last_action_error
@@ -50,6 +58,7 @@ class ResponseCheckReflect:
         try:
             response = chat_json(
                 self._client,
+                model=self._model,
                 system=_SYSTEM_PROMPT,
                 user=user_prompt,
             )

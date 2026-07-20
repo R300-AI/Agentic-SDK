@@ -6,7 +6,7 @@ import logging
 
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.observability.events import EVENT_MODULE_DELTA, EVENT_MODULE_THOUGHT, make_event
-from agentic_sdk.workflow.llm import chat_stream_json, require_client
+from agentic_sdk.workflow.llm import chat_stream_json, require_model, resolve_openai_client
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 logger = logging.getLogger("agentic_sdk.workflow")
@@ -52,12 +52,20 @@ class NextStepPlan:
 
     def __init__(
         self,
-        client=None,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
         system_prompt: str | None = None,
         retrieve_description: str | None = None,
         retrieve_name: str | None = None,
     ) -> None:
-        self._client = require_client(client, self.__class__.__name__)
+        self._model = require_model(model, self.__class__.__name__)
+        self._client = resolve_openai_client(
+            self.__class__.__name__,
+            api_key=api_key,
+            base_url=base_url,
+        )
         if system_prompt is not None:
             self._system_prompt = system_prompt
         else:
@@ -65,8 +73,8 @@ class NextStepPlan:
             self._system_prompt = _REACT_TEMPLATE.format(retrieve_index=index)
 
     @property
-    def gen_ai_request_model(self) -> None:
-        return None
+    def gen_ai_request_model(self) -> str:
+        return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         perceived = state.latest_of(ContextEntryType.PERCEIVED)
@@ -99,6 +107,7 @@ class NextStepPlan:
 
         response = chat_stream_json(
             self._client,
+            model=self._model,
             system=self._system_prompt,
             user=user_prompt,
             on_delta=_on_delta,

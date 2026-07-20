@@ -27,10 +27,6 @@ class Settings(BaseSettings):
         default="not-needed",
         validation_alias=AliasChoices("OPENAI_API_KEY"),
     )
-    openai_model: str = Field(
-        default="",
-        validation_alias=AliasChoices("OPENAI_MODEL"),
-    )
     openai_healthcheck_timeout_sec: float = Field(default=5.0, gt=0)
 
     keyvault_models: list[dict[str, str]] = Field(default_factory=list)

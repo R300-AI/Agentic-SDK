@@ -94,8 +94,8 @@ class Workflow:
     ) -> "Workflow":
         """從 WorkflowConfig 建構 Workflow 實例。
 
-                - `module_overrides`:直接傳入已建構好的 module 實例(例如使用者自己 `OpenAI(...)`
-                    建好 client、`GenerativeAction(client=...)` 包好後丟進來),優先級高於
+                - `module_overrides`:直接傳入已建構好的 module 實例(例如已用
+                    `api_key` / `base_url` / `model` 建好的 `GenerativeAction(...)`),優先級高於
           `config.modules[name]` 中的序列化規格。這是 Python SDK 的主要擴充口。
         - 未在 `module_overrides` 也未在 `config.modules` 中指定的模組退回各自的 DEFAULT。
         - `config.gates` 覆蓋 Settings 的三道閘門預設值。

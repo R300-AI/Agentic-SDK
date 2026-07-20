@@ -203,6 +203,14 @@ def default_retrieve_templates() -> list[RetrieveTemplateDefinition]:
     ]
 
 
+def _llm_connection_schema() -> dict[str, Any]:
+    return {
+        "api_key": {"type": "string", "required": True, "secret": True},
+        "base_url": {"type": "string", "required": True},
+        "model": {"type": "string", "required": True},
+    }
+
+
 def _module_definitions() -> list[dict[str, Any]]:
     return [
         {
@@ -217,6 +225,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "perceive",
             "label": "Text perceive",
             "params_schema": {
+                **_llm_connection_schema(),
                 "welcome_message": {"type": "string", "default": ""},
                 "options": {"type": "array", "default": []},
                 "importance": {"type": "number", "default": 1.0, "min": 0.0},
@@ -227,6 +236,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "perceive",
             "label": "Structured perceive",
             "params_schema": {
+                **_llm_connection_schema(),
                 "welcome_message": {"type": "string", "default": ""},
                 "options": {"type": "array", "default": []},
                 "importance": {"type": "number", "default": 1.0, "min": 0.0},
@@ -237,6 +247,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "perceive",
             "label": "Text + image perceive",
             "params_schema": {
+                **_llm_connection_schema(),
                 "welcome_message": {"type": "string", "default": ""},
                 "options": {"type": "array", "default": []},
                 "importance": {"type": "number", "default": 1.0, "min": 0.0},
@@ -247,6 +258,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "plan",
             "label": "Next-step plan",
             "params_schema": {
+                **_llm_connection_schema(),
                 "system_prompt": {"type": "string", "ui": {"control": "textarea"}},
             },
         },
@@ -287,6 +299,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "reflect",
             "label": "Response check reflect",
             "params_schema": {
+                **_llm_connection_schema(),
                 "on_failure": {"type": "string", "default": "retry_plan"},
             },
         },
@@ -310,9 +323,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "action",
             "label": "Generative action",
             "params_schema": {
-                "provider_ref": {"type": "ref", "ref_kind": "provider"},
-                "base_url": {"type": "string", "advanced": True},
-                "secret_ref": {"type": "ref", "ref_kind": "secret"},
+                **_llm_connection_schema(),
             },
         },
         {
@@ -320,9 +331,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "role": "action",
             "label": "Structured action",
             "params_schema": {
-                "provider_ref": {"type": "ref", "ref_kind": "provider"},
-                "base_url": {"type": "string", "advanced": True},
-                "secret_ref": {"type": "ref", "ref_kind": "secret"},
+                **_llm_connection_schema(),
             },
         },
     ]

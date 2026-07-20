@@ -73,14 +73,14 @@ Runner 可以為不同 Agent 呈現不同程度的場景化 UI，但這種場景
 V2 第一版生成的 Python source 應遵循穩定模板，至少包含：
 
 1. 必要 import
-2. 可選的 `OpenAI` client 初始化
+2. 可選的模型連線環境變數區塊
 3. 可選的自訂類別區塊（如自訂 Action）
 4. `workflow = Workflow(...)`
 
 ### 建議結構
 
 ```python
-from openai import OpenAI
+import os
 
 from agentic_sdk import Workflow
 from agentic_sdk.modules import ...
@@ -90,7 +90,9 @@ class CustomAction:
     ...
 
 
-openai_client = OpenAI(...)
+ACTION_API_KEY = os.environ["ACTION_API_KEY"]
+ACTION_API_BASE_URL = os.environ["ACTION_API_BASE_URL"]
+ACTION_MODEL = os.environ["ACTION_MODEL"]
 
 workflow = Workflow(
     perceive=...,

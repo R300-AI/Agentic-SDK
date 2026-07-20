@@ -6,7 +6,7 @@ import json
 
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.memory import MemoryEntry
-from agentic_sdk.workflow.llm import chat_json, require_client
+from agentic_sdk.workflow.llm import chat_json, require_model, resolve_openai_client
 from agentic_sdk.workflow.module import ModuleOutput, WorkflowState
 
 
@@ -29,18 +29,31 @@ _PERCEIVE_SYSTEM = (
 
 class TextPerceive:
     name = "perceive"
+    gen_ai_system = "openai_compatible"
 
     def __init__(
         self,
         welcome_message: str = "",
         options: list[dict] | None = None,
         importance: float = 1.0,
-        client=None,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
     ) -> None:
         self._welcome_message = welcome_message
         self._options = options or []
         self._importance = importance
-        self._client = require_client(client, self.__class__.__name__)
+        self._model = require_model(model, self.__class__.__name__)
+        self._client = resolve_openai_client(
+            self.__class__.__name__,
+            api_key=api_key,
+            base_url=base_url,
+        )
+
+    @property
+    def gen_ai_request_model(self) -> str:
+        return self._model
 
     @property
     def welcome_message(self) -> str:
@@ -59,6 +72,7 @@ class TextPerceive:
 
         response = chat_json(
             self._client,
+            model=self._model,
             system=_PERCEIVE_SYSTEM,
             user=user_prompt,
         )

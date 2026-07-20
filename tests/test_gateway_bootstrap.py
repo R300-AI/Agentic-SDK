@@ -14,10 +14,8 @@ from support import FoundryOpenAILikeClient
 
 
 class GatewayBootstrapTests(unittest.TestCase):
-    def test_settings_do_not_default_to_cloud_model(self) -> None:
-        settings = Settings()
-
-        self.assertEqual("", settings.openai_model)
+    def test_settings_do_not_expose_global_model_default(self) -> None:
+        self.assertNotIn("openai_model", Settings.model_fields)
 
     def test_healthcheck_skips_placeholder_local_openai(self) -> None:
         settings = Settings()
@@ -54,11 +52,16 @@ class GatewayBootstrapTests(unittest.TestCase):
 
     def test_gateway_request_model_is_bound_to_client_not_module(self) -> None:
         client = FoundryOpenAILikeClient(action_text="ok")
-        action = _build_action(client, "request-model")
+        settings = Settings()
+        settings.openai_api_key = "gateway-key"
+        settings.openai_api_base_url = "https://example.openai.test/v1"
+        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=client) as openai_cls:
+            action = _build_action(settings, "request-model")
 
-        output = action(WorkflowState(user_message="hello"))
+            output = action(WorkflowState(user_message="hello"))
 
-        self.assertIsNone(action.gen_ai_request_model)
+        openai_cls.assert_called_once_with(api_key="gateway-key", base_url="https://example.openai.test/v1")
+        self.assertEqual("request-model", action.gen_ai_request_model)
         self.assertIsNone(output["next_module"])
         self.assertEqual("request-model", client.last_create_kwargs["model"])
 

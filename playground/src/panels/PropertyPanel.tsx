@@ -375,7 +375,7 @@ function ActionEditor({
         <input
           type="text"
           value={model}
-          placeholder="例:gpt-4o-mini、phi-3"
+          placeholder="例:llama3.2:1b、phi-3"
           onChange={(e) => onUpdate(setParam(spec, "model", e.target.value))}
         />
       </div>

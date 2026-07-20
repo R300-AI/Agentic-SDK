@@ -668,6 +668,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="NextStepPlan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -969,6 +986,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="NextStepPlan">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
     </ul>
@@ -992,10 +1026,67 @@
 
 
 <h1 id="plan">Plan<a class="headerlink" href="#plan" title="Permanent link">&para;</a></h1>
-<p>Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一步。這一頁先把 Plan 家族的核心責任收斂成「交出下一節點決策」，再用單一標準名 <code>NextStepPlan</code> 來承接這個角色。規劃過程讀寫的中間欄位統一回到 <a href="../">Module Family</a> 的 <code>Entities</code> 中央定義理解，因此這一頁聚焦在模組角色與決策責任。</p>
+<p>Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一步。這一頁先把 Plan 家族的核心責任收斂成「交出下一節點決策」，再用單一標準名 <code>NextStepPlan</code> 來承接這個角色。每個模組會先列出建立物件時使用的初始化參數；規劃過程讀寫的中間欄位統一回到 <a href="../">Module Family</a> 的 <code>Entities</code> 中央定義理解。</p>
 <h2 id="nextstepplan">NextStepPlan<a class="headerlink" href="#nextstepplan" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>ReActPlan</code></p>
 <p><code>NextStepPlan</code> 根據感知摘要與已有上下文，決定下一步要查資料還是直接回答。閱讀這個模組時，可以把它理解成一個明確的路由點：先看它讀進哪些線索，再看它交出哪些決策欄位給後續節點使用。</p>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>。不同 Plan 模組可以與 Perceive 或 Action 使用不同模型。</p>
+<h3 id="_1">初始化參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱。</td>
+</tr>
+<tr>
+<td><code>system_prompt</code></td>
+<td><code>string|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>覆寫 planner 系統提示；未提供時由 SDK 根據 retrieve 描述產生預設 prompt。</td>
+</tr>
+<tr>
+<td><code>retrieve_name</code></td>
+<td><code>string|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>取回節點的顯示名稱，會被放入預設 planner prompt。</td>
+</tr>
+<tr>
+<td><code>retrieve_description</code></td>
+<td><code>string|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>取回節點用途說明，會被放入預設 planner prompt。</td>
+</tr>
+</tbody>
+</table>
 
 
 

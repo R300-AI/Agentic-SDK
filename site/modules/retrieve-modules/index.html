@@ -696,6 +696,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="KeywordRetrieve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -706,6 +723,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="SemanticRetrieve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -718,6 +752,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="HybridRetrieve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -728,6 +779,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Retrieve 配套元件：VisionQueryBuilder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1002,6 +1070,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="KeywordRetrieve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1012,6 +1097,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="SemanticRetrieve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1024,6 +1126,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="HybridRetrieve">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -1034,6 +1153,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="Retrieve 配套元件：VisionQueryBuilder">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1058,20 +1194,231 @@
 
 
 <h1 id="retrieve">Retrieve<a class="headerlink" href="#retrieve" title="Permanent link">&para;</a></h1>
-<p>Retrieve 模組負責把 workflow 需要的內容取回來。這一頁先整理 Retrieve 家族中的檢索角色，再依序展開目前文件採用的檢索模組與配套元件。檢索過程讀寫的中間欄位統一回到 <a href="../">Module Family</a> 的 <code>Entities</code> 中央定義理解，因此這一頁聚焦在模組如何取回內容，以及它們在檢索路徑中的分工。</p>
+<p>Retrieve 模組負責把 workflow 需要的內容取回來。這一頁先整理 Retrieve 家族中的檢索角色，再依序展開目前文件採用的檢索模組與配套元件。每個模組會先列出建立物件時使用的初始化參數；檢索過程讀寫的中間欄位統一回到 <a href="../">Module Family</a> 的 <code>Entities</code> 中央定義理解。</p>
 <h2 id="keywordretrieve">KeywordRetrieve<a class="headerlink" href="#keywordretrieve" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>KeywordRetrieve</code></p>
 <p><code>KeywordRetrieve</code> 依關鍵字規則取回內容，適合 README 的最小流程與條目式知識查找。它代表的是最直接的檢索路徑：有明確查詢字串，就回傳最對應的條目內容。</p>
+<h3 id="_1">初始化參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>items</code></td>
+<td><code>array&lt;object&gt;</code></td>
+<td>否</td>
+<td><code>[]</code></td>
+<td>關鍵字條目清單；每筆通常包含 <code>keywords</code> 與 <code>content</code>。</td>
+</tr>
+<tr>
+<td><code>fallback</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>"沒有命中任何條目。"</code></td>
+<td>沒有命中任何條目時寫入取回內容的文字。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="semanticretrieve">SemanticRetrieve<a class="headerlink" href="#semanticretrieve" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>SemanticRetrieve</code></p>
 <p><code>SemanticRetrieve</code> 依語意相似度從知識來源取回內容。當流程需要從較長知識片段裡找出真正相關的內容時，這個模組會把檢索重心放在語意接近度。</p>
+<h3 id="_2">初始化參數<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>top_k</code></td>
+<td><code>integer</code></td>
+<td>否</td>
+<td><code>3</code></td>
+<td>從 knowledge base 或 memory store 取回的最大筆數。</td>
+</tr>
+<tr>
+<td><code>similarity_weight</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>0.5</code></td>
+<td>記憶搜尋的語意相似度權重。</td>
+</tr>
+<tr>
+<td><code>recency_weight</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>0.3</code></td>
+<td>記憶搜尋的新近性權重。</td>
+</tr>
+<tr>
+<td><code>importance_weight</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>0.2</code></td>
+<td>記憶搜尋的重要性權重。</td>
+</tr>
+<tr>
+<td><code>embedder</code></td>
+<td><code>Embedder|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>可插拔向量嵌入器；未提供時使用內建文字相似度路徑。</td>
+</tr>
+<tr>
+<td><code>knowledge_base</code></td>
+<td><code>KnowledgeBase|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>靜態知識庫來源；未提供時只使用 workflow memory。</td>
+</tr>
+<tr>
+<td><code>vision_query</code></td>
+<td><code>VisionQueryBuilder|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>圖文查詢改寫器；有圖片附件時可先產生檢索查詢。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="hybridretrieve">HybridRetrieve<a class="headerlink" href="#hybridretrieve" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>HybridRetrieve</code></p>
 <p><code>HybridRetrieve</code> 混合關鍵字、語意與欄位條件取回內容。當流程同時需要欄位比對與語意補證據時，這個模組會把多種檢索線索合併成同一輪結果。</p>
+<h3 id="_3">初始化參數<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>items</code></td>
+<td><code>array&lt;object&gt;</code></td>
+<td>否</td>
+<td><code>[]</code></td>
+<td>關鍵字條目清單；命中時會與語意結果合併。</td>
+</tr>
+<tr>
+<td><code>fallback</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>"沒有命中任何條目。"</code></td>
+<td>關鍵字路徑沒有命中時的 fallback 文字。</td>
+</tr>
+<tr>
+<td><code>top_k</code></td>
+<td><code>integer</code></td>
+<td>否</td>
+<td><code>3</code></td>
+<td>語意路徑取回的最大筆數。</td>
+</tr>
+<tr>
+<td><code>similarity_weight</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>0.5</code></td>
+<td>記憶搜尋的語意相似度權重。</td>
+</tr>
+<tr>
+<td><code>recency_weight</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>0.3</code></td>
+<td>記憶搜尋的新近性權重。</td>
+</tr>
+<tr>
+<td><code>importance_weight</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>0.2</code></td>
+<td>記憶搜尋的重要性權重。</td>
+</tr>
+<tr>
+<td><code>embedder</code></td>
+<td><code>Embedder|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>可插拔向量嵌入器。</td>
+</tr>
+<tr>
+<td><code>knowledge_base</code></td>
+<td><code>KnowledgeBase|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>靜態知識庫來源。</td>
+</tr>
+<tr>
+<td><code>vision_query</code></td>
+<td><code>VisionQueryBuilder|null</code></td>
+<td>否</td>
+<td><code>null</code></td>
+<td>圖文查詢改寫器。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="retrieve-visionquerybuilder">Retrieve 配套元件：VisionQueryBuilder<a class="headerlink" href="#retrieve-visionquerybuilder" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>FoundryVisionQuery</code></p>
 <p>前面三個模組直接參與 workflow 的 Retrieve 節點；這個配套元件則負責在檢索前先把圖文輸入整理成可檢索的查詢字串，讓圖像輸入也能順利接上同一套檢索流程。</p>
 <p><code>VisionQueryBuilder</code> 是搭配 <code>TextImagePerceive</code> 或 <code>SemanticRetrieve</code> 使用的查詢改寫器。它的責任是把圖片與文字整理成一段可檢索的查詢字串，供後續檢索流程使用。</p>
+<p><code>VisionQueryBuilder</code> 本身是 protocol；SDK 內建的 <code>DefaultVisionQueryBuilder</code> 需要明確的 OpenAI-compatible 連線設定，並在內部初始化 client。</p>
+<h3 id="_4">初始化參數<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>圖文模型名稱；端點需支援圖片輸入。</td>
+</tr>
+<tr>
+<td><code>max_keywords_chars</code></td>
+<td><code>integer</code></td>
+<td>否</td>
+<td><code>60</code></td>
+<td>查詢改寫結果最多保留的字元數。</td>
+</tr>
+</tbody>
+</table>
 
 
 

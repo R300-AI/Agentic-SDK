@@ -82,7 +82,7 @@ print(result.final_message)
 
 ### 2. 把 OpenAI SDK client 注入需要模型的模組
 
-第二個範例會把模型能力接進既有 workflow，並示範如何把 OpenAI SDK client 注入需要模型的模組。
+第二個範例會把模型能力接進既有 workflow，並示範如何讓需要模型的模組用 OpenAI-compatible 設定自行初始化 client。
 
 以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。
 
@@ -91,19 +91,12 @@ ollama pull llama3.2:1b
 ollama serve
 ```
 
-`OpenAI(...)` 建立完成後，直接將 client 交給 `GenerativeAction`：
+需要模型的模組會用 `api_key` 與 `base_url` 建立 OpenAI-compatible client，並在推論時使用指定的 `model`：
 
 ```python
 # 公開介面範例
-from openai import OpenAI
-
 from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
-
-openai_client = OpenAI(
-    api_key="not-needed",
-    base_url="http://localhost:11434/v1",
-)
 
 workflow = Workflow(
     perceive=PassThroughPerceive(),
@@ -116,7 +109,9 @@ workflow = Workflow(
         ],
     ),
     action=GenerativeAction(
-        client=openai_client,
+        api_key="ollama",
+        base_url="http://localhost:11434/v1/",
+        model="llama3.2:1b",
     ),
 )
 
@@ -124,7 +119,7 @@ result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-此一範例保留原本的輸入處理與條目查詢方式，僅將輸出步驟改為透過 OpenAI Python client 呼叫模型端點。對 AI Hub 而言，重點不在特定 provider，而在模型服務與 Agent workflow 皆沿用 OpenAI SDK 介面。當模型端點遵循同一協定時，模型封裝與 Agent 功能即可使用一致的調用方式，降低不同生態各自定義呼叫介面的整合成本。
+此一範例保留原本的輸入處理與條目查詢方式，僅將輸出步驟改為透過 OpenAI-compatible 端點呼叫模型。對 AI Hub 而言，重點不在特定 provider，而在模型服務與 Agent workflow 皆沿用 OpenAI SDK 介面。當模型端點遵循同一協定時，模型封裝與 Agent 功能即可使用一致的調用方式，降低不同生態各自定義呼叫介面的整合成本。
 
 ### 3. 用最小 custom module 替換內建 Action
 

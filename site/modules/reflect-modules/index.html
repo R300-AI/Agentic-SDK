@@ -752,6 +752,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="ResponseCheckReflect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -762,6 +779,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="EvidenceCheckReflect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -980,6 +1014,23 @@
     </span>
   </a>
   
+    <nav class="md-nav" aria-label="ResponseCheckReflect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
 </li>
       
         <li class="md-nav__item">
@@ -990,6 +1041,23 @@
       
     </span>
   </a>
+  
+    <nav class="md-nav" aria-label="EvidenceCheckReflect">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
   
 </li>
       
@@ -1014,13 +1082,77 @@
 
 
 <h1 id="reflect">Reflect<a class="headerlink" href="#reflect" title="Permanent link">&para;</a></h1>
-<p>Reflect 模組負責檢查 Action 產出的候選答案，交出可直接交付或回到前一階段修正的判定。這一頁先整理 Reflect 家族共用的驗收責任，再展開目前文件採用的兩種 Reflect 模組。驗收過程讀寫的中間欄位統一回到 <a href="../">Module Family</a> 的 <code>Entities</code> 中央定義理解，因此這一頁聚焦在模組如何判定回應品質，以及它們在驗收流程中的分工。</p>
+<p>Reflect 模組負責檢查 Action 產出的候選答案，交出可直接交付或回到前一階段修正的判定。這一頁先整理 Reflect 家族共用的驗收責任，再展開目前文件採用的兩種 Reflect 模組。每個模組會先列出建立物件時使用的初始化參數；驗收過程讀寫的中間欄位統一回到 <a href="../">Module Family</a> 的 <code>Entities</code> 中央定義理解。</p>
 <h2 id="responsecheckreflect">ResponseCheckReflect<a class="headerlink" href="#responsecheckreflect" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>ReflexionReflect</code></p>
 <p><code>ResponseCheckReflect</code> 檢查目前回應是否回到問題本身，並提出修正方向。當流程已經有自然語言輸出，接下來要確認回答是否完整貼合問題時，就會接到這個模組。</p>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>。若不需要模型檢查，可改用規則式的 <code>EvidenceCheckReflect</code>。</p>
+<h3 id="_1">初始化參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>on_failure</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>"retry_plan"</code></td>
+<td>檢查失敗時的下一步；可用值為 <code>"retry_plan"</code> 或 <code>"end"</code>。</td>
+</tr>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱。</td>
+</tr>
+</tbody>
+</table>
 <h2 id="evidencecheckreflect">EvidenceCheckReflect<a class="headerlink" href="#evidencecheckreflect" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>EvidenceCheckReflect</code></p>
 <p><code>EvidenceCheckReflect</code> 檢查目前回應是否有足夠證據、是否涵蓋重點，以及是否符合固定格式。當流程需要把回應與檢索內容一起驗收時，這個模組會補上證據與格式層的檢查。</p>
+<h3 id="_2">初始化參數<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>on_failure</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>"retry_plan"</code></td>
+<td>檢查失敗時的下一步；可用值為 <code>"retry_plan"</code> 或 <code>"end"</code>。</td>
+</tr>
+</tbody>
+</table>
 
 
 

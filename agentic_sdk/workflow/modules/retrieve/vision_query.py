@@ -3,8 +3,8 @@
 設計約束:
 - Protocol 不依賴任何 LLM SDK，方便測試替身與第三方實作替換
 - 失敗時必須回 fallback（通常為原始 user_message），不阻斷整條 Retrieve
-- 預設實作 DefaultVisionQueryBuilder 要求呼叫端注入 OpenAI client
-    （vision-capable model），與其他 LLM 模組一致
+- 預設實作 DefaultVisionQueryBuilder 使用 api_key / base_url / model
+    在內部初始化 OpenAI-compatible client，與其他 LLM 模組一致
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import logging
 from typing import Protocol, runtime_checkable
 
 from agentic_sdk.workflow.attachments import Attachment
-from agentic_sdk.workflow.llm import require_client
+from agentic_sdk.workflow.llm import require_model, resolve_openai_client
 
 logger = logging.getLogger(__name__)
 
@@ -37,11 +37,19 @@ class DefaultVisionQueryBuilder:
 
     def __init__(
         self,
-        client=None,
+        *,
+        api_key: str | None = None,
+        base_url: str | None = None,
+        model: str | None = None,
         max_keywords_chars: int = 60,
     ) -> None:
         self._max_chars = max_keywords_chars
-        self._client = require_client(client, self.__class__.__name__)
+        self._model = require_model(model, self.__class__.__name__)
+        self._client = resolve_openai_client(
+            self.__class__.__name__,
+            api_key=api_key,
+            base_url=base_url,
+        )
 
     def __call__(self, text: str, attachments: list[Attachment]) -> str:
         if not attachments:
@@ -54,6 +62,7 @@ class DefaultVisionQueryBuilder:
 
         try:
             completion = self._client.chat.completions.create(
+                model=self._model,
                 messages=[
                     {"role": "system", "content": _VISION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_parts},

@@ -647,6 +647,17 @@
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
         標準輸入參數
       
     </span>
@@ -672,7 +683,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸入參數
@@ -700,7 +722,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸入參數
@@ -728,7 +761,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸入參數
@@ -1077,6 +1121,17 @@
   <a href="#_1" class="md-nav__link">
     <span class="md-ellipsis">
       
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
         標準輸入參數
       
     </span>
@@ -1102,7 +1157,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_2" class="md-nav__link">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸入參數
@@ -1130,7 +1196,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_3" class="md-nav__link">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸入參數
@@ -1158,7 +1235,18 @@
       <ul class="md-nav__list">
         
           <li class="md-nav__item">
-  <a href="#_4" class="md-nav__link">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        初始化參數
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
     <span class="md-ellipsis">
       
         標準輸入參數
@@ -1194,11 +1282,32 @@
 
 
 <h1 id="perceive">Perceive<a class="headerlink" href="#perceive" title="Permanent link">&para;</a></h1>
-<p>Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的四個標準模組。Perceive 的重點在接收什麼輸入，因此這一頁只列各模組的標準輸入參數；整理後寫入 <code>Entities</code> 的欄位，會回到 <a href="../">Module Family</a> 的中央定義理解。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 <code>image/png</code>、<code>image/jpeg</code>、<code>image/webp</code>。</p>
+<p>Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的四個標準模組。每個模組會先列出建立物件時使用的初始化參數，再列出 workflow 執行時接收的標準輸入參數；整理後寫入 <code>Entities</code> 的欄位，會回到 <a href="../">Module Family</a> 的中央定義理解。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 <code>image/png</code>、<code>image/jpeg</code>、<code>image/webp</code>。</p>
 <h2 id="passthroughperceive">PassThroughPerceive<a class="headerlink" href="#passthroughperceive" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>InputPerceive</code></p>
 <p><code>PassThroughPerceive</code> 將原始文字輸入直接整理成查詢內容，交給後續節點接手。它適合 README 的最小流程，也適合作為文字型流程的直接入口。這個模組代表的是最短路徑：收到文字後，先把可查詢的內容穩定交出去。</p>
-<h3 id="_1">標準輸入參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<h3 id="_1">初始化參數<a class="headerlink" href="#_1" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>input_label</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>""</code></td>
+<td>寫入感知結果 metadata 的輸入標籤，方便後續節點或觀測資料辨識來源。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_2">標準輸入參數<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -1220,7 +1329,64 @@
 <h2 id="textperceive">TextPerceive<a class="headerlink" href="#textperceive" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>LLMBasedPerceive</code></p>
 <p><code>TextPerceive</code> 依文字內容做語意判讀，將輸入整理成後續可用的查詢、標籤與摘要。當流程需要的不只是原句，而是對需求做一次語意整理時，就會接到這個模組。</p>
-<h3 id="_2">標準輸入參數<a class="headerlink" href="#_2" title="Permanent link">&para;</a></h3>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>。模組會在內部建立 OpenAI client，不讀取全域預設模型。</p>
+<h3 id="_3">初始化參數<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰；例如 Ollama 可使用 <code>"ollama"</code> 或其他非空值。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL，例如 <code>"http://localhost:11434/v1/"</code>。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱，例如 <code>"llama3.2:1b"</code>。</td>
+</tr>
+<tr>
+<td><code>welcome_message</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>""</code></td>
+<td>給 UI 或 metadata 使用的提示文字，不會覆蓋使用者輸入。</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td><code>array&lt;object&gt;</code></td>
+<td>否</td>
+<td><code>[]</code></td>
+<td>可選意圖或服務範圍，供模型理解背景；不會直接覆蓋模型判斷。</td>
+</tr>
+<tr>
+<td><code>importance</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>1.0</code></td>
+<td>寫入 memory entry 的重要性權重。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_4">標準輸入參數<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -1260,7 +1426,64 @@
 <h2 id="structuredperceive">StructuredPerceive<a class="headerlink" href="#structuredperceive" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>StructuredPerceive</code></p>
 <p><code>StructuredPerceive</code> 將結構化欄位整理成後續可用的查詢與摘要。當流程的主要輸入來自欄位資料時，這個模組會把欄位內容直接組成查詢與需求摘要。</p>
-<h3 id="_3">標準輸入參數<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h3>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>。</p>
+<h3 id="_5">初始化參數<a class="headerlink" href="#_5" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱。</td>
+</tr>
+<tr>
+<td><code>welcome_message</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>""</code></td>
+<td>給 UI 或 metadata 使用的提示文字。</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td><code>array&lt;object&gt;</code></td>
+<td>否</td>
+<td><code>[]</code></td>
+<td>可選意圖或服務範圍，供模型理解背景。</td>
+</tr>
+<tr>
+<td><code>importance</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>1.0</code></td>
+<td>寫入 memory entry 的重要性權重。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_6">標準輸入參數<a class="headerlink" href="#_6" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>
@@ -1300,7 +1523,64 @@
 <h2 id="textimageperceive">TextImagePerceive<a class="headerlink" href="#textimageperceive" title="Permanent link">&para;</a></h2>
 <p>舊名對應：<code>MultimodalPerceive</code></p>
 <p><code>TextImagePerceive</code> 將文字與圖片內容一起整理成後續可用的查詢與摘要。當流程同時需要讀取文字與圖片時，這個模組會把兩類資訊整合成後續可用的感知結果，支援 <code>image/png</code>、<code>image/jpeg</code>、<code>image/webp</code> 三種格式。</p>
-<h3 id="_4">標準輸入參數<a class="headerlink" href="#_4" title="Permanent link">&para;</a></h3>
+<p>此模組需要明確的 OpenAI-compatible 連線設定：<code>api_key</code>、<code>base_url</code>、<code>model</code>，且模型端點需支援圖文輸入。</p>
+<h3 id="_7">初始化參數<a class="headerlink" href="#_7" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>參數</th>
+<th>型態</th>
+<th>必填</th>
+<th>預設值</th>
+<th>說明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_key</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible 端點金鑰。</td>
+</tr>
+<tr>
+<td><code>base_url</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>OpenAI-compatible API base URL。</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td><code>string</code></td>
+<td>是</td>
+<td>無</td>
+<td>每次推論呼叫送出的模型名稱；端點需支援圖文輸入。</td>
+</tr>
+<tr>
+<td><code>welcome_message</code></td>
+<td><code>string</code></td>
+<td>否</td>
+<td><code>""</code></td>
+<td>給 UI 或 metadata 使用的提示文字。</td>
+</tr>
+<tr>
+<td><code>options</code></td>
+<td><code>array&lt;object&gt;</code></td>
+<td>否</td>
+<td><code>[]</code></td>
+<td>可選意圖或服務範圍，供模型理解背景。</td>
+</tr>
+<tr>
+<td><code>importance</code></td>
+<td><code>number</code></td>
+<td>否</td>
+<td><code>1.0</code></td>
+<td>寫入 memory entry 的重要性權重。</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_8">標準輸入參數<a class="headerlink" href="#_8" title="Permanent link">&para;</a></h3>
 <table>
 <thead>
 <tr>

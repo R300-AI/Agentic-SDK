@@ -7,6 +7,8 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+from openai import OpenAI
+
 
 @dataclass
 class OpenAIChatResponse:
@@ -26,12 +28,26 @@ class OpenAIChatResponse:
 DeltaCallback = Callable[[str], None]
 
 
-def require_client(client, module_name: str):
-    if client is None:
-        raise ValueError(
-            f"{module_name} requires a user-injected OpenAI client via client=OpenAI(...)."
-        )
-    return client
+def require_model(model: str | None, module_name: str) -> str:
+    resolved = (model or "").strip()
+    if not resolved:
+        raise ValueError(f"{module_name} requires explicit model.")
+    return resolved
+
+
+def resolve_openai_client(module_name: str, *, api_key: str | None = None, base_url: str | None = None):
+    resolved_api_key = (api_key or "").strip()
+    resolved_base_url = (base_url or "").strip()
+    missing = []
+    if not resolved_api_key:
+        missing.append("api_key")
+    if not resolved_base_url:
+        missing.append("base_url")
+    if missing:
+        joined = "/".join(missing)
+        raise ValueError(f"{module_name} requires explicit {joined}.")
+
+    return OpenAI(api_key=resolved_api_key, base_url=resolved_base_url)
 
 
 def chat_json(

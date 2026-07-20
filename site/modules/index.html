@@ -1000,6 +1000,7 @@
 </table>
 <p>表 1：五個模組家族的標準模組名與主要工作對照表。</p>
 <p>表 1 使用的是文件標準名。讀完這張表之後，接下來最需要補上的就是家族之間實際交換的是哪一份資料，因此下一節會把共用的 <code>Entities</code> 物件整理出來。各頁也會列出標準名對應的既有類別名稱，以及標準輸入輸出格式，方便你把家族定義對回實際實作。</p>
+<p>需要模型的標準模組會各自持有 OpenAI-compatible 連線設定。也就是每個 <code>TextPerceive</code>、<code>NextStepPlan</code>、<code>GenerativeAction</code>、<code>StructuredAction</code>、<code>ResponseCheckReflect</code> 等模組都要明確提供 <code>api_key</code>、<code>base_url</code> 與 <code>model</code>；不使用全域預設模型，也不由 SDK 自動挑選模型。</p>
 <h2 id="entities">Entities<a class="headerlink" href="#entities" title="Permanent link">&para;</a></h2>
 <p><code>Entities</code> 是 workflow 內部節點交換資料時使用的核心標準物件。<code>Plan</code>、<code>Retrieve</code>、<code>Reflect</code> 這三個家族都讀寫同一份物件；真正會因模組型態而改變的是 <code>Perceive</code> 的輸入參數與 <code>Action</code> 的輸出參數，因此留在各自模組頁定義即可。這一頁只需要掌握一件事：<code>Perceive</code> 與 <code>Action</code> 會有各自不同的參數，而 <code>Plan</code>、<code>Retrieve</code>、<code>Reflect</code> 則透過同一份 <code>Entities</code> 在 workflow 內部交換資料。</p>
 <h2 id="_3">建議閱讀順序<a class="headerlink" href="#_3" title="Permanent link">&para;</a></h2>
