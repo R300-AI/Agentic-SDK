@@ -28,7 +28,7 @@ Vite dev server 已設定 `/v1/workflow` proxy 到 `http://localhost:8080`,跨�
 3. **點選節點開屬性面板**:
    - Plan 可選 `react` / `cot` / `plan_and_solve` 三模板,或自訂多行 prompt
    - Reflect 可切 `retry_plan`(失敗回 Plan 重試)/ `end`(失敗直接結束)
-    - Action 以單一 OpenAI-compatible client 設定模型連線
+    - Action 以 OpenAI-compatible `api_key` / `base_url` / `model` 設定模型連線
 4. **YAML 下載 / 載入**:Ctrl+S / 拖檔載入。檔案完全在本機。
 5. **跑一次 + 動畫**:輸入訊息按「跑一次」→ 五節點即時亮燈 → 對話框顯示最終回應
 

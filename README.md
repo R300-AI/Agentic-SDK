@@ -80,18 +80,38 @@ print(result.final_message)
 
 `PassThroughPerceive` 會先讀取使用者問題。`KeywordRetrieve` 會從 `items` 條目中比對 `keywords`，命中後取回對應的 `content`。`DirectAnswerAction` 則直接把前面取回的內容組成回應。`Workflow` 會把這些中間資料保留下來，讓後面的步驟可以直接使用。
 
-### 2. 把 OpenAI SDK client 注入需要模型的模組
+### 2. 用 OpenAI-compatible 端點接上模型模組
 
 第二個範例會把模型能力接進既有 workflow，並示範如何讓需要模型的模組用 OpenAI-compatible 設定自行初始化 client。
 
-以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。
+以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。Ollama 的 OpenAI compatibility 說明可參考官方文件：[https://docs.ollama.com/api/openai-compatibility](https://docs.ollama.com/api/openai-compatibility)。
 
 ```bash
 ollama pull llama3.2:1b
 ollama serve
 ```
 
-需要模型的模組會用 `api_key` 與 `base_url` 建立 OpenAI-compatible client，並在推論時使用指定的 `model`：
+在掛到 Agentic SDK workflow 之前，先用 OpenAI SDK 直接驗證 `llama3.2:1b` 可以透過 Ollama 的 OpenAI-compatible 端點跑通：
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="ollama",
+    base_url="http://localhost:11434/v1/",
+)
+
+completion = client.chat.completions.create(
+    model="llama3.2:1b",
+    messages=[
+        {"role": "user", "content": "請用一句繁體中文說明 TSiP 是什麼。"},
+    ],
+)
+
+print(completion.choices[0].message.content)
+```
+
+這一步只驗證模型端點與 OpenAI SDK 介面能正常工作。確認可以直接呼叫後，再把同一組 `api_key`、`base_url`、`model` 交給需要模型的 Workflow 模組；模組會自行建立 OpenAI-compatible client，並在推論時使用指定的 `model`：
 
 ```python
 # 公開介面範例

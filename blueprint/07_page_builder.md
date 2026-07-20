@@ -635,7 +635,7 @@ Builder 應讓使用者理解：
 V2 第一版至少支援：
 
 1. 最小三模組 Workflow
-2. OpenAI client 注入型 Workflow
+2. OpenAI-compatible 模型連線參數型 Workflow
 3. 自訂 Action 類別型 Workflow
 
 ## 右欄規格
@@ -694,7 +694,7 @@ V2 第一版至少支援：
 
 1. 若選了 `TextImagePerceive` 但沒有任何圖片輸入設計，應提示輸入契約不一致
 2. 若選了 `StructuredAction` 但沒有任何輸出欄位結構說明，應提示輸出契約不完整
-3. 若選了依賴模型的模組，但整份 workflow 沒有對應 client 注入前提，應標示為 run-blocking risk
+3. 若選了依賴模型的模組，但缺少對應的 `api_key`、`base_url` 或 `model`，應標示為 run-blocking risk
 
 ## 視覺方向
 
