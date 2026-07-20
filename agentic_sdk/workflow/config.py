@@ -21,10 +21,8 @@ YAML 格式範例::
                     knowledge_base_ref: default
       reflect:
                 type: ResponseCheckReflect
-      action:
-                type: GenerativeAction
-        params:
-          model: gpt-4o-mini
+        action:
+                                type: GenerativeAction
     gates:
       max_node_hops: 50
       max_revisit: 5
@@ -238,7 +236,7 @@ def _build_module_from_spec(
             "StructuredPerceive": StructuredPerceive,
             "TextImagePerceive": TextImagePerceive,
         }[t]
-        return perceive_cls(settings=settings, **spec.params)
+        return perceive_cls(**spec.params)
 
     if t == "NextStepPlan":
         from agentic_sdk.workflow.modules.plan import NextStepPlan
@@ -265,7 +263,7 @@ def _build_module_from_spec(
                         plan_params.setdefault("retrieve_description", kb_obj.description)
                     except (KeyError, FileNotFoundError, OSError, ValueError):
                         pass
-        return NextStepPlan(settings=settings, **plan_params)
+        return NextStepPlan(**plan_params)
 
     if t in {"KeywordRetrieve", "SemanticRetrieve", "HybridRetrieve"}:
         from agentic_sdk.capabilities import KnowledgeBaseRegistry
@@ -291,7 +289,7 @@ def _build_module_from_spec(
         from agentic_sdk.workflow.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
         params = dict(spec.params)
         if t == "ResponseCheckReflect":
-            return ResponseCheckReflect(settings=settings, **params)
+            return ResponseCheckReflect(**params)
         return EvidenceCheckReflect(**params)
 
     if t in {"DirectAnswerAction", "GenerativeAction", "StructuredAction"}:
@@ -300,8 +298,8 @@ def _build_module_from_spec(
         if t == "DirectAnswerAction":
             return DirectAnswerAction(**params)
         if t == "StructuredAction":
-            return StructuredAction(settings=settings, **params)
-        return GenerativeAction(settings=settings, **params)
+            return StructuredAction(**params)
+        return GenerativeAction(**params)
 
     # custom — 解析為 "module.path:ClassName" 或 "module.path.ClassName"
     if ":" in t:

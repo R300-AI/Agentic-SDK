@@ -54,7 +54,6 @@ _WORKFLOW_RING_OFFSETS: dict[str, int] = {}
 class WorkflowRunRequest(BaseModel):
     workflow_yaml: str = Field(..., description="完整的 WorkflowConfig YAML 字串")
     user_message: str = Field(..., min_length=0, description="使用者輸入訊息；純圖片請求可為空字串")
-    model: str | None = Field(default=None, description="保留欄位;目前由 YAML 決定")
     attachments: list[dict] | None = Field(
         default=None,
         description="多模態附件。每筆需含 kind/mime/data_url，可選 name",

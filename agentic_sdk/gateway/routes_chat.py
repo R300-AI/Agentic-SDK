@@ -80,8 +80,28 @@ def _extract_user_input(messages: list[dict]) -> tuple[str, list[Attachment]]:
     return "", []
 
 
-def _build_action(settings, model: str):
-    return GenerativeAction(settings=settings, model=model)
+class _ModelBoundCompletions:
+    def __init__(self, completions, model: str) -> None:
+        self._completions = completions
+        self._model = model
+
+    def create(self, **kwargs):
+        kwargs.setdefault("model", self._model)
+        return self._completions.create(**kwargs)
+
+
+class _ModelBoundChat:
+    def __init__(self, chat, model: str) -> None:
+        self.completions = _ModelBoundCompletions(chat.completions, model)
+
+
+class _ModelBoundClient:
+    def __init__(self, client, model: str) -> None:
+        self.chat = _ModelBoundChat(client.chat, model)
+
+
+def _build_action(client, model: str):
+    return GenerativeAction(client=_ModelBoundClient(client, model))
 
 
 @router.post(_ROUTE)
@@ -102,6 +122,7 @@ async def chat_completions(request: Request):
         user_message = "(image-only message)"
 
     settings = request.app.state.settings
+    openai_client = request.app.state.openai_client
     active_store = request.app.state.active_context
 
     logger.info(
@@ -121,7 +142,7 @@ async def chat_completions(request: Request):
     workflow = Workflow(
         settings=settings,
         active_store=active_store,
-        action=_build_action(settings, model),
+        action=_build_action(openai_client, model),
     )
 
     try:

@@ -1,5 +1,5 @@
 """啟動時從 Azure Key Vault 掃描 model-{id}-* secrets，
-並將模型池保存到 Settings，同時把第一個模型注入既有 OpenAI-compatible 設定。
+並將模型池保存到 Settings，同時把第一個模型的 endpoint/key 注入 OpenAI-compatible 設定。
 
 只在 KEY_VAULT_NAME 環境變數存在時執行（本機開發不需要）。
 使用 Managed Identity（DefaultAzureCredential），不需要任何額外憑證。
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 def load_first_model_from_keyvault(settings) -> None:
-    """掃描 Key Vault 中的 model-{id}-* secrets，建立模型池並注入預設模型。
+    """掃描 Key Vault 中的 model-{id}-* secrets，建立模型池並注入 endpoint/key。
 
     若 KEY_VAULT_NAME 未設定、azure-identity/azure-keyvault-secrets 未安裝，
     或 Key Vault 無法存取，則靜默略過（不中斷啟動）。
@@ -50,8 +50,6 @@ def load_first_model_from_keyvault(settings) -> None:
 
         settings.openai_api_base_url = first_model["base_url"]
         settings.openai_api_key = first_model["api_key"]
-        if first_model.get("model"):
-            settings.openai_model = first_model["model"]
 
         logger.info(
             "Key Vault 載入完成: models=%d base_url=%s model=%s",

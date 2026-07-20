@@ -31,7 +31,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
             module_overrides={
                 "perceive": TextPerceive(client=FoundryOpenAILikeClient()),
                 "plan": NextStepPlan(client=FoundryOpenAILikeClient(plan_sequence=["action"])),
-                "action": GenerativeAction(client=FoundryOpenAILikeClient(action_text="ok"), model="foundry-openai-like"),
+                "action": GenerativeAction(client=FoundryOpenAILikeClient(action_text="ok")),
                 "reflect": ResponseCheckReflect(client=FoundryOpenAILikeClient()),
             },
         )

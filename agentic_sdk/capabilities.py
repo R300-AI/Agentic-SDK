@@ -248,7 +248,6 @@ def _module_definitions() -> list[dict[str, Any]]:
             "label": "Next-step plan",
             "params_schema": {
                 "system_prompt": {"type": "string", "ui": {"control": "textarea"}},
-                "model": {"type": "string", "advanced": True},
             },
         },
         {
@@ -312,9 +311,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "label": "Generative action",
             "params_schema": {
                 "provider_ref": {"type": "ref", "ref_kind": "provider"},
-                "model": {"type": "string", "advanced": True},
                 "base_url": {"type": "string", "advanced": True},
-                "temperature": {"type": "number", "default": 0.2, "min": 0.0, "max": 2.0},
                 "secret_ref": {"type": "ref", "ref_kind": "secret"},
             },
         },
@@ -324,9 +321,7 @@ def _module_definitions() -> list[dict[str, Any]]:
             "label": "Structured action",
             "params_schema": {
                 "provider_ref": {"type": "ref", "ref_kind": "provider"},
-                "model": {"type": "string", "advanced": True},
                 "base_url": {"type": "string", "advanced": True},
-                "temperature": {"type": "number", "default": 0.2, "min": 0.0, "max": 2.0},
                 "secret_ref": {"type": "ref", "ref_kind": "secret"},
             },
         },

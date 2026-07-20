@@ -52,7 +52,6 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             action=ActionToReflectWrapper(
                 GenerativeAction(
                     client=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
-                    model="foundry-openai-like",
                 )
             ),
             reflect=ResponseCheckReflect(client=client),
@@ -80,7 +79,6 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             action=ActionToReflectWrapper(
                 StructuredAction(
                     client=FoundryOpenAILikeClient(action_text="建議優先考慮支撐型慢跑鞋。"),
-                    model="foundry-openai-like",
                 )
             ),
             reflect=EvidenceCheckReflect(),
@@ -107,7 +105,6 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             action=ActionToReflectWrapper(
                 GenerativeAction(
                     client=FoundryOpenAILikeClient(action_text="支撐型慢跑鞋適合足弓支撐需求。"),
-                    model="foundry-openai-like",
                 )
             ),
             reflect=EvidenceCheckReflect(),

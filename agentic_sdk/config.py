@@ -28,7 +28,7 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("OPENAI_API_KEY"),
     )
     openai_model: str = Field(
-        default="gpt-4o-mini",
+        default="",
         validation_alias=AliasChoices("OPENAI_MODEL"),
     )
     openai_healthcheck_timeout_sec: float = Field(default=5.0, gt=0)

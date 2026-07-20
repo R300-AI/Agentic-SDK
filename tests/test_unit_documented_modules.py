@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from agentic_sdk.capabilities import build_capability_document
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.knowledge import KnowledgeBase, KnowledgeEntry
 from agentic_sdk.memory import MemoryStore
@@ -130,7 +131,6 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                 state.payload["retrieved_snippet"] = "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"
                 module = module_cls(
                     client=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
-                    model="foundry-openai-like",
                 )
 
                 output = module(state)
@@ -140,6 +140,41 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                     "TSiP 是工研院主導的國產 AI 晶片落地藍圖。",
                     state.last_action_result["content"],
                 )
+
+    def test_llm_modules_do_not_send_per_module_model(self) -> None:
+        perceive_client = FoundryOpenAILikeClient()
+        TextPerceive(client=perceive_client)(WorkflowState(user_message="hello"))
+        self.assertNotIn("model", perceive_client.last_create_kwargs or {})
+
+        plan_client = FoundryOpenAILikeClient(plan_sequence=["action"])
+        plan_state = WorkflowState(user_message="hello")
+        plan_state.append(ContextEntry(type=ContextEntryType.PERCEIVED, content="intent=test", metadata={"intent": "test"}))
+        NextStepPlan(client=plan_client)(plan_state)
+        self.assertNotIn("model", plan_client.last_create_kwargs or {})
+
+        action_client = FoundryOpenAILikeClient(action_text="ok")
+        GenerativeAction(client=action_client)(WorkflowState(user_message="hello"))
+        self.assertNotIn("model", action_client.last_create_kwargs or {})
+
+        reflect_client = FoundryOpenAILikeClient()
+        reflect_state = WorkflowState(user_message="hello")
+        reflect_state.last_action_result = {"content": "ok"}
+        ResponseCheckReflect(client=reflect_client)(reflect_state)
+        self.assertNotIn("model", reflect_client.last_create_kwargs or {})
+
+    def test_llm_module_constructors_reject_model_parameter(self) -> None:
+        for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, StructuredAction, ResponseCheckReflect):
+            with self.subTest(module=module_cls.__name__):
+                with self.assertRaises(TypeError):
+                    module_cls(client=FoundryOpenAILikeClient(), model="gpt-4o")
+
+    def test_capabilities_do_not_expose_per_module_model_or_temperature(self) -> None:
+        document = build_capability_document()
+        for module in document["module_definitions"]:
+            params = module.get("params_schema", {})
+            with self.subTest(module=module["type"]):
+                self.assertNotIn("model", params)
+                self.assertNotIn("temperature", params)
 
     def test_response_check_reflect_and_evidence_check_reflect_can_pass(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")

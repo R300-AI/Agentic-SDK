@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 from typing import Protocol, runtime_checkable
 
-from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.workflow.attachments import Attachment
 from agentic_sdk.workflow.llm import require_client
 
@@ -38,13 +37,9 @@ class DefaultVisionQueryBuilder:
 
     def __init__(
         self,
-        settings: Settings | None = None,
         client=None,
-        model: str | None = None,
         max_keywords_chars: int = 60,
     ) -> None:
-        self._settings = settings or get_settings()
-        self._model = model or self._settings.openai_model
         self._max_chars = max_keywords_chars
         self._client = require_client(client, self.__class__.__name__)
 
@@ -59,7 +54,6 @@ class DefaultVisionQueryBuilder:
 
         try:
             completion = self._client.chat.completions.create(
-                model=self._model,
                 messages=[
                     {"role": "system", "content": _VISION_SYSTEM_PROMPT},
                     {"role": "user", "content": user_parts},

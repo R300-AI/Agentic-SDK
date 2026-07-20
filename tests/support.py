@@ -28,6 +28,7 @@ class FoundryOpenAILikeClient:
         self._action_text = action_text
         self._plan_index = 0
         self._model_id = model_id
+        self.last_create_kwargs: dict | None = None
         self.chat = _FoundryChatNamespace(self)
         self.models = _FoundryModelNamespace(self)
 
@@ -77,6 +78,7 @@ class _FoundryCompletionsNamespace:
         self._owner = owner
 
     def create(self, **kwargs):
+        self._owner.last_create_kwargs = dict(kwargs)
         messages = kwargs.get("messages", [])
         system = next((str(message.get("content", "")) for message in messages if message.get("role") == "system"), "")
         user = next((str(message.get("content", "")) for message in messages if message.get("role") == "user"), "")

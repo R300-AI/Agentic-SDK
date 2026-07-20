@@ -26,6 +26,7 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
 
     def test_readme_example_two_path(self) -> None:
+        openai_client = FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")
         workflow = Workflow(
             perceive=PassThroughPerceive(),
             retrieve=KeywordRetrieve(
@@ -34,8 +35,7 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
                 ]
             ),
             action=GenerativeAction(
-                client=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
-                model="foundry-openai-like",
+                client=openai_client,
             ),
         )
 

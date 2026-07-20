@@ -87,7 +87,7 @@ print(result.final_message)
 以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。
 
 ```bash
-ollama pull llama3.1:8b
+ollama pull llama3.2:1b
 ollama serve
 ```
 

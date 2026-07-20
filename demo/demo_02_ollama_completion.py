@@ -10,6 +10,7 @@ from openai import OpenAI
 from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
+
 openai_client = OpenAI(
     api_key="not-needed",
     base_url="http://localhost:11434/v1",

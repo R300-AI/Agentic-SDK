@@ -11,7 +11,7 @@ from typing import Callable
 @dataclass
 class OpenAIChatResponse:
     content: str
-    model: str
+    model: str | None
     input_tokens: int | None = None
     output_tokens: int | None = None
 
@@ -37,20 +37,23 @@ def require_client(client, module_name: str):
 def chat_json(
     client,
     *,
-    model: str,
+    model: str | None = None,
     system: str,
     user: str,
-    temperature: float = 0.0,
+    temperature: float | None = None,
 ) -> OpenAIChatResponse:
-    completion = client.chat.completions.create(
-        model=model,
-        messages=[
+    kwargs: dict = {
+        "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        temperature=temperature,
-        response_format={"type": "json_object"},
-    )
+        "response_format": {"type": "json_object"},
+    }
+    if model:
+        kwargs["model"] = model
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    completion = client.chat.completions.create(**kwargs)
     content = completion.choices[0].message.content or ""
     usage = getattr(completion, "usage", None)
     return OpenAIChatResponse(
@@ -64,23 +67,26 @@ def chat_json(
 def chat_stream_json(
     client,
     *,
-    model: str,
+    model: str | None = None,
     system: str,
     user: str,
-    temperature: float = 0.0,
+    temperature: float | None = None,
     on_delta: DeltaCallback | None = None,
     idle_timeout_sec: float = 30.0,
 ) -> OpenAIChatResponse:
-    stream = client.chat.completions.create(
-        model=model,
-        messages=[
+    kwargs: dict = {
+        "messages": [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
         ],
-        temperature=temperature,
-        stream=True,
-        response_format={"type": "json_object"},
-    )
+        "stream": True,
+        "response_format": {"type": "json_object"},
+    }
+    if model:
+        kwargs["model"] = model
+    if temperature is not None:
+        kwargs["temperature"] = temperature
+    stream = client.chat.completions.create(**kwargs)
     chunks: list[str] = []
     resolved_model = model
     last_token_at = time.monotonic()

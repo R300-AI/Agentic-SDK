@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 
-from agentic_sdk.config import Settings, get_settings
 from agentic_sdk.context import ContextEntry, ContextEntryType
 from agentic_sdk.memory import MemoryEntry
 from agentic_sdk.workflow.llm import chat_json, require_client
@@ -36,16 +35,12 @@ class TextPerceive:
         welcome_message: str = "",
         options: list[dict] | None = None,
         importance: float = 1.0,
-        settings: Settings | None = None,
         client=None,
-        model: str | None = None,
     ) -> None:
-        self._settings = settings or get_settings()
         self._welcome_message = welcome_message
         self._options = options or []
         self._importance = importance
         self._client = require_client(client, self.__class__.__name__)
-        self._model = model or self._settings.openai_model
 
     @property
     def welcome_message(self) -> str:
@@ -64,7 +59,6 @@ class TextPerceive:
 
         response = chat_json(
             self._client,
-            model=self._model,
             system=_PERCEIVE_SYSTEM,
             user=user_prompt,
         )
