@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from dataclasses import asdict
 
-from agentic_sdk.workflow import Workflow
-from agentic_sdk.workflow.attachments import Attachment
+from agentic_sdk import Workflow
+from agentic_sdk.core import Attachment
 
 from playground_v2.models import RunnerSceneProfile
 from playground_v2.services.source_parser import parse_supported_source
@@ -125,4 +125,12 @@ def execute_python_source(
 
 
 def _to_attachment(raw: dict) -> Attachment:
-    return Attachment.from_dict(raw)
+    media_type = raw["media_type"] if "media_type" in raw else raw["mime"]
+    content = raw["content"] if "content" in raw else raw["data_url"]
+    return Attachment(
+        kind=str(raw["kind"]),
+        content=content,
+        media_type=str(media_type),
+        name=raw.get("name"),
+        metadata=dict(raw.get("metadata") or {}),
+    )

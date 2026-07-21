@@ -4,8 +4,8 @@ import json
 from dataclasses import dataclass
 from types import SimpleNamespace
 
-from agentic_sdk.workflow.attachments import Attachment
-from agentic_sdk.workflow.llm import OpenAIChatResponse
+from agentic_sdk.core import Attachment
+from agentic_sdk.llm import OpenAIChatResponse
 
 
 class FoundryOpenAILikeClient:

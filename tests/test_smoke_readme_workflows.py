@@ -33,7 +33,7 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
 
     def test_readme_example_two_path(self) -> None:
         openai_client = FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")
-        with patch("agentic_sdk.workflow.llm.OpenAI", return_value=openai_client):
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=openai_client):
             workflow = Workflow(
                 perceive=PassThroughPerceive(),
                 retrieve=KeywordRetrieve(

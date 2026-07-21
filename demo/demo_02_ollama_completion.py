@@ -1,4 +1,4 @@
-import os
+﻿import os
 import sys
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,6 +25,8 @@ workflow = Workflow(
         api_key="ollama",
         base_url="http://localhost:11434/v1/",
         model=ollama_model,
+        temperature=0,
+        system_prompt="只根據 retrieved_context 回答。若 retrieved_context 有內容，請直接輸出其重點，不要加入任何外部知識或推測。",
     ),
 )
 

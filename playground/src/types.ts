@@ -57,20 +57,12 @@ export interface ModelPreset {
 
 export const MODEL_PRESETS: ModelPreset[] = [
   {
-    value: "agentic-sdk-gpt-5.4",
-    label: "GPT-5.4",
+    value: "",
+    label: "未設定模型",
     platform: "OpenAI-compatible Endpoint",
     compute_target: "cloud",
-    endpoint: "https://api.openai.com/v1",
-    deployment: "agentic-sdk-gpt-5.4",
-  },
-  {
-    value: "gemma-3-4b",
-    label: "Gemma-3-4b",
-    platform: "AMD Ryzen AI",
-    compute_target: "soc_edge",
-    endpoint: "http://localhost:11434",
-    deployment: "gemma-3-4b",
+    endpoint: "",
+    deployment: "",
   },
 ];
 

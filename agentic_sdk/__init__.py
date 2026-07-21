@@ -1,16 +1,12 @@
-"""Agentic SDK — edge cluster orchestration protocol with OpenAI-compatible facade."""
+﻿"""Clean core package for Agentic SDK v2."""
 
-__version__ = "0.0.1"
-
-from agentic_sdk.config import Settings, get_settings
-from agentic_sdk.capabilities import (
-    KnowledgeBaseRegistry,
-    RetrieveStrategyRegistry,
-    build_capability_document,
-)
-from agentic_sdk.workflow import (
+from agentic_sdk.config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
+from agentic_sdk.core import (
+    Attachment,
+    ContextEntry,
+    ContextEntryType,
+    Entities,
     Gates,
-    InContextMemory,
     Module,
     ModuleOutput,
     Workflow,
@@ -18,6 +14,7 @@ from agentic_sdk.workflow import (
     WorkflowResult,
     WorkflowState,
 )
+from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore
 from agentic_sdk.modules import (
     DirectAnswerAction,
     EvidenceCheckReflect,
@@ -34,32 +31,40 @@ from agentic_sdk.modules import (
     TextPerceive,
 )
 
+__version__ = "0.0.0-v2"
+
 __all__ = [
-    "Settings",
-    "get_settings",
-    "Workflow",
-    "WorkflowState",
-    "InContextMemory",
-    "WorkflowResult",
-    "WorkflowAborted",
+    "Attachment",
+    "ContextEntry",
+    "ContextEntryType",
+    "DirectAnswerAction",
+    "Entities",
+    "EvidenceCheckReflect",
+    "GateConfig",
+    "Gates",
+    "GenerativeAction",
+    "HybridRetrieve",
+    "InMemoryStore",
+    "KeywordRetrieve",
+    "MemoryEntry",
+    "MemorySearchResult",
+    "MemoryStore",
     "Module",
     "ModuleOutput",
-    "Gates",
+    "ModuleSpec",
+    "NextStepPlan",
     "PassThroughPerceive",
-    "TextPerceive",
+    "ResponseCheckReflect",
+    "SemanticRetrieve",
+    "StructuredAction",
     "StructuredPerceive",
     "TextImagePerceive",
-    "NextStepPlan",
-    "SemanticRetrieve",
-    "HybridRetrieve",
-    "GenerativeAction",
-    "StructuredAction",
-    "ResponseCheckReflect",
-    "EvidenceCheckReflect",
-    "KeywordRetrieve",
-    "DirectAnswerAction",
-    "KnowledgeBaseRegistry",
-    "RetrieveStrategyRegistry",
-    "build_capability_document",
+    "TextPerceive",
+    "Workflow",
+    "WorkflowAborted",
+    "WorkflowConfig",
+    "WorkflowResult",
+    "WorkflowState",
+    "build_workflow",
     "__version__",
 ]

@@ -1,3 +1,4 @@
-from agentic_sdk.memory.store import MemoryEntry, MemoryStore, ScoredMemory
+﻿from agentic_sdk.memory.in_memory import InMemoryStore
+from agentic_sdk.memory.protocol import MemoryEntry, MemorySearchResult, MemoryStore
 
-__all__ = ["MemoryEntry", "MemoryStore", "ScoredMemory"]
+__all__ = ["InMemoryStore", "MemoryEntry", "MemorySearchResult", "MemoryStore"]

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import unittest
 from unittest.mock import patch
 
@@ -5,12 +7,14 @@ from agentic_sdk import (
     EvidenceCheckReflect,
     GenerativeAction,
     HybridRetrieve,
+    ModuleSpec,
     NextStepPlan,
     PassThroughPerceive,
     ResponseCheckReflect,
     TextPerceive,
+    WorkflowConfig,
+    build_workflow,
 )
-from agentic_sdk.workflow import ModuleSpec, Workflow, WorkflowConfig
 
 from support import FoundryOpenAILikeClient
 
@@ -25,19 +29,19 @@ def _llm_params() -> dict[str, str]:
 
 
 class WorkflowCanonicalConfigTests(unittest.TestCase):
-    def test_workflow_builds_from_canonical_node_names_with_explicit_llm_modules(self) -> None:
+    def test_workflow_builds_from_clean_core_config_with_overrides(self) -> None:
         config = WorkflowConfig(
             modules={
-                "perceive": ModuleSpec(type="TextPerceive"),
-                "plan": ModuleSpec(type="NextStepPlan"),
-                "retrieve": ModuleSpec(type="HybridRetrieve"),
-                "action": ModuleSpec(type="GenerativeAction"),
-                "reflect": ModuleSpec(type="ResponseCheckReflect"),
+                "perceive": ModuleSpec(kind="text"),
+                "plan": ModuleSpec(kind="next_step"),
+                "retrieve": ModuleSpec(kind="hybrid"),
+                "action": ModuleSpec(kind="generative"),
+                "reflect": ModuleSpec(kind="response_check"),
             }
         )
 
         with patch(
-            "agentic_sdk.workflow.llm.OpenAI",
+            "agentic_sdk.llm.openai_compatible.OpenAI",
             side_effect=[
                 FoundryOpenAILikeClient(),
                 FoundryOpenAILikeClient(plan_sequence=["action"]),
@@ -45,7 +49,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
                 FoundryOpenAILikeClient(),
             ],
         ):
-            workflow = Workflow.from_config(
+            workflow = build_workflow(
                 config,
                 module_overrides={
                     "perceive": TextPerceive(**_llm_params()),
@@ -62,14 +66,10 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
         self.assertIsInstance(workflow.modules["reflect"], ResponseCheckReflect)
 
     def test_workflow_config_with_llm_modules_requires_explicit_model_configuration(self) -> None:
-        config = WorkflowConfig(
-            modules={
-                "perceive": ModuleSpec(type="TextPerceive"),
-            }
-        )
+        config = WorkflowConfig(modules={"perceive": ModuleSpec(kind="text")})
 
         with self.assertRaisesRegex(ValueError, "explicit model"):
-            Workflow.from_config(config)
+            build_workflow(config)
 
     def test_top_level_exports_expose_canonical_names(self) -> None:
         self.assertTrue(issubclass(PassThroughPerceive, object))

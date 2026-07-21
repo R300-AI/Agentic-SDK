@@ -185,3 +185,7 @@ print(result.final_message)
 
 1. 瀏覽器介面操作流程：[demo/README.md](demo/README.md)。
 2. 設計藍圖與分階段交付內容：[sdk_blueprint/README.md](sdk_blueprint/README.md)。
+3. 試用Playground_V2
+```
+python -m flask --app playground_v2.app run --debug --host 127.0.0.1 --port 5050
+```

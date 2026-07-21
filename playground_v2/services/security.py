@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from flask import Request
+import os
 
-from agentic_sdk.config import get_settings
+from flask import Request
 
 
 def is_allowed_origin(request: Request) -> bool:
@@ -11,5 +11,10 @@ def is_allowed_origin(request: Request) -> bool:
         return True
 
     host_origin = request.host_url.rstrip("/")
-    allowed = {host_origin, *get_settings().cors_origins_list}
+    allowed = {host_origin, *_cors_origins_list()}
     return origin.rstrip("/") in allowed
+
+
+def _cors_origins_list() -> list[str]:
+    raw = os.environ.get("AGENTIC_SDK_CORS_ORIGINS", "")
+    return [origin.strip().rstrip("/") for origin in raw.split(",") if origin.strip()]

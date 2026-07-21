@@ -41,7 +41,7 @@ def test_parse_readme_starter_template_hints():
 
 
 def test_execute_marks_unsupported_source_without_running_arbitrary_code():
-    python_source = """from agentic_sdk.workflow import Workflow
+    python_source = """from agentic_sdk import Workflow
 
 exec("raise RuntimeError('should not run')")
 workflow = Workflow()
