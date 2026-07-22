@@ -1,7 +1,7 @@
 /**
  * playground/scripts/start.mjs
  *
- * 一鍵啟動 Gateway + Vite dev server。跨平台（Windows / macOS / Linux）。
+ * 一鍵啟動 Playground V1 dev gateway + Vite dev server。跨平台（Windows / macOS / Linux）。
  * 自動偵測 .venv 的 Python 路徑；找不到時退回系統 `python` / `python3`。
  */
 
@@ -56,8 +56,8 @@ function resolvePython() {
 
 const pythonExe = resolvePython();
 
-// ── Gateway（cwd = 專案根，確保 pydantic_settings 能讀到 .env）──────
-const gw = spawn(pythonExe, ["-m", "agentic_sdk.gateway", "--host", "127.0.0.1", "--port", "8080"], {
+// ── Playground V1 dev gateway（cwd = 專案根，避免把 Gateway 放回 SDK core）──────
+const gw = spawn(pythonExe, ["-m", "playground_v1_gateway", "--host", "127.0.0.1", "--port", "8080"], {
   cwd: projectRoot,
   stdio: "pipe",
   env: { ...process.env, PYTHONUNBUFFERED: "1" },
@@ -85,7 +85,7 @@ async function waitForGateway(timeoutMs = 30000) {
 async function startVite() {
   const ready = await waitForGateway();
   if (!ready) {
-    process.stderr.write(`[gateway] Gateway 未於 30 秒內回應 /healthz，仍啟動 Demo UI。\n`);
+    process.stderr.write(`[gateway] Playground V1 dev gateway 未於 30 秒內回應 /healthz，仍啟動 Demo UI。\n`);
   }
 
   // ── Vite（以 npm 自帶的 node 執行，不依賴全域 PATH）────────────────

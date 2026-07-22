@@ -9,8 +9,8 @@
 需求:Node 22+(本專案不要求全機 install,可用 fnm / nvm-windows 隔離)。
 
 ```powershell
-# 1. 啟 Gateway(另一個 terminal)
-.\.venv\Scripts\python.exe -m agentic_sdk.gateway --host 127.0.0.1 --port 8080
+# 1. 啟 Playground V1 dev gateway(另一個 terminal)
+.\.venv\Scripts\python.exe -m playground_v1_gateway --host 127.0.0.1 --port 8080
 
 # 2. 啟編輯器(此目錄)
 cd playground
@@ -19,7 +19,7 @@ npm run dev
 # 開 http://localhost:5173
 ```
 
-Vite dev server 已設定 `/v1/workflow` proxy 到 `http://localhost:8080`,跨域不必處理。
+Vite dev server 已設定 `/v1/*` 與 `/api/me/*` proxy 到 `http://localhost:8080`,跨域不必處理。
 
 ## 你能做什麼
 
@@ -44,7 +44,7 @@ Vite dev server 已設定 `/v1/workflow` proxy 到 `http://localhost:8080`,跨�
 ```
 playground/
 ├── package.json
-├── vite.config.ts                 # /v1/workflow proxy → :8080
+├── vite.config.ts                 # /v1/* + /api/me/* proxy → :8080
 ├── index.html
 └── src/
     ├── main.tsx                   # entry
