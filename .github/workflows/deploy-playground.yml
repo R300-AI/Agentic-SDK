@@ -273,7 +273,7 @@ jobs:
                grep -q "tool-call-panel" result-surface.js && \
                curl --fail --silent --show-error --location "$CSS_URL" | tee app.css | grep -q "api-contract-editor"; then
               COOKIE_JAR="$(mktemp)"
-              curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
+              curl --fail --silent --show-error --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
                 --request POST "$URL/start/anonymous" >/dev/null
               printf '{"step":"output_format","choice":"interactive"}' > builder-choice.json
               curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
