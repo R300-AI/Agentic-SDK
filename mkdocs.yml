@@ -45,7 +45,7 @@ nav:
     - ICOPE 六力評估助手: use-cases/icope-six-capacity-assistant.md
   - Deploy:
     - GitHub CI/CD 到 Azure App Service: github_cicd_workflow.md
-    - AI Hub 到 Playground 導航: aihub_playground_navigation.md
+    - AI Hub Playground API: aihub_playground_api.md
 
 markdown_extensions:
   - admonition
