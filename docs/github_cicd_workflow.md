@@ -16,7 +16,7 @@
 | `AZURE_WEBAPP_NAME` | App Service name，必須全域唯一。 |
 | `KEY_VAULT_NAME` | Key Vault name，必須全域唯一。 |
 
-AI Hub host base URL 記錄在 repository 根目錄的 `.env`，workflow 會從 `.env` 讀取 `AI_HUB_BASE_URL` 並同步到 App Service，不需要在 GitHub variables 另行設定。`PLAYGROUND_SECRET_KEY` 會由 workflow 讀取既有 App Service setting；如果尚未存在，部署時會在 Azure 端產生一次並寫入 App Service。模型 endpoint 和 API key 建議放在 Key Vault，由 App Service 的 managed identity 在 runtime 讀取。
+AI Hub host base URL 與 Playground origin 記錄在 repository 根目錄的 `.env`，workflow 會從 `.env` 讀取 `AI_HUB_BASE_URL` 並同步到 App Service，不需要在 GitHub variables 另行設定。`PLAYGROUND_SECRET_KEY` 會由 workflow 讀取既有 App Service setting；如果尚未存在，部署時會在 Azure 端產生一次並寫入 App Service。模型 endpoint 和 API key 建議放在 Key Vault，由 App Service 的 managed identity 在 runtime 讀取。
 
 ## Azure OIDC 前置設定
 

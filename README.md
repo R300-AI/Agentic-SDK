@@ -195,6 +195,7 @@ AI Hub 登入模式會呼叫 AI Hub 提供的帳密驗證 API：`POST /api/playg
 
 ```bash
 AI_HUB_BASE_URL=https://ai-hub-portal.azurewebsites.net
+AI_HUB_PLAYGROUND_ORIGIN=https://agentic-sdk-playground.azurewebsites.net
 ```
 
 驗證成功且回傳 `{"valid": true}` 時，Playground 才會進入已登入模式；AI Hub 回傳 invalid，或 API 暫時不可用時，都會拒絕登入。若 AI Hub host 之後更換，只需要修改 [.env](.env) 的 `AI_HUB_BASE_URL`。

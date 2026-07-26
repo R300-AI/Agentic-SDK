@@ -15,13 +15,17 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def test_create_app_loads_ai_hub_url_from_project_env(monkeypatch):
     monkeypatch.delenv("AI_HUB_BASE_URL", raising=False)
     monkeypatch.delenv("AIHUB_BASE_URL", raising=False)
+    monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
     expected_base_url = dotenv_values(REPO_ROOT / ".env").get("AI_HUB_BASE_URL")
+    expected_origin = dotenv_values(REPO_ROOT / ".env").get("AI_HUB_PLAYGROUND_ORIGIN")
 
     assert expected_base_url
+    assert expected_origin
 
     create_app()
 
     assert os.environ["AI_HUB_BASE_URL"] == expected_base_url
+    assert os.environ["AI_HUB_PLAYGROUND_ORIGIN"] == expected_origin
 
 
 def test_verify_credentials_calls_ai_hub_auth_api(monkeypatch):
@@ -32,6 +36,7 @@ def test_verify_credentials_calls_ai_hub_auth_api(monkeypatch):
         return httpx.Response(200, json={"valid": True})
 
     monkeypatch.setenv("AI_HUB_BASE_URL", "https://aihub.example/")
+    monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
     monkeypatch.setenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", "1.25")
     monkeypatch.setattr(aihub_client.httpx, "post", fake_post)
 
