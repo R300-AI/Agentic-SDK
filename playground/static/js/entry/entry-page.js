@@ -7,7 +7,10 @@ const loginButton = document.querySelector("[data-login-submit]");
 const loginStatus = document.querySelector("[data-login-status]");
 
 loginForm?.addEventListener("submit", () => {
-	loginForm.querySelectorAll("input, button").forEach((control) => {
+	loginForm.querySelectorAll("input").forEach((control) => {
+		control.readOnly = true;
+	});
+	loginForm.querySelectorAll("button").forEach((control) => {
 		control.disabled = true;
 	});
 	if (loginButton) {

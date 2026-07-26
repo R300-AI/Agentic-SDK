@@ -692,6 +692,8 @@ def test_static_assets_are_served():
     entry_js_response = client.get("/static/js/entry/entry-page.js")
     assert entry_js_response.status_code == 200
     assert "正在登入".encode("utf-8") in entry_js_response.data
+    assert b"control.readOnly = true" in entry_js_response.data
+    assert b'querySelectorAll("input, button")' not in entry_js_response.data
     assert module_response.status_code == 200
     assert b"/playground/run/profile" in module_response.data
     assert dialog_response.status_code == 200
