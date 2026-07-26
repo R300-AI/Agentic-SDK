@@ -184,6 +184,75 @@ def test_login_uses_ai_hub_verification_before_entering_authenticated_mode(monke
     assert seen == [("creator", "secret", "https://playground.example/")]
 
 
+def test_aihub_navigation_builder_verifies_credentials_and_enters_builder(monkeypatch):
+    seen = []
+
+    def fake_verify(username, password, *, origin=None):
+        seen.append((username, password, origin))
+        return True
+
+    monkeypatch.setattr(entry_routes, "verify_credentials", fake_verify)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/builder",
+            base_url="https://playground.example",
+            data={"username": "creator", "password": "secret"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/playground/builder")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "manual_auth"
+            assert session["account_context_present"] is True
+            assert session["ai_hub_credential_ticket"]
+            assert "agent_id" not in session
+
+    assert seen == [("creator", "secret", "https://playground.example/")]
+
+
+def test_aihub_navigation_runner_verifies_and_loads_agent(monkeypatch):
+    seen_verify = []
+    seen_load = []
+
+    def fake_verify(username, password, *, origin=None):
+        seen_verify.append((username, password, origin))
+        return True
+
+    def fake_load_config(agent_id, *, credentials=None, origin=None):
+        seen_load.append({"agent_id": agent_id, "credentials": credentials, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Agent One", "python_source": "print('loaded')"}
+
+    monkeypatch.setattr(entry_routes, "verify_credentials", fake_verify)
+    monkeypatch.setattr(entry_routes, "load_config", fake_load_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/runner",
+            base_url="https://playground.example",
+            data={"username": "creator", "password": "secret", "agent_id": "agent-1"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/playground/run")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_editable"
+            assert session["account_context_present"] is True
+            assert session["agent_id"] == "agent-1"
+            assert session["agent_name"] == "Agent One"
+            assert session["python_source"] == "print('loaded')"
+            assert session["source_origin"] == "aihub_loaded"
+            assert session["ai_hub_credential_ticket"]
+
+    assert seen_verify == [("creator", "secret", "https://playground.example/")]
+    assert seen_load[0]["agent_id"] == "agent-1"
+    assert seen_load[0]["origin"] == "https://playground.example/"
+    assert seen_load[0]["credentials"].username == "creator"
+    assert seen_load[0]["credentials"].password == "secret"
+
+
 def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     seen = []

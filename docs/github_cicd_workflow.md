@@ -45,7 +45,8 @@ python -m playground.main
 6. 在 GitHub Actions runner 上安裝 Python dependencies 到 `.python_packages/lib/site-packages`，並用 FastAPI TestClient smoke test `/healthz`、`/playground`、`/playground/builder`。
 7. 打包 `agentic_sdk/`、`playground/`、`.python_packages/`、`.env`、`requirements.txt` 為 `deploy.zip`。
 8. 使用 `azure/webapps-deploy` 部署到 App Service。
-9. 對 `/playground`、`/playground/builder`、Runner 靜態 JS、`/static/css/app.css` 與 Builder 匯出的 source 執行 smoke check，確認公開站台回傳正式 Playground、Builder Q4 顯示 `純文字回覆` / `可互動元件`、互動 API 區塊包含 `回覆風格與規範`、`可互動元件 API`、`功能說明`，Runner 仍載入 ToolCallPanel 前端支援，匯出的互動 workflow 使用 `ToolCallAction` 且不含 `StructuredAction`。
+9. 部署 zip 後 restart App Service，確保 Python worker 載入新的 route map。
+10. 對 `/playground`、`/playground/agents`、`/playground/builder`、Runner 靜態 JS、`/static/css/app.css` 與 Builder 匯出的 source 執行 smoke check，確認公開站台回傳正式 Playground、AI Hub Agent 導航 route 存在、Builder Q4 顯示 `純文字回覆` / `可互動元件`、互動 API 區塊包含 `回覆風格與規範`、`可互動元件 API`、`功能說明`，Runner 仍載入 ToolCallPanel 前端支援，匯出的互動 workflow 使用 `ToolCallAction` 且不含 `StructuredAction`。
 
 部署完成後，正式入口為：
 
