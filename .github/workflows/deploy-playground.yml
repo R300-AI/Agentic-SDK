@@ -126,8 +126,8 @@ jobs:
               --name "${{ vars.AZURE_WEBAPP_NAME }}" \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --settings \
-                PORT=80 \
-                WEBSITES_PORT=80 \
+                PORT=8000 \
+                WEBSITES_PORT=8000 \
                 SCM_DO_BUILD_DURING_DEPLOYMENT=false \
                 ENABLE_ORYX_BUILD=false \
                 PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot \
