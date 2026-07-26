@@ -21,6 +21,7 @@ Then open:
 - Task-page Runner shell
 - Lightweight page-specific JavaScript modules
 - Shared visual language across the three pages
-- Python source preview as the only canonical saved artifact placeholder
+- Python source preview/export as the canonical artifact
+- AI Hub login verification and Runner save-back through the AI Hub API
 
-Gateway execution, structured result payloads, AI Hub integration, and SDK multimodal/structured modules are intentionally left for later implementation slices.
+Gateway execution, full AI Hub config load, arbitrary Python execution, and SDK multimodal/structured modules are intentionally left for later implementation slices.

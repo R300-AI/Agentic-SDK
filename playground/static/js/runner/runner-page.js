@@ -315,18 +315,30 @@ resultThread?.addEventListener("runner:tool-call-submit", async (event) => {
 });
 
 saveButton?.addEventListener("click", async () => {
+	if (saveButton) {
+		saveButton.disabled = true;
+	}
 	if (runStatus) {
 		runStatus.textContent = "正在儲存...";
 	}
 	if (saveStatus) {
 		saveStatus.textContent = "儲存中...";
 	}
-	const result = await postJson("/playground/aihub/config/save");
+	let result;
+	try {
+		result = await postJson("/playground/aihub/config/save");
+	} catch (error) {
+		result = { saved: false, error: error.message || "儲存失敗。" };
+	}
+	const message = result.saved ? "已儲存。" : (result.error || "儲存失敗。");
 	if (runStatus) {
-		runStatus.textContent = result.saved ? "已儲存。" : "儲存失敗。";
+		runStatus.textContent = message;
 	}
 	if (saveStatus) {
 		saveStatus.textContent = result.saved ? "已儲存" : "儲存失敗";
 	}
-	showSavePanel(savePanel, result.saved ? "已儲存。" : "儲存失敗。");
+	showSavePanel(savePanel, message);
+	if (saveButton) {
+		saveButton.disabled = false;
+	}
 });

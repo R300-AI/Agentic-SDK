@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, session
 
-from playground.services.aihub_client import load_config, save_config, verify_credentials
+from playground.services.aihub_client import credentials_for_ticket, load_config, save_config, verify_credentials
 from playground.services.security import is_allowed_origin
 
 
@@ -38,10 +38,23 @@ def save_aihub_config():
         return jsonify({"saved": False, "error": "Origin is not allowed for AI Hub config access."}), 403
 
     payload = request.get_json(silent=True) or {}
-    if session.get("mode") not in {"anonymous", "manual_auth", "aihub_editable"}:
+    if session.get("mode") not in {"manual_auth", "aihub_editable"}:
         return jsonify({"saved": False, "error": "Current mode cannot save to AI Hub."}), 403
 
+    credentials = credentials_for_ticket(session.get("ai_hub_credential_ticket"))
+    if not credentials:
+        return jsonify({"saved": False, "error": "AI Hub login is required before saving."}), 401
+
+    agent_id = payload.get("agent_id") or session.get("agent_id")
+    if not agent_id:
+        return jsonify({"saved": False, "error": "Missing AI Hub agent id."}), 400
+
     python_source = payload.get("python_source") or session.get("python_source")
-    result = save_config(payload.get("agent_id") or session.get("agent_id", "sample-agent"), python_source)
-    session["last_aihub_save"] = result
-    return jsonify(result)
+    if not python_source:
+        return jsonify({"saved": False, "error": "No Python source is available to save."}), 400
+
+    result = save_config(agent_id, python_source, credentials=credentials, origin=request.host_url)
+    if result.get("saved"):
+        session["last_aihub_save"] = result
+    status_code = 200 if result.get("saved") else 502
+    return jsonify(result), status_code

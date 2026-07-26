@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from playground.models import ModeContext
-from playground.services.aihub_client import verify_credentials
+from playground.services.aihub_client import issue_credential_ticket, verify_credentials
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source
 
@@ -39,8 +39,9 @@ def start_anonymous():
 def login():
     username = request.form.get("username", "")
     password = request.form.get("password", "")
+    normalized_username = username.strip()
 
-    if not verify_credentials(username, password, origin=request.host_url):
+    if not verify_credentials(normalized_username, password, origin=request.host_url):
         return render_template(
             "entry.html",
             mode_context=ModeContext(),
@@ -50,6 +51,7 @@ def login():
     session.clear()
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
+    session["ai_hub_credential_ticket"] = issue_credential_ticket(normalized_username, password)
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
     return redirect(url_for("builder.builder"))
