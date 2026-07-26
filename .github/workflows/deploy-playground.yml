@@ -291,7 +291,7 @@ jobs:
               grep -q "tools=\[" exported-source.py
               grep -q "submit_api_1" exported-source.py
               grep -q "回覆風格與規範：" exported-source.py
-              grep -q "互動元件功能說明：" exported-source.py
+              grep -q "互動元件觸發條件：" exported-source.py
               grep -q "API 提交設定：POST https://api.example.com/resource" exported-source.py
               ! grep -q "StructuredAction" exported-source.py
               echo "Playground is live at $URL"
