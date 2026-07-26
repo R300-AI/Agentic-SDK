@@ -15,7 +15,7 @@
 | [Perceive](../modules/perceive-modules.md) | TextImagePerceive | TextPerceive | StructuredPerceive |
 | [Plan](../modules/plan-modules.md) | NextStepPlan | NextStepPlan | NextStepPlan |
 | [Retrieve](../modules/retrieve-modules.md) | HybridRetrieve | SemanticRetrieve | HybridRetrieve |
-| [Action](../modules/action-modules.md) | StructuredAction | GenerativeAction | StructuredAction |
+| [Action](../modules/action-modules.md) | GenerativeAction | GenerativeAction | GenerativeAction |
 | [Reflect](../modules/reflect-modules.md) | EvidenceCheckReflect | ResponseCheckReflect | EvidenceCheckReflect |
 
 表 1：三個 use case 的五大模組家族配置表，可依欄位重現對應流程。

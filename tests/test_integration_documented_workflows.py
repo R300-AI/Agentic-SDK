@@ -16,7 +16,6 @@ from agentic_sdk.modules import (
     PassThroughPerceive,
     ResponseCheckReflect,
     SemanticRetrieve,
-    StructuredAction,
     StructuredPerceive,
     TextImagePerceive,
     TextPerceive,
@@ -78,6 +77,24 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
         self.assertEqual({"perceive": 1, "retrieve": 1, "action": 1}, result.visit_counts)
 
+    def test_plan_and_reflect_slots_are_reachable_without_action_wrapper(self) -> None:
+        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=plan_client):
+            workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                plan=NextStepPlan(**_llm_params()),
+                retrieve=KeywordRetrieve(
+                    items=[{"keywords": ["tsip"], "content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"}]
+                ),
+                action=DirectAnswerAction(),
+                reflect=EvidenceCheckReflect(),
+            )
+
+        result = workflow.run("TSiP 是什麼？")
+
+        self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
+        self.assertEqual({"perceive": 1, "plan": 1, "retrieve": 1, "action": 1, "reflect": 1}, result.visit_counts)
+
     def test_text_perceive_semantic_retrieve_generative_reflect_workflow_runs(self) -> None:
         kb = KnowledgeBase(
             entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")]
@@ -107,7 +124,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(1, result.visit_counts["action"])
         self.assertEqual(1, result.visit_counts["reflect"])
 
-    def test_structured_perceive_hybrid_retrieve_structured_action_workflow_runs(self) -> None:
+    def test_structured_perceive_hybrid_retrieve_generative_action_workflow_runs(self) -> None:
         kb = KnowledgeBase(
             entries=[KnowledgeEntry(id="1", title="支撐鞋", content="建議優先考慮支撐型慢跑鞋。")]
         )
@@ -122,7 +139,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
                 perceive=StructuredPerceive(**_llm_params()),
                 plan=NextStepPlan(**_llm_params()),
                 retrieve=HybridRetrieve(knowledge_base=kb),
-                action=ActionToReflectWrapper(StructuredAction(**_llm_params())),
+                action=ActionToReflectWrapper(GenerativeAction(**_llm_params())),
                 reflect=EvidenceCheckReflect(),
             )
 

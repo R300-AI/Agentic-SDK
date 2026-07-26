@@ -4,7 +4,7 @@ import unittest
 from unittest.mock import patch
 
 from agentic_sdk import Workflow
-from agentic_sdk.modules import DirectAnswerAction, GenerativeAction, KeywordRetrieve, PassThroughPerceive
+from agentic_sdk.modules import DirectAnswerAction, GenerativeAction, KeywordRetrieve, PassThroughPerceive, ToolCallAction
 
 from support import FoundryOpenAILikeClient
 
@@ -49,9 +49,53 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
 
     def test_readme_example_three_path(self) -> None:
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "submit_booking",
+                    "description": "提交球場預約資料。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "customer_name": {"type": "string", "description": "預約人姓名。"},
+                            "booking_time": {"type": "string", "description": "使用者想預約的日期與時間。"},
+                        },
+                        "required": ["customer_name", "booking_time"],
+                        "additionalProperties": False,
+                    },
+                },
+            }
+        ]
+        tool_calls = [
+            {
+                "id": "call_booking",
+                "type": "function",
+                "function": {"name": "submit_booking", "arguments": '{"customer_name":"王小明","booking_time":"明天下午三點"}'},
+            }
+        ]
+        openai_client = FoundryOpenAILikeClient(action_text="已準備提交預約資料。", tool_calls=tool_calls)
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=openai_client):
+            workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                retrieve=KeywordRetrieve(
+                    items=[
+                        {"keywords": ["booking", "預約", "球場"], "content": "球場預約需要留下姓名與預約時間。"}
+                    ]
+                ),
+                action=ToolCallAction(api_key=TEST_API_KEY, base_url=TEST_BASE_URL, model=TEST_MODEL, tools=tools),
+            )
+
+        result = workflow.run("我想預約明天下午三點的球場，姓名是王小明。")
+
+        self.assertEqual("已準備提交預約資料。", result.final_message)
+        self.assertEqual(tools, openai_client.last_create_kwargs["tools"])
+        self.assertEqual(tool_calls, result.entities["latest_tool_calls"])
+
+    def test_readme_example_four_path(self) -> None:
         class SummaryAction:
-            def __call__(self, memory):
-                summary = memory.lookup("latest_retrieved_content") or "沒有命中任何條目。"
+            def __call__(self, state):
+                summary = state.lookup("latest_retrieved_content") or "沒有命中任何條目。"
                 return f"自訂 Action 回傳：{summary}"
 
         workflow = Workflow(

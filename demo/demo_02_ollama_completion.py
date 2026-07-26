@@ -17,7 +17,10 @@ workflow = Workflow(
         items=[
             {
                 "keywords": ["tsip"],
-                "content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。",
+                "content": (
+                    "TSiP 是工研院主導的國產 AI 晶片落地藍圖，"
+                    "重點是把國產 AI 晶片從技術規劃推進到實際應用與產業落地。"
+                ),
             },
         ],
     ),
@@ -25,10 +28,14 @@ workflow = Workflow(
         api_key="ollama",
         base_url="http://localhost:11434/v1/",
         model=ollama_model,
-        temperature=0,
-        system_prompt="只根據 retrieved_context 回答。若 retrieved_context 有內容，請直接輸出其重點，不要加入任何外部知識或推測。",
+        temperature=0.2,
+        system_prompt=(
+            "你是 Agentic SDK demo 的 Action 模組。請根據 retrieved_context 用自然語氣回答，"
+            "不要逐字照抄，也不要加入 retrieved_context 沒有的外部事實。"
+            "請輸出兩句繁體中文，第二句必須用『簡單說，』開頭做一句補充說明。"
+        ),
     ),
 )
 
-result = workflow.run("TSiP 是什麼？")
+result = workflow.run("請用自己的話介紹 TSiP，並補一句它的重點。")
 print(result.final_message)

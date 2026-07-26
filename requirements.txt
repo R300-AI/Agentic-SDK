@@ -28,7 +28,9 @@ distro==1.9.0
 fastapi==0.136.3
     # via agentic-sdk (pyproject.toml)
 flask==3.1.1
-    # via playground-v2
+    # via playground
+gunicorn==23.0.0
+    # via playground azure app service
 h11==0.16.0
     # via
     #   httpcore

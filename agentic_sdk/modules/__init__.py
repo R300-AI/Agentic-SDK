@@ -1,8 +1,8 @@
-﻿from agentic_sdk.modules.action import DirectAnswerAction, GenerativeAction, StructuredAction
+﻿from agentic_sdk.modules.action import DirectAnswerAction, GenerativeAction, ToolCallAction
 from agentic_sdk.modules.perceive import PassThroughPerceive, StructuredPerceive, TextImagePerceive, TextPerceive
 from agentic_sdk.modules.plan import NextStepPlan
 from agentic_sdk.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
-from agentic_sdk.modules.retrieve import HybridRetrieve, KeywordRetrieve, SemanticRetrieve
+from agentic_sdk.modules.retrieve import HybridRetrieve, KeywordRetrieve, PassThroughRetrieve, SemanticRetrieve
 
 __all__ = [
     "DirectAnswerAction",
@@ -12,10 +12,11 @@ __all__ = [
     "KeywordRetrieve",
     "NextStepPlan",
     "PassThroughPerceive",
+    "PassThroughRetrieve",
     "ResponseCheckReflect",
     "SemanticRetrieve",
-    "StructuredAction",
     "StructuredPerceive",
     "TextImagePerceive",
     "TextPerceive",
+    "ToolCallAction",
 ]

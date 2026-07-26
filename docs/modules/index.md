@@ -17,14 +17,14 @@
 | Perceive | PassThroughPerceive、TextPerceive、StructuredPerceive、TextImagePerceive | 把原始輸入整理成查詢、標籤與摘要。 |
 | Plan | NextStepPlan | 決定下一步交給 `Retrieve` 還是 `Action`。 |
 | Retrieve | KeywordRetrieve、SemanticRetrieve、HybridRetrieve | 查回條目、歷史紀錄、知識內容或比對結果。 |
-| Action | DirectAnswerAction、GenerativeAction、StructuredAction | 組成自然語言回應或固定欄位輸出。 |
+| Action | DirectAnswerAction、GenerativeAction、ToolCallAction | 組成自然語言回應、固定格式文字輸出或 OpenAI 標準工具呼叫。 |
 | Reflect | ResponseCheckReflect、EvidenceCheckReflect | 檢查回應完整性與證據是否足夠。 |
 
 表 1：五個模組家族的標準模組名與主要工作對照表。
 
 表 1 使用的是文件標準名。讀完這張表之後，接下來最需要補上的就是家族之間實際交換的是哪一份資料，因此下一節會把共用的 `Entities` 物件整理出來。各頁也會列出標準名對應的既有類別名稱，以及標準輸入輸出格式，方便你把家族定義對回實際實作。
 
-需要模型的標準模組會各自持有 OpenAI-compatible 連線設定。也就是每個 `TextPerceive`、`NextStepPlan`、`GenerativeAction`、`StructuredAction`、`ResponseCheckReflect` 等模組都要明確提供 `api_key`、`base_url` 與 `model`；不使用全域預設模型，也不由 SDK 自動挑選模型。
+需要模型的標準模組會各自持有 OpenAI-compatible 連線設定。也就是每個 `TextPerceive`、`NextStepPlan`、`GenerativeAction`、`ToolCallAction`、`ResponseCheckReflect` 等模組都要明確提供 `api_key`、`base_url` 與 `model`；不使用全域預設模型，也不由 SDK 自動挑選模型。
 
 ## Entities
 

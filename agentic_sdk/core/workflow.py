@@ -1,5 +1,6 @@
 ﻿from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,6 +46,7 @@ class Workflow:
         *,
         workflow_id: str | None = None,
         attachments: list[Any] | None = None,
+        event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> WorkflowResult:
         state = WorkflowState(user_message=user_message, workflow_name=self.workflow_name)
         if workflow_id:
@@ -69,13 +71,29 @@ class Workflow:
                 if module is None:
                     raise WorkflowAborted(f"unknown module '{current}'")
 
+                if event_callback is not None:
+                    event_callback({"phase": "start", "module": current, "state": state, "visit_count": state.visit_counts.get(current, 1)})
                 raw_output = module(state)
                 output = _normalize_output(current, raw_output, state)
                 state.apply(output)
-                current = output.get("next_module")
+                next_module = _next_module_after(current, output, self.modules)
+                if event_callback is not None:
+                    event_callback(
+                        {
+                            "phase": "finish",
+                            "module": current,
+                            "state": state,
+                            "output": output,
+                            "next_module": next_module,
+                            "visit_count": state.visit_counts.get(current, 1),
+                        }
+                    )
+                current = next_module
         except WorkflowAborted as exc:
             aborted = True
             abort_reason = exc.reason
+            if event_callback is not None and current is not None:
+                event_callback({"phase": "abort", "module": current, "state": state, "reason": abort_reason})
 
         return WorkflowResult(
             workflow_id=state.workflow_id,
@@ -108,6 +126,17 @@ def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> Mo
             ],
         )
     raise TypeError(f"module '{current}' returned unsupported output type: {type(raw_output).__name__}")
+
+
+def _next_module_after(current: str, output: ModuleOutput, modules: dict[str, Module]) -> str | None:
+    next_module = output.get("next_module")
+    if current == "perceive" and "plan" in modules and next_module in {None, "retrieve"}:
+        return "plan"
+    if current == "perceive" and next_module == "plan" and "plan" not in modules:
+        return "retrieve" if "retrieve" in modules else "action" if "action" in modules else None
+    if current == "action" and "reflect" in modules and next_module is None:
+        return "reflect"
+    return next_module
 
 
 def _final_message_from(state: WorkflowState) -> str:

@@ -1,0 +1,244 @@
+name: Deploy Playground to Azure App Service
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agentic_sdk/**"
+      - "playground/**"
+      - "requirements.txt"
+      - ".github/workflows/deploy-playground.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-playground
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build and deploy FastAPI Playground
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
+
+      - name: Azure login by OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Provision Azure App Service resources
+        uses: azure/CLI@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            set -euo pipefail
+
+            RG="${{ vars.AZURE_RESOURCE_GROUP }}"
+            WEBAPP="${{ vars.AZURE_WEBAPP_NAME }}"
+            KV="${{ vars.KEY_VAULT_NAME }}"
+            REGION="${{ vars.AZURE_REGION }}"
+            PLAN="${WEBAPP}-plan"
+
+            if ! az group show --name "$RG" --output none 2>/dev/null; then
+              az group create --name "$RG" --location "$REGION" --output none
+            fi
+
+            if ! az appservice plan show --name "$PLAN" --resource-group "$RG" --output none 2>/dev/null; then
+              az appservice plan create \
+                --name "$PLAN" \
+                --resource-group "$RG" \
+                --sku B2 \
+                --is-linux \
+                --location "$REGION" \
+                --output none
+            fi
+
+            if ! az webapp show --name "$WEBAPP" --resource-group "$RG" --output none 2>/dev/null; then
+              az webapp create \
+                --name "$WEBAPP" \
+                --resource-group "$RG" \
+                --plan "$PLAN" \
+                --runtime "PYTHON:3.12" \
+                --output none
+            fi
+
+            az webapp identity assign \
+              --name "$WEBAPP" \
+              --resource-group "$RG" \
+              --output none
+
+            if ! az keyvault show --name "$KV" --output none 2>/dev/null; then
+              az keyvault create \
+                --name "$KV" \
+                --resource-group "$RG" \
+                --location "$REGION" \
+                --sku standard \
+                --enable-rbac-authorization true \
+                --output none
+            fi
+
+            PRINCIPAL_ID=$(az webapp identity show \
+              --name "$WEBAPP" \
+              --resource-group "$RG" \
+              --query principalId \
+              -o tsv)
+            KV_ID=$(az keyvault show --name "$KV" --query id -o tsv)
+            az role assignment create \
+              --role "Key Vault Secrets User" \
+              --assignee-object-id "$PRINCIPAL_ID" \
+              --assignee-principal-type ServicePrincipal \
+              --scope "$KV_ID" \
+              --output none 2>/dev/null || true
+
+      - name: Configure App Service runtime
+        uses: azure/CLI@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            STARTUP_COMMAND='python -m playground.main'
+            CURRENT_SECRET=$(az webapp config appsettings list \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --query "[?name=='PLAYGROUND_SECRET_KEY'].value | [0]" \
+              -o tsv)
+            if [ -z "$CURRENT_SECRET" ]; then
+              CURRENT_SECRET=$(openssl rand -hex 32)
+            fi
+
+            az webapp config set \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --startup-file "$STARTUP_COMMAND"
+
+            az webapp config appsettings set \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --settings \
+                PORT=8000 \
+                WEBSITES_PORT=8000 \
+                SCM_DO_BUILD_DURING_DEPLOYMENT=false \
+                ENABLE_ORYX_BUILD=false \
+                PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot \
+                KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}" \
+                PLAYGROUND_SECRET_KEY="$CURRENT_SECRET"
+
+      - name: Install Python dependencies into package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install --target .python_packages/lib/site-packages -r requirements.txt
+
+      - name: Verify FastAPI Playground package
+        env:
+          PYTHONPATH: .python_packages/lib/site-packages:.
+        run: |
+          python - <<'PY'
+          from fastapi.testclient import TestClient
+          from playground.main import app
+
+          client = TestClient(app)
+          health = client.get('/healthz')
+          assert health.status_code == 200, health.text
+          assert health.json() == {'status': 'ok'}
+
+          entry = client.get('/playground')
+          assert entry.status_code == 200, entry.text[:500]
+          assert 'AI Hub Agent' in entry.text
+
+          builder = client.get('/playground/builder')
+          assert builder.status_code == 200, builder.text[:500]
+          assert '回覆風格與規範' in builder.text
+          assert '可互動元件 API' in builder.text
+          assert '互動面板進階配置' not in builder.text
+          PY
+
+      - name: Create deployment package
+        run: |
+          zip -r deploy.zip \
+            agentic_sdk/ \
+            playground/ \
+            .python_packages/ \
+            requirements.txt \
+            -x "*.pyc" -x "*/__pycache__/*" -x "playground/visual-audit/*"
+
+      - name: Deploy package to Azure App Service
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ vars.AZURE_WEBAPP_NAME }}
+          package: deploy.zip
+
+      - name: Verify deployed Playground
+        run: |
+          set -euo pipefail
+
+          URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/playground"
+          BUILDER_URL="${URL}/builder"
+          RUNNER_JS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/js/runner/runner-page.js"
+          RESULT_SURFACE_JS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/js/runner/result-surface.js"
+          CSS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/css/app.css"
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --location "$URL" | grep -q "AI Hub Agent" && \
+               curl --fail --silent --show-error --location "$BUILDER_URL" | tee builder.html | grep -q "builder-step-task_type" && \
+               grep -q "builder-step-output_format" builder.html && \
+               grep -q "builder-step-readiness" builder.html && \
+               grep -q "純文字回覆" builder.html && \
+               grep -q "可互動元件" builder.html && \
+               grep -q "回覆風格與規範" builder.html && \
+               grep -q "可互動元件 API" builder.html && \
+               grep -q "功能說明" builder.html && \
+               grep -q "api-endpoint-row" builder.html && \
+               grep -q "api-method-field" builder.html && \
+               ! grep -q "builder-step-template" builder.html && \
+               ! grep -q "builder-step-reflect" builder.html && \
+               ! grep -q "可互動元件 API 契約" builder.html && \
+               ! grep -q "回覆指令" builder.html && \
+               ! grep -q "互動面板進階配置" builder.html && \
+               curl --fail --silent --show-error --location "$RUNNER_JS_URL" | tee runner-page.js | grep -q "tool_call_submission" && \
+               grep -q "renderToolCallPanels" runner-page.js && \
+               curl --fail --silent --show-error --location "$RESULT_SURFACE_JS_URL" | tee result-surface.js | grep -q "runner:tool-call-submit" && \
+               grep -q "tool-call-panel" result-surface.js && \
+               curl --fail --silent --show-error --location "$CSS_URL" | tee app.css | grep -q "repeat(6" && \
+               ! grep -q "repeat(9" app.css; then
+              COOKIE_JAR="$(mktemp)"
+              curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
+                --request POST "$URL/start/anonymous" >/dev/null
+              printf '{"step":"output_format","choice":"interactive"}' > builder-choice.json
+              curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
+                --header "Content-Type: application/json; charset=utf-8" \
+                --data-binary @builder-choice.json \
+                "$URL/builder/state" >/dev/null
+                printf '%s' '{"step":"action","value":{"response_instruction":"設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。","interaction_trigger":"說明這個元件要協助使用者完成哪項流程、需要取得哪些必要資訊，以及資料齊全後如何交給後續處理。","api_method":"POST","api_url":"https://api.example.com/resource","component_fields":"id = 識別碼\nquantity = 數字：數量\napproved = 是否確認","api_body_template":"{\"id\":\"{{id}}\",\"quantity\":\"{{quantity}}\",\"approved\":\"{{approved}}\"}","missing_info_rule":"缺少必要欄位時，先詢問使用者補齊後再送出。"}}' > builder-action.json
+              curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
+                --header "Content-Type: application/json; charset=utf-8" \
+                --data-binary @builder-action.json \
+                "$URL/builder/state" >/dev/null
+              curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
+                --request POST "$URL/source/export" | tee exported-source.py >/dev/null
+              grep -q "ToolCallAction(" exported-source.py
+              grep -q "tools=\[" exported-source.py
+              grep -q "submit_api_1" exported-source.py
+              grep -q "回覆風格與規範：" exported-source.py
+              grep -q "互動元件功能說明：" exported-source.py
+              grep -q "API 提交設定：POST https://api.example.com/resource" exported-source.py
+              ! grep -q "StructuredAction" exported-source.py
+              echo "Playground is live at $URL"
+              exit 0
+            fi
+
+            echo "Waiting for Playground startup: attempt $attempt/30"
+            sleep 10
+          done
+
+          echo "::error::Playground did not become healthy at $URL"
+          exit 1

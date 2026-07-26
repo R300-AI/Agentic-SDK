@@ -17,10 +17,10 @@ from agentic_sdk.modules import (
     PassThroughPerceive,
     ResponseCheckReflect,
     SemanticRetrieve,
-    StructuredAction,
     StructuredPerceive,
     TextImagePerceive,
     TextPerceive,
+    ToolCallAction,
 )
 
 from support import FoundryOpenAILikeClient, StaticVisionQueryBuilder
@@ -156,24 +156,76 @@ class DocumentedModuleUnitTests(unittest.TestCase):
             state.last_action_result["content"],
         )
 
-    def test_generative_action_family_returns_openai_client_content(self) -> None:
-        for module_cls in (GenerativeAction, StructuredAction):
-            with self.subTest(module=module_cls.__name__):
-                state = WorkflowState(user_message="TSiP 是什麼？")
-                state.payload["retrieved_snippet"] = "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"
-                with patch(
-                    "agentic_sdk.llm.openai_compatible.OpenAI",
-                    return_value=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
-                ):
-                    module = module_cls(**_llm_params())
+    def test_generative_action_returns_openai_client_content(self) -> None:
+        state = WorkflowState(user_message="TSiP 是什麼？")
+        state.payload["retrieved_snippet"] = "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"
+        with patch(
+            "agentic_sdk.llm.openai_compatible.OpenAI",
+            return_value=FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。"),
+        ):
+            module = GenerativeAction(**_llm_params())
 
-                output = module(state)
+        output = module(state)
 
-                self.assertIsNone(output["next_module"])
-                self.assertEqual(
-                    "TSiP 是工研院主導的國產 AI 晶片落地藍圖。",
-                    state.last_action_result["content"],
-                )
+        self.assertIsNone(output["next_module"])
+        self.assertEqual(
+            "TSiP 是工研院主導的國產 AI 晶片落地藍圖。",
+            state.last_action_result["content"],
+        )
+
+    def test_tool_call_action_uses_openai_tools_standard(self) -> None:
+        state = WorkflowState(user_message="我要預約明天下午三點。")
+        tools = [
+            {
+                "type": "function",
+                "function": {
+                    "name": "submit_booking",
+                    "description": "提交預約資料。",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"customer_name": {"type": "string"}},
+                        "required": ["customer_name"],
+                    },
+                },
+            }
+        ]
+        tool_calls = [
+            {
+                "id": "call_booking",
+                "type": "function",
+                "function": {"name": "submit_booking", "arguments": '{"customer_name":"王小明"}'},
+            }
+        ]
+        client = FoundryOpenAILikeClient(action_text="請確認預約資料。", tool_calls=tool_calls)
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = ToolCallAction(tools=tools, **_llm_params())
+
+        output = module(state)
+
+        self.assertIsNone(output["next_module"])
+        self.assertEqual(tools, client.last_create_kwargs["tools"])
+        self.assertEqual("auto", client.last_create_kwargs["tool_choice"])
+        self.assertEqual(tool_calls, output["payload"]["latest_tool_calls"])
+        self.assertEqual(tool_calls, state.last_action_result["tool_calls"])
+
+    def test_tool_call_action_keeps_final_message_when_model_returns_only_tool_calls(self) -> None:
+        state = WorkflowState(user_message="我要送出資料。")
+        tool_calls = [
+            {
+                "id": "call_submit",
+                "type": "function",
+                "function": {"name": "submit_api_1", "arguments": '{"ok":true}'},
+            }
+        ]
+        client = FoundryOpenAILikeClient(action_text="", tool_calls=tool_calls)
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = ToolCallAction(tools=[{"type": "function", "function": {"name": "submit_api_1", "parameters": {"type": "object"}}}], **_llm_params())
+
+        output = module(state)
+
+        self.assertEqual("已產生工具呼叫。", output["payload"]["latest_final_message"])
+        self.assertEqual("已產生工具呼叫。", state.last_action_result["content"])
+        self.assertEqual(tool_calls, output["payload"]["latest_tool_calls"])
 
     def test_llm_modules_send_explicit_model(self) -> None:
         perceive_client = FoundryOpenAILikeClient()
@@ -201,7 +253,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("reflect-model", reflect_client.last_create_kwargs["model"])
 
     def test_llm_module_constructors_require_model_parameter(self) -> None:
-        for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, StructuredAction, ResponseCheckReflect):
+        for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, ToolCallAction, ResponseCheckReflect):
             with self.subTest(module=module_cls.__name__):
                 with self.assertRaisesRegex(ValueError, "explicit model"):
                     module_cls(api_key=TEST_API_KEY, base_url=TEST_BASE_URL)

@@ -1,59 +1,35 @@
 # Agentic SDK
 
-當你要把 Agent 接進實際應用時，往往需要把輸入處理、資料查詢、外部工具與回應流程一起串起來。這些步驟若各自分散實作，後續要調整流程、替換模組或接進既有系統時，整合成本會很快上升。本專案聚焦這類需求，提供一套可在 Python 應用程式中組裝 Agent workflow 的統一框架，讓開發者在整合不同系統時，不必每次都從頭重寫相似的流程骨架。
+Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以用 Perceive、Plan、Retrieve、Action、Reflect 等模組建立可測試、可替換、可觀測的 Agent 流程，並在 Playground 中用 Builder / Runner 快速試作。
 
-## Agentic SDK 是什麼
+## 核心概念
 
-Agentic SDK 是一套用於在 Python 應用程式中組裝 Agent workflow 的 SDK。你可以透過 `Workflow` 串接感知、檢索、執行等模組，並把自訂模型或既有系統整合進同一條流程。
+一個 workflow 由幾個可選模組組成：
 
-### 核心概念
+- Perceive：整理使用者輸入，產生可供後續步驟使用的感知結果。
+- Plan：決定下一步要 Retrieve、Action，或結束流程。
+- Retrieve：從規則、關鍵字、語意或混合檢索中取得支援資料。
+- Action：產生最終回覆、呼叫工具，或執行自訂處理邏輯。
+- Reflect：檢查結果品質或資料依據，必要時中止或重新規劃。
 
-一條 Agent workflow 通常由幾類模組組成，各自負責不同工作：
+最小 workflow 只需要 `Workflow` 加上你需要的模組。所有模組都可以用一般 Python 物件替換，因此適合從小型 PoC 擴充到正式應用。
 
-- 感知（Perceive）負責整理使用者輸入，形成後續模組可用的結構化理解。
-- 規劃（Plan）負責根據當前狀態判斷下一步應前往的模組。
-- 檢索（Retrieve）負責補充相關內容、命中條目或其他可用證據。
-- 執行（Action）負責產生主要輸出或最終回應。
-- 反思（Reflect）負責檢查結果是否可接受，並決定結束或重試。
+## 安裝
 
-## 安裝環境
+需要 Python 3.12。
 
-若你要跟著本頁範例實際跑一次 Agentic SDK，請先準備 Python 3.12 環境。下列步驟會帶你完成 repo 下載、依賴安裝與模組匯入確認。若要執行第二個範例，再另外準備 OpenAI-compatible 端點。
-
-1. 依 [Git 官方安裝頁](https://git-scm.com/downloads) 完成安裝。
-
-2. 依 [Python 官方安裝頁](https://www.python.org/downloads/) 安裝 Python 3.12。
-
-3. 複製這個 repo，並切換到專案目錄。
-
-   ```bash
-   git clone https://github.com/R300-AI/Agentic-SDK.git
-   cd Agentic-SDK
-   ```
-
-4. 安裝閱讀原始碼與檢查模組匯入所需的 Python 依賴。
-
-   ```bash
-   python -m pip install -r requirements.txt
-   ```
-
-5. 執行 import 檢查，以確認 Python 可載入 `agentic_sdk`。
-
-   ```bash
-   python -c "import agentic_sdk; print('Agentic SDK import ok')"
-   ```
-
+```bash
+git clone https://github.com/R300-AI/Agentic-SDK.git
+cd Agentic-SDK
+python -m pip install -r requirements.txt
+python -c "import agentic_sdk; print('Agentic SDK import ok')"
+```
 
 ## 快速開始
 
-你可以先照著第一個範例跑出一條最小 workflow，再把模型能力接進同一條流程，最後只替換需要客製化的模組。以下三個範例就依照這個順序安排，讓你逐步熟悉 Agentic SDK 的導入方式。
-
-### 1. 用最少的三類模組組出第一條 workflow
-
-第一個範例會帶你建立第一條可執行流程。你會先用最少的模組組合完成輸入整理、內容命中與回應生成，並熟悉 Agentic SDK 的基本組裝方式。
+### 1. 最小可執行 Workflow
 
 ```python
-# 公開介面範例
 from agentic_sdk import Workflow
 from agentic_sdk.modules import DirectAnswerAction, KeywordRetrieve, PassThroughPerceive
 
@@ -78,43 +54,13 @@ result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-`PassThroughPerceive` 會先讀取使用者問題。`KeywordRetrieve` 會從 `items` 條目中比對 `keywords`，命中後取回對應的 `content`。`DirectAnswerAction` 則直接把前面取回的內容組成回應。`Workflow` 會把這些中間資料保留下來，讓後面的步驟可以直接使用。
+`PassThroughPerceive` 會保留原始輸入，`KeywordRetrieve` 依關鍵字取得支援資料，`DirectAnswerAction` 則直接回傳檢索到的內容。
 
-### 2. 用 OpenAI-compatible 端點接上模型模組
+### 2. 使用 OpenAI-compatible 生成回覆
 
-第二個範例會把模型能力接進既有 workflow，並示範如何讓需要模型的模組用 OpenAI-compatible 設定自行初始化 client。
-
-以下以本地 Ollama 端點示意 OpenAI SDK 相容端點。Ollama 的 OpenAI compatibility 說明可參考官方文件：[https://docs.ollama.com/api/openai-compatibility](https://docs.ollama.com/api/openai-compatibility)。
-
-```bash
-ollama pull llama3.2:1b
-ollama serve
-```
-
-在掛到 Agentic SDK workflow 之前，先用 OpenAI SDK 直接驗證 `llama3.2:1b` 可以透過 Ollama 的 OpenAI-compatible 端點跑通：
+可搭配任何 OpenAI-compatible endpoint，例如 Azure AI Foundry、Ollama 或其他相容服務。
 
 ```python
-from openai import OpenAI
-
-client = OpenAI(
-    api_key="ollama",
-    base_url="http://localhost:11434/v1/",
-)
-
-completion = client.chat.completions.create(
-    model="llama3.2:1b",
-    messages=[
-        {"role": "user", "content": "請用一句繁體中文說明 TSiP 是什麼。"},
-    ],
-)
-
-print(completion.choices[0].message.content)
-```
-
-這一步只驗證模型端點與 OpenAI SDK 介面能正常工作。確認可以直接呼叫後，再把同一組 `api_key`、`base_url`、`model` 交給需要模型的 Workflow 模組；模組會自行建立 OpenAI-compatible client，並在推論時使用指定的 `model`：
-
-```python
-# 公開介面範例
 from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
@@ -139,21 +85,78 @@ result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-此一範例保留原本的輸入處理與條目查詢方式，僅將輸出步驟改為透過 OpenAI-compatible 端點呼叫模型。對 AI Hub 而言，重點不在特定 provider，而在模型服務與 Agent workflow 皆沿用 OpenAI SDK 介面。當模型端點遵循同一協定時，模型封裝與 Agent 功能即可使用一致的調用方式，降低不同生態各自定義呼叫介面的整合成本。
+### 3. 使用 ToolCallAction 產生 OpenAI 標準工具呼叫
 
-### 3. 用最小 custom module 替換內建 Action
-
-到這一步，你已經可以保留前段流程，只把最後的輸出模組換成自己的程式邏輯。
+`ToolCallAction` 使用 OpenAI SDK 的 `tools` / `tool_choice` 標準格式，並把模型回傳的 `message.tool_calls` 正規化到 `result.entities["latest_tool_calls"]`。
 
 ```python
-# 公開介面範例
+from agentic_sdk import Workflow
+from agentic_sdk.modules import KeywordRetrieve, PassThroughPerceive, ToolCallAction
+
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "submit_booking",
+            "description": "提交球場預約資料。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "customer_name": {
+                        "type": "string",
+                        "description": "預約人姓名。",
+                    },
+                    "booking_time": {
+                        "type": "string",
+                        "description": "使用者想預約的日期與時間。",
+                    },
+                },
+                "required": ["customer_name", "booking_time"],
+                "additionalProperties": False,
+            },
+        },
+    }
+]
+
+workflow = Workflow(
+    perceive=PassThroughPerceive(),
+    retrieve=KeywordRetrieve(
+        items=[
+            {
+                "keywords": ["booking", "預約", "球場"],
+                "content": "球場預約需要留下姓名與預約時間。",
+            },
+        ],
+    ),
+    action=ToolCallAction(
+        api_key="<API key>",
+        base_url="<OpenAI-compatible base_url>",
+        model="<支援 tool calling 的模型>",
+        tools=tools,
+    ),
+)
+
+result = workflow.run("我想預約明天下午三點的球場，姓名是王小明。")
+print(result.final_message)
+print(result.entities["latest_tool_calls"])
+```
+
+SDK 只負責產生與保存標準 tool call 結果；真正呼叫外部 API、呈現確認面板或提交表單，可以由應用層或 Playground Runner 承接。
+
+### 4. 自訂 Action
+
+Action 也可以是一般 Python class。自訂 Action 會收到 `WorkflowState`，可以透過 `state.lookup(...)` 讀取前面模組產生的資料。
+
+```python
 from agentic_sdk import Workflow
 from agentic_sdk.modules import KeywordRetrieve, PassThroughPerceive
 
+
 class SummaryAction:
-    def __call__(self, memory):
-        summary = memory.lookup("latest_retrieved_content") or "沒有命中任何條目。"
+    def __call__(self, state):
+        summary = state.lookup("latest_retrieved_content") or "沒有命中任何條目。"
         return f"自訂 Action 回傳：{summary}"
+
 
 workflow = Workflow(
     perceive=PassThroughPerceive(),
@@ -172,20 +175,30 @@ result = workflow.run("請介紹 Agentic SDK")
 print(result.final_message)
 ```
 
-`SummaryAction` 直接接收 `Workflow` 建立的 `InContextMemory`，並自記憶體讀取前面模組留下的內容，再組成輸出。這樣你可以保留既有流程，只替換最後的輸出邏輯。
+## Playground
 
-> 這個範例會用到兩個 memory 約定。
->
-> - `memory` 是 `Workflow` 建立的 `InContextMemory`。
-> - `latest_retrieved_content` 表示最近一次檢索模組命中的主要內容，供後續 `Action` 模組直接讀取。
+正式 Playground 是 Flask app，包含 Entry、Builder、Runner、Source preview/export、AI Hub stub，以及 ToolCallAction 互動面板。
 
-## 下一步
-
-相關文件如下。
-
-1. 瀏覽器介面操作流程：[demo/README.md](demo/README.md)。
-2. 設計藍圖與分階段交付內容：[sdk_blueprint/README.md](sdk_blueprint/README.md)。
-3. 試用Playground_V2
+```bash
+python -m flask --app playground.app:app run --host 127.0.0.1 --port 5050 --no-reload --no-debugger
 ```
-python -m flask --app playground_v2.app run --debug --host 127.0.0.1 --port 5050
+
+開啟：
+
+- `http://127.0.0.1:5050/playground`
+- `http://127.0.0.1:5050/playground/builder`
+- `http://127.0.0.1:5050/playground/run`
+
+Runner 若要使用 OpenAI-compatible endpoint，可以在本機環境或部署環境提供對應的 `*_MODEL`、`*_BASE_URL`、`*_API_KEY` 變數。Azure 部署建議透過 Key Vault 與 App Service managed identity 管理機密。
+
+## Demo 與文件
+
+- Demo 範例在 `demo/README.md`。
+- 文件網站來源在 `docs/`，本機可用 `python -m mkdocs build --strict` 驗證。
+- GitHub Actions 到 Azure App Service 的部署說明在 `docs/github_cicd_workflow.md`。
+
+## 測試
+
+```bash
+python -m pytest -q
 ```

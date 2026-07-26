@@ -17,6 +17,10 @@ uv.lock
 .pytest_cache/
 .coverage
 htmlcov/
+test-results/
+
+# Docs build output
+site/
 
 # IDE
 .vscode/
@@ -49,6 +53,8 @@ out.txt
 build_out.txt
 vitest_out.txt
 scripts/timing_out.txt
+appservice-logs*/
+appservice-logs*.zip
 
 # TypeScript build cache
 *.tsbuildinfo

@@ -65,12 +65,13 @@ def build_module(spec: ModuleSpec) -> Module:
         "keyword": modules.KeywordRetrieve,
         "next_step": modules.NextStepPlan,
         "pass_through": modules.PassThroughPerceive,
+        "pass_through_retrieve": modules.PassThroughRetrieve,
         "response_check": modules.ResponseCheckReflect,
         "semantic": modules.SemanticRetrieve,
-        "structured_action": modules.StructuredAction,
         "structured_perceive": modules.StructuredPerceive,
         "text": modules.TextPerceive,
         "text_image": modules.TextImagePerceive,
+        "tool_call_action": modules.ToolCallAction,
     }
     try:
         constructor = registry[spec.kind]

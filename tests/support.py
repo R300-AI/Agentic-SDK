@@ -18,6 +18,7 @@ class FoundryOpenAILikeClient:
         reflect_verdict: str = "pass",
         reflect_reason: str = "test reflect ok",
         action_text: str = "mock action response",
+        tool_calls: list[dict] | None = None,
         model_id: str = "foundry-openai-like",
     ) -> None:
         self._perceive_intent = perceive_intent
@@ -26,6 +27,7 @@ class FoundryOpenAILikeClient:
         self._reflect_verdict = reflect_verdict
         self._reflect_reason = reflect_reason
         self._action_text = action_text
+        self._tool_calls = list(tool_calls or [])
         self._plan_index = 0
         self._model_id = model_id
         self.last_create_kwargs: dict | None = None
@@ -95,7 +97,7 @@ class _FoundryCompletionsNamespace:
             ]
 
         return SimpleNamespace(
-            choices=[SimpleNamespace(message=SimpleNamespace(content=response.content))],
+            choices=[SimpleNamespace(message=SimpleNamespace(content=response.content, tool_calls=self._owner._tool_calls))],
             usage=SimpleNamespace(
                 prompt_tokens=response.input_tokens,
                 completion_tokens=response.output_tokens,

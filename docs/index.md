@@ -88,17 +88,23 @@
       <td>用語意去找真正相關的內容，不只看字面相同，較適合需要提高召回率與理解能力的情境。</td>
     </tr>
     <tr>
-      <td rowspan="2">Action</td>
+      <td rowspan="3">Action</td>
       <td><a href="modules/action-modules.md#directansweraction">DirectAnswerAction</a></td>
       <td>no</td>
       <td>--</td>
       <td>把前面已找到的內容直接整理成答案，適合不需要模型重新生成文字的情況。</td>
     </tr>
     <tr>
-      <td><a href="modules/action-modules.md#completionaction">CompletionAction</a></td>
+      <td><a href="modules/action-modules.md#generativeaction">GenerativeAction</a></td>
       <td>yes</td>
       <td>OpenAI</td>
       <td>根據前面整理好的內容重新生成自然語言回答，適合需要較完整表達與文字潤飾的情況。</td>
+    </tr>
+    <tr>
+      <td><a href="modules/action-modules.md#toolcallaction">ToolCallAction</a></td>
+      <td>yes</td>
+      <td>OpenAI</td>
+      <td>使用 OpenAI 標準 tools schema 讓模型產生 tool calls，適合外部 API 或後端函式由應用層執行的情境。</td>
     </tr>
     <tr>
       <td>Reflect</td>

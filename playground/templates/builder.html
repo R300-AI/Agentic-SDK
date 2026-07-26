@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+
+{% block title %}建立 Agent - AI Hub Agent 建立工具{% endblock %}
+
+{% macro pair_editor(id, name, key_label, value_label, add_label, rows=None, key_placeholder="", value_placeholder="") -%}
+{% set editor_rows = rows or [{"key": "", "value": ""}] %}
+<div class="pair-editor" data-pair-editor>
+  {% set output = namespace(has_pair=false) %}
+  <textarea id="{{ id }}" name="{{ name }}" hidden data-pair-output>{%- for row in editor_rows -%}{%- if row["key"] and row["value"] -%}{% if output.has_pair %}&#10;{% endif %}{{ row["key"] }} = {{ row["value"] }}{% set output.has_pair = true %}{%- endif -%}{%- endfor -%}</textarea>
+  <div class="pair-list" data-pair-list>
+    {% for row in editor_rows %}
+    <div class="pair-row" data-pair-row>
+      <input type="text" value="{{ row["key"] }}" aria-label="{{ key_label }}" data-pair-key>
+      <textarea rows="2" aria-label="{{ value_label }}" data-pair-value>{{ row["value"] }}</textarea>
+      <button class="button button-ghost pair-remove" type="button" data-pair-remove aria-label="刪除此列">移除</button>
+    </div>
+    {% endfor %}
+  </div>
+  <button class="button button-ghost pair-add" type="button" data-pair-add>{{ add_label }}</button>
+</div>
+{%- endmacro %}
+
+{% block body %}
+<main class="builder-page" data-page="builder">
+  <header class="context-bar builder-context-bar">
+    <div>
+      <span class="eyebrow">Agent 設定</span>
+      <strong>{{ mode_context.label }}</strong>
+      <small>{{ mode_context.source_label }}</small>
+    </div>
+    <a class="button button-ghost" href="{{ url_for('runner.runner') }}" data-runner-link>預覽 Agent 頁面</a>
+  </header>
+
+  <section class="builder-layout">
+    {% set step_state = namespace(active_index=1) %}
+    {% for step in steps %}
+      {% if step.key == active_step.key %}
+        {% set step_state.active_index = loop.index %}
+      {% endif %}
+    {% endfor %}
+    <nav class="progress-rail" aria-label="建立流程步驟">
+      <p class="progress-current" aria-live="polite" data-progress-current>目前階段：步驟 {{ step_state.active_index }} / {{ steps|length }}</p>
+      <ol class="progress-step-list">
+      {% for step in steps %}
+      <li class="rail-step{% if loop.index < step_state.active_index %} completed{% endif %}{% if step.key == active_step.key %} active{% endif %}" data-progress-step="{{ step.key }}" data-step-index="{{ loop.index }}" data-step-label="{{ step.title }}"{% if step.key == active_step.key %} aria-current="step"{% endif %} aria-label="{{ '目前階段' if step.key == active_step.key else '已完成' if loop.index < step_state.active_index else '尚未進行' }}：步驟 {{ loop.index }} / {{ steps|length }}：{{ step.title }}">
+        <span aria-hidden="true">{{ loop.index }}</span>
+      </li>
+      {% endfor %}
+      </ol>
+    </nav>
+
+    <section class="builder-stage" aria-labelledby="builder-step-title">
+      {% for step in steps %}
+      <article class="step-panel{% if step.key == active_step.key %} active{% endif %}" id="builder-step-{{ step.key }}" data-step-panel="{{ step.key }}"{% if step.key != active_step.key %} hidden{% endif %}>
+        <p class="eyebrow">步驟 {{ loop.index }} / {{ steps|length }}</p>
+        <h1{% if step.key == active_step.key %} id="builder-step-title"{% endif %}>{{ step.title }}</h1>
+
+        {% if step.control == "text" %}
+        <form class="builder-field" data-name-form>
+          <label for="agent-name-input">{{ step.technical_name }}</label>
+          <input id="agent-name-input" name="agent_name" type="text" maxlength="64" autocomplete="off" data-name-input data-step-key="{{ step.key }}">
+        </form>
+        {% elif step.control == "finish" %}
+        <div class="readiness-card ready" aria-live="polite">
+          <strong>{{ workflow_summary.readiness }}</strong>
+          <span data-summary-field="name">{{ workflow_summary.name }}</span>
+        </div>
+        <details class="advanced-disclosure step-advanced" open>
+          <summary>試跑安全限制</summary>
+          <form class="module-param-form" data-param-form data-step-key="readiness">
+            <label for="readiness-entry-module">從哪一步開始</label>
+            <select id="readiness-entry-module" name="entry_module">
+              <option value="perceive">接收需求</option>
+              <option value="plan">判斷是否查資料</option>
+              <option value="retrieve">查找支援資料</option>
+              <option value="action">產生回覆</option>
+            </select>
+            <label for="readiness-max-node-hops">最大節點跳數</label>
+            <input id="readiness-max-node-hops" name="max_node_hops" type="number" min="1" max="10000" value="50">
+            <label for="readiness-max-revisit">同一步重試上限</label>
+            <input id="readiness-max-revisit" name="max_revisit" type="number" min="1" max="1000" value="5">
+            <label for="readiness-timeout-sec">逾時秒數</label>
+            <input id="readiness-timeout-sec" name="timeout_sec" type="number" min="1" max="3600" value="300">
+          </form>
+        </details>
+        {% else %}
+        <div class="choice-grid" aria-label="{{ step.title }} 選項">
+          {% for choice in step.choices %}
+          <button class="choice-card{% if loop.first %} selected{% endif %}" type="button" data-choice-card data-step-key="{{ step.key }}" data-choice-label="{{ choice.label }}">
+            <span>{{ loop.index }}</span>
+            <strong>{{ choice.title }}</strong>
+            {% if choice.description %}<small>{{ choice.description }}</small>{% endif %}
+          </button>
+          {% endfor %}
+        </div>
+        {% if step.key == "task_type" %}
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Custom Action" open>
+          <summary>規則處理進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="action">
+            <input name="class_name" type="hidden" value="BusinessRule">
+            <input name="memory_key" type="hidden" value="latest_retrieved_content">
+            <label for="template-action-custom-rule-title">規則名稱</label>
+            <input id="template-action-custom-rule-title" name="rule_title" type="text" autocomplete="off">
+            <label for="template-action-custom-rule-pairs">規則 key 對處理 value</label>
+            {{ pair_editor(
+              "template-action-custom-rule-pairs",
+              "rule_pairs",
+              "規則 key",
+              "處理 value",
+              "新增處理規則",
+              none
+            ) }}
+            <label for="template-action-custom-fallback">沒有內容時的文字</label>
+            <input id="template-action-custom-fallback" name="fallback" type="text" autocomplete="off">
+            <label for="template-action-custom-prefix">結果開頭文字</label>
+            <input id="template-action-custom-prefix" name="prefix" type="text" autocomplete="off">
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Advisor|Recommendation|Review" open>
+          <summary>需求整理進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="perceive">
+            <label for="template-perceive-welcome-message">開場提示</label>
+            <input id="template-perceive-welcome-message" name="welcome_message" type="text" autocomplete="off">
+            <label for="template-perceive-intent-pairs">意圖 key 對說明 value</label>
+            {{ pair_editor(
+              "template-perceive-intent-pairs",
+              "intent_pairs",
+              "意圖 key",
+              "意圖說明 value",
+              "新增意圖",
+              none
+            ) }}
+            <label for="template-perceive-importance">記憶重要度</label>
+            <div class="range-field">
+              <input id="template-perceive-importance" name="importance" type="range" min="0" max="5" step="0.1" value="1.0" data-range-control>
+              <output for="template-perceive-importance" data-range-output>1.0</output>
+            </div>
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Advisor|Recommendation" open>
+          <summary>支援資料判斷進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="plan">
+            <label for="template-plan-retrieve-name">資料名稱</label>
+            <input id="template-plan-retrieve-name" name="retrieve_name" type="text" autocomplete="off">
+            <label for="template-plan-retrieve-description">資料用途說明</label>
+            <textarea id="template-plan-retrieve-description" name="retrieve_description" rows="3"></textarea>
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Minimal" open>
+          <summary>直接回覆進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="action">
+            <label for="template-action-direct-memory-key">讀取哪個結果 key</label>
+            <select id="template-action-direct-memory-key" name="direct_memory_key">
+              <option value="latest_retrieved_content">最新查找內容</option>
+              <option value="retrieved_snippet">查找摘要</option>
+              <option value="perceived_input">原始輸入</option>
+              <option value="query">查詢文字</option>
+              <option value="latest_final_message">上一段最終回覆</option>
+            </select>
+            <label for="template-action-direct-fallback">沒有結果時的文字</label>
+            <input id="template-action-direct-fallback" name="direct_fallback" type="text" autocomplete="off">
+            <label for="template-action-direct-prefix">回覆開頭文字</label>
+            <input id="template-action-direct-prefix" name="direct_prefix" type="text" autocomplete="off">
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Minimal|OpenAI client|Custom Action|Advisor|Recommendation" open>
+          <summary>支援資料進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="retrieve">
+            <label for="template-retrieve-fallback">沒有命中資料時的內容</label>
+            <input id="template-retrieve-fallback" name="fallback" type="text" autocomplete="off">
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Minimal|OpenAI client|Custom Action|Advisor|Recommendation" open>
+          <summary>關鍵字對照進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="retrieve">
+            <label for="template-retrieve-keyword-pairs">key 對 value</label>
+            {{ pair_editor(
+              "template-retrieve-keyword-pairs",
+              "keyword_pairs",
+              "關鍵字 key",
+              "命中內容 value",
+              "新增關鍵字內容",
+              none
+            ) }}
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Minimal|OpenAI client|Custom Action" open>
+          <summary>直接讀取進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="perceive">
+            <label for="template-perceive-input-label">輸入標籤</label>
+            <input id="template-perceive-input-label" name="input_label" type="text" autocomplete="off">
+          </form>
+        </details>
+        {% endif %}
+        {% if step.key == "input_type" %}
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Message" open>
+          <summary>直接讀取進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="perceive">
+            <label for="perceive-input-label">輸入標籤</label>
+            <input id="perceive-input-label" name="input_label" type="text" autocomplete="off">
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Document|Form|TextImage" open>
+          <summary>需求整理進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="perceive">
+            <label for="perceive-welcome-message">開場提示</label>
+            <input id="perceive-welcome-message" name="welcome_message" type="text" autocomplete="off">
+            <label for="perceive-intent-pairs">意圖 key 對說明 value</label>
+            {{ pair_editor(
+              "perceive-intent-pairs",
+              "intent_pairs",
+              "意圖 key",
+              "意圖說明 value",
+              "新增意圖",
+              none
+            ) }}
+            <label for="perceive-importance">記憶重要度</label>
+            <div class="range-field">
+              <input id="perceive-importance" name="importance" type="range" min="0" max="5" step="0.1" value="1.0" data-range-control>
+              <output for="perceive-importance" data-range-output>1.0</output>
+            </div>
+          </form>
+        </details>
+        {% endif %}
+        {% if step.key == "plan" %}
+        <details class="advanced-disclosure step-advanced" data-visible-choices="RouteBySupport" open>
+          <summary>支援資料判斷進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="plan">
+            <label for="plan-retrieve-name">資料名稱</label>
+            <input id="plan-retrieve-name" name="retrieve_name" type="text" autocomplete="off">
+            <label for="plan-retrieve-description">資料用途說明</label>
+            <textarea id="plan-retrieve-description" name="retrieve_description" rows="3"></textarea>
+          </form>
+        </details>
+        {% endif %}
+        {% if step.key == "retrieve_policy" %}
+        <details class="advanced-disclosure step-advanced" open>
+          <summary>支援資料進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="retrieve">
+            <label for="retrieve-fallback">沒有命中資料時的內容</label>
+            <input id="retrieve-fallback" name="fallback" type="text" autocomplete="off">
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="Keyword|Hybrid" open>
+          <summary>關鍵字對照進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="retrieve">
+            <label for="retrieve-keyword-pairs">key 對 value</label>
+            {{ pair_editor(
+              "retrieve-keyword-pairs",
+              "keyword_pairs",
+              "關鍵字 key",
+              "命中內容 value",
+              "新增關鍵字內容",
+              none
+            ) }}
+          </form>
+        </details>
+        {% endif %}
+        {% if step.key == "output_format" %}
+        <details class="advanced-disclosure step-advanced" data-visible-choices="free_text|interactive" open>
+          <summary>回覆風格與規範</summary>
+          <form class="module-param-form" data-param-form data-step-key="action">
+            <label for="v3-action-response-instruction">回覆風格與規範</label>
+            <textarea id="v3-action-response-instruction" name="response_instruction" rows="5" placeholder="例如：設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。"></textarea>
+          </form>
+        </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="interactive" open>
+          <summary>可互動元件 API</summary>
+          <form class="module-param-form" data-param-form data-step-key="action">
+            <label for="v3-action-interaction-trigger">功能說明</label>
+            <textarea id="v3-action-interaction-trigger" name="interaction_trigger" rows="3" placeholder="例如：說明這個元件要協助使用者完成哪項流程、需要取得哪些必要資訊，以及資料齊全後如何交給後續處理。"></textarea>
+            <div class="api-endpoint-row">
+              <div class="api-method-field">
+                <label for="v3-action-api-method">Method</label>
+                <select id="v3-action-api-method" name="api_method">
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                </select>
+              </div>
+              <div>
+                <label for="v3-action-api-url">API URL</label>
+                <input id="v3-action-api-url" name="api_url" type="url" autocomplete="off" placeholder="https://api.example.com/resource">
+              </div>
+            </div>
+            <label for="v3-action-component-fields">JSON Spec 需要的抽取欄位</label>
+            {{ pair_editor(
+              "v3-action-component-fields",
+              "component_fields",
+              "欄位 key",
+              "欄位說明",
+              "新增欄位",
+              none
+            ) }}
+            <label for="v3-action-api-body-template">送出 JSON Body 範本</label>
+            <textarea id="v3-action-api-body-template" name="api_body_template" rows="4" placeholder='例如：{"id":"{{id}}","status":"{{status}}"}'></textarea>
+            <label for="v3-action-missing-info-rule">資料不足時怎麼問</label>
+            <textarea id="v3-action-missing-info-rule" name="missing_info_rule" rows="3" placeholder="例如：缺少必要欄位時，先詢問使用者補齊後再送出。"></textarea>
+          </form>
+        </details>
+        {% endif %}
+        {% if step.key == "failure_policy" %}
+        <details class="advanced-disclosure step-advanced" data-visible-choices="ResponseCheck|EvidenceCheck" open>
+          <summary>檢查失敗進階配置</summary>
+          <form class="module-param-form" data-param-form data-step-key="reflect">
+            <label for="reflect-retry-on-failure">檢查不通過時</label>
+            <select id="reflect-retry-on-failure" name="on_failure">
+              <option value="retry_plan">重新規劃</option>
+              <option value="end">停止輸出</option>
+            </select>
+          </form>
+        </details>
+        {% endif %}
+        {% endif %}
+
+        <footer class="stage-actions">
+          <button class="button button-secondary" type="button" data-step-back{% if loop.first %} disabled{% endif %}>上一步</button>
+          {% if loop.last %}
+          <a class="button button-primary" href="{{ url_for('runner.runner') }}" data-runner-link>前往試跑頁</a>
+          {% else %}
+          <button class="button button-primary" type="button" data-step-continue>下一步</button>
+          {% endif %}
+        </footer>
+      </article>
+      {% endfor %}
+    </section>
+
+  </section>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script id="builder-form-state" type="application/json" data-builder-form-state>{{ builder_form_state|tojson }}</script>
+<script type="module" src="{{ url_for('static', filename='js/builder/builder-page.js') }}"></script>
+{% endblock %}
