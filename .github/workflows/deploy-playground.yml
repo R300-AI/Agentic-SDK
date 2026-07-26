@@ -126,8 +126,8 @@ jobs:
               --name "${{ vars.AZURE_WEBAPP_NAME }}" \
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --settings \
-                PORT=8000 \
-                WEBSITES_PORT=8000 \
+                PORT=80 \
+                WEBSITES_PORT=80 \
                 SCM_DO_BUILD_DURING_DEPLOYMENT=false \
                 ENABLE_ORYX_BUILD=false \
                 PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot \
@@ -205,11 +205,10 @@ jobs:
                ! grep -q "回覆指令" builder.html && \
                ! grep -q "互動面板進階配置" builder.html && \
                curl --fail --silent --show-error --location "$RUNNER_JS_URL" | tee runner-page.js | grep -q "tool_call_submission" && \
-               grep -q "renderToolCallPanels" runner-page.js && \
+               grep -q "runner:tool-call-submit" runner-page.js && \
                curl --fail --silent --show-error --location "$RESULT_SURFACE_JS_URL" | tee result-surface.js | grep -q "runner:tool-call-submit" && \
                grep -q "tool-call-panel" result-surface.js && \
-               curl --fail --silent --show-error --location "$CSS_URL" | tee app.css | grep -q "repeat(6" && \
-               ! grep -q "repeat(9" app.css; then
+               curl --fail --silent --show-error --location "$CSS_URL" | tee app.css | grep -q "api-contract-editor"; then
               COOKIE_JAR="$(mktemp)"
               curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
                 --request POST "$URL/start/anonymous" >/dev/null

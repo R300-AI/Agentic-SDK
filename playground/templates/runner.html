@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+
+{% block title %}試跑 Agent - AI Hub Agent 建立工具{% endblock %}
+
+{% block body %}
+<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}">
+  <header class="context-bar">
+    <div>
+      <span class="eyebrow">AI Hub Agent</span>
+      <div class="runner-title-row">
+        <strong>{{ workflow_summary.name }}</strong>
+        {% if mode_context.can_save %}
+        <small class="save-status" data-save-status>{{ '已儲存' if last_aihub_save or mode_context.source_origin == 'aihub_loaded' else '尚未儲存' }}</small>
+        {% elif mode_context.is_aihub %}
+        <small class="save-status">已儲存</small>
+        {% endif %}
+      </div>
+    </div>
+    <div class="context-actions">
+      {% if mode_context.can_save %}
+      <button class="button button-secondary" type="button" data-save-action>儲存</button>
+      {% endif %}
+      {% if mode_context.can_view_code %}
+      <a class="button button-secondary" href="{{ url_for('source.source_page') }}" data-code-preview-open>預覽程式碼</a>
+      {% endif %}
+      {% if mode_context.can_edit %}
+      <a class="button button-ghost" href="{{ url_for('builder.builder') }}">編輯設定</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <section class="runner-layout m365-chat-layout">
+    <section class="task-surface chat-surface" aria-labelledby="runner-title">
+      <div class="chat-intro">
+        <div class="agent-identity chat-hero">
+          <div class="agent-orb" aria-hidden="true">A</div>
+          <div>
+            <p class="eyebrow">可開始使用</p>
+            <h1 id="runner-title">{{ workflow_summary.name }}</h1>
+          </div>
+        </div>
+        <p class="lede">輸入問題、客戶情境或參考資料。</p>
+      </div>
+
+      <div class="chat-thread" aria-label="Agent 對話" data-result-thread>
+        <article class="chat-message assistant-message" data-empty-message>
+          <div class="message-avatar agent-avatar" aria-hidden="true">AI</div>
+          <div class="message-bubble assistant-bubble">
+            <p>請貼上要處理的內容，我會直接在這裡回覆。</p>
+          </div>
+        </article>
+        <article class="chat-message user-message" data-user-message hidden>
+          <div class="message-avatar user-avatar" aria-hidden="true">你</div>
+          <div class="message-bubble user-bubble">
+            <p data-user-message-text></p>
+          </div>
+        </article>
+        <article class="chat-message assistant-message" data-result-surface hidden>
+          <div class="message-avatar agent-avatar" aria-hidden="true">AI</div>
+          <div class="message-bubble assistant-bubble" data-result-bubble>
+            <div class="assistant-response" aria-live="polite">
+              <div class="process-trace" data-process-trace aria-label="AI 處理過程" hidden></div>
+              <div class="markdown-output" data-result-message></div>
+              <div class="tool-call-panel-list" data-tool-call-panels aria-label="工具呼叫互動面板" hidden></div>
+            </div>
+          </div>
+          <div class="message-debug" data-debug-status hidden></div>
+        </article>
+      </div>
+
+      <form class="input-composer chat-composer" data-input-composer>
+        <label for="runner-message">輸入訊息</label>
+        <div class="composer-main-row">
+          <textarea id="runner-message" name="message" rows="1"></textarea>
+          <button class="button button-primary" type="submit">產生回覆</button>
+        </div>
+        <div class="composer-row">
+          <div class="attachment-picker" data-artifact-panel>
+            <label for="runner-attachments">附加資料</label>
+            <label class="attachment-trigger" for="runner-attachments">選擇參考檔案</label>
+            <input class="visually-hidden" id="runner-attachments" name="attachments" type="file" multiple data-attachment-input>
+            <p class="inline-status" data-attachment-status>尚未選擇附件。</p>
+            <ul class="artifact-list" data-artifact-list aria-label="已選擇的參考資料"></ul>
+          </div>
+          <p class="inline-status" role="status" data-run-status>可以開始產生回覆。</p>
+        </div>
+      </form>
+    </section>
+
+    <aside class="runner-side-panel chat-rail" aria-label="試跑頁情境資訊">
+      <div class="agent-orb" aria-hidden="true">AI</div>
+      <span class="eyebrow">AI Hub Agent</span>
+      <h2>{{ workflow_summary.name }}</h2>
+      <section class="endpoint-panel" data-endpoint-panel>
+        {% if runner_endpoint_state.requirements %}
+        <form class="endpoint-form" data-endpoint-form>
+          {% if runner_endpoint_state.endpoints %}
+          {% for requirement in runner_endpoint_state.requirements %}
+          <label class="endpoint-row">
+            <span class="endpoint-module">
+              <strong>{{ requirement.role_label }}</strong>
+            </span>
+            <select name="{{ requirement.role }}" data-endpoint-select>
+              {% for endpoint in runner_endpoint_state.endpoints %}
+              <option value="{{ endpoint.id }}"{% if runner_endpoint_state.selections.get(requirement.role) == endpoint.id %} selected{% endif %}>{{ endpoint.label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+          {% endfor %}
+          <button class="button button-secondary endpoint-deploy-button" type="button" data-endpoint-deploy>部署</button>
+          {% endif %}
+        </form>
+        {% endif %}
+      </section>
+    </aside>
+  </section>
+
+  <aside class="toast-panel" data-save-panel role="status" aria-live="polite" hidden></aside>
+  {% if mode_context.can_view_code %}
+  <section class="code-preview-modal" role="dialog" aria-modal="true" aria-labelledby="code-preview-title" data-code-preview-modal hidden>
+    <button class="code-preview-backdrop" type="button" aria-label="關閉程式碼預覽" data-code-preview-close></button>
+    <div class="code-preview-window">
+      <header class="code-preview-header">
+        <div>
+          <span class="eyebrow">Python 部署程式碼</span>
+          <h2 id="code-preview-title">使用步驟</h2>
+        </div>
+        <div class="context-actions">
+          <button class="button button-ghost" type="button" data-code-preview-close>關閉</button>
+        </div>
+      </header>
+      <div class="code-preview-block source-preview-markdown" data-code-preview-content></div>
+    </div>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script type="module" src="{{ url_for('static', filename='js/runner/runner-page.js') }}"></script>
+{% endblock %}
