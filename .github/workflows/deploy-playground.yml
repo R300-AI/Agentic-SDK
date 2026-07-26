@@ -272,17 +272,29 @@ jobs:
           package: deploy.zip
           clean: true
 
+      - name: Restart App Service after package deploy
+        uses: azure/CLI@v2
+        with:
+          azcliversion: latest
+          inlineScript: |
+            az webapp restart \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --output none
+
       - name: Verify deployed Playground
         run: |
           set -euo pipefail
 
           URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/playground"
+          AGENTS_URL="${URL}/agents"
           BUILDER_URL="${URL}/builder"
           RUNNER_JS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/js/runner/runner-page.js"
           RESULT_SURFACE_JS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/js/runner/result-surface.js"
           CSS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/css/app.css"
           for attempt in {1..30}; do
             if curl --fail --silent --show-error --location "$URL" | grep -q "AI Hub Agent" && \
+               curl --fail --silent --show-error --location "$AGENTS_URL" | grep -q "AI Hub Agent" && \
                curl --fail --silent --show-error --location "$BUILDER_URL" | tee builder.html | grep -q "builder-step-task_type" && \
                grep -q "builder-step-output_format" builder.html && \
                grep -q "builder-step-readiness" builder.html && \
