@@ -6,6 +6,7 @@ on:
     paths:
       - "agentic_sdk/**"
       - "playground/**"
+      - ".env"
       - "requirements.txt"
       - ".github/workflows/deploy-playground.yml"
   workflow_dispatch:
@@ -187,7 +188,7 @@ jobs:
               -o tsv)
 
             DESIRED_PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot
-            DESIRED_AI_HUB_BASE_URL="${{ vars.AI_HUB_BASE_URL }}"
+            DESIRED_AI_HUB_BASE_URL=$(sed -n 's/^AI_HUB_BASE_URL=//p' .env | tail -n 1 | tr -d '"' | tr -d "'")
             DESIRED_AI_HUB_PLAYGROUND_ORIGIN="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net"
             SHOULD_UPDATE_SETTINGS=false
 
@@ -260,6 +261,7 @@ jobs:
             agentic_sdk/ \
             playground/ \
             .python_packages/ \
+            .env \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*" -x "playground/visual-audit/*"
 

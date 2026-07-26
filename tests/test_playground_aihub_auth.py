@@ -1,8 +1,27 @@
+import os
+from pathlib import Path
+
 import httpx
+from dotenv import dotenv_values
 
 from playground import create_app
 from playground.routes import entry as entry_routes
 from playground.services import aihub_client
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_create_app_loads_ai_hub_url_from_project_env(monkeypatch):
+    monkeypatch.delenv("AI_HUB_BASE_URL", raising=False)
+    monkeypatch.delenv("AIHUB_BASE_URL", raising=False)
+    expected_base_url = dotenv_values(REPO_ROOT / ".env").get("AI_HUB_BASE_URL")
+
+    assert expected_base_url
+
+    create_app()
+
+    assert os.environ["AI_HUB_BASE_URL"] == expected_base_url
 
 
 def test_verify_credentials_calls_ai_hub_auth_api(monkeypatch):
