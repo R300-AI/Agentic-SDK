@@ -191,6 +191,14 @@ python -m flask --app playground.app:app run --host 127.0.0.1 --port 5050 --no-r
 
 Runner 若要使用 OpenAI-compatible endpoint，可以在本機環境或部署環境提供對應的 `*_MODEL`、`*_BASE_URL`、`*_API_KEY` 變數。Azure 部署建議透過 Key Vault 與 App Service managed identity 管理機密。
 
+AI Hub 登入模式會呼叫 AI Hub 提供的帳密驗證 API：`POST /api/playground/auth/verify`。本機或部署環境需要提供 `AI_HUB_BASE_URL`，例如：
+
+```bash
+AI_HUB_BASE_URL="https://<your-ai-hub-host>"
+```
+
+驗證成功且回傳 `{"valid": true}` 時，Playground 才會進入已登入模式；未設定 `AI_HUB_BASE_URL`、AI Hub 回傳 invalid，或 API 暫時不可用時，都會拒絕登入。若 AI Hub 有限制 Playground 來源網域，可另外設定 `AI_HUB_PLAYGROUND_ORIGIN`；未設定時會使用目前 Playground request 的 host origin。
+
 ## Demo 與文件
 
 - Demo 範例在 `demo/README.md`。

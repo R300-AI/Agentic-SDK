@@ -12,7 +12,7 @@ aihub_bp = Blueprint("aihub", __name__, url_prefix="/playground/aihub")
 @aihub_bp.post("/auth/verify")
 def verify_auth():
     payload = request.get_json(silent=True) or {}
-    valid = verify_credentials(payload.get("username", ""), payload.get("password", ""))
+    valid = verify_credentials(payload.get("username", ""), payload.get("password", ""), origin=request.host_url)
     return jsonify({"valid": valid})
 
 

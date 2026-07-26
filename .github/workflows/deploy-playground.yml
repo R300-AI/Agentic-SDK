@@ -141,7 +141,8 @@ jobs:
               az webapp config set \
                 --name "${{ vars.AZURE_WEBAPP_NAME }}" \
                 --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-                --startup-file "$STARTUP_COMMAND"
+                --startup-file "$STARTUP_COMMAND" \
+                --output none
             fi
 
             CURRENT_PORT=$(az webapp config appsettings list \
@@ -174,26 +175,54 @@ jobs:
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --query "[?name=='KEY_VAULT_NAME'].value | [0]" \
               -o tsv)
+            CURRENT_AI_HUB_BASE_URL=$(az webapp config appsettings list \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --query "[?name=='AI_HUB_BASE_URL'].value | [0]" \
+              -o tsv)
+            CURRENT_AI_HUB_PLAYGROUND_ORIGIN=$(az webapp config appsettings list \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --query "[?name=='AI_HUB_PLAYGROUND_ORIGIN'].value | [0]" \
+              -o tsv)
 
             DESIRED_PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot
+            DESIRED_AI_HUB_BASE_URL="${{ vars.AI_HUB_BASE_URL }}"
+            DESIRED_AI_HUB_PLAYGROUND_ORIGIN="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net"
+            SHOULD_UPDATE_SETTINGS=false
 
             if [ "$CURRENT_PORT" != "8000" ] || \
                [ "$CURRENT_WEBSITES_PORT" != "8000" ] || \
                [ "$CURRENT_SCM_BUILD" != "false" ] || \
                [ "$CURRENT_ORYX_BUILD" != "false" ] || \
                [ "$CURRENT_PYTHONPATH" != "$DESIRED_PYTHONPATH" ] || \
-               [ "$CURRENT_KEY_VAULT" != "${{ vars.KEY_VAULT_NAME }}" ]; then
+               [ "$CURRENT_KEY_VAULT" != "${{ vars.KEY_VAULT_NAME }}" ] || \
+               [ "$CURRENT_AI_HUB_PLAYGROUND_ORIGIN" != "$DESIRED_AI_HUB_PLAYGROUND_ORIGIN" ]; then
+              SHOULD_UPDATE_SETTINGS=true
+            fi
+            if [ -n "$DESIRED_AI_HUB_BASE_URL" ] && [ "$CURRENT_AI_HUB_BASE_URL" != "$DESIRED_AI_HUB_BASE_URL" ]; then
+              SHOULD_UPDATE_SETTINGS=true
+            fi
+
+            if [ "$SHOULD_UPDATE_SETTINGS" = "true" ]; then
+              APP_SETTINGS=(
+                "PORT=8000"
+                "WEBSITES_PORT=8000"
+                "SCM_DO_BUILD_DURING_DEPLOYMENT=false"
+                "ENABLE_ORYX_BUILD=false"
+                "PYTHONPATH=$DESIRED_PYTHONPATH"
+                "KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}"
+                "AI_HUB_PLAYGROUND_ORIGIN=$DESIRED_AI_HUB_PLAYGROUND_ORIGIN"
+                "PLAYGROUND_SECRET_KEY=$CURRENT_SECRET"
+              )
+              if [ -n "$DESIRED_AI_HUB_BASE_URL" ]; then
+                APP_SETTINGS+=("AI_HUB_BASE_URL=$DESIRED_AI_HUB_BASE_URL")
+              fi
               az webapp config appsettings set \
                 --name "${{ vars.AZURE_WEBAPP_NAME }}" \
                 --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-                --settings \
-                  PORT=8000 \
-                  WEBSITES_PORT=8000 \
-                  SCM_DO_BUILD_DURING_DEPLOYMENT=false \
-                  ENABLE_ORYX_BUILD=false \
-                  PYTHONPATH="$DESIRED_PYTHONPATH" \
-                  KEY_VAULT_NAME="${{ vars.KEY_VAULT_NAME }}" \
-                  PLAYGROUND_SECRET_KEY="$CURRENT_SECRET"
+                --settings "${APP_SETTINGS[@]}" \
+                --output none
             fi
 
       - name: Install Python dependencies into package

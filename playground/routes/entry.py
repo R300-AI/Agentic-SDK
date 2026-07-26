@@ -40,7 +40,7 @@ def login():
     username = request.form.get("username", "")
     password = request.form.get("password", "")
 
-    if not verify_credentials(username, password):
+    if not verify_credentials(username, password, origin=request.host_url):
         return render_template(
             "entry.html",
             mode_context=ModeContext(),

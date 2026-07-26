@@ -15,6 +15,7 @@
 | `AZURE_REGION` | Azure region，例如 `eastasia`。 |
 | `AZURE_WEBAPP_NAME` | App Service name，必須全域唯一。 |
 | `KEY_VAULT_NAME` | Key Vault name，必須全域唯一。 |
+| `AI_HUB_BASE_URL` | 選填。AI Hub host base URL；設定後 App Service 會用它呼叫 `POST /api/playground/auth/verify` 驗證登入帳密。 |
 
 `PLAYGROUND_SECRET_KEY` 會由 workflow 讀取既有 App Service setting；如果尚未存在，部署時會在 Azure 端產生一次並寫入 App Service。模型 endpoint 和 API key 建議放在 Key Vault，由 App Service 的 managed identity 在 runtime 讀取。
 
@@ -41,7 +42,7 @@ repo:R300-AI/Agentic-SDK:ref:refs/heads/main
 python -m playground.main
 ```
 
-5. 設定 `PORT=8000`、`WEBSITES_PORT=8000`、`SCM_DO_BUILD_DURING_DEPLOYMENT=false`、`ENABLE_ORYX_BUILD=false`、`PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot`、`KEY_VAULT_NAME`，並沿用或建立 `PLAYGROUND_SECRET_KEY`。Azure App Service 對外仍由平台提供 HTTP/HTTPS 80/443，容器內由 `PORT=8000` 接收流量。
+5. 設定 `PORT=8000`、`WEBSITES_PORT=8000`、`SCM_DO_BUILD_DURING_DEPLOYMENT=false`、`ENABLE_ORYX_BUILD=false`、`PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot`、`KEY_VAULT_NAME`、`AI_HUB_PLAYGROUND_ORIGIN`，並沿用或建立 `PLAYGROUND_SECRET_KEY`。若 repository variable 有設定 `AI_HUB_BASE_URL`，也會同步到 App Service；未設定時不覆蓋既有 App Service setting。Azure App Service 對外仍由平台提供 HTTP/HTTPS 80/443，容器內由 `PORT=8000` 接收流量。
 6. 在 GitHub Actions runner 上安裝 Python dependencies 到 `.python_packages/lib/site-packages`，並用 FastAPI TestClient smoke test `/healthz`、`/playground`、`/playground/builder`。
 7. 打包 `agentic_sdk/`、`playground/`、`.python_packages/`、`requirements.txt` 為 `deploy.zip`。
 8. 使用 `azure/webapps-deploy` 部署到 App Service。
