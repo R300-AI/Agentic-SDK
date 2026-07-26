@@ -1,6 +1,8 @@
-# AI Hub Playground API
+# AI Hub Playground Handoff API
 
-這份文件是給 AI Hub 串接 Agentic SDK Playground 使用的 API contract。重點不是一般使用者導覽，而是 AI Hub 在「使用者已登入」的狀態下，如何把必要資訊交給 Playground，讓 Playground 建立自己的 session 並進入 Builder 或 Runner。
+這份文件只定義 AI Hub 進入 Agentic SDK Playground 的 handoff API。AI Hub 已經定義好的 Agent list、config load、config save 等 API，以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
+
+本頁不重新定義 AI Hub 的 save/load request 或 response，避免兩邊文件 drift。
 
 ## Base URL
 
@@ -18,10 +20,8 @@ https://agentic-sdk-playground.azurewebsites.net
 | --- | --- | --- | --- |
 | Create Agent Handoff | `POST` | `/playground/aihub/navigation/builder` | AI Hub 已登入使用者直接建立新 Agent，成功後進 Builder。 |
 | Existing Agent Handoff | `POST` | `/playground/aihub/navigation/runner` | AI Hub 已登入使用者帶 `agent_id` 載入既有 Agent，成功後進 Runner。 |
-| Save Current Config | `POST` | `/playground/aihub/config/save` | Runner 儲存目前 Playground config 到 AI Hub。 |
-| Reload Current Config | `POST` | `/playground/aihub/config/reload` | Runner 重新從 AI Hub 載入目前 `agent_id` 的 config。 |
 
-前兩個 handoff API 是 AI Hub 進入 Playground 的入口；後兩個 API 是 Playground Runner 進入後使用的 session API。
+這兩個 endpoint 是 AI Hub 把已登入使用者送入 Playground 的入口。Runner 進入後的 save/load/reload 行為會依照 AI Hub connection model 執行，不在本頁重複定義。
 
 ## POST /playground/aihub/navigation/builder
 
@@ -56,7 +56,7 @@ Playground 會完成以下動作：
 
 1. 呼叫 AI Hub `POST /api/playground/auth/verify` 驗證帳密。
 2. 建立 Playground server-side session。
-3. 建立 AI Hub credential ticket，供後續 save/reload 使用。
+3. 建立 AI Hub credential ticket，供後續依 AI Hub connection model 執行 save/reload 時使用。
 4. 清除舊的 `agent_id`、`agent_name`、`last_aihub_save`。
 5. 初始化預設 `python_source`。
 6. Redirect 到 `/playground/builder`。
@@ -101,7 +101,7 @@ Playground 會完成以下動作：
 
 1. 呼叫 AI Hub `POST /api/playground/auth/verify` 驗證帳密。
 2. 清除目前瀏覽器上的舊 Playground session 狀態。
-3. 呼叫 AI Hub `POST /api/playground/agents/<agent_id>/config/load` 載入 config。
+3. 依 AI Hub connection model 載入指定 `agent_id` 的 Playground config。
 4. 建立 Playground server-side session。
 5. 設定 `mode=aihub_editable`。
 6. 寫入 `agent_id`、`agent_name`、`python_source`、`source_origin=aihub_loaded`。
@@ -113,96 +113,18 @@ Playground 會完成以下動作：
 | --- | --- | --- |
 | `400` | `agent_id` 缺漏 | 回傳登入頁 HTML，顯示 `Missing AI Hub agent id.`。 |
 | `400` | `username` / `password` 缺漏或驗證失敗 | 回傳登入頁 HTML，顯示驗證錯誤。 |
-| `502` | AI Hub config load 失敗 | 回傳登入頁 HTML，顯示 AI Hub load 錯誤。 |
+| `502` | AI Hub connection model 的 config load 失敗 | 回傳登入頁 HTML，顯示 AI Hub load 錯誤。 |
 
-## POST /playground/aihub/config/save
+## Canonical AI Hub API Contract
 
-這是 Runner 裡的 session API。AI Hub 不需要直接呼叫它；使用者在 Runner 按「儲存」時，Playground 前端會呼叫此 API。
+以下 API 由 AI Hub 文件定義，本頁只引用，不重寫 request/response：
 
-### Request
+- 驗證帳密
+- 列出使用者 Agent
+- 載入指定 Agent config
+- 儲存或建立 Agent config
 
-```http
-POST /playground/aihub/config/save HTTP/1.1
-Cookie: session=...
-Content-Type: application/json
-
-{}
-```
-
-可選 payload：
-
-| 欄位 | 型別 | 必填 | 說明 |
-| --- | --- | --- | --- |
-| `agent_id` | string | No | 若提供，覆蓋 session 裡的 `agent_id`。 |
-| `python_source` | string | No | 若提供，覆蓋 session 裡的 `python_source`。 |
-
-### Success Response
-
-```json
-{
-  "saved": true,
-  "agent_id": "agt_dbc780b2d07445ef",
-  "agent_name": "Playground Agent - admin",
-  "integration_status": "aihub",
-  "requires_real_aihub_api": false
-}
-```
-
-如果 session 尚無 `agent_id`，Playground 會呼叫 AI Hub `POST /api/playground/config/save` 並讓 AI Hub 建立新 Agent。AI Hub 回傳 `agent_id` 後，Playground 會把它保存到 session，後續 save/reload 都會針對同一個 Agent。
-
-### Error Response
-
-| 狀態碼 | 條件 |
-| --- | --- |
-| `403` | 目前 session 不是可儲存模式，或 Origin 不允許。 |
-| `401` | session 沒有 AI Hub credential ticket。 |
-| `400` | 沒有可儲存的 `python_source`。 |
-| `502` | AI Hub save API 失敗。 |
-
-## POST /playground/aihub/config/reload
-
-這是 Runner 裡的 session API。使用者按「重新載入」時，Playground 會用 session 裡的 `agent_id` 重新向 AI Hub 取得 config。
-
-### Request
-
-```http
-POST /playground/aihub/config/reload HTTP/1.1
-Cookie: session=...
-```
-
-### Success Response
-
-```json
-{
-  "loaded": true,
-  "agent_id": "agt_dbc780b2d07445ef",
-  "agent_name": "Playground Agent - admin",
-  "python_source": "..."
-}
-```
-
-### Error Response
-
-| 狀態碼 | 條件 |
-| --- | --- |
-| `403` | Origin 不允許。 |
-| `401` | session 沒有 AI Hub credential ticket。 |
-| `502` | AI Hub load API 失敗。 |
-
-## AI Hub Upstream API Requirements
-
-Playground 會呼叫 AI Hub 這些 API。這些 API 位於 `AI_HUB_BASE_URL`，目前正式設定為：
-
-```text
-https://ai-hub-portal.azurewebsites.net
-```
-
-| AI Hub API | Method | 說明 |
-| --- | --- | --- |
-| `/api/playground/auth/verify` | `POST` | 驗證 `username` / `password` 是否合法。 |
-| `/api/playground/agents` | `POST` | 列出該帳號可用 Agent。 |
-| `/api/playground/agents/<agent_id>/config/load` | `POST` | 載入指定 Agent 的 Playground config。 |
-| `/api/playground/config/save` | `POST` | 儲存 config；沒有 `agent_id` 時建立新 Agent，有 `agent_id` 時更新既有 Agent。 |
+Canonical 文件：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
 
 ## Browser Handoff Example
 
