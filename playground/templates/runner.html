@@ -20,6 +20,9 @@
       {% if mode_context.can_save %}
       <button class="button button-secondary" type="button" data-save-action>儲存</button>
       {% endif %}
+      {% if has_ai_hub_agent and mode_context.can_save %}
+      <button class="button button-secondary" type="button" data-reload-action>重新載入</button>
+      {% endif %}
       {% if mode_context.can_view_code %}
       <a class="button button-secondary" href="{{ url_for('source.source_page') }}" data-code-preview-open>預覽程式碼</a>
       {% endif %}

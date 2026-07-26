@@ -38,6 +38,7 @@ def runner():
         workflow_summary=workflow_summary,
         runner_endpoint_state=endpoint_state(python_source, endpoint_selections),
         last_aihub_save=session.get("last_aihub_save"),
+        has_ai_hub_agent=bool(session.get("agent_id")),
     )
 
 

@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+
+{% block title %}選擇 Agent - AI Hub Agent 建立工具{% endblock %}
+
+{% block body %}
+<main class="entry-page" data-page="agent-picker">
+  <section class="entry-card official-auth-card" aria-labelledby="agent-picker-title">
+    <div class="official-brand-row">
+      <div class="brand-mark" aria-hidden="true"><span></span></div>
+      <div>
+        <p class="eyebrow">AI Hub Agent 建立工具</p>
+        <strong>Agentic SDK</strong>
+      </div>
+    </div>
+    <div class="entry-copy">
+      <h1 id="agent-picker-title">選擇要編輯的 Agent。</h1>
+      <p class="lede">可載入既有 Agent 的 Playground 配置，或建立新的 Agent 設定。</p>
+    </div>
+
+    {% if load_error %}
+    <p class="inline-status error" role="alert">{{ load_error }}</p>
+    {% endif %}
+
+    <div class="entry-choice-grid" aria-label="選擇 Agent">
+      {% for agent in agents %}
+      <form class="entry-choice-card" method="post" action="{{ url_for('entry.select_agent') }}">
+        <span class="choice-icon" aria-hidden="true">AI</span>
+        <h2>{{ agent.agent_name or agent.agent_id }}</h2>
+        <p>{{ agent.description or '載入此 Agent 最近一次保存的 Playground 配置。' }}</p>
+        <input type="hidden" name="agent_id" value="{{ agent.agent_id }}">
+        <button class="button button-primary" type="submit">載入並編輯</button>
+      </form>
+      {% endfor %}
+
+      <form class="entry-choice-card quiet" method="post" action="{{ url_for('entry.start_new_agent') }}">
+        <span class="choice-icon" aria-hidden="true">NEW</span>
+        <h2>建立新的 Agent</h2>
+        <p>先在 Playground 建立設定；第一次儲存時 AI Hub 會建立 Agent 並回傳 agent_id。</p>
+        <button class="button button-secondary" type="submit">開始新建</button>
+      </form>
+    </div>
+  </section>
+</main>
+{% endblock %}

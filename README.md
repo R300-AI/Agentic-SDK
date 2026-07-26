@@ -198,7 +198,7 @@ AI_HUB_BASE_URL=https://ai-hub-portal.azurewebsites.net
 AI_HUB_PLAYGROUND_ORIGIN=https://agentic-sdk-playground.azurewebsites.net
 ```
 
-驗證成功且回傳 `{"valid": true}` 時，Playground 才會進入已登入模式；AI Hub 回傳 invalid，或 API 暫時不可用時，都會拒絕登入。登入成功後，Playground 會以 server-side 暫存 ticket 保留本次 session 的 AI Hub credential，Runner 按「儲存」時會呼叫 `POST /api/playground/agents/<agent_id>/config/save` 寫回 AI Hub；這需要 session 已有 AI Hub `agent_id`。若 AI Hub host 之後更換，只需要修改 [.env](.env) 的 `AI_HUB_BASE_URL`。
+驗證成功且回傳 `{"valid": true}` 時，Playground 才會進入已登入模式；AI Hub 回傳 invalid，或 API 暫時不可用時，都會拒絕登入。登入成功後，Playground 會以 server-side 暫存 ticket 保留本次 session 的 AI Hub credential，呼叫 `POST /api/playground/agents` 列出同帳號所有 Agent，並可用 `POST /api/playground/agents/<agent_id>/config/load` 載入或重新載入配置。Runner 按「儲存」時會呼叫 `POST /api/playground/config/save`；若 session 尚無 `agent_id`，AI Hub 會建立新 Agent 並回傳 `agent_id`，後續儲存會更新同一個 Agent。若 AI Hub host 之後更換，只需要修改 [.env](.env) 的 `AI_HUB_BASE_URL`。
 
 ## Demo 與文件
 

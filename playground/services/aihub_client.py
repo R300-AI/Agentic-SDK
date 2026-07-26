@@ -13,7 +13,9 @@ from playground.services.source_builder import build_default_python_source
 
 
 _AUTH_VERIFY_PATH = "/api/playground/auth/verify"
-_CONFIG_SAVE_PATH = "/api/playground/agents/{agent_id}/config/save"
+_AGENTS_PATH = "/api/playground/agents"
+_CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/load"
+_CONFIG_SAVE_PATH = "/api/playground/config/save"
 _DEFAULT_TIMEOUT_SECONDS = 5.0
 _DEFAULT_CREDENTIAL_TTL_SECONDS = 8 * 60 * 60
 
@@ -98,13 +100,77 @@ def _request_timeout_seconds() -> float:
         return _DEFAULT_TIMEOUT_SECONDS
 
 
-def load_config(agent_id: str) -> dict[str, str]:
+def list_agents(*, credentials: AiHubCredentials | None = None, origin: str | None = None) -> dict[str, object]:
+    if not credentials or not credentials.username or not credentials.password:
+        return _aihub_error("AI Hub login is required before listing agents.", "missing_credentials")
+    base_url = _ai_hub_base_url()
+    if not base_url:
+        return _aihub_error("AI Hub base URL is not configured.", "missing_base_url")
+
+    try:
+        response = httpx.post(
+            f"{base_url}{_AGENTS_PATH}",
+            json={"username": credentials.username, "password": credentials.password},
+            headers=_json_headers(origin),
+            timeout=_request_timeout_seconds(),
+        )
+        if response.status_code >= 400:
+            return _aihub_error(_response_error_message(response), "aihub_agents_failed", status_code=response.status_code)
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as error:
+        return _aihub_error(str(error) or "AI Hub agents request failed.", "aihub_agents_failed")
+
+    items = payload.get("items") if isinstance(payload, dict) else []
     return {
-        "agent_id": agent_id,
-        "python_source": build_default_python_source(),
-        "exported_at": datetime.now(timezone.utc).isoformat(),
-        "integration_status": "stub",
-        "requires_real_aihub_api": True,
+        "loaded": True,
+        "items": items if isinstance(items, list) else [],
+        "integration_status": "aihub",
+        "requires_real_aihub_api": False,
+    }
+
+
+def load_config(
+    agent_id: str | None,
+    *,
+    credentials: AiHubCredentials | None = None,
+    origin: str | None = None,
+) -> dict[str, object]:
+    resolved_agent_id = (agent_id or "").strip()
+    if not resolved_agent_id:
+        return _aihub_error("Missing AI Hub agent id.", "missing_agent_id", loaded=False)
+    if not credentials or not credentials.username or not credentials.password:
+        return _aihub_error("AI Hub login is required before loading.", "missing_credentials", agent_id=resolved_agent_id, loaded=False)
+    base_url = _ai_hub_base_url()
+    if not base_url:
+        return _aihub_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id, loaded=False)
+
+    try:
+        response = httpx.post(
+            f"{base_url}{_CONFIG_LOAD_PATH.format(agent_id=quote(resolved_agent_id, safe=''))}",
+            json={"username": credentials.username, "password": credentials.password},
+            headers=_json_headers(origin),
+            timeout=_request_timeout_seconds(),
+        )
+        if response.status_code >= 400:
+            return _aihub_error(
+                _response_error_message(response),
+                "aihub_load_failed",
+                agent_id=resolved_agent_id,
+                loaded=False,
+                status_code=response.status_code,
+            )
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as error:
+        return _aihub_error(str(error) or "AI Hub load request failed.", "aihub_load_failed", agent_id=resolved_agent_id, loaded=False)
+
+    return {
+        "loaded": True,
+        "agent_id": payload.get("agent_id") or resolved_agent_id,
+        "agent_name": payload.get("agent_name") or "",
+        "python_source": payload.get("python_source") or build_default_python_source(),
+        "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or "",
+        "integration_status": "aihub",
+        "requires_real_aihub_api": False,
     }
 
 
@@ -115,22 +181,24 @@ def save_config(
     credentials: AiHubCredentials | None = None,
     origin: str | None = None,
 ) -> dict[str, object]:
-    resolved_agent_id = (agent_id or "").strip()
-    if not resolved_agent_id:
-        return _save_error("Missing AI Hub agent id.", "missing_agent_id")
     if not python_source:
-        return _save_error("No Python source is available to save.", "missing_python_source", agent_id=resolved_agent_id)
+        return _save_error("No Python source is available to save.", "missing_python_source", agent_id=agent_id)
     if not credentials or not credentials.username or not credentials.password:
-        return _save_error("AI Hub login is required before saving.", "missing_credentials", agent_id=resolved_agent_id)
+        return _save_error("AI Hub login is required before saving.", "missing_credentials", agent_id=agent_id)
 
     base_url = _ai_hub_base_url()
     if not base_url:
-        return _save_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id)
+        return _save_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=agent_id)
+
+    payload = {"username": credentials.username, "password": credentials.password, "python_source": python_source}
+    resolved_agent_id = (agent_id or "").strip()
+    if resolved_agent_id:
+        payload["agent_id"] = resolved_agent_id
 
     try:
         response = httpx.post(
-            f"{base_url}{_CONFIG_SAVE_PATH.format(agent_id=quote(resolved_agent_id, safe=''))}",
-            json={"username": credentials.username, "password": credentials.password, "python_source": python_source},
+            f"{base_url}{_CONFIG_SAVE_PATH}",
+            json=payload,
             headers=_json_headers(origin),
             timeout=_request_timeout_seconds(),
         )
@@ -138,12 +206,12 @@ def save_config(
             return _save_error(
                 _response_error_message(response),
                 "aihub_save_failed",
-                agent_id=resolved_agent_id,
+                agent_id=resolved_agent_id or agent_id,
                 status_code=response.status_code,
             )
         payload = response.json()
     except (httpx.HTTPError, ValueError) as error:
-        return _save_error(str(error) or "AI Hub save request failed.", "aihub_save_failed", agent_id=resolved_agent_id)
+        return _save_error(str(error) or "AI Hub save request failed.", "aihub_save_failed", agent_id=resolved_agent_id or agent_id)
 
     saved = payload.get("saved")
     if saved is None:
@@ -152,11 +220,35 @@ def save_config(
         saved = True
     return {
         "agent_id": payload.get("agent_id") or resolved_agent_id,
+        "agent_name": payload.get("agent_name") or "",
         "saved": bool(saved),
-        "exported_at": payload.get("exported_at") or payload.get("saved_at") or datetime.now(timezone.utc).isoformat(),
+        "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or payload.get("saved_at") or datetime.now(timezone.utc).isoformat(),
         "integration_status": "aihub",
         "requires_real_aihub_api": False,
     }
+
+
+def _aihub_error(
+    message: str,
+    code: str,
+    *,
+    agent_id: str | None = None,
+    loaded: bool | None = None,
+    status_code: int | None = None,
+) -> dict[str, object]:
+    result: dict[str, object] = {
+        "error": message,
+        "error_code": code,
+        "integration_status": "aihub",
+        "requires_real_aihub_api": False,
+    }
+    if loaded is not None:
+        result["loaded"] = loaded
+    if agent_id:
+        result["agent_id"] = agent_id
+    if status_code is not None:
+        result["status_code"] = status_code
+    return result
 
 
 def _json_headers(origin: str | None) -> dict[str, str]:

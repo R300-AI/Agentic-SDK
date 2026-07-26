@@ -12,6 +12,7 @@ const resultSurface = document.querySelector("[data-result-surface]");
 const userMessage = document.querySelector("[data-user-message]");
 const emptyMessage = document.querySelector("[data-empty-message]");
 const saveButton = document.querySelector("[data-save-action]");
+const reloadButton = document.querySelector("[data-reload-action]");
 const saveStatus = document.querySelector("[data-save-status]");
 const attachmentInput = document.querySelector("[data-attachment-input]");
 const artifactList = document.querySelector("[data-artifact-list]");
@@ -341,4 +342,27 @@ saveButton?.addEventListener("click", async () => {
 	if (saveButton) {
 		saveButton.disabled = false;
 	}
+});
+
+reloadButton?.addEventListener("click", async () => {
+	reloadButton.disabled = true;
+	if (runStatus) {
+		runStatus.textContent = "正在重新載入...";
+	}
+	let result;
+	try {
+		result = await postJson("/playground/aihub/config/reload");
+	} catch (error) {
+		result = { loaded: false, error: error.message || "重新載入失敗。" };
+	}
+	if (result.loaded) {
+		window.location.href = "/playground/run";
+		return;
+	}
+	const message = result.error || "重新載入失敗。";
+	if (runStatus) {
+		runStatus.textContent = message;
+	}
+	showSavePanel(savePanel, message);
+	reloadButton.disabled = false;
 });
