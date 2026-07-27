@@ -3,6 +3,17 @@ from playground.services.source_parser import parse_supported_source
 from playground.services.runner_service import execute_python_source
 
 
+def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None) -> str:
+    hint_line = f"# Playground V2 profile hint: {profile_hint}\n" if profile_hint else ""
+    return (
+        "from agentic_sdk import Workflow\n\n"
+        f"{hint_line}"
+        "workflow = Workflow(\n"
+        f"    workflow_name={workflow_name!r},\n"
+        ")\n"
+    )
+
+
 def test_parse_supported_default_source_name():
     parsed = parse_supported_source(build_default_python_source())
 
@@ -12,7 +23,7 @@ def test_parse_supported_default_source_name():
 
 
 def test_parse_generated_profile_hint_for_summary():
-    python_source = build_python_source_from_builder_choice("template", "Review", None)
+    python_source = _sample_workflow_source("Review Summary Helper")
     parsed = parse_supported_source(python_source)
     summary = get_workflow_summary(python_source)
 
@@ -22,7 +33,7 @@ def test_parse_generated_profile_hint_for_summary():
 
 
 def test_parse_structured_action_profile_hint():
-    python_source = build_python_source_from_builder_choice("action", "Structured", None)
+    python_source = _sample_workflow_source("Structured Result Helper")
     parsed = parse_supported_source(python_source)
     summary = get_workflow_summary(python_source)
 
@@ -31,8 +42,8 @@ def test_parse_structured_action_profile_hint():
 
 
 def test_parse_readme_starter_template_hints():
-    openai_source = build_python_source_from_builder_choice("template", "OpenAI client", None)
-    custom_source = build_python_source_from_builder_choice("template", "Custom Action", None)
+    openai_source = _sample_workflow_source("OpenAI Client Helper")
+    custom_source = _sample_workflow_source("Custom Action Helper")
 
     assert parse_supported_source(openai_source).workflow_name == "OpenAI Client Helper"
     assert get_workflow_summary(openai_source).template == "模型回覆"
@@ -56,7 +67,7 @@ workflow = Workflow()
 
 
 def test_retrieve_builder_ignores_legacy_semantic_weight_fields():
-    source = build_python_source_from_builder_choice("retrieve", "Semantic", None)
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
     source = build_python_source_from_builder_choice(
         "retrieve",
         {

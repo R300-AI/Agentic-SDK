@@ -34,31 +34,6 @@ _ALLOWED_DIRECT_RESULT_KEYS = {
     "latest_final_message",
 }
 _ALLOWED_ENTRY_MODULES = {"perceive", "plan", "retrieve", "action"}
-_FORMAL_AUDIENCE_PROMPTS = {
-    "customer": "對象是對外客戶；語氣禮貌、清楚，避免內部術語。",
-    "executive": "對象是主管或決策者；先給結論、風險與需要決策的事項。",
-    "internal": "對象是內部協作夥伴；清楚交代狀態、責任與下一步。",
-}
-_FORMAL_STRUCTURE_PROMPTS = {
-    "conclusion_evidence_next_steps": "結構依序包含：結論、重點依據、下一步。",
-    "email_reply": "結構依序包含：稱呼、主旨回覆、補充說明、收尾。",
-    "brief_status": "結構依序包含：目前狀態、需要注意的風險、後續動作。",
-}
-_ADVISOR_QUESTION_MODE_PROMPTS = {
-    "one_at_a_time": "每次只問一個最關鍵問題。",
-    "two_at_most": "每次最多問兩個彼此相關的問題。",
-    "offer_choices": "先提供少量選項協助使用者選擇，再追問缺口。",
-}
-_ADVISOR_REPLY_STYLE_PROMPTS = {
-    "guided": "語氣溫和、引導式，讓使用者容易補充資訊。",
-    "diagnostic": "語氣偏診斷式，先指出缺口再提出下一個問題。",
-    "concise": "語氣精簡，直接確認下一個必要資訊。",
-}
-_ADVISOR_RESPONSE_SHAPE_PROMPTS = {
-    "known_then_question": "先用一小段整理已知資訊，再提出下一個問題。",
-    "question_only": "只提出下一個問題，不提前做結論。",
-    "options_then_question": "先列出可選方向，再問使用者要往哪一個方向走。",
-}
 _OUTPUT_FORMAT_PROMPTS = {
     "free_text": "請依使用者需求自然回覆；語氣、角色、品牌口吻與回覆方式以使用者設定的回覆風格與規範為準。",
     "interactive": "請同時支援純文字回覆與 OpenAI tool calling。一般問題可自然回答；當需要使用者選擇或填寫資料時，請呼叫最符合的工具，不要把 component/api JSON 當成一般文字輸出。",
@@ -73,7 +48,6 @@ _INTERACTIVE_OUTPUT_CHOICES = {"interactive", "table", "json", "custom_schema"}
 _TOOL_CALL_OUTPUT_CHOICES = {"interactive"}
 _STRUCTURED_OUTPUT_CHOICES = {"table", "json", "custom_schema"}
 _ADVISOR_REQUIRED_FIELDS_TEXT = "目標 = 使用者想完成的結果\n限制 = 時程、預算、規格或其他約束\n現況 = 已知資料、已嘗試方法或目前阻礙"
-_ADVISOR_HANDOFF_RULE = "當目標、限制與現況足夠明確，或需要支援資料佐證時，才進入查資料或產生整理回覆。"
 _ADVISOR_WELCOME_MESSAGE = "請先描述你想完成的事，我會一步步確認需求。"
 _DEFAULT_RETRIEVE_DESCRIPTION = "依使用者設定的關鍵字支援資料判斷是否需要查詢。"
 _DEFAULT_SEMANTIC_RETRIEVE_NAME = "支援文件"
@@ -287,121 +261,6 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
         if choice in failure_overrides:
             return _build_source_for_config(_replace_config(config, **failure_overrides[choice]))
 
-    if step_key == "template":
-        if isinstance(choice_label, dict):
-            return _build_source_for_config(
-                _replace_config(
-                    config,
-                    task_goal=_clean_prompt(str(choice_label.get("task_goal", config.task_goal or ""))) if "task_goal" in choice_label else config.task_goal,
-                    task_success_criteria=_clean_prompt(str(choice_label.get("success_criteria", config.task_success_criteria or ""))) if "success_criteria" in choice_label else config.task_success_criteria,
-                )
-            )
-        choice = str(choice_label)
-        default_names = {
-            "Minimal": "Customer Helper",
-            "OpenAI client": "OpenAI Client Helper",
-            "Custom Action": "Custom Action Helper",
-            "Advisor": "Advisor Helper",
-            "Recommendation": "Recommendation Helper",
-            "Review": "Review Summary Helper",
-        }
-        profile_hints = {
-            "Minimal": None,
-            "OpenAI client": "OpenAI Client",
-            "Custom Action": "Custom Action",
-            "Advisor": "Advisor",
-            "Recommendation": "Recommendation",
-            "Review": "Summary",
-        }
-        template_overrides = {
-            "Minimal": {"perceive_module": "PassThroughPerceive", "retrieve_module": "KeywordRetrieve", "action_module": "DirectAnswerAction", "plan_strategy": None, "reflect_module": None, "reflect_on_failure": None},
-            "OpenAI client": {
-                "task_goal": "將使用者輸入整理成可直接對外發送的正式回覆。",
-                "task_success_criteria": "語氣專業、先給結論、保留必要依據與下一步，資訊不足時要明確說明。",
-                "perceive_module": "PassThroughPerceive",
-                "retrieve_module": "KeywordRetrieve",
-                "action_module": "GenerativeAction",
-                "action_prompt": _formal_response_prompt({}),
-                "plan_strategy": None,
-                "reflect_module": None,
-                "reflect_on_failure": None,
-            },
-            "Custom Action": {"perceive_module": "PassThroughPerceive", "retrieve_module": "KeywordRetrieve", "action_module": "CustomAction", "plan_strategy": None, "reflect_module": None, "reflect_on_failure": None},
-            "Advisor": {
-                "task_goal": "一步步釐清使用者需求，缺少關鍵資訊時先追問，不急著給最終結論。",
-                "task_success_criteria": "每次只補齊下一個關鍵缺口；資料足夠時再查支援資料或整理回覆。",
-                "perceive_module": "TextPerceive",
-                "perceive_input_label": "使用者需求",
-                "perceive_welcome_message": _ADVISOR_WELCOME_MESSAGE,
-                "perceive_options": tuple(_option_items_from_pairs(_ADVISOR_REQUIRED_FIELDS_TEXT)),
-                "retrieve_module": "KeywordRetrieve",
-                "action_module": "GenerativeAction",
-                "action_prompt": _advisor_action_prompt({}),
-                "plan_strategy": "RouteBySupport",
-                "plan_system_prompt": _advisor_plan_prompt({}),
-            },
-            "Recommendation": {"perceive_module": "TextPerceive", "retrieve_module": "SemanticRetrieve", "action_module": "GenerativeAction", "plan_strategy": "RouteBySupport"},
-            "Review": {"perceive_module": "TextPerceive", "retrieve_module": "SemanticRetrieve", "action_module": "GenerativeAction"},
-        }
-        template_reset = {
-            "task_goal": None,
-            "task_success_criteria": None,
-            "perceive_input_label": None,
-            "perceive_welcome_message": None,
-            "perceive_options": (),
-            "perceive_importance": 1.0,
-            "action_prompt": None,
-            "plan_direct_rule": None,
-            "plan_system_prompt": None,
-        }
-        if choice in profile_hints:
-            template_values = {**template_reset, **template_overrides[choice]}
-            updated = _replace_config(
-                config,
-                workflow_name=_workflow_name_for_profile(existing_source, default_names[choice]),
-                profile_hint=profile_hints[choice],
-                **template_values,
-            )
-            return _build_source_for_config(updated)
-
-    if step_key == "input" and isinstance(choice_label, dict):
-        return _build_source_for_config(
-            _replace_config(
-                config,
-                input_description=_clean_prompt(str(choice_label.get("input_description", config.input_description or ""))) if "input_description" in choice_label else config.input_description,
-                input_fields=tuple(_config_items_from_pairs(str(choice_label.get("input_fields", "")))) if "input_fields" in choice_label else config.input_fields,
-                perceive_welcome_message=_clean_prompt(str(choice_label.get("welcome_message", config.perceive_welcome_message or ""))) if "welcome_message" in choice_label else config.perceive_welcome_message,
-                perceive_importance=_clean_float(choice_label.get("importance"), config.perceive_importance, 0.0, 5.0) if "importance" in choice_label else config.perceive_importance,
-            )
-        )
-
-    if step_key == "input" and str(choice_label) == "Message":
-        return _build_source_for_config(_replace_config(config, input_kind="Message", perceive_module="PassThroughPerceive"))
-    if step_key == "input" and str(choice_label) == "Document":
-        return _build_source_for_config(
-            _replace_config(
-                config,
-                input_kind="Document",
-                perceive_module="TextPerceive",
-                workflow_name=_workflow_name_for_profile(existing_source, "Document Review Helper"),
-                profile_hint="Summary",
-            )
-        )
-    if step_key == "input" and str(choice_label) == "Form":
-        return _build_source_for_config(
-            _replace_config(
-                config,
-                input_kind="Form",
-                perceive_module="TextPerceive",
-                workflow_name=_workflow_name_for_profile(existing_source, "Structured Intake Helper"),
-                profile_hint="Structured Form",
-            )
-        )
-    if step_key == "input" and str(choice_label) == "TextImage":
-        return _build_source_for_config(
-            _replace_config(config, input_kind="TextImage", perceive_module="TextImagePerceive", profile_hint="Text Image")
-        )
-
     if step_key == "perceive":
         if isinstance(choice_label, dict):
             return _build_source_for_config(
@@ -414,13 +273,6 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                     perceive_image_instruction=_clean_prompt(str(choice_label.get("image_instruction", config.perceive_image_instruction or ""))) if "image_instruction" in choice_label else config.perceive_image_instruction,
                 )
             )
-        perceive_module = {
-            "Simple": "PassThroughPerceive",
-            "Text": "TextPerceive",
-            "Structured": "TextPerceive",
-            "TextImage": "TextImagePerceive",
-        }.get(str(choice_label), config.perceive_module)
-        return _build_source_for_config(_replace_config(config, perceive_module=perceive_module))
 
     if step_key == "retrieve":
         if isinstance(choice_label, dict):
@@ -443,27 +295,6 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 ),
             )
             return _build_source_for_config(updated)
-        retrieve_module = {
-            "None yet": "KeywordRetrieve",
-            "Keyword": "KeywordRetrieve",
-            "Semantic": "SemanticRetrieve",
-        }.get(str(choice_label), config.retrieve_module)
-        return _build_source_for_config(_replace_config(config, retrieve_module=retrieve_module))
-
-    if step_key == "plan":
-        if isinstance(choice_label, dict):
-            return _build_source_for_config(
-                _replace_config(
-                    config,
-                    retrieve_name=_clean_short_text(str(choice_label.get("retrieve_name", config.retrieve_name)), "支援資料") if "retrieve_name" in choice_label else config.retrieve_name,
-                    retrieve_description=_clean_prompt(str(choice_label.get("retrieve_description", config.retrieve_description or ""))) if "retrieve_description" in choice_label else config.retrieve_description,
-                    plan_direct_rule=_clean_prompt(str(choice_label.get("direct_rule", config.plan_direct_rule or ""))) if "direct_rule" in choice_label else config.plan_direct_rule,
-                    plan_system_prompt=_plan_prompt_from_payload(choice_label, config.plan_system_prompt),
-                )
-            )
-        plan_strategy = "RouteBySupport" if str(choice_label) == "RouteBySupport" else None
-        plan_system_prompt = config.plan_system_prompt if plan_strategy else None
-        return _build_source_for_config(_replace_config(config, plan_strategy=plan_strategy, plan_system_prompt=plan_system_prompt))
 
     if step_key == "action":
         if isinstance(choice_label, dict):
@@ -495,65 +326,6 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 ),
             )
             return _build_source_for_config(updated)
-        action_module = {
-            "Reply": "DirectAnswerAction",
-            "Generative": "GenerativeAction",
-            "Structured": "GenerativeAction",
-            "ToolCall": "ToolCallAction",
-            "Custom": "CustomAction",
-        }.get(str(choice_label), config.action_module)
-        structured_choice = str(choice_label) == "Structured"
-        profile_hint = _profile_hint_for_action_switch(config.profile_hint, action_module)
-        workflow_name = _workflow_name_for_action_switch(config, action_module, existing_source)
-        if structured_choice:
-            profile_hint = "Structured Result"
-            workflow_name = _workflow_name_for_profile(existing_source, "Structured Result Helper")
-        action_prompt = config.action_prompt if action_module in {"GenerativeAction", "ToolCallAction"} else None
-        if structured_choice and not action_prompt:
-            action_prompt = _OUTPUT_FORMAT_PROMPTS["json"]
-        action_tools = config.action_tools if action_module == "ToolCallAction" else ()
-        return _build_source_for_config(
-            _replace_config(
-                config,
-                action_module=action_module,
-                profile_hint=profile_hint,
-                workflow_name=workflow_name,
-                action_prompt=action_prompt,
-                action_tools=action_tools,
-            )
-        )
-
-    if step_key == "reflect":
-        if isinstance(choice_label, dict):
-            on_failure = str(choice_label.get("on_failure") or config.reflect_on_failure or "retry_plan")
-            if on_failure not in {"retry_plan", "end"}:
-                on_failure = config.reflect_on_failure or "retry_plan"
-            plan_strategy = config.plan_strategy or ("RouteBySupport" if on_failure == "retry_plan" else None)
-            return _build_source_for_config(
-                _replace_config(
-                    config,
-                    reflect_on_failure=on_failure,
-                    plan_strategy=plan_strategy,
-                    reflect_criteria=_clean_prompt(str(choice_label.get("criteria", config.reflect_criteria or ""))) if "criteria" in choice_label else config.reflect_criteria,
-                )
-            )
-        reflect_map = {
-            "Later": (None, None),
-            "ResponseCheck": ("ResponseCheckReflect", "retry_plan"),
-            "EvidenceCheck": ("EvidenceCheckReflect", "retry_plan"),
-            "ResponseRetry": ("ResponseCheckReflect", "retry_plan"),
-            "ResponseStop": ("ResponseCheckReflect", "end"),
-            "EvidenceRetry": ("EvidenceCheckReflect", "retry_plan"),
-            "EvidenceStop": ("EvidenceCheckReflect", "end"),
-            "RetryPlan": ("ResponseCheckReflect", "retry_plan"),
-            "Stop": ("ResponseCheckReflect", "end"),
-        }
-        reflect_module, reflect_on_failure = reflect_map.get(str(choice_label), (config.reflect_module, config.reflect_on_failure))
-        plan_strategy = config.plan_strategy or ("RouteBySupport" if reflect_on_failure == "retry_plan" else None)
-        return _build_source_for_config(_replace_config(config, reflect_module=reflect_module, reflect_on_failure=reflect_on_failure, plan_strategy=plan_strategy))
-
-    if step_key == "readiness" and isinstance(choice_label, dict):
-        return _build_source_for_config(config)
 
     return existing_source or build_default_python_source()
 
@@ -710,30 +482,11 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
     intent_pairs = _pairs_text_from_options(config.perceive_options)
     if include_generated_defaults or intent_pairs != _ADVISOR_REQUIRED_FIELDS_TEXT:
         _add_form_value(values, "perceive", "intent_pairs", intent_pairs)
-    if include_generated_defaults or config.perceive_importance != 1.0:
-        _add_form_value(values, "perceive", "importance", config.perceive_importance)
-    _add_form_value(values, "perceive", "image_instruction", _configured_text(config.perceive_image_instruction, None, include_generated_defaults))
-
-    _add_form_value(values, "plan", "retrieve_name", _configured_text(_retrieve_name(config), "支援資料", include_generated_defaults))
-    _add_form_value(values, "plan", "retrieve_description", _configured_text(_retrieve_description(config), _DEFAULT_RETRIEVE_DESCRIPTION, include_generated_defaults))
-
-    _add_form_value(values, "retrieve", "fallback", _configured_text(config.retrieve_fallback, "沒有命中任何條目。", include_generated_defaults))
     _add_form_value(values, "retrieve", "keyword_pairs", _pairs_text_from_retrieve_items(config.retrieve_items))
-    if include_generated_defaults or config.retrieve_top_k != 3:
-        _add_form_value(values, "retrieve", "top_k", config.retrieve_top_k)
     _add_form_value(values, "retrieve", "semantic_support_files", _lines_text_from_items(config.semantic_support_files))
     _add_form_value(values, "retrieve", "semantic_search_goal", _configured_text(config.semantic_search_goal, None, include_generated_defaults))
-
-    _add_form_value(values, "action", "direct_memory_key", _configured_text(config.direct_answer_memory_key, "latest_retrieved_content", include_generated_defaults))
-    _add_form_value(values, "action", "direct_fallback", _configured_text(config.direct_answer_fallback, "沒有命中任何條目。", include_generated_defaults))
-    _add_form_value(values, "action", "direct_prefix", _configured_text(config.direct_answer_prefix, "", include_generated_defaults))
-    _add_form_value(values, "action", "rule_title", _configured_text(config.custom_rule_title, "作業規則", include_generated_defaults))
-    _add_form_value(values, "action", "rule_pairs", _pairs_text_from_rule_instruction(config.custom_rule_instruction))
-    _add_form_value(values, "action", "fallback", _configured_text(config.custom_action_fallback, "找不到符合的支援資料。", include_generated_defaults))
-    _add_form_value(values, "action", "prefix", _configured_text(config.custom_action_prefix, "自訂處理結果：", include_generated_defaults))
-
-    if config.reflect_on_failure:
-        _add_form_value(values, "reflect", "on_failure", config.reflect_on_failure)
+    _add_form_value(values, "action", "response_instruction", _response_instruction_from_prompt(config.action_prompt))
+    _add_form_value(values, "action", "api_contracts", _api_contracts_json_from_tools(config.action_tools))
 
     return {
         "choices": _builder_choices_for_config(config),
@@ -742,40 +495,6 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
 
 
 def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
-    template_choice = "Minimal"
-    if config.profile_hint == "OpenAI Client":
-        template_choice = "OpenAI client"
-    elif config.profile_hint == "Custom Action" or config.action_module == "CustomAction":
-        template_choice = "Custom Action"
-    elif config.profile_hint == "Advisor":
-        template_choice = "Advisor"
-    elif config.profile_hint == "Recommendation":
-        template_choice = "Recommendation"
-    elif config.profile_hint == "Summary":
-        template_choice = "Review"
-
-    perceive_choice = {
-        "PassThroughPerceive": "Simple",
-        "TextPerceive": "Text",
-        "TextImagePerceive": "TextImage",
-    }.get(config.perceive_module, "Simple")
-    if config.perceive_module == "TextPerceive" and config.input_kind == "Form":
-        perceive_choice = "Structured"
-    retrieve_choice = {
-        "SemanticRetrieve": "Semantic",
-        "PassThroughRetrieve": "None yet",
-    }.get(config.retrieve_module, "Keyword" if config.retrieve_items else "None yet")
-    action_choice = {
-        "DirectAnswerAction": "Reply",
-        "GenerativeAction": "Generative",
-        "ToolCallAction": "ToolCall",
-        "CustomAction": "Custom",
-    }.get(config.action_module, "Reply")
-    reflect_choice = {
-        "ResponseCheckReflect": "ResponseCheck",
-        "EvidenceCheckReflect": "EvidenceCheck",
-    }.get(config.reflect_module or "", "Later")
-
     input_type = {
         "TextPerceive": "text",
         "TextImagePerceive": "text_image",
@@ -798,13 +517,6 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         failure_policy = "retry"
 
     return {
-        "template": template_choice,
-        "input": config.input_kind,
-        "perceive": perceive_choice,
-        "plan": "RouteBySupport" if config.plan_strategy else "Direct",
-        "retrieve": retrieve_choice,
-        "action": action_choice,
-        "reflect": reflect_choice,
         "input_type": input_type,
         "retrieve_policy": retrieve_policy,
         "output_format": output_format,
@@ -872,6 +584,72 @@ def _pairs_text_from_rule_instruction(instruction: str | None) -> str:
     return "\n".join(pairs)
 
 
+def _response_instruction_from_prompt(prompt: str | None) -> str | None:
+    for raw_line in str(prompt or "").splitlines():
+        line = raw_line.strip()
+        if line.startswith("回覆風格與規範："):
+            return line.split("回覆風格與規範：", 1)[1].strip() or None
+    return None
+
+
+def _api_contracts_json_from_tools(tools: tuple[dict[str, object], ...]) -> str | None:
+    contracts = _api_contracts_from_tools(tools)
+    if not contracts:
+        return None
+    return json.dumps(contracts, ensure_ascii=False)
+
+
+def _api_contracts_from_tools(tools: tuple[dict[str, object], ...]) -> list[dict[str, str]]:
+    contracts: list[dict[str, str]] = []
+    for tool in tools:
+        if not isinstance(tool, dict):
+            continue
+        function = tool.get("function")
+        if not isinstance(function, dict):
+            continue
+        description = str(function.get("description") or "").strip()
+        trigger, api_method, api_url = _interactive_contract_description_parts(description)
+        parameters = function.get("parameters")
+        contracts.append(
+            {
+                "interaction_trigger": trigger,
+                "api_method": api_method,
+                "api_url": api_url,
+                "component_fields": _component_fields_text_from_parameters(parameters),
+            }
+        )
+    return [contract for contract in contracts if any(contract.values())]
+
+
+def _interactive_contract_description_parts(description: str) -> tuple[str, str, str]:
+    if "API：" not in description:
+        return description, "POST", ""
+    trigger, api_part = description.rsplit("API：", 1)
+    api_bits = api_part.strip().split(None, 1)
+    api_method = api_bits[0].upper() if api_bits else "POST"
+    api_url = api_bits[1].strip() if len(api_bits) > 1 else ""
+    return trigger.strip(), api_method, api_url
+
+
+def _component_fields_text_from_parameters(parameters: object) -> str:
+    if not isinstance(parameters, dict):
+        return ""
+    properties = parameters.get("properties")
+    if not isinstance(properties, dict):
+        return ""
+    type_labels = {"string": "文字", "number": "數字", "boolean": "是/否"}
+    lines: list[str] = []
+    for name, field in properties.items():
+        if not isinstance(field, dict):
+            continue
+        label = _clean_short_text(str(name), "")
+        description = _clean_prompt(str(field.get("description") or "")) or label
+        json_type = type_labels.get(str(field.get("type") or "string").lower(), "文字")
+        if label and description:
+            lines.append(f"{label} = {description}（資料類型：{json_type}）")
+    return "\n".join(lines)
+
+
 def _string_items_from_lines(value: str) -> list[str]:
     return [item for item in (line.strip() for line in value.splitlines()) if item]
 
@@ -881,26 +659,6 @@ def _workflow_name_for_profile(existing_source: str | None, default_name: str) -
     if parsed.workflow_name and parsed.workflow_name not in _GENERATED_WORKFLOW_NAMES and parsed.workflow_name != "Untitled Agent":
         return parsed.workflow_name
     return default_name
-
-
-def _profile_hint_for_action_switch(current_profile_hint: str | None, action_module: str) -> str | None:
-    if action_module == "ToolCallAction":
-        return "Structured Result"
-    if action_module == "CustomAction":
-        return "Custom Action"
-    if current_profile_hint in _ACTION_SPECIFIC_PROFILE_HINTS:
-        return None
-    return current_profile_hint
-
-
-def _workflow_name_for_action_switch(config: BuilderSourceConfig, action_module: str, existing_source: str | None) -> str:
-    if action_module == "ToolCallAction":
-        return _workflow_name_for_profile(existing_source, "Structured Result Helper")
-    if action_module == "CustomAction":
-        return _workflow_name_for_profile(existing_source, "Custom Action Helper")
-    if config.profile_hint in _ACTION_SPECIFIC_PROFILE_HINTS and config.workflow_name in _ACTION_SPECIFIC_WORKFLOW_NAMES:
-        return "Customer Helper"
-    return config.workflow_name
 
 
 def _clean_workflow_name(workflow_name: str) -> str:
@@ -944,18 +702,8 @@ def _action_prompt_from_payload(payload: dict[str, Any], current_prompt: str | N
         return _single_response_instruction_prompt(payload, current_prompt)
     if {"response_instruction", *interactive_keys} & keys and _prompt_looks_interactive(current_prompt):
         return _interactive_action_prompt(payload, current_prompt)
-    if {"brand_voice", "response_guidance", "style_examples"} & keys:
-        return _free_text_action_prompt(payload, current_prompt)
     if {"interaction_trigger", "component_type", "component_fields", "component_actions", "api_method", "api_url"} & keys:
         return _interactive_action_prompt(payload, current_prompt)
-    if {"formal_audience", "formal_structure", "formal_constraints"} & keys:
-        return _formal_response_prompt(payload)
-    if {"reply_style", "response_shape"} & keys:
-        return _advisor_action_prompt(payload)
-    if "output_guidance" in payload:
-        return _clean_prompt(str(payload.get("output_guidance", "")))
-    if "system_prompt" in payload:
-        return _clean_prompt(str(payload.get("system_prompt", "")))
     return current_prompt
 
 
@@ -1024,59 +772,6 @@ def _fixed_format_action_prompt_from_payload(payload: dict[str, Any], current_pr
     if rules:
         parts.append(f"固定欄位或規則：\n{rules}")
     return "\n".join(parts)
-
-
-def _plan_prompt_from_payload(payload: dict[str, Any], current_prompt: str | None) -> str | None:
-    if {"question_mode", "missing_info_fields", "handoff_rule"} & set(payload):
-        return _advisor_plan_prompt(payload)
-    if "route_rule" in payload:
-        return _clean_prompt(str(payload.get("route_rule", current_prompt or "")))
-    if "system_prompt" in payload:
-        return _clean_prompt(str(payload.get("system_prompt", current_prompt or "")))
-    return current_prompt
-
-
-def _formal_response_prompt(payload: dict[str, Any]) -> str:
-    audience = _clean_allowed_value(str(payload.get("formal_audience", "customer")), set(_FORMAL_AUDIENCE_PROMPTS), "customer")
-    structure = _clean_allowed_value(str(payload.get("formal_structure", "conclusion_evidence_next_steps")), set(_FORMAL_STRUCTURE_PROMPTS), "conclusion_evidence_next_steps")
-    constraints = _clean_prompt(str(payload.get("formal_constraints", "不可捏造資料；資訊不足時要明確說明。")))
-    parts = [
-        "請將使用者輸入整理成可直接發送的正式回覆。",
-        _FORMAL_AUDIENCE_PROMPTS[audience],
-        _FORMAL_STRUCTURE_PROMPTS[structure],
-        "用台灣繁體中文；語氣專業、具體，不使用空泛寒暄。",
-    ]
-    if constraints:
-        parts.append(f"額外限制：{constraints}")
-    return "\n".join(parts)
-
-
-def _advisor_plan_prompt(payload: dict[str, Any]) -> str:
-    question_mode = _clean_allowed_value(str(payload.get("question_mode", "one_at_a_time")), set(_ADVISOR_QUESTION_MODE_PROMPTS), "one_at_a_time")
-    missing_info_fields = _clean_prompt(str(payload.get("missing_info_fields", _ADVISOR_REQUIRED_FIELDS_TEXT)))
-    handoff_rule = _clean_prompt(str(payload.get("handoff_rule", _ADVISOR_HANDOFF_RULE)))
-    parts = [
-        "請用一步步詢問的方式規劃下一步。",
-        f"詢問節奏：{_ADVISOR_QUESTION_MODE_PROMPTS[question_mode]}",
-    ]
-    if missing_info_fields:
-        parts.append(f"優先補齊資訊：\n{missing_info_fields}")
-    if handoff_rule:
-        parts.append(f"進入查資料或最終回覆的條件：{handoff_rule}")
-    return "\n".join(parts)
-
-
-def _advisor_action_prompt(payload: dict[str, Any]) -> str:
-    reply_style = _clean_allowed_value(str(payload.get("reply_style", "guided")), set(_ADVISOR_REPLY_STYLE_PROMPTS), "guided")
-    response_shape = _clean_allowed_value(str(payload.get("response_shape", "known_then_question")), set(_ADVISOR_RESPONSE_SHAPE_PROMPTS), "known_then_question")
-    return "\n".join(
-        [
-            "請用一步步詢問的方式回覆，不要在資訊不足時直接給最終結論。",
-            _ADVISOR_REPLY_STYLE_PROMPTS[reply_style],
-            _ADVISOR_RESPONSE_SHAPE_PROMPTS[response_shape],
-            "問題要具體、可回答，避免一次丟出過多開放式問題。",
-        ]
-    )
 
 
 def _retrieve_items_from_payload(payload: dict[str, Any]) -> tuple[dict[str, object], ...]:
@@ -1907,20 +1602,6 @@ def get_workflow_summary(python_source: str) -> WorkflowSummary:
         can_run=True,
         can_roundtrip=parsed.supported_subset,
     )
-
-
-def _free_text_action_prompt(payload: dict[str, Any], current_prompt: str | None) -> str:
-    brand_voice = _clean_prompt(str(payload.get("brand_voice", "")))
-    style_examples = _clean_prompt(str(payload.get("style_examples", "")))
-    response_guidance = _clean_prompt(str(payload.get("response_guidance", "")))
-    parts = [current_prompt or _OUTPUT_FORMAT_PROMPTS["free_text"]]
-    if brand_voice:
-        parts.append(f"AI 角色與口吻：{brand_voice}")
-    if style_examples:
-        parts.append(f"品牌或情境話術：{style_examples}")
-    if response_guidance:
-        parts.append(f"回覆方式偏好：{response_guidance}")
-    return "\n".join(parts)
 
 
 def _single_response_instruction_prompt(payload: dict[str, Any], current_prompt: str | None) -> str:

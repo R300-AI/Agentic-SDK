@@ -22,6 +22,16 @@ from playground.services.source_builder import (
 builder_bp = Blueprint("builder", __name__, url_prefix="/playground/builder")
 
 _PERSISTENT_SOURCE_ORIGINS = {"aihub_loaded", "aihub_shared_readonly"}
+_ACTIVE_BUILDER_STATE_STEPS = {
+    "memory_type",
+    "input_type",
+    "perceive",
+    "retrieve_policy",
+    "retrieve",
+    "output_format",
+    "action",
+    "failure_policy",
+}
 _REVIEW_STEP_BY_ROLE = {
     "perceive": "input_type",
     "retrieve": "retrieve_policy",
@@ -62,6 +72,8 @@ def update_builder_state():
     steps = get_builder_steps()
     payload = request.get_json(silent=True) or {}
     step_key = str(payload.get("step", ""))
+    if step_key not in _ACTIVE_BUILDER_STATE_STEPS:
+        return jsonify({"updated": False, "error": "Unsupported builder step."}), 400
     choice_label = payload.get("choice") if "choice" in payload else payload.get("value") or ""
     if _is_locked_builder_choice(step_key, choice_label):
         workflow_summary = get_workflow_summary(session.get("python_source") or build_default_python_source())

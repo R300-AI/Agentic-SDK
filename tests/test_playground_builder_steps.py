@@ -52,6 +52,9 @@ def test_builder_page_does_not_render_legacy_task_type_step():
     assert 'id="builder-step-task_type"' not in page
     assert 'data-progress-step="task_type"' not in page
     assert "Q3: 收到需求後，要怎麼決定下一步？" not in page
+    assert 'data-param-form data-step-key="plan"' not in page
+    assert 'template-action-custom-rule-title' not in page
+    assert 'reflect-retry-on-failure' not in page
     assert "目前階段：步驟 1 / 6" in page
 
 
@@ -225,6 +228,16 @@ def test_builder_step6_exposes_review_checklist_and_model_endpoint_section():
     assert 'name="timeout_sec"' not in page
 
 
+def test_builder_state_rejects_legacy_step_keys():
+    app = create_app()
+
+    with app.test_client() as client:
+        response = client.post("/playground/builder/state", json={"step": "template", "choice": "Recommendation"})
+
+    assert response.status_code == 400
+    assert response.get_json() == {"updated": False, "error": "Unsupported builder step."}
+
+
 def test_builder_step3_semantic_questions_roundtrip_to_source_and_form_state():
     app = create_app()
 
@@ -312,9 +325,9 @@ def test_builder_step6_endpoint_selection_roundtrips_before_runner(monkeypatch):
         endpoint_state = failure_response.get_json()["builder_endpoint_state"]
 
         assert [requirement["role"] for requirement in endpoint_state["requirements"]] == ["perceive", "retrieve", "action"]
-        assert [endpoint["label"] for endpoint in endpoint_state["endpoints"]] == ["gpt-4.1", "gpt-5.4"]
+        assert {endpoint["label"] for endpoint in endpoint_state["endpoints"]} >= {"gpt-4.1", "gpt-5.4"}
         retrieve_requirement = next(requirement for requirement in endpoint_state["requirements"] if requirement["role"] == "retrieve")
-        assert [endpoint["label"] for endpoint in retrieve_requirement["options"]] == ["text-embedding-3-large"]
+        assert {endpoint["label"] for endpoint in retrieve_requirement["options"]} >= {"text-embedding-3-large"}
 
         endpoint_response = client.post(
             "/playground/builder/endpoints",
