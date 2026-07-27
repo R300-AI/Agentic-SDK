@@ -11,6 +11,7 @@ const resultThread = document.querySelector("[data-result-thread]");
 const resultSurface = document.querySelector("[data-result-surface]");
 const userMessage = document.querySelector("[data-user-message]");
 const emptyMessage = document.querySelector("[data-empty-message]");
+const starterQuestions = document.querySelector("[data-starter-questions]");
 const saveButton = document.querySelector("[data-save-action]");
 const reloadButton = document.querySelector("[data-reload-action]");
 const saveStatus = document.querySelector("[data-save-status]");
@@ -24,6 +25,7 @@ const endpointStatus = document.querySelector("[data-endpoint-status]");
 const codePreviewToggles = document.querySelectorAll("[data-code-preview-open]");
 const codePreviewModal = document.querySelector("[data-code-preview-modal]");
 const submitButton = form?.querySelector("button[type='submit']");
+const messageInput = form?.querySelector("textarea[name='message']");
 let activeRunId = 0;
 
 function actionReplyFrom(result) {
@@ -99,6 +101,12 @@ function toolCallPanelsFrom(result) {
 function scrollResultThread() {
 	if (resultThread) {
 		resultThread.scrollTop = resultThread.scrollHeight;
+	}
+}
+
+function hideStarterQuestions() {
+	if (starterQuestions) {
+		starterQuestions.hidden = true;
 	}
 }
 
@@ -202,6 +210,7 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	if (emptyMessage) {
 		emptyMessage.hidden = true;
 	}
+	hideStarterQuestions();
 	if (showUserMessage) {
 		appendUserMessage(displayMessage || prompt || "（空白訊息）");
 	}
@@ -305,6 +314,16 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 
 bindInputComposer(form, async (payload) => {
 	await runWorkflow(payload);
+});
+
+starterQuestions?.addEventListener("click", (event) => {
+	const button = event.target.closest?.("[data-starter-question-button]");
+	if (!button || !messageInput) {
+		return;
+	}
+	messageInput.value = button.textContent?.trim() || "";
+	messageInput.focus();
+	messageInput.setSelectionRange(messageInput.value.length, messageInput.value.length);
 });
 
 resultThread?.addEventListener("runner:tool-call-submit", async (event) => {

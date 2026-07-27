@@ -14,7 +14,7 @@ def test_builder_uses_memory_step_then_configured_perceive_modes():
         "readiness",
     ]
     assert [step.title for step in steps] == [
-        "Q1: 這個 Agent 要使用哪種記憶方式？",
+        "Q1: 這個 Agent 主要要完成哪類任務？",
         "Q2: 這個 Agent 要如何理解輸入？",
         "Q3: 回答前需要查資料嗎？",
         "Q4: 最後回覆要怎麼呈現給使用者？",
@@ -67,6 +67,35 @@ def test_builder_step2_exposes_shared_focus_and_field_configuration():
     assert "JSON 欄位" not in page
     assert "表單欄位" not in page
     assert "混合輸入" not in page
+
+
+def test_builder_step1_starter_questions_roundtrip_to_runner():
+    app = create_app()
+
+    with app.test_client() as client:
+        client.get("/playground/builder")
+        client.post(
+            "/playground/builder/state",
+            json={
+                "step": "memory_type",
+                "value": {
+                    "starter_questions": "這份內容的重點是什麼？\n下一步該怎麼做？",
+                },
+            },
+        )
+        builder_page = client.get("/playground/builder").data.decode("utf-8")
+        source_page = client.get("/playground/source/preview").data.decode("utf-8")
+        runner_page = client.get("/playground/run").data.decode("utf-8")
+
+    assert 'name="starter_questions"' in builder_page
+    assert "對話開始前，要先放哪些常用問題？" in builder_page
+    assert "這份內容的重點是什麼？" in builder_page
+    assert "RUNNER_CONFIG" in source_page
+    assert '"starter_questions": [' in source_page
+    assert "下一步該怎麼做？" in source_page
+    assert 'data-starter-questions' in runner_page
+    assert 'data-starter-question-button' in runner_page
+    assert "這份內容的重點是什麼？" in runner_page
 
 
 def test_builder_step2_choices_update_perceive_source():

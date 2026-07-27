@@ -46,6 +46,15 @@
       </div>
 
       <div class="chat-thread" aria-label="Agent 對話" data-result-thread>
+        {% if starter_questions %}
+        <section class="starter-question-panel" data-starter-questions aria-label="預設問題">
+          <div class="starter-question-list">
+            {% for question in starter_questions %}
+            <button class="button button-ghost starter-question-button" type="button" data-starter-question-button>{{ question }}</button>
+            {% endfor %}
+          </div>
+        </section>
+        {% endif %}
         <article class="chat-message assistant-message" data-empty-message>
           <div class="message-avatar agent-avatar" aria-hidden="true">AI</div>
           <div class="message-bubble assistant-bubble">

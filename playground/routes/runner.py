@@ -9,7 +9,7 @@ from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
 from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution
-from playground.services.source_builder import get_workflow_summary
+from playground.services.source_builder import config_from_source, get_workflow_summary
 
 
 runner_bp = Blueprint("runner", __name__, url_prefix="/playground/run")
@@ -27,6 +27,7 @@ def runner():
     scene_profile = get_scene_profile(python_source)
     demo_result = get_runner_demo_result(scene_profile)
     workflow_summary = get_workflow_summary(python_source)
+    starter_questions = list(config_from_source(python_source).starter_questions)
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
     session["runner_endpoint_selections"] = endpoint_selections
 
@@ -36,6 +37,7 @@ def runner():
         scene_profile=scene_profile,
         demo_result=demo_result,
         workflow_summary=workflow_summary,
+        starter_questions=starter_questions,
         runner_endpoint_state=endpoint_state(python_source, endpoint_selections),
         last_aihub_save=session.get("last_aihub_save"),
         has_ai_hub_agent=bool(session.get("agent_id")),

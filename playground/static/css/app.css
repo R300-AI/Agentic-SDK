@@ -434,6 +434,12 @@ a { color: inherit; text-decoration: none; }
   gap: 0.75rem;
 }
 
+.list-editor,
+.list-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
 .pair-editor-help {
   margin: 0;
   color: var(--muted);
@@ -461,6 +467,16 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface-soft);
 }
 
+.list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+}
+
 .module-param-form .pair-row textarea {
   min-height: 2.9rem;
 }
@@ -473,17 +489,31 @@ a { color: inherit; text-decoration: none; }
   grid-template-columns: minmax(8rem, 0.85fr) minmax(0, 1.4fr) 5.25rem;
 }
 
+.starter-questions-editor {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 5.25rem;
+}
+
 .field-requirements-editor .pair-editor-help,
 .field-requirements-editor .pair-row-header,
 .field-requirements-editor .pair-list,
 .input-signals-editor .pair-editor-help,
 .input-signals-editor .pair-row-header,
-.input-signals-editor .pair-list {
+.input-signals-editor .pair-list,
+.starter-questions-editor .list-list {
   grid-column: 1 / -1;
 }
 
 .field-requirements-editor .pair-list,
 .input-signals-editor .pair-list {
+  padding: 0.75rem;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-soft);
+}
+
+.starter-questions-editor .list-list {
+  width: 100%;
+  box-sizing: border-box;
   padding: 0.75rem;
   border: 1px solid var(--line-soft);
   background: var(--surface-soft);
@@ -497,6 +527,11 @@ a { color: inherit; text-decoration: none; }
 .input-signals-editor .pair-row,
 .input-signals-editor .pair-row-header {
   grid-template-columns: minmax(8rem, 0.85fr) minmax(0, 1.4fr) 5.25rem;
+}
+
+.starter-questions-editor .list-row {
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) 5.25rem;
 }
 
 .field-requirements-editor .pair-row {
@@ -513,11 +548,22 @@ a { color: inherit; text-decoration: none; }
   background: transparent;
 }
 
+.starter-questions-editor .list-row {
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
 .field-requirements-editor [data-pair-key],
 .field-requirements-editor [data-pair-value],
 .field-requirements-editor [data-pair-type],
 .input-signals-editor [data-pair-key],
 .input-signals-editor [data-pair-value] {
+  min-height: 3rem;
+}
+
+.starter-questions-editor [data-list-item] {
   min-height: 3rem;
 }
 
@@ -529,6 +575,16 @@ a { color: inherit; text-decoration: none; }
 .input-signals-editor .pair-remove {
   align-self: center;
   width: 100%;
+}
+
+.starter-questions-editor .list-remove {
+  align-self: center;
+  width: 100%;
+}
+
+.list-remove {
+  min-height: 2.95rem;
+  white-space: nowrap;
 }
 
 .pair-add-icon {
@@ -554,6 +610,12 @@ a { color: inherit; text-decoration: none; }
 
 .field-requirements-editor .pair-add-icon,
 .input-signals-editor .pair-add-icon {
+  grid-column: 1 / -1;
+  justify-self: center;
+  align-self: center;
+}
+
+.starter-questions-editor .pair-add-icon {
   grid-column: 1 / -1;
   justify-self: center;
   align-self: center;
@@ -804,6 +866,30 @@ a { color: inherit; text-decoration: none; }
   margin: 1rem 0;
   padding: 0.75rem 0 1.2rem;
   overflow: auto;
+}
+
+.starter-question-panel {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+  width: min(100%, 46rem);
+  margin: auto;
+  padding: 0.75rem 0 0.35rem;
+}
+
+.starter-question-list {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+}
+
+.starter-question-button {
+  min-height: 2.5rem;
+  padding: 0.6rem 0.95rem;
+  border: 1px solid #d9dee8;
+  color: var(--ink);
+  background: #ffffff;
 }
 
 .chat-message {
@@ -1495,10 +1581,13 @@ pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0; color: #
   .composer-row { align-items: stretch; flex-direction: column; }
   .attachment-picker { gap: 0.35rem; padding: 0.55rem; }
   .inline-status { font-size: 0.8rem; }
-  .pair-row { grid-template-columns: 1fr; }
-  .field-requirements-editor, .input-signals-editor { grid-template-columns: 1fr; }
+  .pair-row,
+  .list-row { grid-template-columns: 1fr; }
+  .field-requirements-editor, .input-signals-editor, .starter-questions-editor { grid-template-columns: 1fr; }
   .field-requirements-editor .pair-add-icon,
-  .input-signals-editor .pair-add-icon { grid-column: 1; }
+  .input-signals-editor .pair-add-icon,
+  .starter-questions-editor .pair-add-icon { grid-column: 1; }
   .pair-remove { justify-self: start; }
+  .list-remove { justify-self: start; }
   .button { min-height: 2.45rem; padding: 0.65rem 0.95rem; }
 }

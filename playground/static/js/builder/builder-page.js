@@ -243,17 +243,25 @@ function parsePairText(value) {
     .filter(Boolean);
 }
 
+function parseListText(value) {
+  return String(value || "")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+}
+
 function setPairEditorValue(output, value) {
   const editor = output.closest("[data-pair-editor]");
   const list = editor?.querySelector("[data-pair-list]");
   const sourceRow = editor?.querySelector("[data-pair-row]");
+  const addButton = list?.querySelector("[data-pair-add]");
   if (!editor || !list || !sourceRow) {
     output.value = String(value || "");
     return;
   }
   const pairs = parsePairText(value);
   const rows = pairs.length ? pairs : [{ key: "", value: "" }];
-  list.replaceChildren(...rows.map((pair) => {
+  const nextChildren = rows.map((pair) => {
     const row = sourceRow.cloneNode(true);
     row.querySelector("[data-pair-key]").value = pair.key;
     row.querySelector("[data-pair-value]").value = pair.value;
@@ -267,8 +275,35 @@ function setPairEditorValue(output, value) {
       }
     }
     return row;
-  }));
+  });
+  if (addButton) {
+    nextChildren.push(addButton);
+  }
+  list.replaceChildren(...nextChildren);
   syncPairEditor(editor);
+}
+
+function setListEditorValue(output, value) {
+  const editor = output.closest("[data-list-editor]");
+  const list = editor?.querySelector("[data-list-list]");
+  const sourceRow = editor?.querySelector("[data-list-row]");
+  const addButton = list?.querySelector("[data-list-add]");
+  if (!editor || !list || !sourceRow) {
+    output.value = String(value || "");
+    return;
+  }
+  const items = parseListText(value);
+  const rows = items.length ? items : [""];
+  const nextChildren = rows.map((item) => {
+    const row = sourceRow.cloneNode(true);
+    row.querySelector("[data-list-item]").value = item;
+    return row;
+  });
+  if (addButton) {
+    nextChildren.push(addButton);
+  }
+  list.replaceChildren(...nextChildren);
+  syncListEditor(editor);
 }
 
 function parseApiContracts(value) {
@@ -343,6 +378,10 @@ function setFieldValue(field, value) {
     setApiEditorValue(field, value);
     return;
   }
+  if (field.matches("[data-list-output]")) {
+    setListEditorValue(field, value);
+    return;
+  }
   if (field.matches("[data-pair-output]")) {
     setPairEditorValue(field, value);
     return;
@@ -415,6 +454,21 @@ function syncPairEditor(editor) {
 
 function syncPairEditors(root) {
   root.querySelectorAll("[data-pair-editor]").forEach(syncPairEditor);
+}
+
+function syncListEditor(editor) {
+  const output = editor.querySelector("[data-list-output]");
+  if (!output) {
+    return;
+  }
+  const items = Array.from(editor.querySelectorAll("[data-list-row]"))
+    .map((row) => row.querySelector("[data-list-item]")?.value.trim() || "")
+    .filter(Boolean);
+  output.value = items.join("\n");
+}
+
+function syncListEditors(root) {
+  root.querySelectorAll("[data-list-editor]").forEach(syncListEditor);
 }
 
 function normalizeApiMethod(value) {
@@ -527,17 +581,46 @@ function clearPairRow(row) {
   });
 }
 
+function clearListRow(row) {
+  row.querySelectorAll("[data-list-item]").forEach((field) => {
+    field.value = "";
+  });
+}
+
 function addPairRow(editor) {
   const list = editor.querySelector("[data-pair-list]");
   const sourceRow = editor.querySelector("[data-pair-row]");
+  const addButton = editor.querySelector("[data-pair-add]");
   if (!list || !sourceRow) {
     return;
   }
   const row = sourceRow.cloneNode(true);
   clearPairRow(row);
-  list.append(row);
+  if (addButton?.parentElement === list) {
+    list.insertBefore(row, addButton);
+  } else {
+    list.append(row);
+  }
   row.querySelector("[data-pair-key]")?.focus();
   syncPairEditor(editor);
+}
+
+function addListRow(editor) {
+  const list = editor.querySelector("[data-list-list]");
+  const sourceRow = editor.querySelector("[data-list-row]");
+  const addButton = editor.querySelector("[data-list-add]");
+  if (!list || !sourceRow) {
+    return;
+  }
+  const row = sourceRow.cloneNode(true);
+  clearListRow(row);
+  if (addButton?.parentElement === list) {
+    list.insertBefore(row, addButton);
+  } else {
+    list.append(row);
+  }
+  row.querySelector("[data-list-item]")?.focus();
+  syncListEditor(editor);
 }
 
 function addApiBlock(editor) {
@@ -573,6 +656,16 @@ function removePairRow(editor, row) {
     row.remove();
   }
   syncPairEditor(editor);
+}
+
+function removeListRow(editor, row) {
+  const rows = Array.from(editor.querySelectorAll("[data-list-row]"));
+  if (rows.length <= 1) {
+    clearListRow(row);
+  } else {
+    row.remove();
+  }
+  syncListEditor(editor);
 }
 
 function showStep(key) {
@@ -657,6 +750,11 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
       syncApiEditor(field.closest("[data-api-editor]"));
       return;
     }
+    const listField = event.target.closest?.("[data-list-item]");
+    if (listField) {
+      syncListEditor(listField.closest("[data-list-editor]"));
+      return;
+    }
     const apiField = event.target.closest?.("[data-api-trigger], [data-api-url]");
     if (apiField) {
       syncApiEditor(apiField.closest("[data-api-editor]"));
@@ -670,6 +768,12 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
       await syncParamForms(form.closest("[data-step-panel]"));
       return;
     }
+    const listField = event.target.closest?.("[data-list-item]");
+    if (listField) {
+      syncListEditor(listField.closest("[data-list-editor]"));
+      await syncParamForms(form.closest("[data-step-panel]"));
+      return;
+    }
     const apiField = event.target.closest?.("[data-api-trigger], [data-api-method], [data-api-url]");
     if (apiField) {
       syncApiEditor(apiField.closest("[data-api-editor]"));
@@ -679,8 +783,14 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
   form.addEventListener("click", async (event) => {
     const addButton = event.target.closest?.("[data-pair-add]");
     const removeButton = event.target.closest?.("[data-pair-remove]");
+    const addListButton = event.target.closest?.("[data-list-add]");
+    const removeListButton = event.target.closest?.("[data-list-remove]");
     const addApiButton = event.target.closest?.("[data-api-add]");
     const removeApiButton = event.target.closest?.("[data-api-remove]");
+    if (addListButton) {
+      addListRow(addListButton.closest("[data-list-editor]"));
+      return;
+    }
     if (addButton) {
       addPairRow(addButton.closest("[data-pair-editor]"));
       syncApiEditor(addButton.closest("[data-api-editor]"));
@@ -696,13 +806,18 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
       await syncParamForms(form.closest("[data-step-panel]"));
       return;
     }
+    if (removeListButton) {
+      removeListRow(removeListButton.closest("[data-list-editor]"), removeListButton.closest("[data-list-row]"));
+      await syncParamForms(form.closest("[data-step-panel]"));
+      return;
+    }
     if (removeApiButton) {
       removeApiBlock(removeApiButton.closest("[data-api-editor]"), removeApiButton.closest("[data-api-block]"));
       await syncParamForms(form.closest("[data-step-panel]"));
     }
   });
   form.querySelectorAll("input, textarea, select").forEach((field) => {
-    if (field.matches("[data-pair-key], [data-pair-value], [data-pair-type], [data-pair-output], [data-api-trigger], [data-api-method], [data-api-url], [data-api-output]")) {
+    if (field.matches("[data-pair-key], [data-pair-value], [data-pair-type], [data-pair-output], [data-list-item], [data-list-output], [data-api-trigger], [data-api-method], [data-api-url], [data-api-output]")) {
       return;
     }
     if (field.matches("[data-range-control]")) {
@@ -714,6 +829,7 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
     });
   });
   syncPairEditors(form);
+  syncListEditors(form);
   form.querySelectorAll("[data-api-editor]").forEach(refreshApiBlocks);
   syncApiEditors(form);
 });

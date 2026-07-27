@@ -87,6 +87,7 @@ class BuilderSourceConfig:
     input_kind: str = "Message"
     input_description: str | None = None
     input_fields: tuple[dict[str, str], ...] = ()
+    starter_questions: tuple[str, ...] = ()
     perceive_module: str = "PassThroughPerceive"
     perceive_input_label: str | None = None
     perceive_welcome_message: str | None = None
@@ -130,7 +131,7 @@ def get_builder_steps() -> list[BuilderStep]:
     return [
         BuilderStep(
             "memory_type",
-            "Q1: 這個 Agent 要使用哪種記憶方式？",
+            "Q1: 這個 Agent 主要要完成哪類任務？",
             "",
             "Memory 類型",
             "",
@@ -211,6 +212,18 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
     if step_key == "name":
         updated = _replace_config(config, workflow_name=_clean_workflow_name(str(choice_label)) or config.workflow_name)
         return _build_source_for_config(updated)
+
+    if step_key == "memory_type" and isinstance(choice_label, dict):
+        return _build_source_for_config(
+            _replace_config(
+                config,
+                starter_questions=(
+                    tuple(_string_items_from_lines(str(choice_label.get("starter_questions", ""))))
+                    if "starter_questions" in choice_label
+                    else config.starter_questions
+                ),
+            )
+        )
 
     if step_key == "input_type":
         choice = str(choice_label)
@@ -555,6 +568,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "input_kind": config.input_kind,
         "input_description": config.input_description,
         "input_fields": config.input_fields,
+        "starter_questions": config.starter_questions,
         "perceive_module": config.perceive_module,
         "perceive_input_label": config.perceive_input_label,
         "perceive_welcome_message": config.perceive_welcome_message,
@@ -609,6 +623,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     is_custom_action = bool(action_call_name and action_call_name not in {"DirectAnswerAction", "GenerativeAction", "StructuredAction", "ToolCallAction"})
     task_config = _safe_config_dict(_extract_assignment_literal(source, "TASK_CONFIG", {}))
     input_config = _safe_config_dict(_extract_assignment_literal(source, "INPUT_CONFIG", {}))
+    runner_config = _safe_config_dict(_extract_assignment_literal(source, "RUNNER_CONFIG", {}))
     perceive_config = _safe_config_dict(_extract_assignment_literal(source, "PERCEIVE_CONFIG", {}))
     retrieve_config = _safe_config_dict(_extract_assignment_literal(source, "RETRIEVE_CONFIG", {}))
     action_config = _safe_config_dict(_extract_assignment_literal(source, "ACTION_CONFIG", {}))
@@ -633,6 +648,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         input_kind=str(input_config.get("kind") or _input_kind_from_source(source)),
         input_description=_clean_prompt(str(input_config.get("description", ""))),
         input_fields=tuple(_normalize_config_items(input_config.get("fields"))),
+        starter_questions=tuple(_normalize_string_items(runner_config.get("starter_questions"))),
         perceive_module=perceive_module,
         perceive_input_label=_extract_keyword_value(source, {"PassThroughPerceive"}, "input_label") or _clean_short_text(str(perceive_config.get("input_label", "")), "") or None,
         perceive_welcome_message=_extract_keyword_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "welcome_message"),
@@ -687,6 +703,8 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
 
     if config.workflow_name not in _GENERATED_WORKFLOW_NAMES and config.workflow_name != "Untitled Agent":
         _add_form_value(values, "name", "agent_name", config.workflow_name)
+
+    _add_form_value(values, "memory_type", "starter_questions", _lines_text_from_items(config.starter_questions))
 
     _add_form_value(values, "perceive", "input_label", _configured_text(config.perceive_input_label, None, include_generated_defaults))
     _add_form_value(values, "perceive", "welcome_message", _configured_text(config.perceive_welcome_message, _ADVISOR_WELCOME_MESSAGE, include_generated_defaults))
@@ -836,6 +854,10 @@ def _pairs_text_from_options(options: tuple[dict[str, object], ...]) -> str:
     )
 
 
+def _lines_text_from_items(items: tuple[str, ...]) -> str:
+    return "\n".join(item for item in items if item)
+
+
 def _pairs_text_from_retrieve_items(items: tuple[dict[str, object], ...]) -> str:
     lines = []
     for item in items:
@@ -863,6 +885,10 @@ def _pairs_text_from_rule_instruction(instruction: str | None) -> str:
         if key and value:
             pairs.append(f"{key} = {value}")
     return "\n".join(pairs)
+
+
+def _string_items_from_lines(value: str) -> list[str]:
+    return [item for item in (line.strip() for line in value.splitlines()) if item]
 
 
 def _workflow_name_for_profile(existing_source: str | None, default_name: str) -> str:
@@ -1587,14 +1613,19 @@ def _build_workflow_source(config: BuilderSourceConfig) -> str:
         module_names.append(config.reflect_module)
     import_block = _format_module_imports(module_names)
     workflow_arguments = _workflow_argument_lines(config, reachable_roles, action_expression=_action_expression(config))
-    return f"""{_core_import_line(config)}
-{import_block}
-
-workflow = Workflow(
+    sections = [_core_import_line(config)]
+    if import_block:
+        sections.append(import_block)
+    runner_config_block = _runner_config_block(config)
+    if runner_config_block:
+        sections.append(runner_config_block)
+    sections.append(
+        f"""workflow = Workflow(
     workflow_name={workflow_name_literal},
 {workflow_arguments}
-)
-"""
+)"""
+    )
+    return "\n\n".join(sections) + "\n"
 
 
 def _build_custom_action_source(config: BuilderSourceConfig) -> str:
@@ -1617,10 +1648,14 @@ def _build_custom_action_source(config: BuilderSourceConfig) -> str:
         module_names.append(config.reflect_module)
     import_block = _format_module_imports(module_names)
     workflow_arguments = _workflow_argument_lines(config, reachable_roles, action_expression=f"{custom_action_class}()")
-    return f"""{_core_import_line(config)}
-{import_block}
-
-class {custom_action_class}:
+    sections = [_core_import_line(config)]
+    if import_block:
+        sections.append(import_block)
+    runner_config_block = _runner_config_block(config)
+    if runner_config_block:
+        sections.append(runner_config_block)
+    sections.append(
+        f"""class {custom_action_class}:
     def __call__(self, memory):
         summary = memory.lookup({memory_key_literal}) or {fallback_literal}
         instruction = {rule_instruction_literal}
@@ -1634,6 +1669,8 @@ workflow = Workflow(
 {workflow_arguments}
 )
 """
+    )
+    return "\n\n".join(sections) + "\n"
 
 
 def _core_import_line(config: BuilderSourceConfig) -> str:
@@ -1805,10 +1842,23 @@ def _format_module_imports(module_names: list[str]) -> str:
     return "from agentic_sdk.modules import (\n    " + ",\n    ".join(ordered_names) + ",\n)"
 
 
+def _runner_config_block(config: BuilderSourceConfig) -> str:
+    if not config.starter_questions:
+        return ""
+    runner_config = {"starter_questions": list(config.starter_questions)}
+    return f"RUNNER_CONFIG = {_format_python_literal(runner_config, 0)}"
+
+
 def _format_python_literal(value: object, continuation_indent: int) -> str:
     literal = json.dumps(value, ensure_ascii=False, indent=4)
     literal = literal.replace(": false", ": False").replace(": true", ": True").replace(": null", ": None")
     return literal.replace("\n", "\n" + " " * continuation_indent)
+
+
+def _normalize_string_items(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item for item in (str(entry).strip() for entry in value) if item]
 
 
 def get_workflow_summary(python_source: str) -> WorkflowSummary:

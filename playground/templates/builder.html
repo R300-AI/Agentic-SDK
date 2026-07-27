@@ -47,6 +47,28 @@
 </div>
 {%- endmacro %}
 
+{% macro list_editor(id, name, item_label, add_label, rows=None, item_placeholder="", editor_class="", add_button_variant="text") -%}
+{% set editor_rows = rows or [""] %}
+<div class="list-editor{% if editor_class %} {{ editor_class }}{% endif %}" data-list-editor>
+  <textarea id="{{ id }}" name="{{ name }}" hidden data-list-output>{%- for row in editor_rows -%}{%- set item = row if row is string else row["value"] -%}{%- if item -%}{% if not loop.first %}&#10;{% endif %}{{ item }}{%- endif -%}{%- endfor -%}</textarea>
+  <div class="list-list" data-list-list>
+    {% for row in editor_rows %}
+    {% set item = row if row is string else row["value"] %}
+    <div class="list-row" data-list-row>
+      <input type="text" value="{{ item }}" aria-label="{{ item_label }}" placeholder="{{ item_placeholder }}" data-list-item>
+      <button class="button button-ghost list-remove" type="button" data-list-remove aria-label="刪除此列">移除</button>
+    </div>
+    {% endfor %}
+    {% if add_button_variant == 'icon' %}
+    <button class="button button-ghost pair-add pair-add-icon" type="button" data-list-add aria-label="{{ add_label }}" title="{{ add_label }}"><span class="visually-hidden">{{ add_label }}</span></button>
+    {% endif %}
+  </div>
+  {% if add_button_variant != 'icon' %}
+  <button class="button button-ghost pair-add" type="button" data-list-add aria-label="{{ add_label }}" title="{{ add_label }}">{{ add_label }}</button>
+  {% endif %}
+</div>
+{%- endmacro %}
+
 {% block body %}
 <main class="builder-page" data-page="builder">
   <header class="context-bar builder-context-bar">
@@ -121,6 +143,24 @@
           </button>
           {% endfor %}
         </div>
+        {% if step.key == "memory_type" %}
+        <details class="advanced-disclosure step-advanced" data-visible-choices="in_context" open>
+          <summary>進階設定</summary>
+          <form class="module-param-form" data-param-form data-step-key="memory_type">
+            <label for="v3-memory-starter-questions">對話開始前，要先放哪些常用問題？</label>
+            {{ list_editor(
+              "v3-memory-starter-questions",
+              "starter_questions",
+              "預設問題",
+              "新增問題",
+              none,
+              "例如：這份內容的重點是什麼？",
+              "starter-questions-editor",
+              "icon"
+            ) }}
+          </form>
+        </details>
+        {% endif %}
         {% if step.key == "input_type" %}
         <details class="advanced-disclosure step-advanced" data-visible-choices="text|text_image" open>
           <summary>進階設定</summary>
