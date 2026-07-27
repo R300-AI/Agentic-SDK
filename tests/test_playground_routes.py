@@ -98,9 +98,9 @@ def test_builder_route_renders_oobe_shell():
         response = client.get("/playground/builder")
 
     assert response.status_code == 200
-    assert "這個 Agent 需要記住多久？".encode("utf-8") in response.data
-    assert "即時回答".encode("utf-8") in response.data
-    assert "承接前文回答".encode("utf-8") in response.data
+    assert "這個 Agent 主要要完成哪類任務？".encode("utf-8") in response.data
+    assert "即時問答".encode("utf-8") in response.data
+    assert "承接前文問答".encode("utf-8") in response.data
     assert "預覽中".encode("utf-8") in response.data
     assert b"data-step-panel=\"failure_policy\"" in response.data
     assert "前往試跑頁".encode("utf-8") in response.data
@@ -112,7 +112,7 @@ def test_builder_route_renders_oobe_shell():
     assert b"draft-panel" not in response.data
     assert b"summary-list" not in response.data
     assert "目前階段：步驟 1 / 7".encode("utf-8") in response.data
-    assert "aria-label=\"目前階段：步驟 1 / 7：Q1: 這個 Agent 需要記住多久？\"".encode("utf-8") in response.data
+    assert "aria-label=\"目前階段：步驟 1 / 7：Q1: 這個 Agent 主要要完成哪類任務？\"".encode("utf-8") in response.data
     assert b"progress-step-list" in response.data
     page = response.data.decode("utf-8")
     rail_start = page.index("progress-step-list")

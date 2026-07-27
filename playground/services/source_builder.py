@@ -129,13 +129,13 @@ def get_builder_steps() -> list[BuilderStep]:
     return [
         BuilderStep(
             "memory_type",
-            "Q1: 這個 Agent 需要記住多久？",
+            "Q1: 這個 Agent 主要要完成哪類任務？",
             "",
-            "記憶範圍",
+            "任務類型",
             "",
             (
-                BuilderChoice("in_context", "即時回答", "只根據目前這次對話內容產生回答，不參考先前互動。"),
-                BuilderChoice("workflow_recall_preview", "承接前文回答", "回答時需要接續先前互動內容或狀態。", available=False, badge="預覽中"),
+                BuilderChoice("in_context", "即時問答", "只根據目前這次對話內容產生問答，不參考先前互動。"),
+                BuilderChoice("workflow_recall_preview", "承接前文問答", "問答時需要接續先前互動內容或狀態。", available=False, badge="預覽中"),
             ),
             True,
         ),
@@ -154,9 +154,9 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "task_type",
-            "Q3: 這個 Agent 主要要完成哪類任務？",
+            "Q3: 這次要採用哪種處理流程？",
             "",
-            "任務類型",
+            "處理流程",
             "",
             (
                 BuilderChoice("direct_answer", "直接回答", "不先加入自然生成步驟，適合固定答案或規則型回覆。"),
