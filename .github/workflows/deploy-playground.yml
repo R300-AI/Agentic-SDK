@@ -295,7 +295,9 @@ jobs:
           for attempt in {1..30}; do
             if curl --fail --silent --show-error --location "$URL" | grep -q "AI Hub Agent" && \
                curl --fail --silent --show-error --location "$AGENTS_URL" | grep -q "AI Hub Agent" && \
-               curl --fail --silent --show-error --location "$BUILDER_URL" | tee builder.html | grep -q "builder-step-task_type" && \
+               curl --fail --silent --show-error --location "$BUILDER_URL" | tee builder.html | grep -q "builder-step-memory_type" && \
+               grep -q "builder-step-input_type" builder.html && \
+               grep -q "builder-step-retrieve_policy" builder.html && \
                grep -q "builder-step-output_format" builder.html && \
                grep -q "builder-step-readiness" builder.html && \
                grep -q "純文字回覆" builder.html && \

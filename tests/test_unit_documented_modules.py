@@ -86,6 +86,50 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                 self.assertEqual("test_intent", output["payload"]["perceived_intent"])
                 self.assertEqual(ContextEntryType.PERCEIVED, output["context_updates"][0].type)
 
+    def test_text_perceive_sends_guidance_and_fields_to_openai(self) -> None:
+        state = WorkflowState(user_message="客人說鞋底磨壞了，想知道能不能換。")
+        client = FoundryOpenAILikeClient()
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = TextPerceive(
+                welcome_message="先看出客人想問什麼。",
+                options=[{"label": "客人需求", "intent": "客人想解決的問題或想買的東西"}],
+                **_llm_params(),
+            )
+
+        module(state)
+
+        messages = client.last_create_kwargs["messages"]
+        user_content = messages[1]["content"]
+        self.assertIsInstance(user_content, str)
+        self.assertIn("guidance: 先看出客人想問什麼。", user_content)
+        self.assertIn("fields_to_notice", user_content)
+        self.assertIn("客人需求", user_content)
+
+    def test_text_image_perceive_sends_image_instruction_and_image_to_openai(self) -> None:
+        state = WorkflowState(user_message="請看照片判斷鞋底狀況。")
+        state.attachments = [
+            Attachment(kind="image", content="data:image/png;base64,AAAA", media_type="image/png", name="sole.png")
+        ]
+        client = FoundryOpenAILikeClient()
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = TextImagePerceive(
+                welcome_message="先看出客人想問什麼。",
+                options=[{"label": "破損位置", "intent": "照片中看得到的磨損或破損位置"}],
+                image_instruction="看清楚破損位置與標籤文字，看不到就說看不清楚。",
+                **_llm_params(),
+            )
+
+        module(state)
+
+        messages = client.last_create_kwargs["messages"]
+        user_content = messages[1]["content"]
+        self.assertIsInstance(user_content, list)
+        self.assertEqual("text", user_content[0]["type"])
+        self.assertIn("image_instruction: 看清楚破損位置與標籤文字", user_content[0]["text"])
+        self.assertIn("input_images", user_content[0]["text"])
+        self.assertEqual("image_url", user_content[1]["type"])
+        self.assertEqual("data:image/png;base64,AAAA", user_content[1]["image_url"]["url"])
+
     def test_next_step_plan_uses_openai_decision(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         state.append(

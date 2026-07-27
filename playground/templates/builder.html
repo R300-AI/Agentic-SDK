@@ -118,29 +118,49 @@
         </div>
         {% if step.key == "input_type" %}
         <details class="advanced-disclosure step-advanced" data-visible-choices="text|text_image" open>
-          <summary>輸入理解進階配置</summary>
+          <summary>先抓出哪些資訊</summary>
           <form class="module-param-form" data-param-form data-step-key="perceive">
-            <label for="v3-perceive-welcome-message">開場提示</label>
-            <input id="v3-perceive-welcome-message" name="welcome_message" type="text" autocomplete="off">
-            <label for="v3-perceive-intent-pairs">欄位或重點對應</label>
+            <label for="v3-perceive-welcome-message">整理方式</label>
+            <textarea id="v3-perceive-welcome-message" name="welcome_message" rows="3" placeholder="例如：先看出客人想問什麼、提到哪個商品、需要門市協助還是線上回覆；沒講清楚的地方標成未知。"></textarea>
+            <label for="v3-perceive-intent-pairs">要留意的內容</label>
             {{ pair_editor(
               "v3-perceive-intent-pairs",
               "intent_pairs",
-              "欄位或重點",
-              "說明",
-              "新增欄位或重點",
-              none
+              "資料名稱",
+              "怎麼判斷",
+              "新增一項要抓的內容",
+              none,
+              "例如：客人需求",
+              "例如：客人想解決的問題或想買的東西",
+              "input-signals-editor",
+              "每列代表 Agent 在看使用者輸入時要先找的一件事。左邊是後續流程使用的名稱，右邊是判斷方式。",
+              true,
+              "內容樣子",
+              [
+                {"label": "一段文字", "value": "文字"},
+                {"label": "數量或金額", "value": "數字"},
+                {"label": "是或否", "value": "是/否"},
+                {"label": "多個項目", "value": "清單"}
+              ],
+              "input"
             ) }}
-            <label for="v3-perceive-importance">輸入重要度</label>
+            <label for="v3-perceive-importance">之後回想優先度</label>
             <div class="range-field">
               <input id="v3-perceive-importance" name="importance" type="range" min="0" max="5" step="0.1" value="1.0" data-range-control>
               <output for="v3-perceive-importance" data-range-output>1.0</output>
             </div>
           </form>
         </details>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="text_image" open>
+          <summary>圖片要看什麼</summary>
+          <form class="module-param-form" data-param-form data-step-key="perceive">
+            <label for="v3-perceive-image-instruction">照片判讀重點</label>
+            <textarea id="v3-perceive-image-instruction" name="image_instruction" rows="4" placeholder="例如：看清楚商品型號、尺寸標籤、破損位置、鞋底磨耗或單據文字；看不到的地方請寫看不清楚。"></textarea>
+          </form>
+        </details>
         {% endif %}
         {% if step.key == "retrieve_policy" %}
-        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword|semantic|hybrid_later" data-visible-dependencies="task_type=route_by_support" open>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword|semantic|hybrid_later" open>
           <summary>支援資料範圍</summary>
           <form class="module-param-form" data-param-form data-step-key="plan">
             <label for="v3-plan-retrieve-name">資料名稱</label>

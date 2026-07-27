@@ -92,6 +92,7 @@ class BuilderSourceConfig:
     perceive_welcome_message: str | None = None
     perceive_options: tuple[dict[str, object], ...] = ()
     perceive_importance: float = 1.0
+    perceive_image_instruction: str | None = None
     retrieve_module: str = "KeywordRetrieve"
     retrieve_name: str = "支援資料"
     retrieve_description: str | None = None
@@ -129,9 +130,9 @@ def get_builder_steps() -> list[BuilderStep]:
     return [
         BuilderStep(
             "memory_type",
-            "Q1: 這個 Agent 主要要完成哪類任務？",
+            "Q1: 這個 Agent 要使用哪種記憶方式？",
             "",
-            "任務類型",
+            "Memory 類型",
             "",
             (
                 BuilderChoice("in_context", "即時問答", "只根據目前這次對話內容產生問答，不參考先前互動。"),
@@ -153,20 +154,8 @@ def get_builder_steps() -> list[BuilderStep]:
             True,
         ),
         BuilderStep(
-            "task_type",
-            "Q3: 收到需求後，要怎麼決定下一步？",
-            "",
-            "規劃方式",
-            "",
-            (
-                BuilderChoice("direct", "直接往後處理", "收到輸入後直接進入後續步驟，不先插入額外判斷。"),
-                BuilderChoice("route_by_support", "先判斷是否需要查資料", "先判斷是否需要支援資料，再決定後續步驟。"),
-            ),
-            True,
-        ),
-        BuilderStep(
             "retrieve_policy",
-            "Q4: 回答前需要查資料嗎？",
+            "Q3: 回答前需要查資料嗎？",
             "",
             "資料查詢",
             "",
@@ -179,7 +168,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "output_format",
-            "Q5: 最後回覆要怎麼呈現給使用者？",
+            "Q4: 最後回覆要怎麼呈現給使用者？",
             "",
             "回覆呈現",
             "",
@@ -190,7 +179,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "failure_policy",
-            "Q6: 答案不夠有把握時怎麼辦？",
+            "Q5: 答案不夠有把握時怎麼辦？",
             "",
             "補救策略",
             "",
@@ -203,7 +192,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "readiness",
-            "Q7: 現在可以試跑了嗎？",
+            "Q6: 現在可以試跑了嗎？",
             "",
             "試跑",
             "",
@@ -223,26 +212,18 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
         updated = _replace_config(config, workflow_name=_clean_workflow_name(str(choice_label)) or config.workflow_name)
         return _build_source_for_config(updated)
 
-    if step_key == "task_type":
-        choice = str(choice_label)
-        task_overrides = {
-            "direct": {
-                "plan_strategy": None,
-                "plan_system_prompt": None,
-                "plan_direct_rule": None,
-            },
-            "route_by_support": {
-                "plan_strategy": "RouteBySupport",
-            },
-        }
-        if choice in task_overrides:
-            return _build_source_for_config(_replace_config(config, **task_overrides[choice]))
-
     if step_key == "input_type":
         choice = str(choice_label)
         input_overrides = {
-            "pass_through": {"input_kind": "Message", "perceive_module": "PassThroughPerceive", "perceive_importance": 1.0},
-            "text": {"input_kind": "Document", "perceive_module": "TextPerceive", "perceive_importance": 1.0},
+            "pass_through": {
+                "input_kind": "Message",
+                "perceive_module": "PassThroughPerceive",
+                "perceive_welcome_message": None,
+                "perceive_options": (),
+                "perceive_importance": 1.0,
+                "perceive_image_instruction": None,
+            },
+            "text": {"input_kind": "Document", "perceive_module": "TextPerceive", "perceive_importance": 1.0, "perceive_image_instruction": None},
             "text_image": {"input_kind": "TextImage", "perceive_module": "TextImagePerceive", "perceive_importance": 1.5},
         }
         if choice in input_overrides:
@@ -415,6 +396,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                     perceive_welcome_message=_clean_prompt(str(choice_label.get("welcome_message", ""))),
                     perceive_options=tuple(_option_items_from_pairs(str(choice_label.get("intent_pairs", "")))) if "intent_pairs" in choice_label else config.perceive_options,
                     perceive_importance=_clean_float(choice_label.get("importance"), config.perceive_importance, 0.0, 5.0),
+                    perceive_image_instruction=_clean_prompt(str(choice_label.get("image_instruction", config.perceive_image_instruction or ""))) if "image_instruction" in choice_label else config.perceive_image_instruction,
                 )
             )
         perceive_module = {
@@ -578,6 +560,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "perceive_welcome_message": config.perceive_welcome_message,
         "perceive_options": config.perceive_options,
         "perceive_importance": config.perceive_importance,
+        "perceive_image_instruction": config.perceive_image_instruction,
         "retrieve_module": config.retrieve_module,
         "retrieve_name": config.retrieve_name,
         "retrieve_description": config.retrieve_description,
@@ -655,6 +638,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         perceive_welcome_message=_extract_keyword_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "welcome_message"),
         perceive_options=tuple(_normalize_option_items(_extract_keyword_literal(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "options", perceive_config.get("options")))),
         perceive_importance=_extract_float_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "importance", _clean_float(perceive_config.get("importance"), 1.0, 0.0, 5.0)),
+        perceive_image_instruction=_extract_keyword_value(source, {"TextImagePerceive"}, "image_instruction") or _clean_prompt(str(perceive_config.get("image_instruction", ""))),
         retrieve_module=_first_call_name(source, {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve", "HybridRetrieve"}) or "KeywordRetrieve",
         retrieve_name=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_name") or _clean_short_text(str(retrieve_config.get("name", "支援資料")), "支援資料"),
         retrieve_description=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_description") or _clean_prompt(str(retrieve_config.get("description", ""))),
@@ -711,6 +695,7 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
         _add_form_value(values, "perceive", "intent_pairs", intent_pairs)
     if include_generated_defaults or config.perceive_importance != 1.0:
         _add_form_value(values, "perceive", "importance", config.perceive_importance)
+    _add_form_value(values, "perceive", "image_instruction", _configured_text(config.perceive_image_instruction, None, include_generated_defaults))
 
     _add_form_value(values, "plan", "retrieve_name", _configured_text(config.retrieve_name, "支援資料", include_generated_defaults))
     _add_form_value(values, "plan", "retrieve_description", _configured_text(config.retrieve_description, _DEFAULT_RETRIEVE_DESCRIPTION, include_generated_defaults))
@@ -788,10 +773,7 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         "EvidenceCheckReflect": "EvidenceCheck",
     }.get(config.reflect_module or "", "Later")
 
-    task_type = "route_by_support" if config.plan_strategy else "direct"
-
     input_type = {
-        "PassThroughPerceive": "pass_through",
         "TextPerceive": "text",
         "TextImagePerceive": "text_image",
     }.get(config.perceive_module, "pass_through")
@@ -825,7 +807,6 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         "retrieve": retrieve_choice,
         "action": action_choice,
         "reflect": reflect_choice,
-        "task_type": task_type,
         "input_type": input_type,
         "retrieve_policy": retrieve_policy,
         "output_format": output_format,
@@ -1727,6 +1708,8 @@ def _perceive_expression(config: BuilderSourceConfig) -> str:
         arguments.append(f"options={_format_python_literal(list(config.perceive_options), 8)}")
     if config.perceive_importance != 1.0:
         arguments.append(f"importance={config.perceive_importance}")
+    if config.perceive_module == "TextImagePerceive" and config.perceive_image_instruction:
+        arguments.append(f"image_instruction={json.dumps(config.perceive_image_instruction, ensure_ascii=False)}")
     return f"{config.perceive_module}({', '.join(arguments)})"
 
 

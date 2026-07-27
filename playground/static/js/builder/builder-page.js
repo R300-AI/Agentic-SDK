@@ -32,7 +32,7 @@ const dependencyRules = {
   },
 };
 
-const dependentStepOrder = ["task_type", "input_type", "retrieve_policy", "output_format", "failure_policy"];
+const dependentStepOrder = ["input_type", "retrieve_policy", "output_format", "failure_policy"];
 
 function updateSummary(workflowSummary = {}) {
   Object.entries(workflowSummary).forEach(([key, value]) => {
@@ -290,9 +290,16 @@ function normalizePairType(value) {
     "選單": "文字選項 / string",
     "按鈕": "是/否確認 / boolean",
     "文字內容": "文字選項 / string",
-    "文字選項": "文字選項 / string",
-    "數字資料": "數字資料 / number",
-    "是/否確認": "是/否確認 / boolean",
+    "文字選項": "文字",
+    "文字選項 / string": "文字",
+    "文字 / string": "文字",
+    "數字資料": "數字",
+    "數字資料 / number": "數字",
+    "數字 / number": "數字",
+    "是/否確認": "是/否",
+    "是/否確認 / boolean": "是/否",
+    "是/否 / boolean": "是/否",
+    "清單 / array": "清單",
   };
   return legacyMap[normalized] || normalized;
 }

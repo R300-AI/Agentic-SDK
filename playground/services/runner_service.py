@@ -758,6 +758,7 @@ def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict
             welcome_message=config.perceive_welcome_message or "",
             options=list(config.perceive_options),
             importance=config.perceive_importance,
+            image_instruction=config.perceive_image_instruction or "",
             **endpoint_params_for_role("perceive", endpoint_selections),
         )
     return PassThroughPerceive(input_label=config.perceive_input_label or "")
