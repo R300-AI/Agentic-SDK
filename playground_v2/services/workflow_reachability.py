@@ -6,7 +6,7 @@ if TYPE_CHECKING:
     from playground_v2.services.source_builder import BuilderSourceConfig
 
 
-_MODEL_PERCEIVE_MODULES = {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}
+_MODEL_PERCEIVE_MODULES = {"TextPerceive", "TextImagePerceive"}
 _MODEL_ACTION_MODULES = {"GenerativeAction", "ToolCallAction"}
 
 

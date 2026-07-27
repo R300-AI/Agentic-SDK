@@ -128,8 +128,21 @@ class BuilderSourceConfig:
 def get_builder_steps() -> list[BuilderStep]:
     return [
         BuilderStep(
+            "memory_type",
+            "Q1: 這個 Agent 需要記住多久？",
+            "",
+            "記憶範圍",
+            "",
+            (
+                BuilderChoice("in_context", "單輪工作記憶", "目前對應 InContextMemory，只保留本輪輸入與中繼狀態，適合客服、櫃員與單次諮詢。"),
+                BuilderChoice("workflow_recall_preview", "跨 Session 案件記憶", "保留同一類 workflow 的跨 session 記憶，適合案件續談、回訪與需要延續前情的服務。", available=False, badge="預覽中"),
+                BuilderChoice("user_profile_preview", "長期個人記憶", "保留使用者偏好、背景與歷次互動重點，適合長期助理、照護追蹤與會員顧問。", available=False, badge="預覽中"),
+            ),
+            True,
+        ),
+        BuilderStep(
             "task_type",
-            "Q1: 這個 Agent 主要要完成哪類任務？",
+            "Q2: 這個 Agent 主要要完成哪類任務？",
             "",
             "任務類型",
             "",
@@ -143,7 +156,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "input_type",
-            "Q2: 使用者會提供什麼資料？",
+            "Q3: 使用者會提供什麼資料？",
             "",
             "輸入內容",
             "",
@@ -157,7 +170,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "retrieve_policy",
-            "Q3: 回答前需要查資料嗎？",
+            "Q4: 回答前需要查資料嗎？",
             "",
             "資料查詢",
             "",
@@ -170,7 +183,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "output_format",
-            "Q4: 最後回覆要怎麼呈現給使用者？",
+            "Q5: 最後回覆要怎麼呈現給使用者？",
             "",
             "回覆呈現",
             "",
@@ -181,7 +194,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "failure_policy",
-            "Q5: 答案不夠有把握時怎麼辦？",
+            "Q6: 答案不夠有把握時怎麼辦？",
             "",
             "補救策略",
             "",
@@ -194,7 +207,7 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "readiness",
-            "現在可以試跑了嗎？",
+            "Q7: 現在可以試跑了嗎？",
             "",
             "試跑",
             "",
@@ -253,7 +266,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             "structured_output": {
                 "workflow_name": _workflow_name_for_profile(existing_source, "Structured Result Helper"),
                 "profile_hint": "Structured Result",
-                "perceive_module": "StructuredPerceive",
+                "perceive_module": "TextPerceive",
                 "retrieve_module": "KeywordRetrieve",
                 "action_module": "GenerativeAction",
                 "action_prompt": _OUTPUT_FORMAT_PROMPTS["json"],
@@ -269,7 +282,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
         choice = str(choice_label)
         input_overrides = {
             "text": {"input_kind": "Message", "perceive_module": "PassThroughPerceive"},
-            "structured": {"input_kind": "Form", "perceive_module": "StructuredPerceive"},
+            "structured": {"input_kind": "Form", "perceive_module": "TextPerceive"},
             "file_image": {"input_kind": "TextImage", "perceive_module": "TextImagePerceive"},
             "mixed": {"input_kind": "TextImage", "perceive_module": "TextImagePerceive", "perceive_importance": 1.5},
         }
@@ -424,7 +437,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             _replace_config(
                 config,
                 input_kind="Form",
-                perceive_module="StructuredPerceive",
+                perceive_module="TextPerceive",
                 workflow_name=_workflow_name_for_profile(existing_source, "Structured Intake Helper"),
                 profile_hint="Structured Form",
             )
@@ -448,7 +461,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
         perceive_module = {
             "Simple": "PassThroughPerceive",
             "Text": "TextPerceive",
-            "Structured": "StructuredPerceive",
+            "Structured": "TextPerceive",
             "TextImage": "TextImagePerceive",
         }.get(str(choice_label), config.perceive_module)
         return _build_source_for_config(_replace_config(config, perceive_module=perceive_module))
@@ -666,6 +679,10 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     action_module = "CustomAction" if is_custom_action else action_call_name or "DirectAnswerAction"
     if action_module == "StructuredAction":
         action_module = "ToolCallAction" if action_tools and _prompt_looks_interactive(action_prompt) else "GenerativeAction"
+    perceive_module = _first_call_name(source, {"PassThroughPerceive", "TextPerceive", "StructuredPerceive", "TextImagePerceive"}) or "PassThroughPerceive"
+    if perceive_module == "StructuredPerceive":
+        perceive_module = "TextPerceive"
+
     return BuilderSourceConfig(
         workflow_name=workflow_name,
         profile_hint=parsed.profile_hint,
@@ -674,7 +691,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         input_kind=str(input_config.get("kind") or _input_kind_from_source(source)),
         input_description=_clean_prompt(str(input_config.get("description", ""))),
         input_fields=tuple(_normalize_config_items(input_config.get("fields"))),
-        perceive_module=_first_call_name(source, {"PassThroughPerceive", "TextPerceive", "StructuredPerceive", "TextImagePerceive"}) or "PassThroughPerceive",
+        perceive_module=perceive_module,
         perceive_input_label=_extract_keyword_value(source, {"PassThroughPerceive"}, "input_label") or _clean_short_text(str(perceive_config.get("input_label", "")), "") or None,
         perceive_welcome_message=_extract_keyword_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "welcome_message"),
         perceive_options=tuple(_normalize_option_items(_extract_keyword_literal(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "options", perceive_config.get("options")))),
@@ -792,9 +809,10 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
     perceive_choice = {
         "PassThroughPerceive": "Simple",
         "TextPerceive": "Text",
-        "StructuredPerceive": "Structured",
         "TextImagePerceive": "TextImage",
     }.get(config.perceive_module, "Simple")
+    if config.perceive_module == "TextPerceive" and config.input_kind == "Form":
+        perceive_choice = "Structured"
     retrieve_choice = {
         "SemanticRetrieve": "Semantic",
         "HybridRetrieve": "Hybrid",
@@ -1597,7 +1615,7 @@ def _workflow_action_call_name(python_source: str) -> str | None:
 def _input_kind_from_source(python_source: str) -> str:
     if "TextImagePerceive(" in python_source:
         return "TextImage"
-    if "StructuredPerceive(" in python_source:
+    if "StructuredPerceive(" in python_source or "Structured Intake Helper" in python_source:
         return "Form"
     if "TextPerceive(" in python_source:
         return "Document"
@@ -1840,7 +1858,6 @@ def _format_module_imports(module_names: list[str]) -> str:
             "NextStepPlan",
             "PassThroughPerceive",
             "TextPerceive",
-            "StructuredPerceive",
             "TextImagePerceive",
             "ResponseCheckReflect",
         )

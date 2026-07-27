@@ -2,12 +2,8 @@
 from agentic_sdk.modules.perceive.text import TextPerceive
 
 
-class StructuredPerceive(TextPerceive):
-    pass
-
-
 class TextImagePerceive(TextPerceive):
     pass
 
 
-__all__ = ["PassThroughPerceive", "StructuredPerceive", "TextImagePerceive", "TextPerceive"]
+__all__ = ["PassThroughPerceive", "TextImagePerceive", "TextPerceive"]

@@ -16,6 +16,18 @@
 
 這些資料應被理解成預設 workflow 引擎內承接的狀態，而不是另外脫離 workflow、再獨立定一套不同名稱的 memory 契約。
 
+## Preview 引擎：PersistentMemory
+
+`PersistentMemory` 是文件先行定義的 durable memory engine。它不是單次執行期的工作記憶，而是跨執行期可保存、可索引、可回查的記憶引擎，用來承接之後仍可能被 workflow 重新取回與再利用的記憶資料。
+
+適合把它理解成：
+
+- workflow 結束後仍可保留的 durable memory
+- 可供後續執行再次索引與回查的 recall engine
+- 不再侷限於單輪狀態，而是可持續累積的外部記憶層
+
+這一層對外先定義的是技術性質，而不是應用用途。也就是說，文件目前只先確立 `PersistentMemory` 代表「跨執行期可保存、可索引、可回查」這種記憶引擎類型；至於實際使用哪種 backend、索引方式或治理策略，仍屬後續 implementation slice 的範圍。
+
 ## Workflow 可注入的其他引擎層
 
 從目前程式結構看，`Workflow` 本身保留了引擎注入點，至少包含下列兩個方向：

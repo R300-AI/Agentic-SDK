@@ -1,6 +1,6 @@
 # Perceive
 
-Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的四個標準模組。每個模組會先列出建立物件時使用的初始化參數，再列出 workflow 執行時接收的標準輸入參數；整理後寫入 `Entities` 的欄位，會回到 [Module Family](index.md) 的中央定義理解。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。
+Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的三個標準模組。每個模組會先列出建立物件時使用的初始化參數，再列出 workflow 執行時接收的標準輸入參數；整理後寫入 `Entities` 的欄位，會回到 [Module Family](index.md) 的中央定義理解。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。
 
 ## PassThroughPerceive
 
@@ -46,34 +46,6 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 | `user_message` | `string` | `"我最近久站後足弓很酸，想找比較有支撐的鞋"` | 使用者單輪原始文字。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
-| `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
-
-## StructuredPerceive
-
-舊名對應：`StructuredPerceive`
-
-`StructuredPerceive` 將結構化欄位整理成後續可用的查詢與摘要。當流程的主要輸入來自欄位資料時，這個模組會把欄位內容直接組成查詢與需求摘要。
-
-此模組需要明確的 OpenAI-compatible 連線設定：`api_key`、`base_url`、`model`。
-
-### 初始化參數
-
-| 參數 | 型態 | 必填 | 預設值 | 說明 |
-| --- | --- | --- | --- | --- |
-| `api_key` | `string` | 是 | 無 | OpenAI-compatible 端點金鑰。 |
-| `base_url` | `string` | 是 | 無 | OpenAI-compatible API base URL。 |
-| `model` | `string` | 是 | 無 | 每次推論呼叫送出的模型名稱。 |
-| `welcome_message` | `string` | 否 | `""` | 給 UI 或 metadata 使用的提示文字。 |
-| `options` | `array<object>` | 否 | `[]` | 可選意圖或服務範圍，供模型理解背景。 |
-| `importance` | `number` | 否 | `1.0` | 寫入 memory entry 的重要性權重。 |
-
-### 標準輸入參數
-
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `user_message` | `string` | `""` | 沒有自由輸入時固定空字串。 |
-| `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
-| `input_fields` | `object` | `{"age":72,"left_foot_length_mm":250,"pain":true}` | 欄位資料；沒有欄位時固定 `{}`。 |
 | `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
 
 ## TextImagePerceive

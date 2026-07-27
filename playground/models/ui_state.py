@@ -22,6 +22,8 @@ class BuilderChoice:
     label: str
     title: str
     description: str
+    available: bool = True
+    badge: str = ""
 
 
 @dataclass(frozen=True)

@@ -17,7 +17,6 @@ from agentic_sdk.modules import (
     PassThroughPerceive,
     ResponseCheckReflect,
     SemanticRetrieve,
-    StructuredPerceive,
     TextImagePerceive,
     TextPerceive,
     ToolCallAction,
@@ -75,7 +74,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("請介紹 TSiP", output["payload"]["query"])
 
     def test_text_perceive_family_returns_plan_and_metadata(self) -> None:
-        for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive):
+        for module_cls in (TextPerceive, TextImagePerceive):
             with self.subTest(module=module_cls.__name__):
                 state = WorkflowState(user_message="幫我找支撐型鞋款")
                 with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient()):
@@ -253,7 +252,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("reflect-model", reflect_client.last_create_kwargs["model"])
 
     def test_llm_module_constructors_require_model_parameter(self) -> None:
-        for module_cls in (TextPerceive, StructuredPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, ToolCallAction, ResponseCheckReflect):
+        for module_cls in (TextPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, ToolCallAction, ResponseCheckReflect):
             with self.subTest(module=module_cls.__name__):
                 with self.assertRaisesRegex(ValueError, "explicit model"):
                     module_cls(api_key=TEST_API_KEY, base_url=TEST_BASE_URL)

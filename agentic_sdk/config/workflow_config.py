@@ -68,7 +68,6 @@ def build_module(spec: ModuleSpec) -> Module:
         "pass_through_retrieve": modules.PassThroughRetrieve,
         "response_check": modules.ResponseCheckReflect,
         "semantic": modules.SemanticRetrieve,
-        "structured_perceive": modules.StructuredPerceive,
         "text": modules.TextPerceive,
         "text_image": modules.TextImagePerceive,
         "tool_call_action": modules.ToolCallAction,

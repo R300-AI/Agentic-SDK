@@ -25,7 +25,6 @@ from agentic_sdk.modules import (
     PassThroughPerceive,
     ResponseCheckReflect,
     SemanticRetrieve,
-    StructuredPerceive,
     TextImagePerceive,
     TextPerceive,
     ToolCallAction,
@@ -749,13 +748,6 @@ def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict
         return None
     if config.perceive_module == "TextPerceive":
         return TextPerceive(
-            welcome_message=config.perceive_welcome_message or "",
-            options=list(config.perceive_options),
-            importance=config.perceive_importance,
-            **endpoint_params_for_role("perceive", endpoint_selections),
-        )
-    if config.perceive_module == "StructuredPerceive":
-        return StructuredPerceive(
             welcome_message=config.perceive_welcome_message or "",
             options=list(config.perceive_options),
             importance=config.perceive_importance,

@@ -108,8 +108,9 @@
         {% else %}
         <div class="choice-grid" aria-label="{{ step.title }} 選項">
           {% for choice in step.choices %}
-          <button class="choice-card{% if loop.first %} selected{% endif %}" type="button" data-choice-card data-step-key="{{ step.key }}" data-choice-label="{{ choice.label }}">
+          <button class="choice-card{% if loop.first and choice.available %} selected{% endif %}{% if not choice.available %} is-preview-locked{% endif %}" type="button" data-choice-card data-step-key="{{ step.key }}" data-choice-label="{{ choice.label }}"{% if not choice.available %} disabled aria-disabled="true"{% endif %}>
             <span>{{ loop.index }}</span>
+            {% if choice.badge %}<em class="choice-badge">{{ choice.badge }}</em>{% endif %}
             <strong>{{ choice.title }}</strong>
             {% if choice.description %}<small>{{ choice.description }}</small>{% endif %}
           </button>

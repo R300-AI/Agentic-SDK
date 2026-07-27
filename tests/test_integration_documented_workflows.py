@@ -16,7 +16,6 @@ from agentic_sdk.modules import (
     PassThroughPerceive,
     ResponseCheckReflect,
     SemanticRetrieve,
-    StructuredPerceive,
     TextImagePerceive,
     TextPerceive,
 )
@@ -124,7 +123,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(1, result.visit_counts["action"])
         self.assertEqual(1, result.visit_counts["reflect"])
 
-    def test_structured_perceive_hybrid_retrieve_generative_action_workflow_runs(self) -> None:
+    def test_text_perceive_hybrid_retrieve_generative_action_workflow_runs(self) -> None:
         kb = KnowledgeBase(
             entries=[KnowledgeEntry(id="1", title="支撐鞋", content="建議優先考慮支撐型慢跑鞋。")]
         )
@@ -136,7 +135,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             side_effect=[perceive_client, plan_client, action_client],
         ):
             workflow = Workflow(
-                perceive=StructuredPerceive(**_llm_params()),
+                perceive=TextPerceive(**_llm_params()),
                 plan=NextStepPlan(**_llm_params()),
                 retrieve=HybridRetrieve(knowledge_base=kb),
                 action=ActionToReflectWrapper(GenerativeAction(**_llm_params())),

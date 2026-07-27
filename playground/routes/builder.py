@@ -39,6 +39,20 @@ def update_builder_state():
     payload = request.get_json(silent=True) or {}
     step_key = str(payload.get("step", ""))
     choice_label = payload.get("choice") if "choice" in payload else payload.get("value") or ""
+    if _is_locked_builder_choice(step_key, choice_label):
+        workflow_summary = get_workflow_summary(session.get("python_source") or build_default_python_source())
+        return jsonify(
+            {
+                "updated": False,
+                "workflow_summary": {
+                    "name": workflow_summary.name,
+                    "input_contract": workflow_summary.input_contract,
+                    "template": workflow_summary.template,
+                    "output_contract": workflow_summary.output_contract,
+                    "readiness": workflow_summary.readiness,
+                },
+            }
+        )
     python_source = build_python_source_from_builder_choice(step_key, choice_label, session.get("python_source"))
     session["python_source"] = python_source
     session["builder_has_user_config"] = True
@@ -94,3 +108,15 @@ def _updated_builder_form_state(python_source: str, payload: dict[str, object]) 
         "choices": {**parsed_choices, **choice_overrides},
         "values": values,
     }
+
+
+def _is_locked_builder_choice(step_key: str, choice_label: object) -> bool:
+    if step_key != "memory_type":
+        return False
+    for step in get_builder_steps():
+        if step.key != step_key:
+            continue
+        for choice in step.choices:
+            if choice.label == str(choice_label):
+                return not choice.available
+    return False

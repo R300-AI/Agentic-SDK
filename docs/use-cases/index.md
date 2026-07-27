@@ -12,7 +12,7 @@
 
 | 模組家族 | [LaNew 售鞋顧問](lanew-footwear-advisor.md) | [BCI 射箭教練](bci-archery-coach.md) | [ICOPE 六力評估助手](icope-six-capacity-assistant.md) |
 | --- | --- | --- | --- |
-| [Perceive](../modules/perceive-modules.md) | TextImagePerceive | TextPerceive | StructuredPerceive |
+| [Perceive](../modules/perceive-modules.md) | TextImagePerceive | TextPerceive | TextPerceive |
 | [Plan](../modules/plan-modules.md) | NextStepPlan | NextStepPlan | NextStepPlan |
 | [Retrieve](../modules/retrieve-modules.md) | HybridRetrieve | SemanticRetrieve | HybridRetrieve |
 | [Action](../modules/action-modules.md) | GenerativeAction | GenerativeAction | GenerativeAction |

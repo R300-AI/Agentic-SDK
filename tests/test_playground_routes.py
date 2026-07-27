@@ -98,7 +98,10 @@ def test_builder_route_renders_oobe_shell():
         response = client.get("/playground/builder")
 
     assert response.status_code == 200
-    assert "這個 Agent 要完成哪種任務？".encode("utf-8") in response.data
+    assert "這個 Agent 需要記住多久？".encode("utf-8") in response.data
+    assert "單輪工作記憶".encode("utf-8") in response.data
+    assert "跨 Session 案件記憶".encode("utf-8") in response.data
+    assert "預覽中".encode("utf-8") in response.data
     assert b"data-step-panel=\"failure_policy\"" in response.data
     assert "前往試跑頁".encode("utf-8") in response.data
     assert "純文字回覆".encode("utf-8") in response.data
@@ -108,8 +111,8 @@ def test_builder_route_renders_oobe_shell():
     assert "可試跑".encode("utf-8") in response.data
     assert b"draft-panel" not in response.data
     assert b"summary-list" not in response.data
-    assert "目前階段：步驟 1 / 6".encode("utf-8") in response.data
-    assert "aria-label=\"目前階段：步驟 1 / 6：這個 Agent 要完成哪種任務？\"".encode("utf-8") in response.data
+    assert "目前階段：步驟 1 / 7".encode("utf-8") in response.data
+    assert "aria-label=\"目前階段：步驟 1 / 7：Q1: 這個 Agent 需要記住多久？\"".encode("utf-8") in response.data
     assert b"progress-step-list" in response.data
     page = response.data.decode("utf-8")
     rail_start = page.index("progress-step-list")
@@ -170,7 +173,7 @@ def test_builder_choice_cards_explain_real_differences_and_avoid_duplicate_categ
     assert "檢查資料依據" in failure_step_markup
 
 
-def test_builder_uses_formal_six_step_flow_without_legacy_name_step():
+def test_builder_uses_formal_seven_step_flow_without_legacy_name_step():
     app = create_app()
 
     with app.test_client() as client:
@@ -181,8 +184,7 @@ def test_builder_uses_formal_six_step_flow_without_legacy_name_step():
     assert 'id="builder-step-name"' not in page
     assert 'data-name-input' not in page
     assert "這個 Agent 要如何命名？" not in page
-    assert "步驟 6 / 6" in page
-    assert "步驟 7 /" not in page
+    assert "步驟 7 / 7" in page
     assert "步驟 8 /" not in page
     assert "步驟 9 /" not in page
 
@@ -486,7 +488,7 @@ def test_builder_expanded_module_choices_update_canonical_source():
         )
         readiness_source = client.get("/playground/source/preview").data.decode("utf-8")
 
-    assert "StructuredPerceive(" in form_source
+    assert "TextPerceive(" in form_source
     assert "TextImagePerceive(" in image_source
     assert "SemanticRetrieve(" in semantic_source
     assert "top_k=" not in semantic_source
@@ -999,7 +1001,7 @@ def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
 
     assert '"label": "售後服務"' in preview
     assert '"intent": "保固退換貨"' in preview
-    assert 'StructuredPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL, welcome_message="請提供需求。", options=' in preview
+    assert 'TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL, welcome_message="請提供需求。", options=' in preview
     assert 'importance=2.5' in preview
     assert "HybridRetrieve(" in preview
     assert '"keywords": [\n                          "保固"' in preview

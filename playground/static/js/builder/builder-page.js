@@ -341,7 +341,7 @@ function hydrateBuilderFormState(state) {
   Object.entries(choices).forEach(([stepKey, choiceLabel]) => {
     const panel = panels.find((candidate) => candidate.dataset.stepPanel === stepKey);
     const selectedCard = Array.from(panel?.querySelectorAll("[data-choice-card]") || [])
-      .find((card) => card.dataset.choiceLabel === String(choiceLabel));
+      .find((card) => card.dataset.choiceLabel === String(choiceLabel) && !card.disabled);
     if (panel && selectedCard) {
       selectChoice(panel.querySelectorAll("[data-choice-card]"), selectedCard);
       updateConditionalForms(panel);
@@ -575,6 +575,9 @@ panels.forEach(updateConditionalForms);
 
 cards.forEach((card) => {
   card.addEventListener("click", async () => {
+    if (card.disabled || card.getAttribute("aria-disabled") === "true") {
+      return;
+    }
     const panel = card.closest("[data-step-panel]");
     if (panel) {
       selectChoice(panel.querySelectorAll("[data-choice-card]"), card);
