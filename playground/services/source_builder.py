@@ -154,15 +154,13 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "task_type",
-            "Q3: 這次要採用哪種處理流程？",
+            "Q3: 收到需求後，要怎麼決定下一步？",
             "",
-            "處理流程",
+            "規劃方式",
             "",
             (
-                BuilderChoice("direct_answer", "直接回答", "不先加入自然生成步驟，適合固定答案或規則型回覆。"),
-                BuilderChoice("retrieve_answer", "查資料後回答", "先判斷是否需要支援資料，再整理成自然回覆。"),
-                BuilderChoice("summarize", "整理摘要", "先理解長文字或文件，再收斂成摘要或判讀結果。"),
-                BuilderChoice("structured_output", "產生固定格式", "把輸入整理成表格、JSON 或指定欄位結果。"),
+                BuilderChoice("direct", "直接往後處理", "收到輸入後直接進入後續步驟，不先插入額外判斷。"),
+                BuilderChoice("route_by_support", "先判斷是否需要查資料", "先判斷是否需要支援資料，再決定後續步驟。"),
             ),
             True,
         ),
@@ -228,49 +226,13 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
     if step_key == "task_type":
         choice = str(choice_label)
         task_overrides = {
-            "direct_answer": {
-                "workflow_name": _workflow_name_for_profile(existing_source, "Customer Helper"),
-                "profile_hint": None,
-                "perceive_module": "PassThroughPerceive",
-                "retrieve_module": "KeywordRetrieve",
-                "action_module": "DirectAnswerAction",
-                "action_prompt": None,
+            "direct": {
                 "plan_strategy": None,
-                "reflect_module": None,
-                "reflect_on_failure": None,
+                "plan_system_prompt": None,
+                "plan_direct_rule": None,
             },
-            "retrieve_answer": {
-                "workflow_name": _workflow_name_for_profile(existing_source, "Retrieve Answer Helper"),
-                "profile_hint": "Retrieve Answer",
-                "perceive_module": "PassThroughPerceive",
-                "retrieve_module": "KeywordRetrieve",
-                "action_module": "GenerativeAction",
-                "action_prompt": _OUTPUT_FORMAT_PROMPTS["natural"],
+            "route_by_support": {
                 "plan_strategy": "RouteBySupport",
-                "reflect_module": None,
-                "reflect_on_failure": None,
-            },
-            "summarize": {
-                "workflow_name": _workflow_name_for_profile(existing_source, "Review Summary Helper"),
-                "profile_hint": "Summary",
-                "perceive_module": "TextPerceive",
-                "retrieve_module": "SemanticRetrieve",
-                "action_module": "GenerativeAction",
-                "action_prompt": _OUTPUT_FORMAT_PROMPTS["bullets"],
-                "plan_strategy": None,
-                "reflect_module": None,
-                "reflect_on_failure": None,
-            },
-            "structured_output": {
-                "workflow_name": _workflow_name_for_profile(existing_source, "Structured Result Helper"),
-                "profile_hint": "Structured Result",
-                "perceive_module": "TextPerceive",
-                "retrieve_module": "KeywordRetrieve",
-                "action_module": "GenerativeAction",
-                "action_prompt": _OUTPUT_FORMAT_PROMPTS["json"],
-                "plan_strategy": None,
-                "reflect_module": None,
-                "reflect_on_failure": None,
             },
         }
         if choice in task_overrides:
@@ -826,13 +788,7 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         "EvidenceCheckReflect": "EvidenceCheck",
     }.get(config.reflect_module or "", "Later")
 
-    task_type = "direct_answer"
-    if config.profile_hint == "Summary":
-        task_type = "summarize"
-    elif config.action_module == "ToolCallAction" or config.profile_hint == "Structured Result":
-        task_type = "structured_output"
-    elif config.plan_strategy or config.profile_hint == "Retrieve Answer":
-        task_type = "retrieve_answer"
+    task_type = "route_by_support" if config.plan_strategy else "direct"
 
     input_type = {
         "PassThroughPerceive": "pass_through",

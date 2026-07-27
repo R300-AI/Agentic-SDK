@@ -15,20 +15,17 @@ const dependencyRules = {
     text_image: {},
   },
   retrieve_policy: {
-    none: { task_type: ["direct_answer", "summarize", "structured_output"] },
-    keyword: { task_type: ["direct_answer", "retrieve_answer", "structured_output"] },
-    semantic: { task_type: ["retrieve_answer", "summarize", "structured_output"] },
-    hybrid_later: {
-      task_type: ["retrieve_answer", "structured_output"],
-      input_type: ["file_image", "mixed"],
-    },
+    none: {},
+    keyword: {},
+    semantic: {},
+    hybrid_later: {},
   },
   output_format: {
-    free_text: { task_type: ["direct_answer", "retrieve_answer", "summarize", "structured_output"] },
-    interactive: { task_type: ["direct_answer", "retrieve_answer", "summarize", "structured_output"] },
+    free_text: {},
+    interactive: {},
   },
   failure_policy: {
-    clarify: { task_type: ["retrieve_answer", "summarize", "structured_output"] },
+    clarify: {},
     re_retrieve: { retrieve_policy: ["keyword", "semantic", "hybrid_later"] },
     safe_answer: {},
     escalate: {},
