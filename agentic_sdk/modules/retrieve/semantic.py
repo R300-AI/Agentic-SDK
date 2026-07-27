@@ -25,7 +25,7 @@ class SemanticRetrieve:
         self._vision_query = vision_query
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        query = str(state.lookup("query") or state.lookup("perceived_input") or state.user_message)
+        query = str(state.lookup("query") or state.lookup("perceived_input") or state.latest_user_message())
         sections: list[str] = []
         metadata: dict = {}
         if self._vision_query is not None and state.attachments:
@@ -38,9 +38,10 @@ class SemanticRetrieve:
             metadata["kb_hit_count"] = len(hits)
             if hits:
                 sections.append("\n".join(str(hit) for hit in hits))
-        if state.memory_store is not None:
+        persistent_memory = state.persistent_memory()
+        if persistent_memory is not None:
             query_embedding = self._embedder.embed(query) if self._embedder else None
-            results = state.memory_store.search(
+            results = persistent_memory.search(
                 workflow_name=state.workflow_name,
                 query_text=query,
                 query_embedding=query_embedding,

@@ -2,13 +2,17 @@
 from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
 from agentic_sdk.core.workflow import Workflow
+from agentic_sdk.memory.in_context import ConversationTurn, InContextMemory, InMemoryConversationStore
 
 __all__ = [
     "Attachment",
+    "ConversationTurn",
     "ContextEntry",
     "ContextEntryType",
     "Entities",
     "Gates",
+    "InContextMemory",
+    "InMemoryConversationStore",
     "Module",
     "ModuleOutput",
     "Workflow",

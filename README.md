@@ -2,6 +2,8 @@
 
 Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以用 Perceive、Plan、Retrieve、Action、Reflect 等模組建立可測試、可替換、可觀測的 Agent 流程，並在 Playground 中用 Builder / Runner 快速試作。
 
+從這個版本開始，SDK 的共同 memory 抽象是 `MemoryStore`，而 `InContextMemory` 與 `PersistentMemory` 是同層、可互換的 memory 類型。`InContextMemory` 偏重以時間順序保存同一個 session 的 `user -> assistant -> user -> assistant` 完整 turn 歷史；所有需要模型的模組都會透過 `MemoryStore` 讀取這份歷史，不再只看當輪 `user_message`。
+
 ## 核心概念
 
 一個 workflow 由幾個可選模組組成：
@@ -13,6 +15,8 @@ Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以�
 - Reflect：檢查結果品質或資料依據，必要時中止或重新規劃。
 
 最小 workflow 只需要 `Workflow` 加上你需要的模組。所有模組都可以用一般 Python 物件替換，因此適合從小型 PoC 擴充到正式應用。
+
+`Workflow.run(...)` 仍支援最簡單的單輪呼叫，但也支援用 `session_id`、`conversation` 與 `conversation_store` 管理多輪對話。`WorkflowState` 則保留執行中的中繼結果、payload 與觀測資料，不再被當成 `InContextMemory` 的別名。
 
 ## 安裝
 
@@ -55,6 +59,36 @@ print(result.final_message)
 ```
 
 `PassThroughPerceive` 會保留原始輸入，`KeywordRetrieve` 依關鍵字取得支援資料，`DirectAnswerAction` 則直接回傳檢索到的內容。
+
+如果你之後用同一個 `session_id` 再次呼叫 `workflow.run(...)`，新的使用者輸入與前一次 assistant 回覆都會保留在 `result.memory` 中；若實際採用的是 `InContextMemory`，也能透過相容欄位 `result.in_context_memory` 取得同一份資料。
+
+### 1.1 多輪對話與 session 保存
+
+```python
+from agentic_sdk import InMemoryConversationStore, Workflow
+from agentic_sdk.modules import GenerativeAction, PassThroughPerceive, PassThroughRetrieve
+
+conversation_store = InMemoryConversationStore()
+
+workflow = Workflow(
+    perceive=PassThroughPerceive(),
+    retrieve=PassThroughRetrieve(),
+    action=GenerativeAction(
+        api_key="ollama",
+        base_url="http://localhost:11434/v1/",
+        model="llama3.2:1b",
+    ),
+    conversation_store=conversation_store,
+)
+
+first = workflow.run("先記住我想找支撐型鞋款。", session_id="demo-session")
+second = workflow.run("再幫我整理成一句建議。", session_id="demo-session")
+
+print([turn.role for turn in second.memory.turns])
+print(second.final_message)
+```
+
+上面第二次 `run()` 時，模型看到的不只是「再幫我整理成一句建議」，還會包含前一輪 user 與 assistant 的完整對話歷史。
 
 ### 2. 使用 OpenAI-compatible 生成回覆
 
@@ -174,6 +208,8 @@ workflow = Workflow(
 result = workflow.run("請介紹 Agentic SDK")
 print(result.final_message)
 ```
+
+若自訂模組需要直接讀取完整對話，應優先透過 `state.memory` 這個通用 `MemoryStore` 介面，而不是把模組綁死在特定 `InContextMemory` 類別；要讀取最新一輪使用者文字，則可使用 `state.latest_user_message()`。
 
 ## Playground
 

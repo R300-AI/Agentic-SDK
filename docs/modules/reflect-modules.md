@@ -6,7 +6,7 @@ Reflect 模組負責檢查 Action 產出的候選答案，交出可直接交付�
 
 舊名對應：`ReflexionReflect`
 
-`ResponseCheckReflect` 檢查目前回應是否回到問題本身，並提出修正方向。當流程已經有自然語言輸出，接下來要確認回答是否完整貼合問題時，就會接到這個模組。
+`ResponseCheckReflect` 檢查目前回應是否回到問題本身，並提出修正方向。當流程已經有自然語言輸出，接下來要確認回答是否完整貼合目前這一輪與前面累積的對話脈絡時，就會接到這個模組。
 
 此模組需要明確的 OpenAI-compatible 連線設定：`api_key`、`base_url`、`model`。若不需要模型檢查，可改用規則式的 `EvidenceCheckReflect`。
 

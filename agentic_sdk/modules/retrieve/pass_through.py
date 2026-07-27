@@ -7,7 +7,7 @@ class PassThroughRetrieve:
     name = "retrieve"
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        content = str(state.lookup("perceived_input") or state.lookup("query") or state.user_message).strip()
+        content = str(state.lookup("perceived_input") or state.lookup("query") or state.latest_user_message()).strip()
         return ModuleOutput(
             next_module="action",
             payload={

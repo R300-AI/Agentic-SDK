@@ -3,7 +3,10 @@
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
+
+from agentic_sdk.core.entities import Attachment
+from agentic_sdk.memory.in_context import MemoryStore
 
 
 @dataclass
@@ -11,6 +14,11 @@ class MemoryEntry:
     content: str
     workflow_name: str = "default"
     entry_type: str = "memory"
+    role: str | None = None
+    workflow_id: str | None = None
+    session_id: str | None = None
+    turn_index: int | None = None
+    attachments: list[Attachment] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
     embedding: list[float] | None = None
     importance: float = 1.0
@@ -28,7 +36,8 @@ class MemorySearchResult:
     importance: float = 0.0
 
 
-class MemoryStore(Protocol):
+@runtime_checkable
+class PersistentMemory(MemoryStore, Protocol):
     def append(self, entry: MemoryEntry) -> None: ...
 
     def search(

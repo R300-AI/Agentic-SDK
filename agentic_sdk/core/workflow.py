@@ -3,11 +3,13 @@
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+import uuid
 
 from agentic_sdk.core.entities import ContextEntry, ContextEntryType
 from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
-from agentic_sdk.memory.protocol import MemoryStore
+from agentic_sdk.memory.in_context import ConversationStore, ConversationTurn, InContextMemory, MemoryStore
+from agentic_sdk.memory.protocol import PersistentMemory
 
 
 @dataclass
@@ -17,7 +19,9 @@ class Workflow:
     retrieve: Module | None = None
     action: Module | None = None
     reflect: Module | None = None
-    memory_store: MemoryStore | None = None
+    memory: MemoryStore | None = None
+    memory_store: PersistentMemory | None = None
+    conversation_store: ConversationStore | None = None
     gates: Gates | None = None
     workflow_name: str = "default"
     entry_module: str = "perceive"
@@ -42,20 +46,53 @@ class Workflow:
 
     def run(
         self,
-        user_message: str,
+        user_message: str | None = None,
         *,
         workflow_id: str | None = None,
+        session_id: str | None = None,
+        memory: MemoryStore | None = None,
+        conversation: MemoryStore | None = None,
+        conversation_turns: list[ConversationTurn] | None = None,
         attachments: list[Any] | None = None,
+        memory_store: PersistentMemory | None = None,
+        conversation_store: ConversationStore | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> WorkflowResult:
-        state = WorkflowState(user_message=user_message, workflow_name=self.workflow_name)
+        resolved_workflow_id = workflow_id or uuid.uuid4().hex
+        resolved_session_id = session_id or resolved_workflow_id
+        resolved_conversation_store = conversation_store or self.conversation_store
+        state_memory = _resolve_memory(
+            workflow_name=self.workflow_name,
+            workflow_id=resolved_workflow_id,
+            session_id=resolved_session_id,
+            memory=memory or self.memory,
+            conversation=conversation,
+            conversation_turns=conversation_turns,
+            conversation_store=resolved_conversation_store,
+        )
+        if user_message is not None:
+            state_memory.append_message("user", user_message, attachments=list(attachments or []))
+        latest_user_turn = state_memory.latest_user_turn()
+        if latest_user_turn is None:
+            raise ValueError("Workflow.run requires user_message or a conversation containing a user turn.")
+
+        resolved_memory_store = memory_store or self.memory_store
+        if resolved_memory_store is None and isinstance(state_memory, PersistentMemory):
+            resolved_memory_store = state_memory
+
+        state = WorkflowState(
+            user_message=latest_user_turn.content,
+            workflow_name=self.workflow_name,
+            workflow_id=resolved_workflow_id,
+            session_id=resolved_session_id,
+            memory=state_memory,
+            memory_store=resolved_memory_store,
+        )
         if workflow_id:
             state.workflow_id = workflow_id
-        state.memory_store = self.memory_store
-        if attachments:
-            state.attachments = list(attachments)
+        state.attachments = list(latest_user_turn.attachments)
 
-        state.append(ContextEntry(type=ContextEntryType.USER_INPUT, content=user_message))
+        state.append(ContextEntry(type=ContextEntryType.USER_INPUT, content=latest_user_turn.content))
         current: str | None = self.entry_module
         total_hops = 0
         aborted = False
@@ -95,16 +132,54 @@ class Workflow:
             if event_callback is not None and current is not None:
                 event_callback({"phase": "abort", "module": current, "state": state, "reason": abort_reason})
 
+        final_message = _final_message_from(state)
+        if final_message and state.memory is not None:
+            latest_assistant = state.memory.latest_assistant_turn()
+            if latest_assistant is None or latest_assistant.content != final_message:
+                state.memory.append_message("assistant", final_message, metadata={"source": "workflow.run"})
+        if resolved_conversation_store is not None and state.memory is not None:
+            resolved_conversation_store.save(state.memory)
+
         return WorkflowResult(
             workflow_id=state.workflow_id,
-            final_message=_final_message_from(state),
+            final_message=final_message,
+            session_id=state.session_id,
             aborted=aborted,
             abort_reason=abort_reason,
             entries=list(state.entries),
             visit_counts=dict(state.visit_counts),
             usage=state.payload.get("_llm_usage"),
             entities=state.entities.as_dict(),
+            memory=state.memory.copy_for_run() if state.memory is not None else None,
         )
+
+
+def _resolve_memory(
+    *,
+    workflow_name: str,
+    workflow_id: str,
+    session_id: str,
+    memory: MemoryStore | None,
+    conversation: MemoryStore | None,
+    conversation_turns: list[ConversationTurn] | None,
+    conversation_store: ConversationStore | None,
+) -> MemoryStore:
+    if memory is not None:
+        resolved = memory.copy_for_run()
+    elif conversation is not None:
+        resolved = conversation.copy_for_run()
+    elif conversation_store is not None:
+        loaded = conversation_store.get(session_id, workflow_name=workflow_name)
+        resolved = loaded.copy_for_run() if loaded is not None else InContextMemory()
+    else:
+        resolved = InContextMemory()
+    resolved.workflow_name = workflow_name
+    resolved.workflow_id = workflow_id
+    resolved.session_id = session_id
+    if conversation_turns:
+        for turn in conversation_turns:
+            resolved.append_turn(turn)
+    return resolved
 
 
 def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> ModuleOutput:

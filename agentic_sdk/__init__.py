@@ -3,10 +3,13 @@
 from agentic_sdk.config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
 from agentic_sdk.core import (
     Attachment,
+    ConversationTurn,
     ContextEntry,
     ContextEntryType,
     Entities,
     Gates,
+    InContextMemory,
+    InMemoryConversationStore,
     Module,
     ModuleOutput,
     Workflow,
@@ -14,7 +17,7 @@ from agentic_sdk.core import (
     WorkflowResult,
     WorkflowState,
 )
-from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore
+from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore, PersistentMemory
 from agentic_sdk.modules import (
     DirectAnswerAction,
     EvidenceCheckReflect,
@@ -35,6 +38,7 @@ __version__ = "0.0.0-v2"
 
 __all__ = [
     "Attachment",
+    "ConversationTurn",
     "ContextEntry",
     "ContextEntryType",
     "DirectAnswerAction",
@@ -44,11 +48,14 @@ __all__ = [
     "Gates",
     "GenerativeAction",
     "HybridRetrieve",
+    "InContextMemory",
+    "InMemoryConversationStore",
     "InMemoryStore",
     "KeywordRetrieve",
     "MemoryEntry",
     "MemorySearchResult",
     "MemoryStore",
+    "PersistentMemory",
     "Module",
     "ModuleOutput",
     "ModuleSpec",

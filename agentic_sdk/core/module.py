@@ -6,7 +6,8 @@ from dataclasses import dataclass, field
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from agentic_sdk.core.entities import Attachment, ContextEntry, ContextEntryType, Entities
-from agentic_sdk.memory.protocol import MemoryStore
+from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
+from agentic_sdk.memory.protocol import PersistentMemory
 
 
 class ModuleOutput(TypedDict, total=False):
@@ -27,7 +28,10 @@ class WorkflowState:
     user_message: str
     workflow_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     workflow_name: str = "default"
-    memory_store: MemoryStore | None = None
+    session_id: str = "default"
+    memory_store: PersistentMemory | None = None
+    memory: MemoryStore | None = None
+    in_context_memory: InContextMemory | None = None
     started_monotonic: float = field(default_factory=time.monotonic)
     entities: Entities = field(default_factory=Entities)
     entries: list[ContextEntry] = field(default_factory=list)
@@ -35,6 +39,16 @@ class WorkflowState:
     last_action_result: dict[str, Any] | None = None
     last_action_error: dict[str, Any] | None = None
     attachments: list[Attachment] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        if self.memory is None and self.in_context_memory is not None:
+            self.memory = self.in_context_memory
+        elif self.memory is None and self.memory_store is not None:
+            self.memory = self.memory_store
+        elif self.in_context_memory is None and isinstance(self.memory, InContextMemory):
+            self.in_context_memory = self.memory
+        if self.memory_store is None and isinstance(self.memory, PersistentMemory):
+            self.memory_store = self.memory
 
     @property
     def payload(self) -> dict[str, Any]:
@@ -70,17 +84,44 @@ class WorkflowState:
             return result.get("content")
         return None
 
+    def latest_user_message(self) -> str:
+        if self.memory is not None and self.memory.latest_user_turn() is not None:
+            return self.memory.latest_user_turn().content
+        return self.user_message
+
+    def latest_assistant_message(self) -> str | None:
+        if self.memory is None:
+            return None
+        turn = self.memory.latest_assistant_turn()
+        return turn.content if turn is not None else None
+
+    def persistent_memory(self) -> PersistentMemory | None:
+        if self.memory_store is not None:
+            return self.memory_store
+        if isinstance(self.memory, PersistentMemory):
+            return self.memory
+        return None
+
 
 @dataclass
 class WorkflowResult:
     workflow_id: str
     final_message: str
+    session_id: str = "default"
     aborted: bool = False
     abort_reason: str | None = None
     entries: list[ContextEntry] = field(default_factory=list)
     visit_counts: dict[str, int] = field(default_factory=dict)
     usage: dict[str, Any] | None = None
     entities: dict[str, Any] = field(default_factory=dict)
+    memory: MemoryStore | None = None
+    in_context_memory: InContextMemory | None = None
+
+    def __post_init__(self) -> None:
+        if self.memory is None and self.in_context_memory is not None:
+            self.memory = self.in_context_memory
+        elif self.in_context_memory is None and isinstance(self.memory, InContextMemory):
+            self.in_context_memory = self.memory
 
 
 class WorkflowAborted(RuntimeError):

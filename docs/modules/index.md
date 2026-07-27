@@ -10,7 +10,7 @@
 
 圖 1：五個模組家族在 workflow 中的接手順序。
 
-目前這份定義處理的是單輪 request / response，節點之間以 JSON 物件交換資料，輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。在這個範圍裡，使用者介面分別對接 `Perceive` 的輸入與 `Action` 的輸出；`Plan`、`Retrieve`、`Reflect` 則共用同一份 workflow 內部資料物件，這份物件在文件裡統一寫成 `Entities`。先看下面這張表，可以快速掌握五個家族各自的標準模組與主要工作。
+目前這份定義處理的是多輪對話 workflow。節點之間仍以 JSON 物件交換結構化資料，但需要模型的模組會共用同一份 `MemoryStore` 抽象；實際型別可以是 `InContextMemory`，也可以是同層可互換的 `PersistentMemory`。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。在這個範圍裡，使用者介面分別對接 `Perceive` 的輸入與 `Action` 的輸出；`Plan`、`Retrieve`、`Reflect` 則共用 `WorkflowState` 裡的 `Entities` 與 `ContextEntry`。先看下面這張表，可以快速掌握五個家族各自的標準模組與主要工作。
 
 | 家族 | 標準模組列表 | 主要工作 |
 | --- | --- | --- |
@@ -28,7 +28,7 @@
 
 ## Entities
 
-`Entities` 是 workflow 內部節點交換資料時使用的核心標準物件。`Plan`、`Retrieve`、`Reflect` 這三個家族都讀寫同一份物件；真正會因模組型態而改變的是 `Perceive` 的輸入參數與 `Action` 的輸出參數，因此留在各自模組頁定義即可。這一頁只需要掌握一件事：`Perceive` 與 `Action` 會有各自不同的參數，而 `Plan`、`Retrieve`、`Reflect` 則透過同一份 `Entities` 在 workflow 內部交換資料。
+`Entities` 是 workflow 內部節點交換資料時使用的核心標準物件。`Plan`、`Retrieve`、`Reflect` 這三個家族都讀寫同一份物件；真正會因模組型態而改變的是 `Perceive` 的輸入參數與 `Action` 的輸出參數，因此留在各自模組頁定義即可。這一頁只需要掌握一件事：`Perceive` 與 `Action` 會有各自不同的參數，而 `Plan`、`Retrieve`、`Reflect` 則透過同一份 `Entities` 在 workflow 內部交換資料；完整 turn 歷史則由目前的 `MemoryStore` 實作承接。
 
 ## 建議閱讀順序
 

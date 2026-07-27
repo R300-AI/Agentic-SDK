@@ -1,6 +1,6 @@
 # Agentic SDK 開發者文件站
 
-這套文件站以 SDK reference 為主，目標是讓進階開發者快速查到 `Workflow` 的公開組裝模型、五大功能的模組分類、各模組的參數與輸入輸出契約，以及 `Workflow` 在執行時可以搭配哪些引擎選項。
+這套文件站以 SDK reference 為主，目標是讓進階開發者快速查到 `Workflow` 的公開組裝模型、五大功能的模組分類、各模組的參數與輸入輸出契約，以及 `Workflow` 在執行時如何使用 `MemoryStore`、`InContextMemory` 與 `PersistentMemory`。
 
 這一版文件只聚焦 README 已定稿的公開敘事，不展開 deployment、demo 操作導覽或內部替身實作。所有需要模型的模組，都以 `OpenAI SDK form` 作為統一接入規格。
 
@@ -16,7 +16,7 @@
 
 ### Workflow 引擎選項
 
-說明 `Workflow` 預設如何用 `InContextMemory` 承接執行中的狀態資料，以及之後可替換或注入哪些引擎層。
+說明 `Workflow` 如何用 `MemoryStore` 承接模組可讀的共同 memory，並以 `InContextMemory` 與 `PersistentMemory` 這兩種同層 memory 類型實作不同的記憶策略。
 
 ### Use Case 實施例
 
@@ -26,7 +26,7 @@
 
 - [Workflow Overview](workflow-overview.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
 - [Module Family](modules/index.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
-- [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 預設使用的 `InContextMemory`，以及可注入的其他引擎層。
+- [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 如何分工 `MemoryStore`、`InContextMemory`、`PersistentMemory`、`WorkflowState` 與 `conversation_store`。
 - [Use Case](use-cases/index.md)：查看 LaNew 售鞋顧問、BCI 射箭教練與 ICOPE 六力評估助手三個實施例，理解場景拆法與模組組合。
 
 ## 模組總表
@@ -44,48 +44,42 @@
   <tbody>
     <tr>
       <td rowspan="2">Perceive</td>
-      <td><a href="modules/perceive-modules.md#inputperceive">InputPerceive</a></td>
+      <td><a href="modules/perceive-modules.md#passthroughperceive">PassThroughPerceive</a></td>
       <td>no</td>
       <td>--</td>
-      <td>先接住使用者輸入，讓 workflow 可以從最基本的一條路徑開始往下跑。</td>
+      <td>保留最新一輪使用者輸入，並把它送進同一個 session 的對話上下文。</td>
     </tr>
     <tr>
-      <td><a href="modules/perceive-modules.md#llm-perceive">LLM Perceive</a></td>
+      <td><a href="modules/perceive-modules.md#textperceive">TextPerceive / TextImagePerceive</a></td>
       <td>yes</td>
       <td>OpenAI</td>
-      <td>先把使用者輸入整理成較清楚的理解結果，必要時也能順手產生後續檢索要用的查詢內容。</td>
+      <td>根據完整對話歷史整理最新需求，必要時也把圖片一併納入理解。</td>
     </tr>
     <tr>
-      <td rowspan="3">Plan</td>
-      <td><a href="modules/plan-modules.md#chain-of-thought-planner">Chain-of-Thought Planner</a></td>
+      <td>Plan</td>
+      <td><a href="modules/plan-modules.md#nextstepplan">NextStepPlan</a></td>
       <td>yes</td>
       <td>OpenAI</td>
-      <td>先把問題想一遍，再整理成一條清楚的處理步驟，適合當成最基本的規劃方式。</td>
+      <td>根據完整對話與目前中繼結果，決定下一步要 Retrieve 還是 Action。</td>
     </tr>
     <tr>
-      <td><a href="modules/plan-modules.md#react-planner">ReAct Planner</a></td>
-      <td>yes</td>
-      <td>OpenAI</td>
-      <td>一邊思考一邊決定下一步要查什麼、做什麼，適合需要動態調整流程方向的情境。</td>
-    </tr>
-    <tr>
-      <td><a href="modules/plan-modules.md#plan-and-solve-planner">Plan-and-Solve Planner</a></td>
-      <td>yes</td>
-      <td>OpenAI</td>
-      <td>先把大問題拆成幾個小步驟，再把這些步驟交給後續檢索或回答流程逐步完成。</td>
-    </tr>
-    <tr>
-      <td rowspan="2">Retrieve</td>
+      <td rowspan="3">Retrieve</td>
       <td><a href="modules/retrieve-modules.md#keywordretrieve">KeywordRetrieve</a></td>
       <td>no</td>
       <td>--</td>
       <td>直接用關鍵字去找既有知識內容，適合資料量不大、條目結構明確的情境。</td>
     </tr>
     <tr>
-      <td><a href="modules/retrieve-modules.md#semantic-search-retrieve">Semantic Search Retrieve</a></td>
+      <td><a href="modules/retrieve-modules.md#semanticretrieve">SemanticRetrieve</a></td>
       <td>yes</td>
       <td>OpenAI</td>
       <td>用語意去找真正相關的內容，不只看字面相同，較適合需要提高召回率與理解能力的情境。</td>
+    </tr>
+    <tr>
+      <td><a href="modules/retrieve-modules.md#hybridretrieve">HybridRetrieve</a></td>
+      <td>yes</td>
+      <td>OpenAI + 規則</td>
+      <td>把 keyword 與 semantic retrieval 合併，必要時也能加上 vision query 重寫。</td>
     </tr>
     <tr>
       <td rowspan="3">Action</td>
@@ -107,11 +101,17 @@
       <td>使用 OpenAI 標準 tools schema 讓模型產生 tool calls，適合外部 API 或後端函式由應用層執行的情境。</td>
     </tr>
     <tr>
-      <td>Reflect</td>
-      <td><a href="modules/reflect-modules.md#reflexion-reflect">Reflexion Reflect</a></td>
+      <td rowspan="2">Reflect</td>
+      <td><a href="modules/reflect-modules.md#responsecheckreflect">ResponseCheckReflect</a></td>
       <td>yes</td>
       <td>OpenAI</td>
       <td>回頭檢查目前答案夠不夠好，若不夠就提出修正方向，讓下一輪流程可以繼續改進。</td>
+    </tr>
+    <tr>
+      <td><a href="modules/reflect-modules.md#evidencecheckreflect">EvidenceCheckReflect</a></td>
+      <td>no</td>
+      <td>--</td>
+      <td>用規則檢查目前 action 結果是否有錯誤或缺少依據。</td>
     </tr>
   </tbody>
 </table>

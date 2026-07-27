@@ -4,7 +4,7 @@ import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from agentic_sdk import Workflow
+from agentic_sdk import InMemoryConversationStore, InMemoryStore, Workflow
 from agentic_sdk.core import Attachment
 from agentic_sdk.modules import (
     DirectAnswerAction,
@@ -14,6 +14,7 @@ from agentic_sdk.modules import (
     KeywordRetrieve,
     NextStepPlan,
     PassThroughPerceive,
+    PassThroughRetrieve,
     ResponseCheckReflect,
     SemanticRetrieve,
     TextImagePerceive,
@@ -178,6 +179,67 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         retrieved_entries = [entry for entry in result.entries if entry.type == "retrieved"]
         self.assertTrue(retrieved_entries)
         self.assertIn("支撐型慢跑鞋", retrieved_entries[-1].content)
+
+    def test_workflow_run_persists_full_conversation_history_by_session(self) -> None:
+        conversation_store = InMemoryConversationStore()
+        first_client = FoundryOpenAILikeClient(action_text="第一輪回答")
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=first_client):
+            first_workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                retrieve=PassThroughRetrieve(),
+                action=GenerativeAction(**_llm_params()),
+                conversation_store=conversation_store,
+            )
+
+        first_result = first_workflow.run("第一輪問題", session_id="session-42")
+
+        self.assertEqual("第一輪回答", first_result.final_message)
+        self.assertIsNotNone(first_result.memory)
+        self.assertEqual(["user", "assistant"], [turn.role for turn in first_result.memory.turns])
+        self.assertIsNotNone(first_result.in_context_memory)
+
+        second_client = FoundryOpenAILikeClient(action_text="第二輪回答")
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=second_client):
+            second_workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                retrieve=PassThroughRetrieve(),
+                action=GenerativeAction(**_llm_params()),
+                conversation_store=conversation_store,
+            )
+
+        second_result = second_workflow.run("第二輪追問", session_id="session-42")
+
+        self.assertEqual("第二輪回答", second_result.final_message)
+        self.assertEqual(
+            ["user", "assistant", "user", "assistant"],
+            [turn.role for turn in second_result.memory.turns],
+        )
+        self.assertEqual(
+            ["system", "user", "assistant", "user"],
+            [message["role"] for message in second_client.last_create_kwargs["messages"]],
+        )
+        self.assertEqual("第一輪問題", second_client.last_create_kwargs["messages"][1]["content"])
+        self.assertEqual("第一輪回答", second_client.last_create_kwargs["messages"][2]["content"])
+        self.assertEqual("第二輪追問", second_client.last_create_kwargs["messages"][3]["content"])
+
+    def test_workflow_run_accepts_primary_persistent_memory(self) -> None:
+        client = FoundryOpenAILikeClient(action_text="第二輪回答")
+        primary_memory = InMemoryStore(workflow_name="default", workflow_id="wf-0", session_id="session-77")
+        primary_memory.append_message("user", "第一輪問題")
+        primary_memory.append_message("assistant", "第一輪回答")
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                retrieve=PassThroughRetrieve(),
+                action=GenerativeAction(**_llm_params()),
+            )
+
+        result = workflow.run("第二輪追問", session_id="session-77", memory=primary_memory)
+
+        self.assertEqual("第二輪回答", result.final_message)
+        self.assertIsNotNone(result.memory)
+        self.assertEqual(["user", "assistant", "user", "assistant"], [turn.role for turn in result.memory.turns])
+        self.assertEqual(["system", "user", "assistant", "user"], [message["role"] for message in client.last_create_kwargs["messages"]])
 
 
 if __name__ == "__main__":

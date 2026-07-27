@@ -29,7 +29,7 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 舊名對應：`CompletionAction`
 
-`GenerativeAction` 根據輸入摘要與取回內容生成最終回應。當流程要把多筆條目、歷史紀錄或摘要整合成一段自然語言時，就會接到這個模組。
+`GenerativeAction` 根據完整對話歷史、輸入摘要與取回內容生成最終回應。當流程要把多筆條目、歷史紀錄或摘要整合成一段自然語言時，就會接到這個模組。
 
 固定格式輸出也使用 `GenerativeAction`，透過 `system_prompt` 指定 JSON、表格或欄位格式。若需要 OpenAI 標準工具呼叫或把互動欄位提交給外部 API，請改用 `ToolCallAction`。
 
@@ -58,7 +58,7 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 舊名對應：無。這是 OpenAI tool calling 專用 Action。
 
-`ToolCallAction` 使用 OpenAI SDK 標準的 `tools`、`tool_choice` 與 `message.tool_calls` 介面。當 workflow 需要讓模型決定是否呼叫外部 API、後端函式或應用程式工具時，這個模組會把 tool schema 交給模型，並把模型回傳的 tool calls 保存到 workflow 結果中。
+`ToolCallAction` 使用 OpenAI SDK 標準的 `tools`、`tool_choice` 與 `message.tool_calls` 介面。當 workflow 需要讓模型根據完整對話與目前檢索內容決定是否呼叫外部 API、後端函式或應用程式工具時，這個模組會把 tool schema 交給模型，並把模型回傳的 tool calls 保存到 workflow 結果中。
 
 此模組只產生 OpenAI 標準 tool call，不會在 SDK 內直接執行外部工具。應用層可以讀取 `latest_tool_calls`，再依照自己的權限控管、驗證與錯誤處理流程執行實際 API 或函式。
 

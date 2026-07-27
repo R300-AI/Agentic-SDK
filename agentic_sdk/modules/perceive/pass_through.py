@@ -10,7 +10,7 @@ class PassThroughPerceive:
         self._input_label = input_label
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        content = state.user_message.strip()
+        content = state.latest_user_message().strip()
         metadata = {"source": "pass_through_perceive"}
         if self._input_label:
             metadata["input_label"] = self._input_label

@@ -11,7 +11,7 @@ class KeywordRetrieve:
         self._fallback = fallback
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        query = str(state.lookup("query") or state.lookup("perceived_input") or state.user_message).lower()
+        query = str(state.lookup("query") or state.lookup("perceived_input") or state.latest_user_message()).lower()
         hits: list[dict] = []
         for item in self._items:
             keywords = [str(keyword).lower() for keyword in item.get("keywords", [])]

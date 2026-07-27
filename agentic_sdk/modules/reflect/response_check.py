@@ -2,6 +2,7 @@
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_json, require_model, resolve_openai_client
+from agentic_sdk.memory.in_context import build_module_messages
 
 
 _ON_FAILURE_TO_NEXT: dict[str, str | None] = {"retry_plan": "plan", "end": None}
@@ -36,13 +37,17 @@ class ResponseCheckReflect:
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         action_result = state.last_action_result or {}
         err = state.last_action_error
-        user_prompt = (
-            f"user_message: {state.user_message}\n"
-            f"action_result: {str(action_result.get('content', ''))[:500]}\n"
-            f"action_error: {err.get('message') if err else 'none'}\n"
+        messages = build_module_messages(
+            state.memory,
+            system_prompt=_SYSTEM_PROMPT,
+            extra_context={
+                "action_result": str(action_result.get("content", ""))[:500],
+                "action_error": err.get("message") if err else "none",
+            },
+            latest_user_message=state.latest_user_message(),
         )
         try:
-            response = chat_json(self._client, model=self._model, system=_SYSTEM_PROMPT, user=user_prompt)
+            response = chat_json(self._client, model=self._model, messages=messages)
             parsed = response.as_json()
             verdict = str(parsed.get("verdict", "fail" if err else "pass"))
             reason = str(parsed.get("reason", ""))

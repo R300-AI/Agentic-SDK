@@ -57,16 +57,18 @@ def chat_json(
     client,
     *,
     model: str,
-    system: str,
-    user: str | list[dict[str, Any]],
+    system: str | None = None,
+    user: str | list[dict[str, Any]] | None = None,
+    messages: list[dict[str, Any]] | None = None,
     temperature: float | None = None,
 ) -> OpenAIChatResponse:
+    resolved_messages = messages or [
+        {"role": "system", "content": system or ""},
+        {"role": "user", "content": user or ""},
+    ]
     kwargs: dict[str, Any] = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": resolved_messages,
         "response_format": {"type": "json_object"},
     }
     if temperature is not None:
@@ -85,18 +87,20 @@ def chat_stream_json(
     client,
     *,
     model: str,
-    system: str,
-    user: str,
+    system: str | None = None,
+    user: str | None = None,
+    messages: list[dict[str, Any]] | None = None,
     temperature: float | None = None,
     on_delta: DeltaCallback | None = None,
     idle_timeout_sec: float = 30.0,
 ) -> OpenAIChatResponse:
+    resolved_messages = messages or [
+        {"role": "system", "content": system or ""},
+        {"role": "user", "content": user or ""},
+    ]
     kwargs: dict[str, Any] = {
         "model": model,
-        "messages": [
-            {"role": "system", "content": system},
-            {"role": "user", "content": user},
-        ],
+        "messages": resolved_messages,
         "stream": True,
         "response_format": {"type": "json_object"},
     }

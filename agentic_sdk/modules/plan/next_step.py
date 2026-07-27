@@ -2,6 +2,7 @@
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_stream_json, require_model, resolve_openai_client
+from agentic_sdk.memory.in_context import build_module_messages
 
 
 _ALLOWED_NEXT = {"retrieve", "action"}
@@ -40,13 +41,17 @@ class NextStepPlan:
         perceived = state.latest_of(ContextEntryType.PERCEIVED)
         retrieved = state.latest_of(ContextEntryType.RETRIEVED)
         intent = perceived.metadata.get("intent") if perceived else "general"
-        user_prompt = (
-            f"user_message: {state.user_message}\n"
-            f"perceived_intent: {intent}\n"
-            f"has_retrieved_context: {retrieved is not None}\n"
-            f"has_attachment: {len(state.attachments) > 0}\n"
+        messages = build_module_messages(
+            state.memory,
+            system_prompt=self._system_prompt,
+            extra_context={
+                "perceived_intent": intent,
+                "has_retrieved_context": retrieved is not None,
+                "has_attachment": len(state.attachments) > 0,
+            },
+            latest_user_message=state.latest_user_message(),
         )
-        response = chat_stream_json(self._client, model=self._model, system=self._system_prompt, user=user_prompt)
+        response = chat_stream_json(self._client, model=self._model, messages=messages)
         parsed = response.as_json()
         thought = str(parsed.get("thought", ""))
         next_module = parsed.get("next_module")

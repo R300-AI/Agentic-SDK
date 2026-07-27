@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from unittest.mock import patch
 
 from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, WorkflowState
-from agentic_sdk.memory import InMemoryStore
+from agentic_sdk.memory import InContextMemory, InMemoryStore
 from agentic_sdk.modules import (
     DirectAnswerAction,
     EvidenceCheckReflect,
@@ -104,6 +104,24 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertIn("guidance: 先看出客人想問什麼。", user_content)
         self.assertIn("fields_to_notice", user_content)
         self.assertIn("客人需求", user_content)
+
+    def test_text_perceive_includes_full_conversation_history(self) -> None:
+        conversation = InContextMemory(workflow_name="demo", workflow_id="wf-1", session_id="session-1")
+        conversation.append_message("user", "第一輪問題")
+        conversation.append_message("assistant", "第一輪回答")
+        conversation.append_message("user", "第二輪追問")
+        state = WorkflowState(user_message="第二輪追問", memory=conversation)
+        client = FoundryOpenAILikeClient()
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = TextPerceive(**_llm_params())
+
+        module(state)
+
+        messages = client.last_create_kwargs["messages"]
+        self.assertEqual(["system", "user", "assistant", "user"], [message["role"] for message in messages])
+        self.assertEqual("第一輪問題", messages[1]["content"])
+        self.assertEqual("第一輪回答", messages[2]["content"])
+        self.assertEqual("第二輪追問", messages[3]["content"])
 
     def test_text_image_perceive_sends_image_instruction_and_image_to_openai(self) -> None:
         state = WorkflowState(user_message="請看照片判斷鞋底狀況。")
@@ -215,6 +233,25 @@ class DocumentedModuleUnitTests(unittest.TestCase):
             "TSiP 是工研院主導的國產 AI 晶片落地藍圖。",
             state.last_action_result["content"],
         )
+
+    def test_generative_action_includes_full_conversation_history(self) -> None:
+        conversation = InContextMemory(workflow_name="demo", workflow_id="wf-1", session_id="session-1")
+        conversation.append_message("user", "第一輪問題")
+        conversation.append_message("assistant", "第一輪回答")
+        conversation.append_message("user", "第二輪追問")
+        state = WorkflowState(user_message="第二輪追問", memory=conversation)
+        state.payload["retrieved_snippet"] = "補充檢索內容"
+        client = FoundryOpenAILikeClient(action_text="第二輪最終回答")
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = GenerativeAction(**_llm_params())
+
+        module(state)
+
+        messages = client.last_create_kwargs["messages"]
+        self.assertEqual(["system", "user", "assistant", "user"], [message["role"] for message in messages])
+        self.assertEqual("第一輪問題", messages[1]["content"])
+        self.assertEqual("第一輪回答", messages[2]["content"])
+        self.assertEqual("第二輪追問", messages[3]["content"])
 
     def test_tool_call_action_uses_openai_tools_standard(self) -> None:
         state = WorkflowState(user_message="我要預約明天下午三點。")
@@ -345,6 +382,18 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         entries = store.all_for_workflow("test-workflow")
         self.assertEqual(1, len(entries))
         self.assertEqual("user_input", entries[0].entry_type)
+
+    def test_text_perceive_writes_memory_when_primary_memory_is_persistent(self) -> None:
+        store = InMemoryStore(workflow_name="default", workflow_id="wf-1", session_id="session-1")
+        store.append_message("user", "幫我找鞋")
+        state = WorkflowState(user_message="幫我找鞋", memory=store)
+
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient()):
+            TextPerceive(**_llm_params())(state)
+
+        entries = [entry for entry in store.all_for_workflow("default") if entry.entry_type == "user_input"]
+        self.assertEqual(1, len(entries))
+        self.assertEqual("user", entries[0].role)
 
 
 if __name__ == "__main__":
