@@ -106,21 +106,19 @@
       <section class="endpoint-panel" data-endpoint-panel>
         {% if runner_endpoint_state.requirements %}
         <form class="endpoint-form" data-endpoint-form>
-          {% if runner_endpoint_state.endpoints %}
           {% for requirement in runner_endpoint_state.requirements %}
           <label class="endpoint-row">
             <span class="endpoint-module">
               <strong>{{ requirement.role_label }}</strong>
             </span>
             <select name="{{ requirement.role }}" data-endpoint-select>
-              {% for endpoint in runner_endpoint_state.endpoints %}
+              {% for endpoint in requirement.options %}
               <option value="{{ endpoint.id }}"{% if runner_endpoint_state.selections.get(requirement.role) == endpoint.id %} selected{% endif %}>{{ endpoint.label }}</option>
               {% endfor %}
             </select>
           </label>
           {% endfor %}
           <button class="button button-secondary endpoint-deploy-button" type="button" data-endpoint-deploy>部署</button>
-          {% endif %}
         </form>
         {% endif %}
       </section>

@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from agentic_sdk import Gates, Workflow
+from agentic_sdk import Workflow
 from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, WorkflowResult, WorkflowState
 from agentic_sdk.modules import (
     DirectAnswerAction,
@@ -732,11 +732,9 @@ def _workflow_from_source(python_source: str, workflow_name: str, endpoint_selec
     reachable_roles = reachable_workflow_roles(config)
     return Workflow(
         workflow_name=workflow_name,
-        gates=Gates(max_node_hops=config.max_node_hops, max_revisit=config.max_revisit, timeout_sec=config.timeout_sec),
-        entry_module=config.entry_module,
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
-        retrieve=_retrieve_from_config(config, reachable_roles),
+        retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles),
         action=_action_from_config(config, endpoint_selections, reachable_roles),
         reflect=_reflect_from_config(config, endpoint_selections, reachable_roles),
     )
@@ -766,19 +764,28 @@ def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict
 def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
     if "plan" not in reachable_roles or not config.plan_strategy:
         return None
+    endpoint_role = "action" if "action" in reachable_roles else "perceive"
     return NextStepPlan(
         system_prompt=config.plan_system_prompt,
         retrieve_name=config.retrieve_name,
         retrieve_description=config.retrieve_description,
-        **endpoint_params_for_role("plan", endpoint_selections),
+        **endpoint_params_for_role(endpoint_role, endpoint_selections),
     )
 
 
-def _retrieve_from_config(config: BuilderSourceConfig, reachable_roles: set[str]):
+def _retrieve_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
     if "retrieve" not in reachable_roles:
         return None
     if config.retrieve_module == "SemanticRetrieve":
-        return SemanticRetrieve(top_k=config.retrieve_top_k)
+        retrieve_params = endpoint_params_for_role("retrieve", endpoint_selections)
+        return SemanticRetrieve(
+            top_k=config.retrieve_top_k,
+            source_path="./knowledge",
+            index_path="./.agentic/semantic_index",
+            rebuild_if_missing=True,
+            rebuild_if_stale=True,
+            **retrieve_params,
+        )
     if config.retrieve_module == "PassThroughRetrieve":
         return PassThroughRetrieve()
     return KeywordRetrieve(items=list(config.retrieve_items), fallback=config.retrieve_fallback)

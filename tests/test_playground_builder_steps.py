@@ -3,11 +3,17 @@ from io import BytesIO
 import re
 
 from playground import create_app
-from playground.services.source_builder import get_builder_steps
+from playground.services.source_builder import build_python_source_from_builder_choice, get_builder_steps
 
 
 def _builder_form_state(html: str) -> dict[str, object]:
     match = re.search(r'<script id="builder-form-state" type="application/json" data-builder-form-state>(.*?)</script>', html, re.S)
+    assert match is not None
+    return json.loads(match.group(1))
+
+
+def _builder_endpoint_state(html: str) -> dict[str, object]:
+    match = re.search(r'<script id="builder-endpoint-state" type="application/json" data-builder-endpoint-state>(.*?)</script>', html, re.S)
     assert match is not None
     return json.loads(match.group(1))
 
@@ -29,7 +35,7 @@ def test_builder_uses_memory_step_then_configured_perceive_modes():
         "Q3: 回答前需要查資料嗎？",
         "Q4: 最後回覆要怎麼呈現給使用者？",
         "Q5: 當 Agent 沒把握時，你希望它怎麼做？",
-        "Q6: 現在可以試跑了嗎？",
+        "Q6: 最後確認，準備開始使用",
     ]
     assert [choice.label for choice in steps[1].choices] == ["pass_through", "text", "text_image"]
     assert [choice.title for choice in steps[1].choices] == ["直接傳遞文字", "整理文字內容", "整理文字與圖片"]
@@ -93,19 +99,17 @@ def test_builder_step1_starter_questions_roundtrip_to_runner():
                 },
             },
         )
-        builder_page = client.get("/playground/builder").data.decode("utf-8")
         source_page = client.get("/playground/source/preview").data.decode("utf-8")
         runner_page = client.get("/playground/run").data.decode("utf-8")
+        builder_page = client.get("/playground/builder").data.decode("utf-8")
 
-    assert 'name="starter_questions"' in builder_page
-    assert "對話開始前，要先放哪些常用問題？" in builder_page
-    assert "這份內容的重點是什麼？" in builder_page
     assert "RUNNER_CONFIG" in source_page
     assert '"starter_questions": [' in source_page
     assert "下一步該怎麼做？" in source_page
     assert 'data-starter-questions' in runner_page
     assert 'data-starter-question-button' in runner_page
     assert "這份內容的重點是什麼？" in runner_page
+    assert _builder_form_state(builder_page) == {"choices": {}, "values": {}}
 
 
 def test_builder_step2_choices_update_perceive_source():
@@ -198,6 +202,29 @@ def test_builder_step5_exposes_two_uncertainty_handling_choices():
     assert "轉人工" not in page
 
 
+def test_builder_step6_exposes_review_checklist_and_model_endpoint_section():
+    app = create_app()
+
+    with app.test_client() as client:
+        response = client.get("/playground/builder")
+
+    assert response.status_code == 200
+    page = response.data.decode("utf-8")
+    assert "Q6: 最後確認，準備開始使用" in page
+    assert 'data-builder-review-checklist' in page
+    assert 'data-review-step="memory_type"' in page
+    assert 'data-review-step="failure_policy"' in page
+    assert 'class="builder-review-header"' in page
+    assert 'data-review-answer' in page
+    assert 'data-review-endpoint-body' in page
+    assert 'data-builder-endpoint-state' in page
+    assert "試跑安全限制" not in page
+    assert 'name="entry_module"' not in page
+    assert 'name="max_node_hops"' not in page
+    assert 'name="max_revisit"' not in page
+    assert 'name="timeout_sec"' not in page
+
+
 def test_builder_step3_semantic_questions_roundtrip_to_source_and_form_state():
     app = create_app()
 
@@ -214,13 +241,11 @@ def test_builder_step3_semantic_questions_roundtrip_to_source_and_form_state():
                 },
             },
         )
-        builder_page = client.get("/playground/builder").data.decode("utf-8")
         source_page = client.get("/playground/source/preview").data.decode("utf-8")
+        builder_page = client.get("/playground/builder").data.decode("utf-8")
 
     state = _builder_form_state(builder_page)
-    assert state["choices"]["retrieve_policy"] == "semantic"
-    assert state["values"]["retrieve"]["semantic_support_files"] == "產品手冊.pdf\n退款政策.docx"
-    assert state["values"]["retrieve"]["semantic_search_goal"] == "退款條件與保固限制"
+    assert state == {"choices": {}, "values": {}}
     assert 'RETRIEVE_CONFIG = {' in source_page
     assert '"semantic_support_files": [' in source_page
     assert '"產品手冊.pdf"' in source_page
@@ -250,8 +275,8 @@ def test_builder_step3_semantic_upload_route_updates_state_and_source():
           },
           content_type="multipart/form-data",
       )
-      builder_page = client.get("/playground/builder").data.decode("utf-8")
       source_page = client.get("/playground/source/preview").data.decode("utf-8")
+    builder_page = client.get("/playground/builder").data.decode("utf-8")
 
     assert response.status_code == 200
     payload = response.get_json()
@@ -259,6 +284,126 @@ def test_builder_step3_semantic_upload_route_updates_state_and_source():
     assert payload["uploaded_files"] == ["產品手冊.pdf", "退款政策.docx"]
     assert payload["semantic_support_files"] == ["產品手冊.pdf", "退款政策.docx"]
     state = _builder_form_state(builder_page)
-    assert state["values"]["retrieve"]["semantic_support_files"] == "產品手冊.pdf\n退款政策.docx"
+    assert state == {"choices": {}, "values": {}}
     assert '"產品手冊.pdf"' in source_page
     assert '"退款政策.docx"' in source_page
+
+
+def test_builder_step6_endpoint_selection_roundtrips_before_runner(monkeypatch):
+    monkeypatch.setenv("GPT_54_MODEL", "agentic-sdk-gpt-5.4")
+    monkeypatch.setenv("GPT_54_BASE_URL", "https://example.test/openai/gpt54")
+    monkeypatch.setenv("GPT_54_API_KEY", "key-54")
+    monkeypatch.setenv("GPT_41_MODEL", "agentic-sdk-gpt-4.1")
+    monkeypatch.setenv("GPT_41_BASE_URL", "https://example.test/openai/gpt41")
+    monkeypatch.setenv("GPT_41_API_KEY", "key-41")
+    monkeypatch.setenv("EMBEDDED_DEPLOYMENT_NAME", "text-embedding-3-large")
+    monkeypatch.setenv("EMBEDDED_ENDPOINT", "https://example.test/openai/embeddings")
+    monkeypatch.setenv("EMBEDDED_API_KEY", "embed-key")
+
+    app = create_app()
+
+    with app.test_client() as client:
+        client.get("/playground/builder")
+        client.post("/playground/builder/state", json={"step": "input_type", "choice": "text"})
+        retrieve_response = client.post("/playground/builder/state", json={"step": "retrieve_policy", "choice": "semantic"})
+        client.post("/playground/builder/state", json={"step": "output_format", "choice": "free_text"})
+        failure_response = client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "retry"})
+
+        endpoint_state = failure_response.get_json()["builder_endpoint_state"]
+
+        assert [requirement["role"] for requirement in endpoint_state["requirements"]] == ["perceive", "retrieve", "action"]
+        assert [endpoint["label"] for endpoint in endpoint_state["endpoints"]] == ["gpt-4.1", "gpt-5.4"]
+        retrieve_requirement = next(requirement for requirement in endpoint_state["requirements"] if requirement["role"] == "retrieve")
+        assert [endpoint["label"] for endpoint in retrieve_requirement["options"]] == ["text-embedding-3-large"]
+
+        endpoint_response = client.post(
+            "/playground/builder/endpoints",
+            json={
+                "selections": {
+                    "perceive": "gpt-41",
+                    "retrieve": "embedded",
+                    "action": "gpt-41",
+                }
+            },
+        )
+        refreshed_page = client.get("/playground/builder").data.decode("utf-8")
+
+    assert endpoint_response.status_code == 200
+    payload = endpoint_response.get_json()
+    assert payload["configured"] is True
+    assert payload["selections"] == {
+        "perceive": "gpt-41",
+        "retrieve": "embedded",
+        "action": "gpt-41",
+    }
+    refreshed_state = _builder_endpoint_state(refreshed_page)
+    assert refreshed_state["requirements"] == []
+    assert refreshed_state["selections"] == {}
+
+
+def test_builder_step6_marks_semantic_search_incomplete_without_uploaded_files(monkeypatch):
+    monkeypatch.setenv("EMBEDDED_DEPLOYMENT_NAME", "text-embedding-3-large")
+    monkeypatch.setenv("EMBEDDED_ENDPOINT", "https://example.test/openai/embeddings")
+    monkeypatch.setenv("EMBEDDED_API_KEY", "embed-key")
+
+    app = create_app()
+
+    with app.test_client() as client:
+        client.get("/playground/builder")
+        response = client.post("/playground/builder/state", json={"step": "retrieve_policy", "choice": "semantic"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    review_item = next(item for item in payload["builder_review_state"] if item["step_key"] == "retrieve_policy")
+    assert review_item["answer"] == "語意搜尋"
+    assert review_item["completed"] is False
+    assert review_item["detail"] == "請完成「要上傳哪些支援文件？」。"
+    assert payload["builder_review_ready"] is False
+
+
+def test_builder_step6_marks_interactive_output_incomplete_without_api_contract(monkeypatch):
+    monkeypatch.setenv("GPT_54_MODEL", "agentic-sdk-gpt-5.4")
+    monkeypatch.setenv("GPT_54_BASE_URL", "https://example.test/openai/gpt54")
+    monkeypatch.setenv("GPT_54_API_KEY", "key-54")
+
+    app = create_app()
+
+    with app.test_client() as client:
+        client.get("/playground/builder")
+        response = client.post("/playground/builder/state", json={"step": "output_format", "choice": "interactive"})
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    review_item = next(item for item in payload["builder_review_state"] if item["step_key"] == "output_format")
+    assert review_item["answer"] == "可互動元件"
+    assert review_item["completed"] is False
+    assert review_item["detail"] == "請至少完成一組「API URL」與「需要收集的資訊」。"
+    assert payload["builder_review_ready"] is False
+
+
+def test_failure_policy_toggle_back_to_retry_keeps_reflect_model_requirement():
+    app = create_app()
+
+    with app.test_client() as client:
+        client.get("/playground/builder")
+        first_retry = client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "retry"}).get_json()
+        handoff = client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "handoff"}).get_json()
+        second_retry = client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "retry"}).get_json()
+
+    assert [requirement["role"] for requirement in first_retry["builder_endpoint_state"]["requirements"]] == ["reflect"]
+    assert [requirement["role"] for requirement in handoff["builder_endpoint_state"]["requirements"]] == ["reflect"]
+    assert [requirement["role"] for requirement in second_retry["builder_endpoint_state"]["requirements"]] == ["reflect"]
+
+
+def test_builder_refresh_preserves_loaded_configuration():
+    app = create_app()
+    loaded_source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session_state:
+            session_state["python_source"] = loaded_source
+            session_state["source_origin"] = "aihub_loaded"
+        builder_page = client.get("/playground/builder").data.decode("utf-8")
+
+    state = _builder_form_state(builder_page)
+    assert state["choices"]["retrieve_policy"] == "semantic"

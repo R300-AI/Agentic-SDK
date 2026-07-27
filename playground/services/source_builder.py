@@ -193,9 +193,9 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "readiness",
-            "Q6: 現在可以試跑了嗎？",
+            "Q6: 最後確認，準備開始使用",
             "",
-            "試跑",
+            "最後確認",
             "",
             (),
             control="finish",
@@ -553,16 +553,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
         return _build_source_for_config(_replace_config(config, reflect_module=reflect_module, reflect_on_failure=reflect_on_failure, plan_strategy=plan_strategy))
 
     if step_key == "readiness" and isinstance(choice_label, dict):
-        entry_module = _clean_allowed_value(str(choice_label.get("entry_module") or config.entry_module), _ALLOWED_ENTRY_MODULES, config.entry_module)
-        updated = _replace_config(
-            config,
-            entry_module=entry_module,
-            plan_strategy=config.plan_strategy or ("RouteBySupport" if entry_module == "plan" else None),
-            max_node_hops=_clean_int(choice_label.get("max_node_hops"), config.max_node_hops, 1, 10000),
-            max_revisit=_clean_int(choice_label.get("max_revisit"), config.max_revisit, 1, 1000),
-            timeout_sec=_clean_float(choice_label.get("timeout_sec"), config.timeout_sec, 1.0, 3600.0),
-        )
-        return _build_source_for_config(updated)
+        return _build_source_for_config(config)
 
     return existing_source or build_default_python_source()
 
@@ -744,15 +735,6 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
     if config.reflect_on_failure:
         _add_form_value(values, "reflect", "on_failure", config.reflect_on_failure)
 
-    if include_generated_defaults or config.entry_module != "perceive":
-        _add_form_value(values, "readiness", "entry_module", config.entry_module)
-    if include_generated_defaults or config.max_node_hops != 50:
-        _add_form_value(values, "readiness", "max_node_hops", config.max_node_hops)
-    if include_generated_defaults or config.max_revisit != 5:
-        _add_form_value(values, "readiness", "max_revisit", config.max_revisit)
-    if include_generated_defaults or config.timeout_sec != 300.0:
-        _add_form_value(values, "readiness", "timeout_sec", config.timeout_sec)
-
     return {
         "choices": _builder_choices_for_config(config),
         "values": values,
@@ -831,7 +813,7 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
 
 
 def _reflect_module_for_failure_policy(config: BuilderSourceConfig) -> str:
-    uses_retrieval = config.retrieve_module == "SemanticRetrieve" or bool(config.retrieve_items) or bool(config.plan_strategy)
+    uses_retrieval = config.retrieve_module == "SemanticRetrieve" or bool(config.retrieve_items)
     return "EvidenceCheckReflect" if uses_retrieval else "ResponseCheckReflect"
 
 
@@ -1683,21 +1665,11 @@ workflow = Workflow(
 
 
 def _core_import_line(config: BuilderSourceConfig) -> str:
-    if _uses_custom_gates(config):
-        return "from agentic_sdk import Gates, Workflow"
     return "from agentic_sdk import Workflow"
-
-
-def _uses_custom_gates(config: BuilderSourceConfig) -> bool:
-    return (config.max_node_hops, config.max_revisit, config.timeout_sec) != (50, 5, 300.0)
 
 
 def _workflow_argument_lines(config: BuilderSourceConfig, reachable_roles: set[str], *, action_expression: str) -> str:
     lines: list[str] = []
-    if _uses_custom_gates(config):
-        lines.append(f"    gates=Gates(max_node_hops={config.max_node_hops}, max_revisit={config.max_revisit}, timeout_sec={config.timeout_sec}),")
-    if config.entry_module != "perceive":
-        lines.append(f"    entry_module={json.dumps(config.entry_module, ensure_ascii=False)},")
     if "perceive" in reachable_roles:
         lines.append(f"    perceive={_perceive_expression(config)},")
     if "plan" in reachable_roles and config.plan_strategy:
@@ -1931,7 +1903,7 @@ def get_workflow_summary(python_source: str) -> WorkflowSummary:
         input_contract="輸入：客戶情境",
         output_contract=output_contract,
         template=template,
-        readiness="可試跑" if parsed.supported_subset else "可預覽",
+        readiness="可開始使用" if parsed.supported_subset else "可預覽",
         can_run=True,
         can_roundtrip=parsed.supported_subset,
     )

@@ -4,7 +4,7 @@ import os
 from dataclasses import asdict, dataclass
 
 from playground.services.source_builder import BuilderSourceConfig, config_from_source
-from playground.services.workflow_reachability import reachable_openai_roles
+from playground.services.workflow_reachability import reachable_openai_roles, reachable_workflow_roles
 
 
 _LEGACY_SELECTION_KEY = "model_endpoint"
@@ -15,6 +15,7 @@ class ModelEndpoint:
     id: str
     label: str
     model: str
+    model_env: str
     base_url: str
     base_url_env: str
     api_key_env: str
@@ -49,14 +50,14 @@ def openai_requirements_from_source(python_source: str | None) -> list[dict[str,
 
 
 def endpoint_state(python_source: str | None, selections: dict[str, str] | None) -> dict[str, object]:
-    requirements = _openai_requirements(config_from_source(python_source))
+    requirements = _deployment_requirements(config_from_source(python_source))
     normalized = normalize_endpoint_selections(python_source, selections)
     selected_endpoints = {
         requirement.role: _endpoint_for_role(requirement.role, normalized)
         for requirement in requirements
     }
     missing_envs_by_role = {
-        requirement.role: _missing_endpoint_envs(selected_endpoints[requirement.role])
+        requirement.role: _missing_endpoint_envs(requirement.role, selected_endpoints[requirement.role])
         for requirement in requirements
     }
     configured_roles = {
@@ -64,7 +65,13 @@ def endpoint_state(python_source: str | None, selections: dict[str, str] | None)
         for requirement in requirements
     }
     return {
-        "requirements": [asdict(requirement) for requirement in requirements],
+        "requirements": [
+            {
+                **asdict(requirement),
+                "options": [asdict(endpoint) for endpoint in _endpoint_options_for_role(requirement.role)],
+            }
+            for requirement in requirements
+        ],
         "endpoints": endpoint_options(),
         "selections": normalized,
         "selected_endpoints": {
@@ -78,19 +85,18 @@ def endpoint_state(python_source: str | None, selections: dict[str, str] | None)
 
 
 def normalize_endpoint_selections(python_source: str | None, selections: dict[str, str] | None) -> dict[str, str]:
-    requirements = _openai_requirements(config_from_source(python_source))
+    requirements = _deployment_requirements(config_from_source(python_source))
     if not requirements:
         return {}
 
     raw = selections or {}
-    endpoints_by_id = _endpoints_by_id()
-    if not endpoints_by_id:
-        return {}
-
-    default_endpoint_id = next(iter(endpoints_by_id))
     legacy_endpoint_id = str(raw.get(_LEGACY_SELECTION_KEY) or "")
     normalized: dict[str, str] = {}
     for requirement in requirements:
+        endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(requirement.role))
+        if not endpoints_by_id:
+            continue
+        default_endpoint_id = next(iter(endpoints_by_id))
         endpoint_id = str(raw.get(requirement.role) or legacy_endpoint_id or default_endpoint_id)
         if endpoint_id not in endpoints_by_id:
             endpoint_id = default_endpoint_id
@@ -100,39 +106,46 @@ def normalize_endpoint_selections(python_source: str | None, selections: dict[st
 
 def endpoint_params_for_role(role: str, selections: dict[str, str] | None) -> dict[str, str]:
     endpoint = _endpoint_for_role(role, selections or {})
-    missing_envs = _missing_endpoint_envs(endpoint)
+    missing_envs = _missing_endpoint_envs(role, endpoint)
     if missing_envs:
         raise MissingEndpointCredentials(_role_label(role), endpoint, missing_envs)
     api_key = _api_key_for_role(endpoint, role)
+    if role == "retrieve":
+        return {"api_key": api_key, "base_url": endpoint.base_url, "embedding_model": endpoint.model}
     return {"api_key": api_key, "base_url": endpoint.base_url, "model": endpoint.model}
 
 
-def _openai_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirement]:
+def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirement]:
     requirements: list[OpenAIRequirement] = []
-    reachable_roles = reachable_openai_roles(config)
-    if "perceive" in reachable_roles:
+    reachable_llm_roles = reachable_openai_roles(config)
+    reachable_roles = reachable_workflow_roles(config)
+    if "perceive" in reachable_llm_roles:
         requirements.append(OpenAIRequirement("perceive", "輸入解析器", config.perceive_module, "Perceive"))
-    if "plan" in reachable_roles:
-        requirements.append(OpenAIRequirement("plan", "流程路由器", "NextStepPlan", "Plan"))
-    if "action" in reachable_roles:
+    if "retrieve" in reachable_roles and config.retrieve_module == "SemanticRetrieve":
+        requirements.append(OpenAIRequirement("retrieve", "語意搜尋", config.retrieve_module, "Retrieve"))
+    if "action" in reachable_llm_roles:
         requirements.append(OpenAIRequirement("action", "模型回覆器", config.action_module, "Action"))
-    if "reflect" in reachable_roles:
+    if "reflect" in reachable_llm_roles:
         requirements.append(OpenAIRequirement("reflect", "回覆檢核器", "ResponseCheckReflect", "Reflect"))
     return requirements
 
 
 def _endpoint_for_role(role: str, selections: dict[str, str]) -> ModelEndpoint | None:
-    endpoints_by_id = _endpoints_by_id()
+    endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(role))
     endpoint_id = selections.get(role, selections.get(_LEGACY_SELECTION_KEY, ""))
     if endpoint_id:
         return endpoints_by_id.get(endpoint_id)
     return next(iter(endpoints_by_id.values()), None)
 
 
-def _missing_endpoint_envs(endpoint: ModelEndpoint | None) -> list[str]:
+def _missing_endpoint_envs(role: str, endpoint: ModelEndpoint | None) -> list[str]:
     if endpoint is None:
+        if role == "retrieve":
+            return ["<PREFIX>_DEPLOYMENT_NAME", "<PREFIX>_ENDPOINT", "<PREFIX>_API_KEY"]
         return ["<PREFIX>_MODEL", "<PREFIX>_BASE_URL", "<PREFIX>_API_KEY"]
     missing: list[str] = []
+    if not endpoint.model.strip():
+        missing.append(endpoint.model_env)
     if not endpoint.base_url.strip():
         missing.append(endpoint.base_url_env)
     if not _api_key_for_role(endpoint, ""):
@@ -147,7 +160,7 @@ def _api_key_for_role(endpoint: ModelEndpoint, role: str) -> str:
 def _role_label(role: str) -> str:
     return {
         "perceive": "輸入解析器",
-        "plan": "流程路由器",
+        "retrieve": "語意搜尋",
         "action": "模型回覆器",
         "reflect": "回覆檢核器",
     }.get(role, role)
@@ -173,6 +186,7 @@ def _configured_model_endpoints() -> tuple[ModelEndpoint, ...]:
                 id=_model_id(env_prefix),
                 label=label,
                 model=model,
+                model_env=model_env,
                 base_url=base_url,
                 base_url_env=base_url_env,
                 api_key_env=api_key_env,
@@ -181,8 +195,37 @@ def _configured_model_endpoints() -> tuple[ModelEndpoint, ...]:
     return _dedupe_endpoints(endpoints)
 
 
-def _endpoints_by_id() -> dict[str, ModelEndpoint]:
-    return {endpoint.id: endpoint for endpoint in _model_endpoints()}
+def _embedding_endpoints() -> tuple[ModelEndpoint, ...]:
+    endpoints: list[ModelEndpoint] = []
+    for deployment_env in sorted(key for key, value in _normalized_env_items() if key.endswith("_DEPLOYMENT_NAME") and value.strip()):
+        env_prefix = deployment_env[: -len("_DEPLOYMENT_NAME")]
+        deployment_name = _env_value(deployment_env).strip()
+        base_url_env = f"{env_prefix}_ENDPOINT"
+        base_url = _env_value(base_url_env).strip()
+        api_key_env = f"{env_prefix}_API_KEY"
+        label = _env_value(f"{env_prefix}_LABEL", _display_label_for_model(deployment_name)).strip() or _display_label_for_model(deployment_name)
+        endpoints.append(
+            ModelEndpoint(
+                id=_model_id(env_prefix),
+                label=label,
+                model=deployment_name,
+                model_env=deployment_env,
+                base_url=base_url,
+                base_url_env=base_url_env,
+                api_key_env=api_key_env,
+            )
+        )
+    return _dedupe_endpoints(endpoints)
+
+
+def _endpoint_options_for_role(role: str) -> tuple[ModelEndpoint, ...]:
+    if role == "retrieve":
+        return _embedding_endpoints()
+    return _model_endpoints()
+
+
+def _endpoints_by_id(endpoints: tuple[ModelEndpoint, ...]) -> dict[str, ModelEndpoint]:
+    return {endpoint.id: endpoint for endpoint in endpoints}
 
 
 def _dedupe_endpoints(endpoints: object) -> tuple[ModelEndpoint, ...]:

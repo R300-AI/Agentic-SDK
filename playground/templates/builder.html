@@ -77,7 +77,6 @@
       <strong>{{ mode_context.label }}</strong>
       <small>{{ mode_context.source_label }}</small>
     </div>
-    <a class="button button-ghost" href="{{ url_for('runner.runner') }}" data-runner-link>預覽 Agent 頁面</a>
   </header>
 
   <section class="builder-layout">
@@ -113,25 +112,22 @@
         <div class="readiness-card ready" aria-live="polite">
           <strong>{{ workflow_summary.readiness }}</strong>
           <span data-summary-field="name">{{ workflow_summary.name }}</span>
+          <ul class="readiness-checklist builder-review-checklist" data-builder-review-checklist>
+            {% for review_item in builder_review_state %}
+            <li class="builder-review-item{% if review_item.completed %} is-complete{% else %} is-incomplete{% endif %}" data-review-item data-review-step="{{ review_item.step_key }}">
+              <span class="builder-review-status" data-review-status aria-hidden="true">{{ '✓' if review_item.completed else '✕' }}</span>
+              <div class="builder-review-content">
+                <div class="builder-review-header">
+                  <strong>{{ review_item.step_title }}</strong>
+                  <span class="builder-review-answer" data-review-answer>{{ review_item.answer }}</span>
+                </div>
+                <p class="builder-review-detail{% if not review_item.detail %} hidden{% endif %}" data-review-detail{% if not review_item.detail %} hidden{% endif %}>{{ review_item.detail }}</p>
+                <div class="builder-review-endpoints" data-review-endpoint-body></div>
+              </div>
+            </li>
+            {% endfor %}
+          </ul>
         </div>
-        <details class="advanced-disclosure step-advanced" open>
-          <summary>試跑安全限制</summary>
-          <form class="module-param-form" data-param-form data-step-key="readiness">
-            <label for="readiness-entry-module">從哪一步開始</label>
-            <select id="readiness-entry-module" name="entry_module">
-              <option value="perceive">接收需求</option>
-              <option value="plan">判斷是否查資料</option>
-              <option value="retrieve">查找支援資料</option>
-              <option value="action">產生回覆</option>
-            </select>
-            <label for="readiness-max-node-hops">最大節點跳數</label>
-            <input id="readiness-max-node-hops" name="max_node_hops" type="number" min="1" max="10000" value="50">
-            <label for="readiness-max-revisit">同一步重試上限</label>
-            <input id="readiness-max-revisit" name="max_revisit" type="number" min="1" max="1000" value="5">
-            <label for="readiness-timeout-sec">逾時秒數</label>
-            <input id="readiness-timeout-sec" name="timeout_sec" type="number" min="1" max="3600" value="300">
-          </form>
-        </details>
         {% else %}
         <div class="choice-grid" aria-label="{{ step.title }} 選項">
           {% for choice in step.choices %}
@@ -194,7 +190,7 @@
         <details class="advanced-disclosure step-advanced" data-visible-choices="semantic" open>
           <summary>語意搜尋設定</summary>
           <form class="module-param-form" data-param-form data-step-key="retrieve">
-            <label for="v3-retrieve-semantic-support-files">要上傳哪些支援文件？</label>
+            <label for="v3-retrieve-semantic-support-files">要上傳哪些支援文件？<span class="form-required">必填</span></label>
             <div class="semantic-upload-panel" data-semantic-upload-panel>
               <div class="semantic-upload-actions">
                 <label class="button button-ghost" for="v3-retrieve-semantic-file-input">選擇支援文件</label>
@@ -212,7 +208,7 @@
         <details class="advanced-disclosure step-advanced" data-visible-choices="keyword" open>
           <summary>關鍵字對照</summary>
           <form class="module-param-form" data-param-form data-step-key="retrieve">
-            <label for="v3-retrieve-keyword-pairs">要對照哪些關鍵字內容？</label>
+            <label for="v3-retrieve-keyword-pairs">要對照哪些關鍵字內容？<span class="form-required">必填</span></label>
             {{ pair_editor(
               "v3-retrieve-keyword-pairs",
               "keyword_pairs",
@@ -265,11 +261,11 @@
                       </select>
                     </div>
                     <div>
-                      <label for="v3-action-api-url">API URL</label>
+                      <label for="v3-action-api-url">API URL<span class="form-required">必填</span></label>
                       <input id="v3-action-api-url" name="api_url" type="url" autocomplete="off" placeholder="例如：https://api.example.com/bookings" data-api-url>
                     </div>
                   </div>
-                  <label for="v3-action-component-fields">需要收集的資訊</label>
+                  <label for="v3-action-component-fields">需要收集的資訊<span class="form-required">必填</span></label>
                   {{ pair_editor(
                     "v3-action-component-fields",
                     "component_fields",
@@ -514,7 +510,7 @@
         <footer class="stage-actions">
           <button class="button button-secondary" type="button" data-step-back{% if loop.first %} disabled{% endif %}>上一步</button>
           {% if loop.last %}
-          <a class="button button-primary" href="{{ url_for('runner.runner') }}" data-runner-link>前往試跑頁</a>
+          <a class="button button-primary{% if not builder_review_ready %} is-disabled{% endif %}" href="{{ url_for('runner.runner') }}" data-complete-link aria-disabled="{{ 'false' if builder_review_ready else 'true' }}"{% if not builder_review_ready %} tabindex="-1"{% endif %}>開始建立 Agent</a>
           {% else %}
           <button class="button button-primary" type="button" data-step-continue>下一步</button>
           {% endif %}
@@ -529,5 +525,6 @@
 
 {% block scripts %}
 <script id="builder-form-state" type="application/json" data-builder-form-state>{{ builder_form_state|tojson }}</script>
+<script id="builder-endpoint-state" type="application/json" data-builder-endpoint-state>{{ builder_endpoint_state|tojson }}</script>
 <script type="module" src="{{ url_for('static', filename='js/builder/builder-page.js') }}"></script>
 {% endblock %}

@@ -6,7 +6,15 @@ const panels = Array.from(document.querySelectorAll("[data-step-panel]"));
 const cards = document.querySelectorAll("[data-choice-card]");
 const progressCurrent = document.querySelector("[data-progress-current]");
 const builderFormStateElement = document.querySelector("[data-builder-form-state]");
+const builderEndpointStateElement = document.querySelector("[data-builder-endpoint-state]");
+const completeLinks = Array.from(document.querySelectorAll("[data-complete-link]"));
 let stateQueue = Promise.resolve();
+const reviewEndpointStepByRole = {
+  perceive: "input_type",
+  retrieve: "retrieve_policy",
+  action: "output_format",
+  reflect: "failure_policy",
+};
 
 const dependencyRules = {
   input_type: {
@@ -39,14 +47,167 @@ function updateSummary(workflowSummary = {}) {
   });
 }
 
+function endpointStatusText(state) {
+  const requirements = Array.isArray(state?.requirements) ? state.requirements : [];
+  const hasOptions = requirements.some((requirement) => Array.isArray(requirement.options) && requirement.options.length);
+  if (!hasOptions) {
+    return "目前沒有可用的模型端點。請先在 .env 設定至少一組 <PREFIX>_MODEL / <PREFIX>_BASE_URL / <PREFIX>_API_KEY。";
+  }
+  return state.configured ? "" : "請選擇部署選項。";
+}
+
+function reviewAnswerForStep(stepKey) {
+  const panel = panels.find((candidate) => candidate.dataset.stepPanel === stepKey);
+  const selectedCard = panel?.querySelector("[data-choice-card].selected:not([hidden])")
+    || panel?.querySelector("[data-choice-card].selected");
+  if (!selectedCard) {
+    return { selected: false, answer: "尚未選擇" };
+  }
+  const answer = selectedCard.querySelector("strong")?.textContent?.trim() || selectedCard.dataset.choiceLabel || "已選擇";
+  return { selected: true, answer };
+}
+
+function setCompleteLinkState(ready) {
+  completeLinks.forEach((link) => {
+    link.classList.toggle("is-disabled", !ready);
+    link.setAttribute("aria-disabled", ready ? "false" : "true");
+    if (ready) {
+      link.removeAttribute("tabindex");
+    } else {
+      link.setAttribute("tabindex", "-1");
+    }
+  });
+}
+
+function renderBuilderReviewState(items, ready) {
+  const reviewItems = Array.isArray(items) ? items : [];
+  const itemsByStep = new Map(reviewItems.map((item) => [String(item.step_key || ""), item]));
+  document.querySelectorAll("[data-review-item]").forEach((item) => {
+    const fallbackState = reviewAnswerForStep(item.dataset.reviewStep || "");
+    const state = itemsByStep.get(item.dataset.reviewStep || "") || fallbackState;
+    const completed = Boolean(state.completed ?? state.selected);
+    item.classList.toggle("is-complete", completed);
+    item.classList.toggle("is-incomplete", !completed);
+    const status = item.querySelector("[data-review-status]");
+    const answer = item.querySelector("[data-review-answer]");
+    const detail = item.querySelector("[data-review-detail]");
+    if (status) {
+      status.textContent = completed ? "✓" : "✕";
+    }
+    if (answer) {
+      answer.textContent = state.answer || fallbackState.answer;
+    }
+    if (detail) {
+      const text = String(state.detail || "").trim();
+      detail.textContent = text;
+      detail.hidden = !text;
+      detail.classList.toggle("hidden", !text);
+    }
+  });
+  setCompleteLinkState(Boolean(ready));
+}
+
+function renderBuilderEndpointState(state) {
+  const requirements = Array.isArray(state?.requirements) ? state.requirements : [];
+  const selections = state?.selections && typeof state.selections === "object" ? state.selections : {};
+  const groupedRequirements = new Map();
+  requirements.forEach((requirement) => {
+    const stepKey = reviewEndpointStepByRole[requirement.role];
+    if (!stepKey) {
+      return;
+    }
+    const items = groupedRequirements.get(stepKey) || [];
+    items.push(requirement);
+    groupedRequirements.set(stepKey, items);
+  });
+
+  document.querySelectorAll("[data-review-item]").forEach((item) => {
+    const body = item.querySelector("[data-review-endpoint-body]");
+    if (!body) {
+      return;
+    }
+    body.replaceChildren();
+    const stepKey = item.dataset.reviewStep || "";
+    const stepRequirements = groupedRequirements.get(stepKey) || [];
+    if (!stepRequirements.length) {
+      return;
+    }
+
+    const hasOptions = stepRequirements.every((requirement) => Array.isArray(requirement.options) && requirement.options.length);
+    if (hasOptions) {
+      const form = document.createElement("form");
+      form.className = "module-param-form endpoint-form";
+      form.dataset.builderEndpointForm = "true";
+      stepRequirements.forEach((requirement) => {
+        const label = document.createElement("label");
+        label.className = "endpoint-row";
+
+        const module = document.createElement("span");
+        module.className = "endpoint-module";
+        const strong = document.createElement("strong");
+        strong.textContent = "部署選項";
+        module.append(strong);
+
+        const select = document.createElement("select");
+        select.name = requirement.role;
+        select.dataset.builderEndpointSelect = "true";
+        requirement.options.forEach((endpoint) => {
+          const option = document.createElement("option");
+          option.value = endpoint.id;
+          option.textContent = endpoint.label;
+          if (selections[requirement.role] === endpoint.id) {
+            option.selected = true;
+          }
+          select.append(option);
+        });
+
+        label.append(module, select);
+        form.append(label);
+      });
+      body.append(form);
+    }
+
+    const statusText = endpointStatusText(state);
+    if (statusText) {
+      const status = document.createElement("p");
+      status.className = `inline-status${hasOptions ? "" : " error"}`;
+      status.dataset.builderEndpointStatus = "true";
+      status.textContent = statusText;
+      body.append(status);
+    }
+  });
+}
+
 async function postBuilderState(payload) {
   const task = stateQueue.catch(() => {}).then(async () => {
     const response = await postJson("/playground/builder/state", payload);
     updateSummary(response.workflow_summary);
+    renderBuilderEndpointState(response.builder_endpoint_state);
+    renderBuilderReviewState(response.builder_review_state, response.builder_review_ready);
     return response;
   });
   stateQueue = task.then(() => undefined, () => undefined);
   return task;
+}
+
+async function syncBuilderEndpointSelections() {
+  const forms = Array.from(document.querySelectorAll("[data-builder-endpoint-form]"));
+  if (!forms.length) {
+    return;
+  }
+  document.querySelectorAll("[data-builder-endpoint-status]").forEach((status) => {
+    status.textContent = "正在更新部署選項...";
+    status.classList.remove("error");
+  });
+  const selections = {};
+  forms.forEach((form) => {
+    Object.assign(selections, Object.fromEntries(new FormData(form).entries()));
+  });
+  const result = await postJson("/playground/builder/endpoints", {
+    selections,
+  });
+  renderBuilderEndpointState(result);
+  renderBuilderReviewState(result.builder_review_state, result.builder_review_ready);
 }
 
 async function flushBuilderState() {
@@ -219,6 +380,18 @@ function parseInitialBuilderFormState() {
     return JSON.parse(rawState);
   } catch {
     return { choices: {}, values: {} };
+  }
+}
+
+function parseInitialBuilderEndpointState() {
+  const rawState = builderEndpointStateElement?.textContent?.trim();
+  if (!rawState) {
+    return { requirements: [], endpoints: [], selections: {}, configured: true };
+  }
+  try {
+    return JSON.parse(rawState);
+  } catch {
+    return { requirements: [], endpoints: [], selections: {}, configured: true };
   }
 }
 
@@ -537,6 +710,8 @@ function uploadSemanticFiles(panel) {
           : "";
         syncSemanticUploadPanel(panel);
         updateSummary(response.workflow_summary);
+        renderBuilderEndpointState(response.builder_endpoint_state);
+        renderBuilderReviewState(response.builder_review_state, response.builder_review_ready);
       } catch (error) {
         status.classList.add("error");
         status.textContent = error.message || "上傳失敗。";
@@ -789,8 +964,18 @@ function showStep(key) {
 }
 
 hydrateBuilderFormState(parseInitialBuilderFormState());
+renderBuilderEndpointState(parseInitialBuilderEndpointState());
 applyChoiceDependencies();
 panels.forEach(updateConditionalForms);
+renderBuilderReviewState(
+  Array.from(document.querySelectorAll("[data-review-item]")).map((item) => ({
+    step_key: item.dataset.reviewStep || "",
+    completed: item.classList.contains("is-complete"),
+    answer: item.querySelector("[data-review-answer]")?.textContent || "尚未選擇",
+    detail: item.querySelector("[data-review-detail]")?.textContent || "",
+  })),
+  completeLinks.every((link) => link.getAttribute("aria-disabled") !== "true"),
+);
 
 cards.forEach((card) => {
   card.addEventListener("click", async () => {
@@ -955,6 +1140,10 @@ document.querySelectorAll("[data-step-back]").forEach((button) => {
 
 document.querySelectorAll("[data-runner-link]").forEach((link) => {
   link.addEventListener("click", async (event) => {
+    if (link.matches("[data-complete-link]") && link.getAttribute("aria-disabled") === "true") {
+      event.preventDefault();
+      return;
+    }
     event.preventDefault();
     const activePanel = panels.find((panel) => !panel.hidden);
     await flushBuilderState();
@@ -963,4 +1152,12 @@ document.querySelectorAll("[data-runner-link]").forEach((link) => {
     await syncParamForms(activePanel);
     window.location.href = link.href;
   });
+});
+
+document.addEventListener("change", async (event) => {
+  const select = event.target.closest?.("[data-builder-endpoint-select]");
+  if (!select) {
+    return;
+  }
+  await syncBuilderEndpointSelections();
 });

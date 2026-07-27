@@ -776,10 +776,87 @@ a { color: inherit; text-decoration: none; }
   background: var(--surface-soft);
 }
 
-.readiness-card.ready { border-color: #efb4b7; background: #fff6f6; }
+.readiness-card.ready { border-color: var(--line-soft); background: #fcfaf7; }
 .readiness-card strong, .readiness-card span { display: block; }
 .readiness-card span { margin-top: 0.35rem; }
 .readiness-checklist { display: grid; gap: 0.4rem; margin: 0.75rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: 0.86rem; }
+.builder-review-checklist { padding-left: 0; list-style: none; }
+.builder-review-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: start;
+  padding: 0.7rem 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+}
+.builder-review-item:first-child { border-top: 0; }
+.builder-review-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #7a2028;
+  border: 1px solid currentColor;
+}
+.builder-review-item.is-complete .builder-review-status {
+  color: #1f6b48;
+  background: #ecf7f0;
+}
+.builder-review-item.is-incomplete .builder-review-status {
+  color: #8c2f39;
+  background: #fff1f2;
+}
+.builder-review-content {
+  display: grid;
+  gap: 0.6rem;
+}
+.builder-review-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: baseline;
+}
+.builder-review-answer {
+  color: var(--muted);
+}
+.builder-review-detail {
+  margin: 0;
+  color: #8c2f39;
+  font-size: 0.88rem;
+}
+.builder-review-endpoints {
+  display: grid;
+  gap: 0.65rem;
+}
+.builder-review-endpoints .endpoint-form {
+  display: block;
+}
+.builder-review-endpoints .endpoint-row {
+  gap: 0.75rem;
+}
+.builder-review-endpoints .endpoint-row strong {
+  min-width: 5rem;
+  color: var(--muted);
+}
+.builder-review-note {
+  margin: 1rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+.form-required {
+  margin-left: 0.45rem;
+  color: #8c2f39;
+  font-size: 0.82rem;
+}
+.button.is-disabled,
+.button[aria-disabled="true"] {
+  opacity: 0.55;
+  pointer-events: none;
+}
 
 .runner-layout {
   grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr);
@@ -1172,6 +1249,10 @@ a { color: inherit; text-decoration: none; }
 
 .markdown-output a {
   color: var(--fluent-blue-strong);
+.builder-stage .stage-actions {
+  margin-top: 1.5rem;
+  padding-top: 0.25rem;
+}
   text-decoration: underline;
   text-underline-offset: 0.16rem;
 }
