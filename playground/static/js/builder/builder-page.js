@@ -102,6 +102,40 @@ function updateConditionalForms(panel) {
     const dependenciesVisible = visibleDependenciesSatisfied(form.dataset.visibleDependencies, selections);
     form.hidden = !(choiceVisible && dependenciesVisible);
   });
+  updateInputTypeFieldCopy(panel, selectedChoice);
+}
+
+function updateInputTypeFieldCopy(panel, selectedChoice) {
+  if (!panel || panel.dataset.stepPanel !== "input_type") {
+    return;
+  }
+  const mode = selectedChoice === "text_image" ? "text-image" : "text";
+  panel.querySelectorAll("[data-input-mode-copy]").forEach((element) => {
+    const nextText = mode === "text-image" ? element.dataset.textImageCopy : element.dataset.textCopy;
+    if (nextText) {
+      element.textContent = nextText;
+    }
+  });
+  panel.querySelectorAll("[data-input-mode-placeholder]").forEach((field) => {
+    const nextPlaceholder = mode === "text-image" ? field.dataset.textImagePlaceholder : field.dataset.textPlaceholder;
+    if (nextPlaceholder) {
+      field.placeholder = nextPlaceholder;
+    }
+  });
+  panel.querySelectorAll("[data-input-mode-pair-fields]").forEach((wrapper) => {
+    const keyPlaceholder = mode === "text-image" ? wrapper.dataset.textImageKeyPlaceholder : wrapper.dataset.textKeyPlaceholder;
+    const valuePlaceholder = mode === "text-image" ? wrapper.dataset.textImageValuePlaceholder : wrapper.dataset.textValuePlaceholder;
+    wrapper.querySelectorAll("[data-pair-key]").forEach((field) => {
+      if (keyPlaceholder) {
+        field.placeholder = keyPlaceholder;
+      }
+    });
+    wrapper.querySelectorAll("[data-pair-value]").forEach((field) => {
+      if (valuePlaceholder) {
+        field.placeholder = valuePlaceholder;
+      }
+    });
+  });
 }
 
 function visibleDependenciesSatisfied(rawDependencies, selections) {

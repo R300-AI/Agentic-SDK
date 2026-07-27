@@ -2,7 +2,7 @@
 
 {% block title %}建立 Agent - AI Hub Agent 建立工具{% endblock %}
 
-{% macro pair_editor(id, name, key_label, value_label, add_label, rows=None, key_placeholder="", value_placeholder="", editor_class="", help_text="", show_headers=false, type_label="", type_options=None, value_control="textarea") -%}
+{% macro pair_editor(id, name, key_label, value_label, add_label, rows=None, key_placeholder="", value_placeholder="", editor_class="", help_text="", show_headers=false, type_label="", type_options=None, value_control="textarea", add_button_variant="text") -%}
 {% set editor_rows = rows or [{"key": "", "value": ""}] %}
 <div class="pair-editor{% if editor_class %} {{ editor_class }}{% endif %}" data-pair-editor>
   {% if help_text %}<p class="pair-editor-help">{{ help_text }}</p>{% endif %}
@@ -37,8 +37,13 @@
       <button class="button button-ghost pair-remove" type="button" data-pair-remove aria-label="刪除此列">移除</button>
     </div>
     {% endfor %}
+    {% if add_button_variant == 'icon' %}
+    <button class="button button-ghost pair-add pair-add-icon" type="button" data-pair-add aria-label="{{ add_label }}" title="{{ add_label }}"><span class="visually-hidden">{{ add_label }}</span></button>
+    {% endif %}
   </div>
-  <button class="button button-ghost pair-add" type="button" data-pair-add>{{ add_label }}</button>
+  {% if add_button_variant != 'icon' %}
+  <button class="button button-ghost pair-add" type="button" data-pair-add aria-label="{{ add_label }}" title="{{ add_label }}">{{ add_label }}</button>
+  {% endif %}
 </div>
 {%- endmacro %}
 
@@ -118,44 +123,30 @@
         </div>
         {% if step.key == "input_type" %}
         <details class="advanced-disclosure step-advanced" data-visible-choices="text|text_image" open>
-          <summary>先抓出哪些資訊</summary>
-          <form class="module-param-form" data-param-form data-step-key="perceive">
-            <label for="v3-perceive-welcome-message">整理方式</label>
-            <textarea id="v3-perceive-welcome-message" name="welcome_message" rows="3" placeholder="例如：先看出客人想問什麼、提到哪個商品、需要門市協助還是線上回覆；沒講清楚的地方標成未知。"></textarea>
-            <label for="v3-perceive-intent-pairs">要留意的內容</label>
-            {{ pair_editor(
-              "v3-perceive-intent-pairs",
-              "intent_pairs",
-              "資料名稱",
-              "怎麼判斷",
-              "新增一項要抓的內容",
-              none,
-              "例如：客人需求",
-              "例如：客人想解決的問題或想買的東西",
-              "input-signals-editor",
-              "每列代表 Agent 在看使用者輸入時要先找的一件事。左邊是後續流程使用的名稱，右邊是判斷方式。",
-              true,
-              "內容樣子",
-              [
-                {"label": "一段文字", "value": "文字"},
-                {"label": "數量或金額", "value": "數字"},
-                {"label": "是或否", "value": "是/否"},
-                {"label": "多個項目", "value": "清單"}
-              ],
-              "input"
-            ) }}
-            <label for="v3-perceive-importance">之後回想優先度</label>
-            <div class="range-field">
-              <input id="v3-perceive-importance" name="importance" type="range" min="0" max="5" step="0.1" value="1.0" data-range-control>
-              <output for="v3-perceive-importance" data-range-output>1.0</output>
+          <summary>進階設定</summary>
+          <form class="module-param-form" data-param-form data-step-key="perceive" data-input-type-form>
+            <label for="v3-perceive-welcome-message">Agent 要優先判讀哪些重點？</label>
+            <textarea id="v3-perceive-welcome-message" name="welcome_message" rows="3" data-input-mode-placeholder data-text-placeholder="例如：需求、目的、限制條件、問題描述、期望結果" data-text-image-placeholder="例如：需求、問題狀況、圖片中的異常處、文字與圖片是否一致" placeholder="例如：需求、目的、限制條件、問題描述、期望結果"></textarea>
+            <label for="v3-perceive-intent-pairs">要擷取哪些欄位資訊？</label>
+            <div data-input-mode-pair-fields data-text-key-placeholder="例如：日期" data-text-image-key-placeholder="例如：產品型號" data-text-value-placeholder="例如：文字中提到的事件時間" data-text-image-value-placeholder="例如：可從文字描述或圖片標示辨識的型號資訊">
+              {{ pair_editor(
+                "v3-perceive-intent-pairs",
+                "intent_pairs",
+                "欄位名稱",
+                "欄位說明",
+                "新增欄位",
+                none,
+                "例如：日期",
+                "例如：文字中提到的事件時間",
+                "input-signals-editor",
+                "",
+                true,
+                "",
+                none,
+                "input",
+                "icon"
+              ) }}
             </div>
-          </form>
-        </details>
-        <details class="advanced-disclosure step-advanced" data-visible-choices="text_image" open>
-          <summary>圖片要看什麼</summary>
-          <form class="module-param-form" data-param-form data-step-key="perceive">
-            <label for="v3-perceive-image-instruction">照片判讀重點</label>
-            <textarea id="v3-perceive-image-instruction" name="image_instruction" rows="4" placeholder="例如：看清楚商品型號、尺寸標籤、破損位置、鞋底磨耗或單據文字；看不到的地方請寫看不清楚。"></textarea>
           </form>
         </details>
         {% endif %}
@@ -238,7 +229,7 @@
                     "JSON Key",
                     "簡短定義這個欄位代表的資料",
                     "field-requirements-editor",
-                    "每列代表一項要送出的資料；欄位名稱會對應實際送出的資料名稱。",
+                    "",
                     true,
                     "資料類型",
                     [
@@ -246,7 +237,8 @@
                       {"label": "數字資料", "value": "數字資料 / number"},
                       {"label": "是/否確認", "value": "是/否確認 / boolean"}
                     ],
-                    "input"
+                    "input",
+                    "icon"
                   ) }}
                 </section>
               </div>

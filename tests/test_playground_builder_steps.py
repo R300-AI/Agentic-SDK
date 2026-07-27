@@ -39,7 +39,7 @@ def test_builder_page_does_not_render_legacy_task_type_step():
     assert "目前階段：步驟 1 / 6" in page
 
 
-def test_builder_step2_exposes_json_and_image_configuration():
+def test_builder_step2_exposes_shared_focus_and_field_configuration():
     app = create_app()
 
     with app.test_client() as client:
@@ -47,13 +47,22 @@ def test_builder_step2_exposes_json_and_image_configuration():
 
     assert response.status_code == 200
     page = response.data.decode("utf-8")
-    assert "先抓出哪些資訊" in page
-    assert "要留意的內容" in page
-    assert "圖片要看什麼" in page
-    assert "照片判讀重點" in page
-    assert 'name="image_instruction"' in page
+    assert "進階設定" in page
+    assert "Agent 要優先判讀哪些重點？" in page
+    assert "要擷取哪些欄位資訊？" in page
+    assert "輸入你希望 Agent 讀文字時優先注意的語意重點。" not in page
+    assert "輸入你希望 Agent 綜合文字與圖片時優先注意的重點，可包含文字內容、圖片內容，或兩者之間的關聯。" not in page
+    assert "新增你希望 Agent 從文字內容中擷取的明確欄位。" not in page
+    assert "新增你希望 Agent 從文字與圖片中擷取的明確欄位。" not in page
+    assert "每列代表一項要送出的資料；欄位名稱會對應實際送出的資料名稱。" not in page
     assert 'data-visible-choices="text|text_image"' in page
-    assert 'data-visible-choices="text_image"' in page
+    assert 'data-input-type-form' in page
+    assert page.count('pair-add-icon') >= 2
+    assert 'name="image_instruction"' not in page
+    assert "圖片要看什麼" not in page
+    assert "照片判讀重點" not in page
+    assert "整理方式" not in page
+    assert "之後回想優先度" not in page
     assert "JSON key" not in page
     assert "JSON 欄位" not in page
     assert "表單欄位" not in page
@@ -71,15 +80,23 @@ def test_builder_step2_choices_update_perceive_source():
             json={
                 "step": "perceive",
                 "value": {
-                    "welcome_message": "先看出客人想問什麼。",
-                    "intent_pairs": "客人需求 = 客人想解決的問題或想買的東西（資料類型：文字）",
-                    "importance": "2.0",
+                    "welcome_message": "先判讀需求、限制條件與期望結果。",
+                    "intent_pairs": "日期 = 文字中提到的事件時間",
                 },
             },
         )
         text_source = client.get("/playground/source/preview").data.decode("utf-8")
         client.post("/playground/builder/state", json={"step": "input_type", "choice": "text_image"})
-        client.post("/playground/builder/state", json={"step": "perceive", "value": {"image_instruction": "請辨識圖片中的文字與異常。"}})
+        client.post(
+            "/playground/builder/state",
+            json={
+                "step": "perceive",
+                "value": {
+                    "welcome_message": "請綜合文字與圖片判讀需求、異常處與是否一致。",
+                    "intent_pairs": "產品型號 = 可從文字描述或圖片標示辨識的型號資訊",
+                },
+            },
+        )
         image_source = client.get("/playground/source/preview").data.decode("utf-8")
         client.post("/playground/builder/state", json={"step": "input_type", "choice": "pass_through"})
         pass_source = client.get("/playground/source/preview").data.decode("utf-8")
@@ -88,11 +105,12 @@ def test_builder_step2_choices_update_perceive_source():
     assert "api_key=" in text_source
     assert "base_url=" in text_source
     assert "model=" in text_source
-    assert "welcome_message=" in text_source
-    assert "客人需求" in text_source
-    assert "importance=2.0" in text_source
+    assert 'welcome_message="先判讀需求、限制條件與期望結果。"' in text_source
+    assert "日期" in text_source
     assert "TextImagePerceive(" in image_source
-    assert "image_instruction=" in image_source
+    assert 'welcome_message="請綜合文字與圖片判讀需求、異常處與是否一致。"' in image_source
+    assert "產品型號" in image_source
+    assert "image_instruction=" not in image_source
     assert "PassThroughPerceive()" in pass_source
     assert "TextPerceive(" not in pass_source
     assert "TextImagePerceive(" not in pass_source
