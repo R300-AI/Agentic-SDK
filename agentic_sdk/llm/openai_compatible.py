@@ -5,8 +5,6 @@ import time
 from dataclasses import dataclass
 from typing import Callable, Any
 
-from openai import OpenAI
-
 
 @dataclass
 class OpenAIChatResponse:
@@ -43,6 +41,12 @@ def resolve_openai_client(module_name: str, *, api_key: str | None = None, base_
         missing.append("base_url")
     if missing:
         raise ValueError(f"{module_name} requires explicit {'/'.join(missing)}.")
+    try:
+        from openai import OpenAI
+    except Exception as exc:
+        raise RuntimeError(
+            "OpenAI SDK import failed. Reinstall the 'openai' package in the current environment."
+        ) from exc
     return OpenAI(api_key=resolved_api_key, base_url=resolved_base_url)
 
 

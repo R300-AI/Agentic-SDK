@@ -134,15 +134,27 @@ def get_builder_steps() -> list[BuilderStep]:
             "記憶範圍",
             "",
             (
-                BuilderChoice("in_context", "單輪工作記憶", "目前對應 InContextMemory，只保留本輪輸入與中繼狀態，適合客服、櫃員與單次諮詢。"),
-                BuilderChoice("workflow_recall_preview", "跨 Session 案件記憶", "保留同一類 workflow 的跨 session 記憶，適合案件續談、回訪與需要延續前情的服務。", available=False, badge="預覽中"),
-                BuilderChoice("user_profile_preview", "長期個人記憶", "保留使用者偏好、背景與歷次互動重點，適合長期助理、照護追蹤與會員顧問。", available=False, badge="預覽中"),
+                BuilderChoice("in_context", "即時回答", "只根據目前這次對話內容產生回答，不參考先前互動。"),
+                BuilderChoice("workflow_recall_preview", "承接前文回答", "回答時需要接續先前互動內容或狀態。", available=False, badge="預覽中"),
+            ),
+            True,
+        ),
+        BuilderStep(
+            "input_type",
+            "Q2: 這個 Agent 要如何理解輸入？",
+            "",
+            "輸入理解",
+            "",
+            (
+                BuilderChoice("pass_through", "直接傳遞文字", "直接使用目前對話中的文字內容，不先做額外整理或重寫。"),
+                BuilderChoice("text", "整理文字內容", "先理解並整理文字內容，再交給後續步驟使用。"),
+                BuilderChoice("text_image", "整理文字與圖片", "同時理解文字與圖片內容，再交給後續步驟使用。"),
             ),
             True,
         ),
         BuilderStep(
             "task_type",
-            "Q2: 這個 Agent 主要要完成哪類任務？",
+            "Q3: 這個 Agent 主要要完成哪類任務？",
             "",
             "任務類型",
             "",
@@ -151,20 +163,6 @@ def get_builder_steps() -> list[BuilderStep]:
                 BuilderChoice("retrieve_answer", "查資料後回答", "先判斷是否需要支援資料，再整理成自然回覆。"),
                 BuilderChoice("summarize", "整理摘要", "先理解長文字或文件，再收斂成摘要或判讀結果。"),
                 BuilderChoice("structured_output", "產生固定格式", "把輸入整理成表格、JSON 或指定欄位結果。"),
-            ),
-            True,
-        ),
-        BuilderStep(
-            "input_type",
-            "Q3: 使用者會提供什麼資料？",
-            "",
-            "輸入內容",
-            "",
-            (
-                BuilderChoice("text", "純文字", "直接接收使用者訊息或長文字內容。"),
-                BuilderChoice("structured", "表單欄位", "使用固定欄位收集需求。"),
-                BuilderChoice("file_image", "圖片或文件", "附件內容會影響判斷。"),
-                BuilderChoice("mixed", "混合輸入", "同時接受文字、欄位與附件線索。"),
             ),
             True,
         ),
@@ -281,10 +279,9 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
     if step_key == "input_type":
         choice = str(choice_label)
         input_overrides = {
-            "text": {"input_kind": "Message", "perceive_module": "PassThroughPerceive"},
-            "structured": {"input_kind": "Form", "perceive_module": "TextPerceive"},
-            "file_image": {"input_kind": "TextImage", "perceive_module": "TextImagePerceive"},
-            "mixed": {"input_kind": "TextImage", "perceive_module": "TextImagePerceive", "perceive_importance": 1.5},
+            "pass_through": {"input_kind": "Message", "perceive_module": "PassThroughPerceive", "perceive_importance": 1.0},
+            "text": {"input_kind": "Document", "perceive_module": "TextPerceive", "perceive_importance": 1.0},
+            "text_image": {"input_kind": "TextImage", "perceive_module": "TextImagePerceive", "perceive_importance": 1.5},
         }
         if choice in input_overrides:
             return _build_source_for_config(_replace_config(config, **input_overrides[choice]))
@@ -838,9 +835,10 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         task_type = "retrieve_answer"
 
     input_type = {
-        "Form": "structured",
-        "TextImage": "file_image",
-    }.get(config.input_kind, "text")
+        "PassThroughPerceive": "pass_through",
+        "TextPerceive": "text",
+        "TextImagePerceive": "text_image",
+    }.get(config.perceive_module, "pass_through")
 
     if not config.plan_strategy and not config.retrieve_items:
         retrieve_policy = "none"

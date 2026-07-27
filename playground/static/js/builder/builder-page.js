@@ -10,10 +10,9 @@ let stateQueue = Promise.resolve();
 
 const dependencyRules = {
   input_type: {
+    pass_through: {},
     text: {},
-    structured: { task_type: ["direct_answer", "retrieve_answer", "structured_output"] },
-    file_image: { task_type: ["retrieve_answer", "summarize"] },
-    mixed: { task_type: ["retrieve_answer", "summarize", "structured_output"] },
+    text_image: {},
   },
   retrieve_policy: {
     none: { task_type: ["direct_answer", "summarize", "structured_output"] },

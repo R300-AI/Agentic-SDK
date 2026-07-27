@@ -99,8 +99,8 @@ def test_builder_route_renders_oobe_shell():
 
     assert response.status_code == 200
     assert "這個 Agent 需要記住多久？".encode("utf-8") in response.data
-    assert "單輪工作記憶".encode("utf-8") in response.data
-    assert "跨 Session 案件記憶".encode("utf-8") in response.data
+    assert "即時回答".encode("utf-8") in response.data
+    assert "承接前文回答".encode("utf-8") in response.data
     assert "預覽中".encode("utf-8") in response.data
     assert b"data-step-panel=\"failure_policy\"" in response.data
     assert "前往試跑頁".encode("utf-8") in response.data
