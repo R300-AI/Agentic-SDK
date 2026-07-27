@@ -18,7 +18,6 @@ from agentic_sdk.modules import (
     DirectAnswerAction,
     EvidenceCheckReflect,
     GenerativeAction,
-    HybridRetrieve,
     KeywordRetrieve,
     NextStepPlan,
     PassThroughRetrieve,
@@ -780,8 +779,6 @@ def _retrieve_from_config(config: BuilderSourceConfig, reachable_roles: set[str]
         return None
     if config.retrieve_module == "SemanticRetrieve":
         return SemanticRetrieve(top_k=config.retrieve_top_k)
-    if config.retrieve_module == "HybridRetrieve":
-        return HybridRetrieve(items=list(config.retrieve_items), fallback=config.retrieve_fallback, top_k=config.retrieve_top_k)
     if config.retrieve_module == "PassThroughRetrieve":
         return PassThroughRetrieve()
     return KeywordRetrieve(items=list(config.retrieve_items), fallback=config.retrieve_fallback)
@@ -815,7 +812,7 @@ def _source_fallback_text(python_source: str) -> str | None:
     except SyntaxError:
         return None
 
-    for preferred_call in ("DirectAnswerAction", "KeywordRetrieve", "HybridRetrieve"):
+    for preferred_call in ("DirectAnswerAction", "KeywordRetrieve", "SemanticRetrieve"):
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call) or _call_name(node.func) != preferred_call:
                 continue

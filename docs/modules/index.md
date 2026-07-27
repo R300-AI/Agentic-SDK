@@ -16,7 +16,7 @@
 | --- | --- | --- |
 | Perceive | PassThroughPerceive、TextPerceive、TextImagePerceive | 把原始輸入整理成查詢、標籤與摘要。 |
 | Plan | NextStepPlan | 決定下一步交給 `Retrieve` 還是 `Action`。 |
-| Retrieve | KeywordRetrieve、SemanticRetrieve、HybridRetrieve | 查回條目、歷史紀錄、知識內容或比對結果。 |
+| Retrieve | KeywordRetrieve、SemanticRetrieve | 查回條目、歷史紀錄或知識內容。 |
 | Action | DirectAnswerAction、GenerativeAction、ToolCallAction | 組成自然語言回應、固定格式文字輸出或 OpenAI 標準工具呼叫。 |
 | Reflect | ResponseCheckReflect、EvidenceCheckReflect | 檢查回應完整性與證據是否足夠。 |
 

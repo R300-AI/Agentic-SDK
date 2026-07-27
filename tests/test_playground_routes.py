@@ -901,7 +901,7 @@ def test_builder_module_parameters_update_canonical_source():
             json={"step": "action", "value": {"system_prompt": "請使用台灣繁體中文，先給結論。"}},
         )
         plan_response = client.post("/playground/builder/state", json={"step": "plan", "choice": "RouteBySupport"})
-        reflect_response = client.post("/playground/builder/state", json={"step": "reflect", "choice": "RetryPlan"})
+        reflect_response = client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "retry"})
         preview_response = client.get("/playground/source/preview")
 
     assert retrieve_response.status_code == 200
@@ -918,7 +918,7 @@ def test_builder_module_parameters_update_canonical_source():
     assert 'GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL, system_prompt="請使用台灣繁體中文，先給結論。")' in preview
     assert "ACTION_CONFIG" not in preview
     assert 'NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL, retrieve_name="支援資料"' in preview
-    assert 'ResponseCheckReflect(api_key=REFLECT_API_KEY, base_url=REFLECT_API_BASE_URL, model=REFLECT_MODEL, on_failure="retry_plan")' in preview
+    assert 'EvidenceCheckReflect(on_failure="retry_plan")' in preview
 
 
 def test_builder_advanced_parameters_update_canonical_source():
@@ -946,8 +946,7 @@ def test_builder_advanced_parameters_update_canonical_source():
             "/playground/builder/state",
             json={"step": "plan", "value": {"system_prompt": "只有需要佐證時才查詢支援資料。"}},
         )
-        client.post("/playground/builder/state", json={"step": "reflect", "choice": "ResponseRetry"})
-        reflect_response = client.post("/playground/builder/state", json={"step": "reflect", "value": {"on_failure": "end"}})
+        reflect_response = client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "handoff"})
         preview_response = client.get("/playground/source/preview")
 
     assert custom_response.status_code == 200
@@ -964,7 +963,7 @@ def test_builder_advanced_parameters_update_canonical_source():
     assert "PLAN_CONFIG" not in preview
     assert "只有需要佐證時才查詢支援資料" not in preview
     assert "system_prompt=" not in preview
-    assert 'ResponseCheckReflect(api_key=REFLECT_API_KEY, base_url=REFLECT_API_BASE_URL, model=REFLECT_MODEL, on_failure="end")' in preview
+    assert 'EvidenceCheckReflect(on_failure="end")' in preview
 
 
 def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
@@ -986,7 +985,7 @@ def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
             "/playground/builder/state",
             json={"step": "perceive", "value": {"input_label": "客戶需求", "welcome_message": "請提供需求。", "intent_pairs": "售後服務 = 保固退換貨\n產品諮詢 = 方案比較", "importance": "2.5", "model": "perceive-local"}},
         )
-        client.post("/playground/builder/state", json={"step": "retrieve", "choice": "Hybrid"})
+        client.post("/playground/builder/state", json={"step": "retrieve", "choice": "Semantic"})
         client.post(
             "/playground/builder/state",
             json={"step": "retrieve", "value": {"fallback": "沒有支援資料。", "keyword_pairs": "保固 = 保固說明。", "top_k": "5", "similarity_weight": "0.7", "recency_weight": "0.2", "importance_weight": "0.1"}},
@@ -995,7 +994,7 @@ def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
         client.post("/playground/builder/state", json={"step": "plan", "value": {"retrieve_name": "產品資料", "retrieve_description": "保固與售後資料。", "system_prompt": "資料不足時才查。", "model": "plan-local"}})
         client.post("/playground/builder/state", json={"step": "action", "choice": "Structured"})
         client.post("/playground/builder/state", json={"step": "action", "value": {"system_prompt": "請輸出 JSON。", "model": "answer-local", "temperature": "0.2"}})
-        client.post("/playground/builder/state", json={"step": "reflect", "choice": "ResponseRetry"})
+        client.post("/playground/builder/state", json={"step": "failure_policy", "choice": "retry"})
         client.post("/playground/builder/state", json={"step": "reflect", "value": {"criteria": "不可捏造資料。", "model": "reflect-local", "on_failure": "retry_plan"}})
         preview = client.get("/playground/source/preview").data.decode("utf-8")
 
@@ -1003,12 +1002,12 @@ def test_builder_concrete_parameters_are_emitted_for_advanced_paths():
     assert '"intent": "保固退換貨"' in preview
     assert 'TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL, welcome_message="請提供需求。", options=' in preview
     assert 'importance=2.5' in preview
-    assert "HybridRetrieve(" in preview
+    assert "SemanticRetrieve(" in preview
     assert '"keywords": [\n                          "保固"' in preview
     assert 'fallback="沒有支援資料。"' in preview
     assert 'NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL, retrieve_name="產品資料", retrieve_description="保固與售後資料。")' in preview
     assert 'GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL, system_prompt="請輸出 JSON。")' in preview
-    assert 'ResponseCheckReflect(api_key=REFLECT_API_KEY, base_url=REFLECT_API_BASE_URL, model=REFLECT_MODEL, on_failure="retry_plan")' in preview
+    assert 'EvidenceCheckReflect(on_failure="retry_plan")' in preview
     for removed_config in ("TASK_CONFIG", "INPUT_CONFIG", "PERCEIVE_CONFIG", "RETRIEVE_CONFIG", "ACTION_CONFIG", "PLAN_CONFIG", "REFLECT_CONFIG"):
         assert removed_config not in preview
     for ignored_value in ("協助判斷方案", "固定欄位收件", "資料不足時才查", "不可捏造資料", "top_k", "similarity_weight"):
@@ -1093,7 +1092,7 @@ def test_builder_workflow_templates_map_to_sdk_module_presets():
     assert "workflow_name=\"Recommendation Helper\"" in recommendation_source
     assert "TextPerceive(api_key=PERCEIVE_API_KEY, base_url=PERCEIVE_API_BASE_URL, model=PERCEIVE_MODEL)" in recommendation_source
     assert "NextStepPlan(api_key=PLAN_API_KEY, base_url=PLAN_API_BASE_URL, model=PLAN_MODEL" in recommendation_source
-    assert "HybridRetrieve(" in recommendation_source
+    assert "SemanticRetrieve(" in recommendation_source
     assert "GenerativeAction(api_key=ACTION_API_KEY, base_url=ACTION_API_BASE_URL, model=ACTION_MODEL)" in recommendation_source
     assert "請用一步步詢問" not in recommendation_source
     assert "workflow_name=\"Review Summary Helper\"" in review_source

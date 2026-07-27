@@ -16,7 +16,7 @@
 
 - 本次與前次 turn 共同組成的對話工作記憶
 - 所有需要模型的模組共用的 conversation input
-- 可選擇由 `conversation_store` 持久化的 transcript
+- 可由 `Workflow(memory_type=InContextMemory)` 直接承接的 transcript
 
 `InContextMemory` 不是 `WorkflowState` 的別名，也不是 `Entities` 的別名。它的責任只有一件事：保存完整對話順序。
 
@@ -35,11 +35,7 @@
 - `attachments`
 - `last_action_result` 與 `last_action_error`
 
-也就是說，`WorkflowState` 關心的是「這次 run 現在推進到哪裡」，不是「完整對話 transcript 長什麼樣」。目前 SDK 為了相容舊呼叫端，仍保留 `in_context_memory` 欄位作為 alias；但新的模組契約應以 `memory` 為主。
-
-## conversation_store：durable transcript backend
-
-若你要跨多次 `workflow.run(...)` 保留完整對話，應使用 `conversation_store`。`Workflow` 會先依 `session_id` 取回既有 transcript，再把新的 user turn 與本輪 assistant turn 追加回去。
+也就是說，`WorkflowState` 關心的是「這次 run 現在推進到哪裡」，不是「完整對話 transcript 長什麼樣」。新的模組契約應以 `memory` 為主。
 
 ## Workflow 可注入的其他引擎層
 
@@ -47,7 +43,7 @@
 
 | 引擎位置 | 目前程式對應 | 角色 |
 | --- | --- | --- |
-| conversation transcript engine | `conversation_store` | 依 `session_id` 讀寫完整對話 transcript |
+| workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 類型承接同一個 `session_id` 的對話歷史 |
 | module-facing memory abstraction | `MemoryStore` | 模組讀取完整對話與 turn 歷史時依賴的共同抽象 |
 | conversation-oriented memory | `InContextMemory` | 偏重 session 內完整對話承接的 `MemoryStore` 實作 |
 | durable memory | `PersistentMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
@@ -57,8 +53,8 @@
 ## 什麼時候看這一頁
 
 - 當你要理解 workflow 內到底哪一層保存完整對話
-- 當你要判斷是否只用單輪 `run()`，還是要接 `session_id` / `conversation_store`
-- 當你要替 workflow 注入特定 `MemoryStore` 實作，例如 `PersistentMemory` 或自訂 transcript backend
+- 當你要判斷是否只用單輪 `run()`，還是要用 `memory_type=InContextMemory` 承接多輪對話
+- 當你要替 workflow 指定特定 `MemoryStore` 類型，例如 `InContextMemory` 或 `PersistentMemory`
 - 當你要分清楚「workflow 節點規格」與「workflow 執行引擎」是兩個不同層次
 
 ## 與模組頁的分工

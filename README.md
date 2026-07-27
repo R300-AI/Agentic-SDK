@@ -10,13 +10,13 @@ Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以�
 
 - Perceive：整理使用者輸入，產生可供後續步驟使用的感知結果。
 - Plan：決定下一步要 Retrieve、Action，或結束流程。
-- Retrieve：從規則、關鍵字、語意或混合檢索中取得支援資料。
+- Retrieve：從規則、關鍵字或語意檢索中取得支援資料。
 - Action：產生最終回覆、呼叫工具，或執行自訂處理邏輯。
 - Reflect：檢查結果品質或資料依據，必要時中止或重新規劃。
 
 最小 workflow 只需要 `Workflow` 加上你需要的模組。所有模組都可以用一般 Python 物件替換，因此適合從小型 PoC 擴充到正式應用。
 
-`Workflow.run(...)` 仍支援最簡單的單輪呼叫，但也支援用 `session_id`、`conversation` 與 `conversation_store` 管理多輪對話。`WorkflowState` 則保留執行中的中繼結果、payload 與觀測資料，不再被當成 `InContextMemory` 的別名。
+`Workflow.run(...)` 仍支援最簡單的單輪呼叫。`Workflow` 預設會以 `InContextMemory` 承接同一個 `session_id` 的完整對話歷史；若你之後需要替換記憶實作，再於建立 workflow 時明確指定其他 memory 類型即可。`WorkflowState` 則保留執行中的中繼結果、payload 與觀測資料。
 
 ## 安裝
 
@@ -60,35 +60,7 @@ print(result.final_message)
 
 `PassThroughPerceive` 會保留原始輸入，`KeywordRetrieve` 依關鍵字取得支援資料，`DirectAnswerAction` 則直接回傳檢索到的內容。
 
-如果你之後用同一個 `session_id` 再次呼叫 `workflow.run(...)`，新的使用者輸入與前一次 assistant 回覆都會保留在 `result.memory` 中；若實際採用的是 `InContextMemory`，也能透過相容欄位 `result.in_context_memory` 取得同一份資料。
-
-### 1.1 多輪對話與 session 保存
-
-```python
-from agentic_sdk import InMemoryConversationStore, Workflow
-from agentic_sdk.modules import GenerativeAction, PassThroughPerceive, PassThroughRetrieve
-
-conversation_store = InMemoryConversationStore()
-
-workflow = Workflow(
-    perceive=PassThroughPerceive(),
-    retrieve=PassThroughRetrieve(),
-    action=GenerativeAction(
-        api_key="ollama",
-        base_url="http://localhost:11434/v1/",
-        model="llama3.2:1b",
-    ),
-    conversation_store=conversation_store,
-)
-
-first = workflow.run("先記住我想找支撐型鞋款。", session_id="demo-session")
-second = workflow.run("再幫我整理成一句建議。", session_id="demo-session")
-
-print([turn.role for turn in second.memory.turns])
-print(second.final_message)
-```
-
-上面第二次 `run()` 時，模型看到的不只是「再幫我整理成一句建議」，還會包含前一輪 user 與 assistant 的完整對話歷史。
+如果你之後用同一個 `session_id` 再次呼叫同一個 `Workflow`，新的使用者輸入與前一次 assistant 回覆都會保留在 `result.memory` 中。
 
 ### 2. 使用 OpenAI-compatible 生成回覆
 

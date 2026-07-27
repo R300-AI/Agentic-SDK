@@ -31,7 +31,6 @@ class WorkflowState:
     session_id: str = "default"
     memory_store: PersistentMemory | None = None
     memory: MemoryStore | None = None
-    in_context_memory: InContextMemory | None = None
     started_monotonic: float = field(default_factory=time.monotonic)
     entities: Entities = field(default_factory=Entities)
     entries: list[ContextEntry] = field(default_factory=list)
@@ -41,12 +40,8 @@ class WorkflowState:
     attachments: list[Attachment] = field(default_factory=list)
 
     def __post_init__(self) -> None:
-        if self.memory is None and self.in_context_memory is not None:
-            self.memory = self.in_context_memory
-        elif self.memory is None and self.memory_store is not None:
+        if self.memory is None and self.memory_store is not None:
             self.memory = self.memory_store
-        elif self.in_context_memory is None and isinstance(self.memory, InContextMemory):
-            self.in_context_memory = self.memory
         if self.memory_store is None and isinstance(self.memory, PersistentMemory):
             self.memory_store = self.memory
 
@@ -115,13 +110,6 @@ class WorkflowResult:
     usage: dict[str, Any] | None = None
     entities: dict[str, Any] = field(default_factory=dict)
     memory: MemoryStore | None = None
-    in_context_memory: InContextMemory | None = None
-
-    def __post_init__(self) -> None:
-        if self.memory is None and self.in_context_memory is not None:
-            self.memory = self.in_context_memory
-        elif self.in_context_memory is None and isinstance(self.memory, InContextMemory):
-            self.in_context_memory = self.memory
 
 
 class WorkflowAborted(RuntimeError):

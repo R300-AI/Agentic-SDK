@@ -76,6 +76,10 @@ _ADVISOR_REQUIRED_FIELDS_TEXT = "目標 = 使用者想完成的結果\n限制 = 
 _ADVISOR_HANDOFF_RULE = "當目標、限制與現況足夠明確，或需要支援資料佐證時，才進入查資料或產生整理回覆。"
 _ADVISOR_WELCOME_MESSAGE = "請先描述你想完成的事，我會一步步確認需求。"
 _DEFAULT_RETRIEVE_DESCRIPTION = "依使用者設定的關鍵字支援資料判斷是否需要查詢。"
+_DEFAULT_SEMANTIC_RETRIEVE_NAME = "支援文件"
+_DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的支援文件查找與問題最相關的內容。"
+_DEFAULT_SEMANTIC_SOURCE_PATH = "./knowledge"
+_DEFAULT_SEMANTIC_INDEX_PATH = "./.agentic/semantic_index"
 
 
 @dataclass(frozen=True)
@@ -100,9 +104,8 @@ class BuilderSourceConfig:
     retrieve_items: tuple[dict[str, object], ...] = ()
     retrieve_fallback: str = "沒有命中任何條目。"
     retrieve_top_k: int = 3
-    retrieve_similarity_weight: float = 0.5
-    retrieve_recency_weight: float = 0.3
-    retrieve_importance_weight: float = 0.2
+    semantic_support_files: tuple[str, ...] = ()
+    semantic_search_goal: str | None = None
     action_module: str = "DirectAnswerAction"
     action_prompt: str | None = None
     action_tools: tuple[dict[str, object], ...] = ()
@@ -164,7 +167,6 @@ def get_builder_steps() -> list[BuilderStep]:
                 BuilderChoice("none", "不用查", "直接根據輸入或既有流程產生結果。"),
                 BuilderChoice("keyword", "關鍵字查詢", "用 key/value 對照表命中固定內容。"),
                 BuilderChoice("semantic", "語意搜尋", "依意思找最相關的支援資料。"),
-                BuilderChoice("hybrid_later", "混合查詢", "保留關鍵字與語意線索的組合查詢設定。"),
             ),
         ),
         BuilderStep(
@@ -180,15 +182,13 @@ def get_builder_steps() -> list[BuilderStep]:
         ),
         BuilderStep(
             "failure_policy",
-            "Q5: 答案不夠有把握時怎麼辦？",
+            "Q5: 當 Agent 沒把握時，你希望它怎麼做？",
             "",
             "補救策略",
             "",
             (
-                BuilderChoice("clarify", "先追問", "檢查不通過時回到規劃步驟補齊缺口。"),
-                BuilderChoice("re_retrieve", "重新查資料", "資料或答案不足時重新規劃與查詢。"),
-                BuilderChoice("safe_answer", "保守回答", "只輸出已知內容，不強行重試。"),
-                BuilderChoice("escalate", "轉人工", "停止自動重試，保留人工確認空間。"),
+                BuilderChoice("retry", "再查一次再回答", "Agent 沒把握時，先重新判斷或重查資料，再試著回答一次。"),
+                BuilderChoice("handoff", "先停下來，交給人確認", "Agent 沒把握時先停止，不硬答，保留人工確認空間。"),
             ),
         ),
         BuilderStep(
@@ -248,7 +248,6 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             "none": {"retrieve_module": "PassThroughRetrieve", "plan_strategy": None},
             "keyword": {"retrieve_module": "KeywordRetrieve", "plan_strategy": _plan_strategy_for_retrieve_policy(config)},
             "semantic": {"retrieve_module": "SemanticRetrieve", "plan_strategy": _plan_strategy_for_retrieve_policy(config)},
-            "hybrid_later": {"retrieve_module": "HybridRetrieve", "plan_strategy": _plan_strategy_for_retrieve_policy(config)},
         }
         if choice in retrieve_overrides:
             return _build_source_for_config(_replace_config(config, **retrieve_overrides[choice]))
@@ -276,7 +275,10 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
 
     if step_key == "failure_policy":
         choice = str(choice_label)
+        reflect_module = _reflect_module_for_failure_policy(config)
         failure_overrides = {
+            "retry": {"reflect_module": reflect_module, "reflect_on_failure": "retry_plan", "plan_strategy": config.plan_strategy or "RouteBySupport"},
+            "handoff": {"reflect_module": reflect_module, "reflect_on_failure": "end", "plan_strategy": config.plan_strategy if reflect_module == "EvidenceCheckReflect" and config.plan_strategy else config.plan_strategy},
             "clarify": {"reflect_module": "ResponseCheckReflect", "reflect_on_failure": "retry_plan", "plan_strategy": config.plan_strategy or "RouteBySupport"},
             "re_retrieve": {"reflect_module": "EvidenceCheckReflect", "reflect_on_failure": "retry_plan", "plan_strategy": config.plan_strategy or "RouteBySupport"},
             "safe_answer": {"reflect_module": "EvidenceCheckReflect", "reflect_on_failure": "end"},
@@ -338,7 +340,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 "plan_strategy": "RouteBySupport",
                 "plan_system_prompt": _advisor_plan_prompt({}),
             },
-            "Recommendation": {"perceive_module": "TextPerceive", "retrieve_module": "HybridRetrieve", "action_module": "GenerativeAction", "plan_strategy": "RouteBySupport"},
+            "Recommendation": {"perceive_module": "TextPerceive", "retrieve_module": "SemanticRetrieve", "action_module": "GenerativeAction", "plan_strategy": "RouteBySupport"},
             "Review": {"perceive_module": "TextPerceive", "retrieve_module": "SemanticRetrieve", "action_module": "GenerativeAction"},
         }
         template_reset = {
@@ -429,16 +431,22 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 retrieve_items=_retrieve_items_from_payload(choice_label) if {"keyword_pairs", "keywords", "content"} & set(choice_label) else config.retrieve_items,
                 retrieve_fallback=_clean_short_text(str(choice_label.get("fallback", config.retrieve_fallback)), "沒有命中任何條目。") if "fallback" in choice_label else config.retrieve_fallback,
                 retrieve_top_k=_clean_int(choice_label.get("top_k"), config.retrieve_top_k, 1, 20) if "top_k" in choice_label else config.retrieve_top_k,
-                retrieve_similarity_weight=_clean_float(choice_label.get("similarity_weight"), config.retrieve_similarity_weight, 0.0, 1.0) if "similarity_weight" in choice_label else config.retrieve_similarity_weight,
-                retrieve_recency_weight=_clean_float(choice_label.get("recency_weight"), config.retrieve_recency_weight, 0.0, 1.0) if "recency_weight" in choice_label else config.retrieve_recency_weight,
-                retrieve_importance_weight=_clean_float(choice_label.get("importance_weight"), config.retrieve_importance_weight, 0.0, 1.0) if "importance_weight" in choice_label else config.retrieve_importance_weight,
+                semantic_support_files=(
+                    tuple(_string_items_from_lines(str(choice_label.get("semantic_support_files", ""))))
+                    if "semantic_support_files" in choice_label
+                    else config.semantic_support_files
+                ),
+                semantic_search_goal=(
+                    _clean_prompt(str(choice_label.get("semantic_search_goal", config.semantic_search_goal or "")))
+                    if "semantic_search_goal" in choice_label
+                    else config.semantic_search_goal
+                ),
             )
             return _build_source_for_config(updated)
         retrieve_module = {
             "None yet": "KeywordRetrieve",
             "Keyword": "KeywordRetrieve",
             "Semantic": "SemanticRetrieve",
-            "Hybrid": "HybridRetrieve",
         }.get(str(choice_label), config.retrieve_module)
         return _build_source_for_config(_replace_config(config, retrieve_module=retrieve_module))
 
@@ -581,9 +589,8 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "retrieve_items": config.retrieve_items,
         "retrieve_fallback": config.retrieve_fallback,
         "retrieve_top_k": config.retrieve_top_k,
-        "retrieve_similarity_weight": config.retrieve_similarity_weight,
-        "retrieve_recency_weight": config.retrieve_recency_weight,
-        "retrieve_importance_weight": config.retrieve_importance_weight,
+        "semantic_support_files": config.semantic_support_files,
+        "semantic_search_goal": config.semantic_search_goal,
         "action_module": config.action_module,
         "action_prompt": config.action_prompt,
         "action_tools": config.action_tools,
@@ -612,7 +619,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
 
 
 def _plan_strategy_for_retrieve_policy(config: BuilderSourceConfig) -> str | None:
-    return "RouteBySupport" if config.profile_hint == "Retrieve Answer" or config.plan_strategy else None
+    return config.plan_strategy or "RouteBySupport"
 
 
 def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
@@ -640,6 +647,8 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     if perceive_module == "StructuredPerceive":
         perceive_module = "TextPerceive"
 
+    retrieve_module = _first_call_name(source, {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}) or "KeywordRetrieve"
+
     return BuilderSourceConfig(
         workflow_name=workflow_name,
         profile_hint=parsed.profile_hint,
@@ -655,15 +664,14 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         perceive_options=tuple(_normalize_option_items(_extract_keyword_literal(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "options", perceive_config.get("options")))),
         perceive_importance=_extract_float_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "importance", _clean_float(perceive_config.get("importance"), 1.0, 0.0, 5.0)),
         perceive_image_instruction=_extract_keyword_value(source, {"TextImagePerceive"}, "image_instruction") or _clean_prompt(str(perceive_config.get("image_instruction", ""))),
-        retrieve_module=_first_call_name(source, {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve", "HybridRetrieve"}) or "KeywordRetrieve",
+        retrieve_module=retrieve_module,
         retrieve_name=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_name") or _clean_short_text(str(retrieve_config.get("name", "支援資料")), "支援資料"),
         retrieve_description=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_description") or _clean_prompt(str(retrieve_config.get("description", ""))),
         retrieve_items=tuple(_extract_keyword_items(source)),
-        retrieve_fallback=_extract_keyword_value(source, {"KeywordRetrieve", "HybridRetrieve"}, "fallback") or _clean_short_text(str(retrieve_config.get("fallback", "沒有命中任何條目。")), "沒有命中任何條目。"),
-        retrieve_top_k=_extract_int_value(source, {"SemanticRetrieve", "HybridRetrieve"}, "top_k", _clean_int(retrieve_config.get("top_k"), 3, 1, 20)),
-        retrieve_similarity_weight=_extract_float_value(source, {"SemanticRetrieve", "HybridRetrieve"}, "similarity_weight", _clean_float(retrieve_config.get("similarity_weight"), 0.5, 0.0, 1.0)),
-        retrieve_recency_weight=_extract_float_value(source, {"SemanticRetrieve", "HybridRetrieve"}, "recency_weight", _clean_float(retrieve_config.get("recency_weight"), 0.3, 0.0, 1.0)),
-        retrieve_importance_weight=_extract_float_value(source, {"SemanticRetrieve", "HybridRetrieve"}, "importance_weight", _clean_float(retrieve_config.get("importance_weight"), 0.2, 0.0, 1.0)),
+        retrieve_fallback=_extract_keyword_value(source, {"KeywordRetrieve"}, "fallback") or _clean_short_text(str(retrieve_config.get("fallback", "沒有命中任何條目。")), "沒有命中任何條目。"),
+        retrieve_top_k=_extract_int_value(source, {"SemanticRetrieve"}, "top_k", _clean_int(retrieve_config.get("top_k"), 3, 1, 20)),
+        semantic_support_files=tuple(_normalize_string_items(retrieve_config.get("semantic_support_files"))),
+        semantic_search_goal=_clean_prompt(str(retrieve_config.get("semantic_search_goal", ""))),
         action_module=action_module,
         action_prompt=action_prompt,
         action_tools=action_tools,
@@ -715,19 +723,15 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
         _add_form_value(values, "perceive", "importance", config.perceive_importance)
     _add_form_value(values, "perceive", "image_instruction", _configured_text(config.perceive_image_instruction, None, include_generated_defaults))
 
-    _add_form_value(values, "plan", "retrieve_name", _configured_text(config.retrieve_name, "支援資料", include_generated_defaults))
-    _add_form_value(values, "plan", "retrieve_description", _configured_text(config.retrieve_description, _DEFAULT_RETRIEVE_DESCRIPTION, include_generated_defaults))
+    _add_form_value(values, "plan", "retrieve_name", _configured_text(_retrieve_name(config), "支援資料", include_generated_defaults))
+    _add_form_value(values, "plan", "retrieve_description", _configured_text(_retrieve_description(config), _DEFAULT_RETRIEVE_DESCRIPTION, include_generated_defaults))
 
     _add_form_value(values, "retrieve", "fallback", _configured_text(config.retrieve_fallback, "沒有命中任何條目。", include_generated_defaults))
     _add_form_value(values, "retrieve", "keyword_pairs", _pairs_text_from_retrieve_items(config.retrieve_items))
     if include_generated_defaults or config.retrieve_top_k != 3:
         _add_form_value(values, "retrieve", "top_k", config.retrieve_top_k)
-    if include_generated_defaults or config.retrieve_similarity_weight != 0.5:
-        _add_form_value(values, "retrieve", "similarity_weight", config.retrieve_similarity_weight)
-    if include_generated_defaults or config.retrieve_recency_weight != 0.3:
-        _add_form_value(values, "retrieve", "recency_weight", config.retrieve_recency_weight)
-    if include_generated_defaults or config.retrieve_importance_weight != 0.2:
-        _add_form_value(values, "retrieve", "importance_weight", config.retrieve_importance_weight)
+    _add_form_value(values, "retrieve", "semantic_support_files", _lines_text_from_items(config.semantic_support_files))
+    _add_form_value(values, "retrieve", "semantic_search_goal", _configured_text(config.semantic_search_goal, None, include_generated_defaults))
 
     _add_form_value(values, "action", "direct_memory_key", _configured_text(config.direct_answer_memory_key, "latest_retrieved_content", include_generated_defaults))
     _add_form_value(values, "action", "direct_fallback", _configured_text(config.direct_answer_fallback, "沒有命中任何條目。", include_generated_defaults))
@@ -777,7 +781,6 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         perceive_choice = "Structured"
     retrieve_choice = {
         "SemanticRetrieve": "Semantic",
-        "HybridRetrieve": "Hybrid",
         "PassThroughRetrieve": "None yet",
     }.get(config.retrieve_module, "Keyword" if config.retrieve_items else "None yet")
     action_choice = {
@@ -801,7 +804,6 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
     else:
         retrieve_policy = {
             "SemanticRetrieve": "semantic",
-            "HybridRetrieve": "hybrid_later",
             "PassThroughRetrieve": "none",
         }.get(config.retrieve_module, "keyword")
 
@@ -809,13 +811,9 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
     if config.action_module == "ToolCallAction":
         output_format = "interactive"
 
-    failure_policy = "safe_answer"
-    if config.reflect_module == "ResponseCheckReflect" and config.reflect_on_failure == "retry_plan":
-        failure_policy = "clarify"
-    elif config.reflect_module == "EvidenceCheckReflect" and config.reflect_on_failure == "retry_plan":
-        failure_policy = "re_retrieve"
-    elif config.reflect_module == "ResponseCheckReflect" and config.reflect_on_failure == "end":
-        failure_policy = "escalate"
+    failure_policy = "handoff"
+    if config.reflect_on_failure == "retry_plan":
+        failure_policy = "retry"
 
     return {
         "template": template_choice,
@@ -830,6 +828,11 @@ def _builder_choices_for_config(config: BuilderSourceConfig) -> dict[str, str]:
         "output_format": output_format,
         "failure_policy": failure_policy,
     }
+
+
+def _reflect_module_for_failure_policy(config: BuilderSourceConfig) -> str:
+    uses_retrieval = config.retrieve_module == "SemanticRetrieve" or bool(config.retrieve_items) or bool(config.plan_strategy)
+    return "EvidenceCheckReflect" if uses_retrieval else "ResponseCheckReflect"
 
 
 def _add_form_value(values: dict[str, dict[str, object]], step_key: str, field_name: str, value: object) -> None:
@@ -1269,7 +1272,7 @@ def _extract_keyword_items(python_source: str) -> list[dict[str, object]]:
         return []
 
     for node in ast.walk(tree):
-        if isinstance(node, ast.Call) and _call_name(node.func) in {"KeywordRetrieve", "HybridRetrieve"}:
+        if isinstance(node, ast.Call) and _call_name(node.func) == "KeywordRetrieve":
             for keyword in node.keywords:
                 if keyword.arg == "items":
                     try:
@@ -1619,6 +1622,9 @@ def _build_workflow_source(config: BuilderSourceConfig) -> str:
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
+    retrieve_config_block = _retrieve_config_block(config)
+    if retrieve_config_block:
+        sections.append(retrieve_config_block)
     sections.append(
         f"""workflow = Workflow(
     workflow_name={workflow_name_literal},
@@ -1654,6 +1660,9 @@ def _build_custom_action_source(config: BuilderSourceConfig) -> str:
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
+    retrieve_config_block = _retrieve_config_block(config)
+    if retrieve_config_block:
+        sections.append(retrieve_config_block)
     sections.append(
         f"""class {custom_action_class}:
     def __call__(self, memory):
@@ -1752,28 +1761,26 @@ def _perceive_expression(config: BuilderSourceConfig) -> str:
 
 def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
     if config.retrieve_module == "KeywordRetrieve":
-        return (
-            f"        items={_format_python_literal(list(config.retrieve_items), 14)},\n"
-            f"        fallback={json.dumps(config.retrieve_fallback, ensure_ascii=False)},"
-        )
+        return f"        items={_format_python_literal(list(config.retrieve_items), 14)},"
     if config.retrieve_module == "PassThroughRetrieve":
         return ""
-    keyword_arguments = ""
-    if config.retrieve_module == "HybridRetrieve":
-        keyword_arguments = (
-            f"        items={_format_python_literal(list(config.retrieve_items), 14)},\n"
-            f"        fallback={json.dumps(config.retrieve_fallback, ensure_ascii=False)},\n"
-        )
-    if keyword_arguments:
-        return keyword_arguments.rstrip("\n")
-    return ""
+    arguments = [
+        '        api_key="<填入 API key>",',
+        '        base_url="<填入 OpenAI-compatible base_url>",',
+        '        embedding_model="<填入 embedding model>",',
+        f"        source_path={json.dumps(_semantic_source_path(config), ensure_ascii=False)},",
+        f"        index_path={json.dumps(_semantic_index_path(config), ensure_ascii=False)},",
+        "        rebuild_if_missing=True,",
+        "        rebuild_if_stale=True,",
+    ]
+    return "\n".join(arguments)
 
 
 def _plan_line(config: BuilderSourceConfig) -> str:
     description = _retrieve_description(config)
     arguments = [
         *_llm_arguments("PLAN"),
-        f"retrieve_name={json.dumps(config.retrieve_name, ensure_ascii=False)}",
+        f"retrieve_name={json.dumps(_retrieve_name(config), ensure_ascii=False)}",
         f"retrieve_description={json.dumps(description, ensure_ascii=False)}",
     ]
     return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
@@ -1799,6 +1806,12 @@ def _llm_arguments(prefix: str) -> list[str]:
 
 
 def _retrieve_description(config: BuilderSourceConfig) -> str:
+    if config.retrieve_module == "SemanticRetrieve":
+        if config.semantic_search_goal:
+            return f"優先從這批支援文件查找：{config.semantic_search_goal}"[:240]
+        if config.retrieve_description:
+            return config.retrieve_description[:240]
+        return _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION
     if config.retrieve_description:
         return config.retrieve_description[:240]
     if config.retrieve_items:
@@ -1806,6 +1819,34 @@ def _retrieve_description(config: BuilderSourceConfig) -> str:
         if content:
             return content[:120]
     return _DEFAULT_RETRIEVE_DESCRIPTION
+
+
+def _retrieve_name(config: BuilderSourceConfig) -> str:
+    if config.retrieve_module == "SemanticRetrieve" and config.retrieve_name == "支援資料":
+        return _DEFAULT_SEMANTIC_RETRIEVE_NAME
+    return config.retrieve_name
+
+
+def _retrieve_config_block(config: BuilderSourceConfig) -> str:
+    if config.retrieve_module != "SemanticRetrieve" and not config.semantic_support_files and not config.semantic_search_goal:
+        return ""
+    retrieve_config: dict[str, object] = {}
+    if config.retrieve_module == "SemanticRetrieve":
+        retrieve_config["source_path"] = _semantic_source_path(config)
+        retrieve_config["index_path"] = _semantic_index_path(config)
+    if config.semantic_support_files:
+        retrieve_config["semantic_support_files"] = list(config.semantic_support_files)
+    if config.semantic_search_goal:
+        retrieve_config["semantic_search_goal"] = config.semantic_search_goal
+    return f"RETRIEVE_CONFIG = {_format_python_literal(retrieve_config, 0)}"
+
+
+def _semantic_source_path(_config: BuilderSourceConfig) -> str:
+    return _DEFAULT_SEMANTIC_SOURCE_PATH
+
+
+def _semantic_index_path(_config: BuilderSourceConfig) -> str:
+    return _DEFAULT_SEMANTIC_INDEX_PATH
 
 
 def _task_system_prompt(config: BuilderSourceConfig) -> str | None:
@@ -1828,7 +1869,6 @@ def _format_module_imports(module_names: list[str]) -> str:
             "PassThroughRetrieve",
             "KeywordRetrieve",
             "SemanticRetrieve",
-            "HybridRetrieve",
             "NextStepPlan",
             "PassThroughPerceive",
             "TextPerceive",

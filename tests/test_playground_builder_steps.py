@@ -1,5 +1,15 @@
+import json
+from io import BytesIO
+import re
+
 from playground import create_app
 from playground.services.source_builder import get_builder_steps
+
+
+def _builder_form_state(html: str) -> dict[str, object]:
+    match = re.search(r'<script id="builder-form-state" type="application/json" data-builder-form-state>(.*?)</script>', html, re.S)
+    assert match is not None
+    return json.loads(match.group(1))
 
 
 def test_builder_uses_memory_step_then_configured_perceive_modes():
@@ -18,7 +28,7 @@ def test_builder_uses_memory_step_then_configured_perceive_modes():
         "Q2: 這個 Agent 要如何理解輸入？",
         "Q3: 回答前需要查資料嗎？",
         "Q4: 最後回覆要怎麼呈現給使用者？",
-        "Q5: 答案不夠有把握時怎麼辦？",
+        "Q5: 當 Agent 沒把握時，你希望它怎麼做？",
         "Q6: 現在可以試跑了嗎？",
     ]
     assert [choice.label for choice in steps[1].choices] == ["pass_through", "text", "text_image"]
@@ -143,3 +153,112 @@ def test_builder_step2_choices_update_perceive_source():
     assert "PassThroughPerceive()" in pass_source
     assert "TextPerceive(" not in pass_source
     assert "TextImagePerceive(" not in pass_source
+
+
+def test_builder_step3_only_exposes_keyword_and_semantic_retrieve_paths():
+    app = create_app()
+
+    with app.test_client() as client:
+        response = client.get("/playground/builder")
+
+    assert response.status_code == 200
+    page = response.data.decode("utf-8")
+    assert 'data-visible-choices="semantic"' in page
+    assert 'data-visible-choices="keyword"' in page
+    assert "沒有資料時的處理" not in page
+    assert 'name="fallback"' not in page
+    assert "hybrid_later" not in page
+    assert "混合查詢" not in page
+    assert "要上傳哪些支援文件？" in page
+    assert 'name="semantic_support_files"' in page
+    assert 'type="file"' in page
+    assert 'data-semantic-upload-input' in page
+    assert 'data-semantic-upload-list' in page
+    assert 'data-semantic-upload-progress' in page
+    assert "這批資料要讓 Agent 查什麼？" in page
+    assert 'name="semantic_search_goal"' in page
+    assert "要對照哪些關鍵字內容？" in page
+    assert 'aria-label="新增欄位"' in page
+
+
+def test_builder_step5_exposes_two_uncertainty_handling_choices():
+    app = create_app()
+
+    with app.test_client() as client:
+        response = client.get("/playground/builder")
+
+    assert response.status_code == 200
+    page = response.data.decode("utf-8")
+    assert "當 Agent 沒把握時，你希望它怎麼做？" in page
+    assert "再查一次再回答" in page
+    assert "先停下來，交給人確認" in page
+    assert "先追問" not in page
+    assert "重新查資料" not in page
+    assert "保守回答" not in page
+    assert "轉人工" not in page
+
+
+def test_builder_step3_semantic_questions_roundtrip_to_source_and_form_state():
+    app = create_app()
+
+    with app.test_client() as client:
+        client.get("/playground/builder")
+        client.post("/playground/builder/state", json={"step": "retrieve_policy", "choice": "semantic"})
+        client.post(
+            "/playground/builder/state",
+            json={
+                "step": "retrieve",
+                "value": {
+                    "semantic_support_files": "產品手冊.pdf\n退款政策.docx",
+                    "semantic_search_goal": "退款條件與保固限制",
+                },
+            },
+        )
+        builder_page = client.get("/playground/builder").data.decode("utf-8")
+        source_page = client.get("/playground/source/preview").data.decode("utf-8")
+
+    state = _builder_form_state(builder_page)
+    assert state["choices"]["retrieve_policy"] == "semantic"
+    assert state["values"]["retrieve"]["semantic_support_files"] == "產品手冊.pdf\n退款政策.docx"
+    assert state["values"]["retrieve"]["semantic_search_goal"] == "退款條件與保固限制"
+    assert 'RETRIEVE_CONFIG = {' in source_page
+    assert '"semantic_support_files": [' in source_page
+    assert '"產品手冊.pdf"' in source_page
+    assert '"退款政策.docx"' in source_page
+    assert '"semantic_search_goal": "退款條件與保固限制"' in source_page
+    assert 'SemanticRetrieve(' in source_page
+    assert 'embedding_model="<填入 embedding model>"' in source_page
+    assert 'source_path="./knowledge"' in source_page
+    assert 'index_path="./.agentic/semantic_index"' in source_page
+    assert 'rebuild_if_missing=True' in source_page
+    assert 'rebuild_if_stale=True' in source_page
+
+
+def test_builder_step3_semantic_upload_route_updates_state_and_source():
+    app = create_app()
+
+    with app.test_client() as client:
+      client.get("/playground/builder")
+      client.post("/playground/builder/state", json={"step": "retrieve_policy", "choice": "semantic"})
+      response = client.post(
+          "/playground/builder/uploads",
+          data={
+              "files": [
+                  (BytesIO(b"manual"), "產品手冊.pdf"),
+                  (BytesIO(b"policy"), "退款政策.docx"),
+              ]
+          },
+          content_type="multipart/form-data",
+      )
+      builder_page = client.get("/playground/builder").data.decode("utf-8")
+      source_page = client.get("/playground/source/preview").data.decode("utf-8")
+
+    assert response.status_code == 200
+    payload = response.get_json()
+    assert payload["updated"] is True
+    assert payload["uploaded_files"] == ["產品手冊.pdf", "退款政策.docx"]
+    assert payload["semantic_support_files"] == ["產品手冊.pdf", "退款政策.docx"]
+    state = _builder_form_state(builder_page)
+    assert state["values"]["retrieve"]["semantic_support_files"] == "產品手冊.pdf\n退款政策.docx"
+    assert '"產品手冊.pdf"' in source_page
+    assert '"退款政策.docx"' in source_page

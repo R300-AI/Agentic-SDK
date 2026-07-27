@@ -191,33 +191,44 @@
         </details>
         {% endif %}
         {% if step.key == "retrieve_policy" %}
-        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword|semantic|hybrid_later" open>
-          <summary>支援資料範圍</summary>
-          <form class="module-param-form" data-param-form data-step-key="plan">
-            <label for="v3-plan-retrieve-name">資料名稱</label>
-            <input id="v3-plan-retrieve-name" name="retrieve_name" type="text" autocomplete="off">
-            <label for="v3-plan-retrieve-description">資料用途說明</label>
-            <textarea id="v3-plan-retrieve-description" name="retrieve_description" rows="3"></textarea>
-          </form>
-        </details>
-        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword|hybrid_later" open>
-          <summary>沒有資料時的處理</summary>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="semantic" open>
+          <summary>語意搜尋設定</summary>
           <form class="module-param-form" data-param-form data-step-key="retrieve">
-            <label for="v3-retrieve-fallback">沒有命中資料時的內容</label>
-            <input id="v3-retrieve-fallback" name="fallback" type="text" autocomplete="off">
+            <label for="v3-retrieve-semantic-support-files">要上傳哪些支援文件？</label>
+            <div class="semantic-upload-panel" data-semantic-upload-panel>
+              <div class="semantic-upload-actions">
+                <label class="button button-ghost" for="v3-retrieve-semantic-file-input">選擇支援文件</label>
+                <input class="visually-hidden" id="v3-retrieve-semantic-file-input" type="file" multiple data-semantic-upload-input>
+                <p class="inline-status" data-semantic-upload-status>尚未上傳支援文件。</p>
+              </div>
+              <progress class="semantic-upload-progress" max="100" value="0" hidden data-semantic-upload-progress></progress>
+              <textarea id="v3-retrieve-semantic-support-files" name="semantic_support_files" hidden data-semantic-upload-output></textarea>
+              <ul class="semantic-upload-list" data-semantic-upload-list aria-label="已上傳支援文件"></ul>
+            </div>
+            <label for="v3-retrieve-semantic-search-goal">這批資料要讓 Agent 查什麼？</label>
+            <textarea id="v3-retrieve-semantic-search-goal" name="semantic_search_goal" rows="3" placeholder="例如：退款條件、保固限制、產品規格差異"></textarea>
           </form>
         </details>
-        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword|hybrid_later" open>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword" open>
           <summary>關鍵字對照</summary>
           <form class="module-param-form" data-param-form data-step-key="retrieve">
-            <label for="v3-retrieve-keyword-pairs">key 對 value</label>
+            <label for="v3-retrieve-keyword-pairs">要對照哪些關鍵字內容？</label>
             {{ pair_editor(
               "v3-retrieve-keyword-pairs",
               "keyword_pairs",
-              "關鍵字 key",
-              "命中內容 value",
-              "新增關鍵字內容",
-              none
+              "關鍵字",
+              "命中內容",
+              "新增欄位",
+              none,
+              "例如：保固",
+              "例如：提供保固期限與申請方式",
+              "input-signals-editor",
+              "",
+              true,
+              "",
+              none,
+              "input",
+              "icon"
             ) }}
           </form>
         </details>
@@ -430,14 +441,7 @@
         </details>
         {% endif %}
         {% if step.key == "retrieve" %}
-        <details class="advanced-disclosure step-advanced" open>
-          <summary>支援資料進階配置</summary>
-          <form class="module-param-form" data-param-form data-step-key="retrieve">
-            <label for="retrieve-fallback">沒有命中資料時的內容</label>
-            <input id="retrieve-fallback" name="fallback" type="text" autocomplete="off">
-          </form>
-        </details>
-        <details class="advanced-disclosure step-advanced" data-visible-choices="Keyword|Hybrid" open>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="keyword" open>
           <summary>關鍵字對照進階配置</summary>
           <form class="module-param-form" data-param-form data-step-key="retrieve">
             <label for="retrieve-keyword-pairs">key 對 value</label>

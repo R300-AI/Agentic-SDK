@@ -18,17 +18,14 @@ const dependencyRules = {
     none: {},
     keyword: {},
     semantic: {},
-    hybrid_later: {},
   },
   output_format: {
     free_text: {},
     interactive: {},
   },
   failure_policy: {
-    clarify: {},
-    re_retrieve: { retrieve_policy: ["keyword", "semantic", "hybrid_later"] },
-    safe_answer: {},
-    escalate: {},
+    retry: {},
+    handoff: {},
   },
 };
 
@@ -374,6 +371,11 @@ function normalizePairType(value) {
 }
 
 function setFieldValue(field, value) {
+  if (field.matches("[data-semantic-upload-output]")) {
+    field.value = String(value ?? "");
+    syncSemanticUploadPanel(field.closest("[data-semantic-upload-panel]"));
+    return;
+  }
   if (field.matches("[data-api-output]")) {
     setApiEditorValue(field, value);
     return;
@@ -469,6 +471,93 @@ function syncListEditor(editor) {
 
 function syncListEditors(root) {
   root.querySelectorAll("[data-list-editor]").forEach(syncListEditor);
+}
+
+function syncSemanticUploadPanel(panel) {
+  const output = panel?.querySelector("[data-semantic-upload-output]");
+  const list = panel?.querySelector("[data-semantic-upload-list]");
+  const status = panel?.querySelector("[data-semantic-upload-status]");
+  if (!output || !list || !status) {
+    return;
+  }
+  const items = parseListText(output.value);
+  list.replaceChildren(
+    ...items.map((item) => {
+      const row = document.createElement("li");
+      const name = document.createElement("span");
+      const state = document.createElement("strong");
+      name.textContent = item;
+      state.textContent = "已上傳";
+      row.append(name, state);
+      return row;
+    }),
+  );
+  status.classList.remove("error");
+  status.textContent = items.length
+    ? `已上傳 ${items.length} 份支援文件。`
+    : "尚未上傳支援文件。";
+}
+
+function uploadSemanticFiles(panel) {
+  const input = panel?.querySelector("[data-semantic-upload-input]");
+  const output = panel?.querySelector("[data-semantic-upload-output]");
+  const status = panel?.querySelector("[data-semantic-upload-status]");
+  const progress = panel?.querySelector("[data-semantic-upload-progress]");
+  const files = Array.from(input?.files || []);
+  if (!input || !output || !status || !progress || !files.length) {
+    return Promise.resolve();
+  }
+
+  status.classList.remove("error");
+  status.textContent = `準備上傳 ${files.length} 份支援文件...`;
+  progress.hidden = false;
+  progress.value = 0;
+
+  const formData = new FormData();
+  files.forEach((file) => formData.append("files", file));
+
+  return new Promise((resolve) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/playground/builder/uploads");
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      progress.value = Math.round((event.loaded / event.total) * 100);
+    });
+    xhr.addEventListener("load", () => {
+      progress.value = 100;
+      try {
+        const response = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 400 || response.updated === false) {
+          throw new Error(response.error || "上傳失敗。");
+        }
+        output.value = Array.isArray(response.semantic_support_files)
+          ? response.semantic_support_files.join("\n")
+          : "";
+        syncSemanticUploadPanel(panel);
+        updateSummary(response.workflow_summary);
+      } catch (error) {
+        status.classList.add("error");
+        status.textContent = error.message || "上傳失敗。";
+      }
+      input.value = "";
+      window.setTimeout(() => {
+        progress.hidden = true;
+        progress.value = 0;
+      }, 400);
+      resolve();
+    });
+    xhr.addEventListener("error", () => {
+      status.classList.add("error");
+      status.textContent = "上傳失敗。";
+      progress.hidden = true;
+      progress.value = 0;
+      input.value = "";
+      resolve();
+    });
+    xhr.send(formData);
+  });
 }
 
 function normalizeApiMethod(value) {
@@ -761,6 +850,11 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
     }
   });
   form.addEventListener("change", async (event) => {
+    const uploadInput = event.target.closest?.("[data-semantic-upload-input]");
+    if (uploadInput) {
+      await uploadSemanticFiles(uploadInput.closest("[data-semantic-upload-panel]"));
+      return;
+    }
     const field = event.target.closest?.("[data-pair-key], [data-pair-value], [data-pair-type]");
     if (field) {
       syncPairEditor(field.closest("[data-pair-editor]"));
@@ -830,6 +924,7 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
   });
   syncPairEditors(form);
   syncListEditors(form);
+  form.querySelectorAll("[data-semantic-upload-panel]").forEach(syncSemanticUploadPanel);
   form.querySelectorAll("[data-api-editor]").forEach(refreshApiBlocks);
   syncApiEditors(form);
 });

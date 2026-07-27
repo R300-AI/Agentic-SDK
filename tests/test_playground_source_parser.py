@@ -53,3 +53,36 @@ workflow = Workflow()
     assert result["source_execution"]["supported_subset"] is False
     assert result["source_execution"]["workflow_name"] == "playground_preview"
     assert result["result"]["evidence"] == ["來源：目前輸入內容。", "外部資料：尚未加入。"]
+
+
+def test_retrieve_builder_ignores_legacy_semantic_weight_fields():
+    source = build_python_source_from_builder_choice("retrieve", "Semantic", None)
+    source = build_python_source_from_builder_choice(
+        "retrieve",
+        {
+            "top_k": "7",
+            "similarity_weight": "0.6",
+            "recency_weight": "0.2",
+            "importance_weight": "0.2",
+        },
+        source,
+    )
+
+    assert "SemanticRetrieve(" in source
+    assert "top_k=" not in source
+    assert "similarity_weight" not in source
+    assert "recency_weight" not in source
+    assert "importance_weight" not in source
+
+
+def test_keyword_retrieve_builder_emits_only_keyword_items_without_retrieve_fallback():
+    source = build_python_source_from_builder_choice(
+        "retrieve",
+        {"keyword_pairs": "保固 = 提供保固期限與申請方式", "fallback": "沒有支援資料。"},
+        None,
+    )
+    retrieve_block = source.split("retrieve=KeywordRetrieve(", 1)[1].split("\n    ),", 1)[0]
+
+    assert "KeywordRetrieve(" in source
+    assert '"保固"' in source
+    assert "fallback=" not in retrieve_block

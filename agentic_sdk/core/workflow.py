@@ -8,7 +8,7 @@ import uuid
 from agentic_sdk.core.entities import ContextEntry, ContextEntryType
 from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
-from agentic_sdk.memory.in_context import ConversationStore, ConversationTurn, InContextMemory, MemoryStore
+from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
 from agentic_sdk.memory.protocol import PersistentMemory
 
 
@@ -19,14 +19,14 @@ class Workflow:
     retrieve: Module | None = None
     action: Module | None = None
     reflect: Module | None = None
-    memory: MemoryStore | None = None
+    memory_type: type[MemoryStore] = InContextMemory
     memory_store: PersistentMemory | None = None
-    conversation_store: ConversationStore | None = None
     gates: Gates | None = None
     workflow_name: str = "default"
     entry_module: str = "perceive"
 
     modules: dict[str, Module] = field(init=False)
+    _session_memories: dict[str, MemoryStore] = field(init=False, repr=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         from agentic_sdk.modules.action import DirectAnswerAction
@@ -51,24 +51,19 @@ class Workflow:
         workflow_id: str | None = None,
         session_id: str | None = None,
         memory: MemoryStore | None = None,
-        conversation: MemoryStore | None = None,
-        conversation_turns: list[ConversationTurn] | None = None,
         attachments: list[Any] | None = None,
         memory_store: PersistentMemory | None = None,
-        conversation_store: ConversationStore | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> WorkflowResult:
         resolved_workflow_id = workflow_id or uuid.uuid4().hex
         resolved_session_id = session_id or resolved_workflow_id
-        resolved_conversation_store = conversation_store or self.conversation_store
         state_memory = _resolve_memory(
             workflow_name=self.workflow_name,
             workflow_id=resolved_workflow_id,
             session_id=resolved_session_id,
-            memory=memory or self.memory,
-            conversation=conversation,
-            conversation_turns=conversation_turns,
-            conversation_store=resolved_conversation_store,
+            memory=memory,
+            memory_type=self.memory_type,
+            session_memories=self._session_memories,
         )
         if user_message is not None:
             state_memory.append_message("user", user_message, attachments=list(attachments or []))
@@ -137,8 +132,8 @@ class Workflow:
             latest_assistant = state.memory.latest_assistant_turn()
             if latest_assistant is None or latest_assistant.content != final_message:
                 state.memory.append_message("assistant", final_message, metadata={"source": "workflow.run"})
-        if resolved_conversation_store is not None and state.memory is not None:
-            resolved_conversation_store.save(state.memory)
+        if state.memory is not None:
+            self._session_memories[resolved_session_id] = state.memory.copy_for_run()
 
         return WorkflowResult(
             workflow_id=state.workflow_id,
@@ -160,26 +155,30 @@ def _resolve_memory(
     workflow_id: str,
     session_id: str,
     memory: MemoryStore | None,
-    conversation: MemoryStore | None,
-    conversation_turns: list[ConversationTurn] | None,
-    conversation_store: ConversationStore | None,
+    memory_type: type[MemoryStore],
+    session_memories: dict[str, MemoryStore],
 ) -> MemoryStore:
     if memory is not None:
         resolved = memory.copy_for_run()
-    elif conversation is not None:
-        resolved = conversation.copy_for_run()
-    elif conversation_store is not None:
-        loaded = conversation_store.get(session_id, workflow_name=workflow_name)
-        resolved = loaded.copy_for_run() if loaded is not None else InContextMemory()
+    elif session_id in session_memories:
+        resolved = session_memories[session_id].copy_for_run()
     else:
-        resolved = InContextMemory()
+        resolved = _new_memory(memory_type, workflow_name=workflow_name, workflow_id=workflow_id, session_id=session_id)
     resolved.workflow_name = workflow_name
     resolved.workflow_id = workflow_id
     resolved.session_id = session_id
-    if conversation_turns:
-        for turn in conversation_turns:
-            resolved.append_turn(turn)
     return resolved
+
+
+def _new_memory(memory_type: type[MemoryStore], *, workflow_name: str, workflow_id: str, session_id: str) -> MemoryStore:
+    try:
+        return memory_type(workflow_name=workflow_name, workflow_id=workflow_id, session_id=session_id)
+    except TypeError:
+        resolved = memory_type()
+        resolved.workflow_name = workflow_name
+        resolved.workflow_id = workflow_id
+        resolved.session_id = session_id
+        return resolved
 
 
 def _normalize_output(current: str, raw_output: Any, state: WorkflowState) -> ModuleOutput:

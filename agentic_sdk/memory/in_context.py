@@ -133,25 +133,6 @@ class InContextMemory:
         )
 
 
-@runtime_checkable
-class ConversationStore(Protocol):
-    def get(self, session_id: str, *, workflow_name: str = "default") -> MemoryStore | None: ...
-
-    def save(self, conversation: MemoryStore) -> None: ...
-
-
-class InMemoryConversationStore:
-    def __init__(self) -> None:
-        self._conversations: dict[tuple[str, str], MemoryStore] = {}
-
-    def get(self, session_id: str, *, workflow_name: str = "default") -> MemoryStore | None:
-        conversation = self._conversations.get((workflow_name, session_id))
-        return conversation.copy_for_run() if conversation is not None else None
-
-    def save(self, conversation: MemoryStore) -> None:
-        self._conversations[(conversation.workflow_name, conversation.session_id)] = conversation.copy_for_run()
-
-
 def build_module_messages(
     conversation: MemoryStore | None,
     *,

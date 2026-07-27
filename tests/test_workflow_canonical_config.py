@@ -6,11 +6,11 @@ from unittest.mock import patch
 from agentic_sdk import (
     EvidenceCheckReflect,
     GenerativeAction,
-    HybridRetrieve,
     ModuleSpec,
     NextStepPlan,
     PassThroughPerceive,
     ResponseCheckReflect,
+    SemanticRetrieve,
     TextPerceive,
     WorkflowConfig,
     build_workflow,
@@ -34,7 +34,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
             modules={
                 "perceive": ModuleSpec(kind="text"),
                 "plan": ModuleSpec(kind="next_step"),
-                "retrieve": ModuleSpec(kind="hybrid"),
+                "retrieve": ModuleSpec(kind="semantic"),
                 "action": ModuleSpec(kind="generative"),
                 "reflect": ModuleSpec(kind="response_check"),
             }
@@ -61,7 +61,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
 
         self.assertIsInstance(workflow.modules["perceive"], TextPerceive)
         self.assertIsInstance(workflow.modules["plan"], NextStepPlan)
-        self.assertIsInstance(workflow.modules["retrieve"], HybridRetrieve)
+        self.assertIsInstance(workflow.modules["retrieve"], SemanticRetrieve)
         self.assertIsInstance(workflow.modules["action"], GenerativeAction)
         self.assertIsInstance(workflow.modules["reflect"], ResponseCheckReflect)
 
@@ -75,7 +75,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
         self.assertTrue(issubclass(PassThroughPerceive, object))
         self.assertTrue(issubclass(TextPerceive, object))
         self.assertTrue(issubclass(NextStepPlan, object))
-        self.assertTrue(issubclass(HybridRetrieve, object))
+        self.assertTrue(issubclass(SemanticRetrieve, object))
         self.assertTrue(issubclass(GenerativeAction, object))
         self.assertTrue(issubclass(ResponseCheckReflect, object))
         self.assertTrue(issubclass(EvidenceCheckReflect, object))

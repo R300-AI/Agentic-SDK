@@ -14,7 +14,7 @@
 | --- | --- | --- | --- |
 | [Perceive](../modules/perceive-modules.md) | TextImagePerceive | TextPerceive | TextPerceive |
 | [Plan](../modules/plan-modules.md) | NextStepPlan | NextStepPlan | NextStepPlan |
-| [Retrieve](../modules/retrieve-modules.md) | HybridRetrieve | SemanticRetrieve | HybridRetrieve |
+| [Retrieve](../modules/retrieve-modules.md) | SemanticRetrieve | SemanticRetrieve | SemanticRetrieve |
 | [Action](../modules/action-modules.md) | GenerativeAction | GenerativeAction | GenerativeAction |
 | [Reflect](../modules/reflect-modules.md) | EvidenceCheckReflect | ResponseCheckReflect | EvidenceCheckReflect |
 

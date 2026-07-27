@@ -61,7 +61,6 @@ def build_module(spec: ModuleSpec) -> Module:
         "direct_answer": modules.DirectAnswerAction,
         "evidence_check": modules.EvidenceCheckReflect,
         "generative": modules.GenerativeAction,
-        "hybrid": modules.HybridRetrieve,
         "keyword": modules.KeywordRetrieve,
         "next_step": modules.NextStepPlan,
         "pass_through": modules.PassThroughPerceive,

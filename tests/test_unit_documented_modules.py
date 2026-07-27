@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import importlib.util
+import tempfile
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
 from unittest.mock import patch
 
 from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, WorkflowState
@@ -11,7 +13,6 @@ from agentic_sdk.modules import (
     DirectAnswerAction,
     EvidenceCheckReflect,
     GenerativeAction,
-    HybridRetrieve,
     KeywordRetrieve,
     NextStepPlan,
     PassThroughPerceive,
@@ -64,7 +65,107 @@ class KnowledgeBase:
         return hits[:top_k]
 
 
+class StaticEmbedder:
+    def embed(self, text: str) -> list[float]:
+        return [float(len(text) or 1), 1.0]
+
+
 class DocumentedModuleUnitTests(unittest.TestCase):
+    def test_faiss_knowledge_base_chunks_long_documents(self) -> None:
+        from agentic_sdk.modules.retrieve.semantic import FaissKnowledgeBase
+
+        long_text = "\n\n".join(f"段落{i}：" + ("內容" * 220) for i in range(4))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_dir = Path(temp_dir) / "knowledge"
+            source_dir.mkdir()
+            document_path = source_dir / "guide.md"
+            document_path.write_text(long_text, encoding="utf-8")
+            knowledge_base = FaissKnowledgeBase(
+                index_path=str(Path(temp_dir) / "artifacts"),
+                source_path=str(source_dir),
+                embedder=StaticEmbedder(),
+            )
+
+            documents = knowledge_base._load_documents()
+
+        self.assertGreater(len(documents), 1)
+        self.assertEqual({str(document_path)}, {entry["path"] for entry in documents})
+        self.assertEqual(list(range(len(documents))), [entry["chunk_index"] for entry in documents])
+        self.assertTrue(all(entry["chunk_count"] == len(documents) for entry in documents))
+        self.assertTrue(all(len(entry["content"]) <= FaissKnowledgeBase._DEFAULT_CHUNK_SIZE for entry in documents))
+
+    def test_semantic_retrieve_facade_forwards_chunk_config(self) -> None:
+        state = WorkflowState(user_message="TSiP 是什麼？")
+        kb = KnowledgeBase(entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是 AI 晶片藍圖。")])
+
+        with patch("agentic_sdk.modules.retrieve.semantic.OpenAIEmbedder") as embedder_cls, patch(
+            "agentic_sdk.modules.retrieve.semantic.FaissKnowledgeBase"
+        ) as kb_cls:
+            embedder = object()
+            embedder_cls.return_value = embedder
+            kb_cls.return_value = kb
+
+            SemanticRetrieve(
+                provider="openai",
+                api_key=TEST_API_KEY,
+                base_url=TEST_BASE_URL,
+                embedding_model="text-embedding-3-small",
+                index_path="./artifacts/kb",
+                source_path="./knowledge",
+                chunk_size=800,
+                chunk_overlap=120,
+            )(state)
+
+        _, kwargs = kb_cls.call_args
+        self.assertEqual(800, kwargs["chunk_size"])
+        self.assertEqual(120, kwargs["chunk_overlap"])
+
+    def test_semantic_retrieve_facade_builds_default_components(self) -> None:
+        state = WorkflowState(user_message="TSiP 是什麼？")
+        kb = KnowledgeBase(entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是 AI 晶片藍圖。")])
+
+        with patch("agentic_sdk.modules.retrieve.semantic.OpenAIEmbedder") as embedder_cls, patch(
+            "agentic_sdk.modules.retrieve.semantic.FaissKnowledgeBase"
+        ) as kb_cls:
+            embedder = object()
+            embedder_cls.return_value = embedder
+            kb_cls.return_value = kb
+
+            output = SemanticRetrieve(
+                provider="openai",
+                api_key=TEST_API_KEY,
+                base_url=TEST_BASE_URL,
+                embedding_model="text-embedding-3-small",
+                index_path="./artifacts/kb",
+                source_path="./knowledge",
+            )(state)
+
+        embedder_cls.assert_called_once()
+        kb_cls.assert_called_once()
+        self.assertIn("TSiP 是 AI 晶片藍圖", output["payload"]["retrieved_snippet"])
+
+    def test_semantic_retrieve_override_components_take_precedence(self) -> None:
+        state = WorkflowState(user_message="TSiP 是什麼？")
+        kb = KnowledgeBase(entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是 AI 晶片藍圖。")])
+
+        with patch("agentic_sdk.modules.retrieve.semantic.OpenAIEmbedder") as embedder_cls, patch(
+            "agentic_sdk.modules.retrieve.semantic.FaissKnowledgeBase"
+        ) as kb_cls:
+            output = SemanticRetrieve(
+                provider="openai",
+                api_key=TEST_API_KEY,
+                base_url=TEST_BASE_URL,
+                embedding_model="text-embedding-3-small",
+                index_path="./artifacts/kb",
+                source_path="./knowledge",
+                embedder=object(),
+                knowledge_base=kb,
+            )(state)
+
+        embedder_cls.assert_not_called()
+        kb_cls.assert_not_called()
+        self.assertIn("TSiP 是 AI 晶片藍圖", output["payload"]["retrieved_snippet"])
+
     def test_pass_through_perceive_emits_query_payload(self) -> None:
         state = WorkflowState(user_message="  請介紹 TSiP  ")
 
@@ -183,13 +284,24 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("action", output["next_module"])
         self.assertIn("TSiP 是 AI 晶片藍圖", output["payload"]["retrieved_snippet"])
 
-    def test_hybrid_retrieve_uses_vision_query_when_attachments_exist(self) -> None:
+    def test_semantic_retrieve_formats_knowledge_hits_readably(self) -> None:
+        state = WorkflowState(user_message="TSiP 是什麼？")
+        kb = KnowledgeBase(entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是 AI 晶片藍圖。")])
+
+        output = SemanticRetrieve(knowledge_base=kb)(state)
+
+        snippet = output["payload"]["retrieved_snippet"]
+        self.assertIn("Knowledge hits:", snippet)
+        self.assertIn("1. TSiP", snippet)
+        self.assertIn("content: TSiP 是 AI 晶片藍圖。", snippet)
+
+    def test_semantic_retrieve_uses_vision_query_when_attachments_exist(self) -> None:
         state = WorkflowState(user_message="請看圖推薦")
         state.attachments = [
             Attachment(kind="image", content="data:image/png;base64,AAAA", media_type="image/png", name="scan.png")
         ]
         kb = KnowledgeBase(entries=[KnowledgeEntry(id="1", title="支撐鞋", content="支撐型慢跑鞋適合足弓支撐需求。")])
-        module = HybridRetrieve(
+        module = SemanticRetrieve(
             knowledge_base=kb,
             vision_query=StaticVisionQueryBuilder("支撐鞋 足弓"),
         )

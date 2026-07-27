@@ -26,7 +26,7 @@
 
 - [Workflow Overview](workflow-overview.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
 - [Module Family](modules/index.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
-- [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 如何分工 `MemoryStore`、`InContextMemory`、`PersistentMemory`、`WorkflowState` 與 `conversation_store`。
+- [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 如何分工 `memory_type`、`MemoryStore`、`InContextMemory`、`PersistentMemory` 與 `WorkflowState`。
 - [Use Case](use-cases/index.md)：查看 LaNew 售鞋顧問、BCI 射箭教練與 ICOPE 六力評估助手三個實施例，理解場景拆法與模組組合。
 
 ## 模組總表
@@ -74,12 +74,6 @@
       <td>yes</td>
       <td>OpenAI</td>
       <td>用語意去找真正相關的內容，不只看字面相同，較適合需要提高召回率與理解能力的情境。</td>
-    </tr>
-    <tr>
-      <td><a href="modules/retrieve-modules.md#hybridretrieve">HybridRetrieve</a></td>
-      <td>yes</td>
-      <td>OpenAI + 規則</td>
-      <td>把 keyword 與 semantic retrieval 合併，必要時也能加上 vision query 重寫。</td>
     </tr>
     <tr>
       <td rowspan="3">Action</td>

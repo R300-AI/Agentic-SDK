@@ -141,11 +141,9 @@ def run(
     *,
     workflow_id: str | None = None,
     session_id: str | None = None,
-    conversation: InContextMemory | None = None,
-    conversation_turns: list[ConversationTurn] | None = None,
+    memory: MemoryStore | None = None,
     attachments: list[Any] | None = None,
     memory_store: PersistentMemory | None = None,
-    conversation_store: ConversationStore | None = None,
     event_callback: Callable[[dict[str, Any]], None] | None = None,
 ) -> WorkflowResult:
     ...
@@ -159,33 +157,33 @@ def run(
 
 - `session_id`
   - 對話 session 主鍵
-  - 用來讀寫完整對話歷史
+    - 用來承接同一個 workflow instance 內的完整對話歷史
 
-- `conversation`
-  - 呼叫端直接提供完整對話工作記憶
-
-- `conversation_turns`
-  - 給較簡單呼叫端的替代入口
+- `memory`
+    - 呼叫端直接提供本輪要使用的 `MemoryStore`
+    - 若未提供，則由 `Workflow(memory_type=...)` 建立或續用對應 session 的 memory
 
 - `memory_store`
-    - 目前程式碼中指向持久化記憶的相容參數名；概念上對應 `PersistentMemory`
+    - 指向持久化記憶介面；概念上對應 `PersistentMemory`
+    - 提供搜尋、回查與跨執行期記憶能力
 
-- `conversation_store`
-  - 對話 transcript 的 durable backend
+- `memory_type`
+    - 定義在 `Workflow(...)` constructor
+    - 決定 workflow 預設使用哪一種 `MemoryStore` 來承接同一個 `session_id` 的對話
 
 ### 2.4 執行規則
 
 新的 `Workflow.run` 應遵守：
 
-1. 若提供 `conversation`，直接使用。
-2. 若提供 `session_id` 但未提供 `conversation`，優先從 `conversation_store` 取回 transcript。
+1. 若提供 `memory`，直接使用該 `MemoryStore` 作為本輪基底。
+2. 若未提供 `memory`，則由 `Workflow(memory_type=...)` 依 `session_id` 建立或續用同一份 memory。
 3. 若同時提供 `user_message`，必須先 append 一筆新的 user turn。
 4. workflow 執行結束後，若有 assistant 回覆，必須 append assistant turn。
 5. 各模組統一從 `state.memory` 取對話歷史，不再只依賴 `state.user_message`。
 
 ### 2.5 相容策略
 
-為避免一次破壞所有現有呼叫端，短期可保留：
+新的 public API 應直接收斂為：
 
 ```python
 workflow.run("TSiP 是什麼？")

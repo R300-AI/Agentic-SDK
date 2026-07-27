@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import tempfile
+import uuid
+from pathlib import Path
+
 from flask import Blueprint, jsonify, render_template, request, session
 
 from playground.services.mode_context import get_mode_context
@@ -72,6 +76,54 @@ def update_builder_state():
     )
 
 
+@builder_bp.post("/uploads")
+def upload_builder_files():
+    uploaded_files = [file for file in request.files.getlist("files") if getattr(file, "filename", "")]
+    if not uploaded_files:
+        return jsonify({"updated": False, "error": "沒有可上傳的檔案。"}), 400
+
+    upload_dir = _builder_upload_dir()
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    stored_names: list[str] = _existing_semantic_support_files()
+    new_names: list[str] = []
+    for upload in uploaded_files:
+        filename = Path(str(upload.filename or "")).name.strip()
+        if not filename:
+            continue
+        upload.save(upload_dir / filename)
+        if filename not in stored_names:
+            stored_names.append(filename)
+        new_names.append(filename)
+
+    python_source = build_python_source_from_builder_choice(
+        "retrieve",
+        {"semantic_support_files": "\n".join(stored_names)},
+        session.get("python_source"),
+    )
+    session["python_source"] = python_source
+    session["builder_has_user_config"] = True
+    session["builder_form_state"] = _updated_builder_form_state(
+        python_source,
+        {"step": "retrieve", "value": {"semantic_support_files": "\n".join(stored_names)}},
+    )
+    workflow_summary = get_workflow_summary(python_source)
+    return jsonify(
+        {
+            "updated": True,
+            "uploaded_files": new_names,
+            "semantic_support_files": stored_names,
+            "workflow_summary": {
+                "name": workflow_summary.name,
+                "input_contract": workflow_summary.input_contract,
+                "template": workflow_summary.template,
+                "output_contract": workflow_summary.output_contract,
+                "readiness": workflow_summary.readiness,
+            },
+        }
+    )
+
+
 def _builder_form_state_for_source(python_source: str) -> dict[str, object]:
     stored_state = session.get("builder_form_state")
     if isinstance(stored_state, dict):
@@ -120,3 +172,25 @@ def _is_locked_builder_choice(step_key: str, choice_label: object) -> bool:
             if choice.label == str(choice_label):
                 return not choice.available
     return False
+
+
+def _builder_upload_dir() -> Path:
+    upload_id = session.get("builder_upload_id")
+    if not isinstance(upload_id, str) or not upload_id.strip():
+        upload_id = uuid.uuid4().hex
+        session["builder_upload_id"] = upload_id
+    return Path(tempfile.gettempdir()) / "agentic-sdk-playground" / "builder-uploads" / upload_id
+
+
+def _existing_semantic_support_files() -> list[str]:
+    state = session.get("builder_form_state")
+    if not isinstance(state, dict):
+        return []
+    values = state.get("values")
+    if not isinstance(values, dict):
+        return []
+    retrieve_values = values.get("retrieve")
+    if not isinstance(retrieve_values, dict):
+        return []
+    raw = str(retrieve_values.get("semantic_support_files", ""))
+    return [line.strip() for line in raw.splitlines() if line.strip()]
