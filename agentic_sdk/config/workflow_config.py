@@ -22,6 +22,7 @@ class ModuleSpec:
 @dataclass
 class WorkflowConfig:
     name: str = "default"
+    description: str | None = None
     entry: str = "perceive"
     gates: GateConfig = field(default_factory=GateConfig)
     modules: dict[str, ModuleSpec] = field(default_factory=dict)
@@ -50,6 +51,7 @@ def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module
             timeout_sec=config.gates.timeout_sec,
         ),
         workflow_name=config.name,
+        description=config.description,
         entry_module=config.entry,
     )
 

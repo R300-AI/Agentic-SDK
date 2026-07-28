@@ -732,6 +732,7 @@ def _workflow_from_source(python_source: str, workflow_name: str, endpoint_selec
     reachable_roles = reachable_workflow_roles(config)
     return Workflow(
         workflow_name=workflow_name,
+        description=config.task_goal or None,
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
         retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles),

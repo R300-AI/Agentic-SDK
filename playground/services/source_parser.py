@@ -6,14 +6,22 @@ from dataclasses import dataclass
 
 _PROFILE_HINT_BY_WORKFLOW_NAME = {
     "Advisor Helper": "Advisor",
+    "問答引導 Agent": "Advisor",
     "Recommendation Helper": "Recommendation",
+    "建議型 Agent": "Recommendation",
     "Review Summary Helper": "Summary",
     "Document Review Helper": "Summary",
+    "審閱摘要 Agent": "Summary",
     "Structured Intake Helper": "Structured Form",
+    "結構化收件 Agent": "Structured Form",
     "Structured Result Helper": "Structured Result",
+    "固定格式 Agent": "Structured Result",
     "OpenAI Client Helper": "OpenAI Client",
+    "自然回覆 Agent": "OpenAI Client",
     "Custom Action Helper": "Custom Action",
+    "規則處理 Agent": "Custom Action",
     "Retrieve Answer Helper": "Retrieve Answer",
+    "查資料回答 Agent": "Retrieve Answer",
 }
 
 

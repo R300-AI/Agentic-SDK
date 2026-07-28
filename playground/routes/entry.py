@@ -51,6 +51,7 @@ def login():
     session.clear()
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
+    session["ai_hub_username"] = normalized_username
     session["ai_hub_credential_ticket"] = issue_credential_ticket(normalized_username, password)
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
@@ -176,6 +177,7 @@ def _start_authenticated_session(credentials: AiHubCredentials) -> None:
     session.clear()
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
+    session["ai_hub_username"] = credentials.username.strip()
     session["ai_hub_credential_ticket"] = issue_credential_ticket(credentials.username, credentials.password)
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"

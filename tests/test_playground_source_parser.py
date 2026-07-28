@@ -17,7 +17,7 @@ def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None)
 def test_parse_supported_default_source_name():
     parsed = parse_supported_source(build_default_python_source())
 
-    assert parsed.workflow_name == "Customer Helper"
+    assert parsed.workflow_name == "客戶回覆 Agent"
     assert parsed.supported_subset is True
     assert "WorkflowSettings" not in build_default_python_source()
 

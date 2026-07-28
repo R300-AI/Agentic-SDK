@@ -339,6 +339,41 @@ def test_aihub_save_route_requires_login_ticket(monkeypatch):
     assert missing_ticket_response.json["error"] == "AI Hub login is required before saving."
 
 
+def test_aihub_save_login_route_authenticates_and_saves_current_source(monkeypatch):
+    monkeypatch.setattr(aihub_routes, "verify_credentials", lambda username, password, origin=None: username == "creator" and password == "secret")
+    seen = []
+
+    def fake_save_config(agent_id, python_source, *, credentials=None, origin=None):
+        seen.append({"agent_id": agent_id, "python_source": python_source, "credentials": credentials, "origin": origin})
+        return {"agent_id": "agent-new", "agent_name": "Agent New", "saved": True, "integration_status": "aihub", "requires_real_aihub_api": False}
+
+    monkeypatch.setattr(aihub_routes, "save_config", fake_save_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/start/anonymous", base_url="https://playground.example")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            session["python_source"] = "print('hello')"
+        response = client.post(
+            "/playground/aihub/config/save-login",
+            base_url="https://playground.example",
+            json={"username": "creator", "password": "secret"},
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            saved_mode = session["mode"]
+            saved_agent_id = session["agent_id"]
+            saved_username = session["ai_hub_username"]
+
+    assert response.status_code == 200
+    assert response.json["saved"] is True
+    assert seen[0]["python_source"] == "print('hello')"
+    assert seen[0]["credentials"].username == "creator"
+    assert saved_mode == "manual_auth"
+    assert saved_agent_id == "agent-new"
+    assert saved_username == "creator"
+
+
 def test_login_rejects_invalid_ai_hub_credentials(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: False)
     app = create_app()

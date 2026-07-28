@@ -31,6 +31,7 @@ def _llm_params() -> dict[str, str]:
 class WorkflowCanonicalConfigTests(unittest.TestCase):
     def test_workflow_builds_from_clean_core_config_with_overrides(self) -> None:
         config = WorkflowConfig(
+            description="從標準 config 建立 workflow。",
             modules={
                 "perceive": ModuleSpec(kind="text"),
                 "plan": ModuleSpec(kind="next_step"),
@@ -64,6 +65,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
         self.assertIsInstance(workflow.modules["retrieve"], SemanticRetrieve)
         self.assertIsInstance(workflow.modules["action"], GenerativeAction)
         self.assertIsInstance(workflow.modules["reflect"], ResponseCheckReflect)
+        self.assertEqual("從標準 config 建立 workflow。", workflow.description)
 
     def test_workflow_config_with_llm_modules_requires_explicit_model_configuration(self) -> None:
         config = WorkflowConfig(modules={"perceive": ModuleSpec(kind="text")})

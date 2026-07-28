@@ -11,7 +11,7 @@ from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
 
 
-_GENERATED_WORKFLOW_NAMES = {
+_LEGACY_GENERATED_WORKFLOW_NAMES = {
     "Customer Helper": "客戶回覆 Agent",
     "Advisor Helper": "問答引導 Agent",
     "Retrieve Answer Helper": "查資料回答 Agent",
@@ -23,9 +23,19 @@ _GENERATED_WORKFLOW_NAMES = {
     "OpenAI Client Helper": "自然回覆 Agent",
     "Custom Action Helper": "規則處理 Agent",
 }
+_GENERATED_WORKFLOW_NAMES = set(_LEGACY_GENERATED_WORKFLOW_NAMES.values())
+_DEFAULT_WORKFLOW_NAME = "客戶回覆 Agent"
+_DEFAULT_STRUCTURED_RESULT_WORKFLOW_NAME = "固定格式 Agent"
 
 _ACTION_SPECIFIC_PROFILE_HINTS = {"Structured Result", "Custom Action", "OpenAI Client"}
-_ACTION_SPECIFIC_WORKFLOW_NAMES = {"Structured Result Helper", "Custom Action Helper", "OpenAI Client Helper"}
+_ACTION_SPECIFIC_WORKFLOW_NAMES = {
+    "固定格式 Agent",
+    "規則處理 Agent",
+    "自然回覆 Agent",
+    "Structured Result Helper",
+    "Custom Action Helper",
+    "OpenAI Client Helper",
+}
 _ALLOWED_DIRECT_RESULT_KEYS = {
     "latest_retrieved_content",
     "retrieved_snippet",
@@ -54,6 +64,25 @@ _DEFAULT_SEMANTIC_RETRIEVE_NAME = "支援文件"
 _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的支援文件查找與問題最相關的內容。"
 _DEFAULT_SEMANTIC_SOURCE_PATH = "./knowledge"
 _DEFAULT_SEMANTIC_INDEX_PATH = "./.agentic/semantic_index"
+_DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
+_NON_CONTENT_WORKFLOW_DESCRIPTIONS = {
+    "模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。",
+    _DEFAULT_RUNNER_DESCRIPTION,
+}
+_MODULE_IMPORT_ORDER = (
+    "PassThroughPerceive",
+    "TextPerceive",
+    "TextImagePerceive",
+    "NextStepPlan",
+    "PassThroughRetrieve",
+    "KeywordRetrieve",
+    "SemanticRetrieve",
+    "EvidenceCheckReflect",
+    "ResponseCheckReflect",
+    "DirectAnswerAction",
+    "GenerativeAction",
+    "ToolCallAction",
+)
 
 
 @dataclass(frozen=True)
@@ -178,13 +207,17 @@ def get_builder_steps() -> list[BuilderStep]:
 
 
 def build_default_python_source() -> str:
-    return _build_workflow_source(BuilderSourceConfig(workflow_name="Customer Helper"))
+    return _build_workflow_source(BuilderSourceConfig(workflow_name=_DEFAULT_WORKFLOW_NAME))
 
 
 def build_python_source_from_builder_choice(step_key: str, choice_label: object, existing_source: str | None) -> str:
     config = _config_from_source(existing_source)
     if step_key == "name":
         updated = _replace_config(config, workflow_name=_clean_workflow_name(str(choice_label)) or config.workflow_name)
+        return _build_source_for_config(updated)
+
+    if step_key == "description":
+        updated = _replace_config(config, task_goal=_clean_prompt(str(choice_label)) or None)
         return _build_source_for_config(updated)
 
     if step_key == "memory_type" and isinstance(choice_label, dict):
@@ -232,15 +265,15 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             action_module = "ToolCallAction" if choice in _TOOL_CALL_OUTPUT_CHOICES else "GenerativeAction"
             structured_result = action_module == "ToolCallAction" or choice in _STRUCTURED_OUTPUT_CHOICES
             profile_hint = "Structured Result" if structured_result else config.profile_hint
-            workflow_name = _workflow_name_for_profile(existing_source, "Structured Result Helper") if structured_result else config.workflow_name
+            workflow_name = _workflow_name_for_profile(existing_source, _DEFAULT_STRUCTURED_RESULT_WORKFLOW_NAME) if structured_result else config.workflow_name
             if not structured_result and action_module == "GenerativeAction" and config.profile_hint in _ACTION_SPECIFIC_PROFILE_HINTS and config.workflow_name in _ACTION_SPECIFIC_WORKFLOW_NAMES:
                 profile_hint = None
-                workflow_name = "Customer Helper"
+                workflow_name = _DEFAULT_WORKFLOW_NAME
             return _build_source_for_config(
                 _replace_config(
                     config,
                     action_module=action_module,
-                    action_prompt=_OUTPUT_FORMAT_PROMPTS[choice],
+                    action_prompt=_user_authored_action_prompt(config.action_prompt),
                     action_tools=(),
                     profile_hint=profile_hint,
                     workflow_name=workflow_name,
@@ -388,7 +421,7 @@ def _plan_strategy_for_retrieve_policy(config: BuilderSourceConfig) -> str | Non
 def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     source = existing_source or build_default_python_source()
     parsed = parse_supported_source(source)
-    workflow_name = parsed.workflow_name if parsed.workflow_name != "Untitled Agent" else "Customer Helper"
+    workflow_name = _canonical_workflow_name(parsed.workflow_name if parsed.workflow_name != "Untitled Agent" else _DEFAULT_WORKFLOW_NAME)
     action_call_name = _workflow_action_call_name(source)
     is_custom_action = bool(action_call_name and action_call_name not in {"DirectAnswerAction", "GenerativeAction", "StructuredAction", "ToolCallAction"})
     task_config = _safe_config_dict(_extract_assignment_literal(source, "TASK_CONFIG", {}))
@@ -399,23 +432,27 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     action_config = _safe_config_dict(_extract_assignment_literal(source, "ACTION_CONFIG", {}))
     plan_config = _safe_config_dict(_extract_assignment_literal(source, "PLAN_CONFIG", {}))
     reflect_config = _safe_config_dict(_extract_assignment_literal(source, "REFLECT_CONFIG", {}))
-    action_prompt = _extract_keyword_value(source, {"GenerativeAction", "StructuredAction", "ToolCallAction"}, "system_prompt") or _clean_prompt(str(action_config.get("output_guidance", ""))) or None
+    raw_action_prompt = _extract_keyword_value(source, {"GenerativeAction", "StructuredAction", "ToolCallAction"}, "system_prompt") or _clean_prompt(str(action_config.get("output_guidance", ""))) or None
     action_tools = tuple(_normalize_tool_items(_extract_keyword_literal(source, {"ToolCallAction"}, "tools", action_config.get("tools", []))))
-    if not action_tools and action_prompt:
-        action_tools = tuple(_tools_from_interactive_prompt(action_prompt))
+    if not action_tools and raw_action_prompt:
+        action_tools = tuple(_tools_from_interactive_prompt(raw_action_prompt))
+    action_prompt = _user_authored_action_prompt(raw_action_prompt)
     action_module = "CustomAction" if is_custom_action else action_call_name or "DirectAnswerAction"
     if action_module == "StructuredAction":
-        action_module = "ToolCallAction" if action_tools and _prompt_looks_interactive(action_prompt) else "GenerativeAction"
+        action_module = "ToolCallAction" if action_tools and _prompt_looks_interactive(raw_action_prompt) else "GenerativeAction"
     perceive_module = _first_call_name(source, {"PassThroughPerceive", "TextPerceive", "StructuredPerceive", "TextImagePerceive"}) or "PassThroughPerceive"
     if perceive_module == "StructuredPerceive":
         perceive_module = "TextPerceive"
 
     retrieve_module = _first_call_name(source, {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}) or "KeywordRetrieve"
+    workflow_description = _normalize_workflow_description(
+        _extract_keyword_value(source, {"Workflow"}, "description") or _clean_prompt(str(task_config.get("goal", "")))
+    )
 
     return BuilderSourceConfig(
         workflow_name=workflow_name,
         profile_hint=parsed.profile_hint,
-        task_goal=_clean_prompt(str(task_config.get("goal", ""))),
+        task_goal=workflow_description,
         task_success_criteria=_clean_prompt(str(task_config.get("success_criteria", ""))),
         input_kind=str(input_config.get("kind") or _input_kind_from_source(source)),
         input_description=_clean_prompt(str(input_config.get("description", ""))),
@@ -468,11 +505,15 @@ def normalize_python_source(existing_source: str | None) -> str:
     return _build_source_for_config(_config_from_source(existing_source))
 
 
+def render_python_source(existing_source: str | None, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+    return _build_source_for_config(_config_from_source(existing_source), endpoint_bindings=endpoint_bindings)
+
+
 def get_builder_form_state(python_source: str, *, include_generated_defaults: bool = False) -> dict[str, object]:
     config = _config_from_source(python_source)
     values: dict[str, dict[str, object]] = {}
 
-    if config.workflow_name not in _GENERATED_WORKFLOW_NAMES and config.workflow_name != "Untitled Agent":
+    if config.workflow_name not in _GENERATED_WORKFLOW_NAMES and config.workflow_name not in _LEGACY_GENERATED_WORKFLOW_NAMES and config.workflow_name != "Untitled Agent":
         _add_form_value(values, "name", "agent_name", config.workflow_name)
 
     _add_form_value(values, "memory_type", "starter_questions", _lines_text_from_items(config.starter_questions))
@@ -585,11 +626,7 @@ def _pairs_text_from_rule_instruction(instruction: str | None) -> str:
 
 
 def _response_instruction_from_prompt(prompt: str | None) -> str | None:
-    for raw_line in str(prompt or "").splitlines():
-        line = raw_line.strip()
-        if line.startswith("回覆風格與規範："):
-            return line.split("回覆風格與規範：", 1)[1].strip() or None
-    return None
+    return _user_authored_action_prompt(prompt)
 
 
 def _api_contracts_json_from_tools(tools: tuple[dict[str, object], ...]) -> str | None:
@@ -656,9 +693,14 @@ def _string_items_from_lines(value: str) -> list[str]:
 
 def _workflow_name_for_profile(existing_source: str | None, default_name: str) -> str:
     parsed = parse_supported_source(existing_source or "")
-    if parsed.workflow_name and parsed.workflow_name not in _GENERATED_WORKFLOW_NAMES and parsed.workflow_name != "Untitled Agent":
-        return parsed.workflow_name
+    workflow_name = _canonical_workflow_name(parsed.workflow_name)
+    if workflow_name and workflow_name not in _GENERATED_WORKFLOW_NAMES and workflow_name != "Untitled Agent":
+        return workflow_name
     return default_name
+
+
+def _canonical_workflow_name(workflow_name: str | None) -> str:
+    return _LEGACY_GENERATED_WORKFLOW_NAMES.get(str(workflow_name or ""), str(workflow_name or ""))
 
 
 def _clean_workflow_name(workflow_name: str) -> str:
@@ -696,15 +738,9 @@ def _clean_allowed_value(value: str, allowed_values: set[str], fallback: str) ->
 
 
 def _action_prompt_from_payload(payload: dict[str, Any], current_prompt: str | None) -> str | None:
-    keys = set(payload)
-    interactive_keys = {"interaction_trigger", "api_method", "api_url", "component_fields", "api_contracts"}
-    if "response_instruction" in keys and not (interactive_keys & keys):
-        return _single_response_instruction_prompt(payload, current_prompt)
-    if {"response_instruction", *interactive_keys} & keys and _prompt_looks_interactive(current_prompt):
-        return _interactive_action_prompt(payload, current_prompt)
-    if {"interaction_trigger", "component_type", "component_fields", "component_actions", "api_method", "api_url"} & keys:
-        return _interactive_action_prompt(payload, current_prompt)
-    return current_prompt
+    if "response_instruction" in payload:
+        return _clean_prompt(str(payload.get("response_instruction", "")))
+    return _user_authored_action_prompt(current_prompt)
 
 
 def _payload_has_interactive_contract(payload: dict[str, Any]) -> bool:
@@ -1271,47 +1307,46 @@ def _call_name(func: ast.expr) -> str:
     return ""
 
 
-def _build_source_for_config(config: BuilderSourceConfig) -> str:
+def _build_source_for_config(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     if config.profile_hint == "Custom Action" or config.action_module == "CustomAction":
-        return _build_custom_action_source(config)
-    return _build_workflow_source(config)
+        return _build_custom_action_source(config, endpoint_bindings=endpoint_bindings)
+    return _build_workflow_source(config, endpoint_bindings=endpoint_bindings)
 
 
-def _build_workflow_source(config: BuilderSourceConfig) -> str:
+def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     workflow_name_literal = json.dumps(config.workflow_name, ensure_ascii=False)
     reachable_roles = reachable_workflow_roles(config)
-    module_names = []
-    if "retrieve" in reachable_roles:
-        module_names.append(config.retrieve_module)
-    if "perceive" in reachable_roles:
-        module_names.append(config.perceive_module)
-    if "action" in reachable_roles:
-        module_names.append(_action_class_for_config(config))
-    if "plan" in reachable_roles and config.plan_strategy:
-        module_names.append("NextStepPlan")
-    if "reflect" in reachable_roles and config.reflect_module:
-        module_names.append(config.reflect_module)
-    import_block = _format_module_imports(module_names)
-    workflow_arguments = _workflow_argument_lines(config, reachable_roles, action_expression=_action_expression(config))
-    sections = [_core_import_line(config)]
+    workflow_arguments = _workflow_argument_lines(
+        config,
+        reachable_roles,
+        action_expression=_action_expression(config, endpoint_bindings=endpoint_bindings),
+        endpoint_bindings=endpoint_bindings,
+    )
+    workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
+    if config.task_goal:
+        workflow_metadata_lines.append(f"    description={json.dumps(config.task_goal, ensure_ascii=False)},")
+    workflow_block = f"""workflow = Workflow(
+{chr(10).join(workflow_metadata_lines)}
+{workflow_arguments}
+)"""
+    import_block = _format_module_imports(_module_names_for_source(workflow_block))
+    sections = [_core_import_line(endpoint_bindings)]
     if import_block:
         sections.append(import_block)
+    task_config_block = _task_config_block(config)
+    if task_config_block:
+        sections.append(task_config_block)
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
     retrieve_config_block = _retrieve_config_block(config)
     if retrieve_config_block:
         sections.append(retrieve_config_block)
-    sections.append(
-        f"""workflow = Workflow(
-    workflow_name={workflow_name_literal},
-{workflow_arguments}
-)"""
-    )
+    sections.append(workflow_block)
     return "\n\n".join(sections) + "\n"
 
 
-def _build_custom_action_source(config: BuilderSourceConfig) -> str:
+def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     workflow_name_literal = json.dumps(config.workflow_name, ensure_ascii=False)
     custom_action_class = _clean_python_identifier(config.custom_action_class, "BusinessRule")
     memory_key_literal = json.dumps(config.custom_action_memory_key, ensure_ascii=False)
@@ -1320,28 +1355,16 @@ def _build_custom_action_source(config: BuilderSourceConfig) -> str:
     rule_title_literal = json.dumps(config.custom_rule_title, ensure_ascii=False)
     rule_instruction_literal = json.dumps(config.custom_rule_instruction or "", ensure_ascii=False)
     reachable_roles = reachable_workflow_roles(config)
-    module_names = []
-    if "retrieve" in reachable_roles:
-        module_names.append(config.retrieve_module)
-    if "perceive" in reachable_roles:
-        module_names.append(config.perceive_module)
-    if "plan" in reachable_roles and config.plan_strategy:
-        module_names.append("NextStepPlan")
-    if "reflect" in reachable_roles and config.reflect_module:
-        module_names.append(config.reflect_module)
-    import_block = _format_module_imports(module_names)
-    workflow_arguments = _workflow_argument_lines(config, reachable_roles, action_expression=f"{custom_action_class}()")
-    sections = [_core_import_line(config)]
-    if import_block:
-        sections.append(import_block)
-    runner_config_block = _runner_config_block(config)
-    if runner_config_block:
-        sections.append(runner_config_block)
-    retrieve_config_block = _retrieve_config_block(config)
-    if retrieve_config_block:
-        sections.append(retrieve_config_block)
-    sections.append(
-        f"""class {custom_action_class}:
+    workflow_arguments = _workflow_argument_lines(
+        config,
+        reachable_roles,
+        action_expression=f"{custom_action_class}()",
+        endpoint_bindings=endpoint_bindings,
+    )
+    workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
+    if config.task_goal:
+        workflow_metadata_lines.append(f"    description={json.dumps(config.task_goal, ensure_ascii=False)},")
+    workflow_block = f"""class {custom_action_class}:
     def __call__(self, memory):
         summary = memory.lookup({memory_key_literal}) or {fallback_literal}
         instruction = {rule_instruction_literal}
@@ -1351,26 +1374,45 @@ def _build_custom_action_source(config: BuilderSourceConfig) -> str:
 
 
 workflow = Workflow(
-    workflow_name={workflow_name_literal},
+{chr(10).join(workflow_metadata_lines)}
 {workflow_arguments}
 )
 """
-    )
+    import_block = _format_module_imports(_module_names_for_source(workflow_block))
+    sections = [_core_import_line(endpoint_bindings)]
+    if import_block:
+        sections.append(import_block)
+    task_config_block = _task_config_block(config)
+    if task_config_block:
+        sections.append(task_config_block)
+    runner_config_block = _runner_config_block(config)
+    if runner_config_block:
+        sections.append(runner_config_block)
+    retrieve_config_block = _retrieve_config_block(config)
+    if retrieve_config_block:
+        sections.append(retrieve_config_block)
+    sections.append(workflow_block)
     return "\n\n".join(sections) + "\n"
 
 
-def _core_import_line(config: BuilderSourceConfig) -> str:
+def _core_import_line(endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     return "from agentic_sdk import Workflow"
 
 
-def _workflow_argument_lines(config: BuilderSourceConfig, reachable_roles: set[str], *, action_expression: str) -> str:
+def _workflow_argument_lines(
+    config: BuilderSourceConfig,
+    reachable_roles: set[str],
+    *,
+    action_expression: str,
+    endpoint_bindings: dict[str, dict[str, str]] | None = None,
+) -> str:
     lines: list[str] = []
     if "perceive" in reachable_roles:
-        lines.append(f"    perceive={_perceive_expression(config)},")
+        lines.append(f"    perceive={_perceive_expression(config, endpoint_bindings=endpoint_bindings)},")
     if "plan" in reachable_roles and config.plan_strategy:
-        lines.append(_plan_line(config).rstrip("\n"))
+        lines.append(_plan_line(config, reachable_roles, endpoint_bindings=endpoint_bindings).rstrip("\n"))
     if "retrieve" in reachable_roles:
-        retrieve_body = _retrieve_expression_body(config)
+        retrieve_body = _retrieve_expression_body(config, endpoint_bindings=endpoint_bindings)
         if retrieve_body:
             lines.append(f"    retrieve={config.retrieve_module}(")
             lines.append(retrieve_body)
@@ -1378,7 +1420,7 @@ def _workflow_argument_lines(config: BuilderSourceConfig, reachable_roles: set[s
         else:
             lines.append(f"    retrieve={config.retrieve_module}(),")
     if "reflect" in reachable_roles and config.reflect_module:
-        lines.append(_reflect_line(config).rstrip("\n"))
+        lines.append(_reflect_line(config, endpoint_bindings=endpoint_bindings).rstrip("\n"))
     if "action" in reachable_roles:
         lines.append(f"    action={action_expression},")
     return "\n".join(lines)
@@ -1392,7 +1434,7 @@ def _action_class_for_config(config: BuilderSourceConfig) -> str:
     return "DirectAnswerAction"
 
 
-def _action_expression(config: BuilderSourceConfig) -> str:
+def _action_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     action_class = _action_class_for_config(config)
     if action_class == "DirectAnswerAction":
         arguments = [
@@ -1401,7 +1443,7 @@ def _action_expression(config: BuilderSourceConfig) -> str:
             f"prefix={json.dumps(config.direct_answer_prefix, ensure_ascii=False)}",
         ]
         return f"DirectAnswerAction({', '.join(arguments)})"
-    arguments = _llm_arguments("ACTION")
+    arguments = _llm_arguments("ACTION", binding_role="action", endpoint_bindings=endpoint_bindings)
     if config.action_prompt:
         arguments.append(f"system_prompt={json.dumps(config.action_prompt, ensure_ascii=False)}")
     if action_class == "ToolCallAction" and config.action_tools:
@@ -1409,12 +1451,12 @@ def _action_expression(config: BuilderSourceConfig) -> str:
     return f"{action_class}({', '.join(arguments)})"
 
 
-def _perceive_expression(config: BuilderSourceConfig) -> str:
+def _perceive_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     if config.perceive_module == "PassThroughPerceive":
         if config.perceive_input_label:
             return f"PassThroughPerceive(input_label={json.dumps(config.perceive_input_label, ensure_ascii=False)})"
         return "PassThroughPerceive()"
-    arguments = _llm_arguments("PERCEIVE")
+    arguments = _llm_arguments("PERCEIVE", binding_role="perceive", endpoint_bindings=endpoint_bindings)
     if config.perceive_welcome_message:
         arguments.append(f"welcome_message={json.dumps(config.perceive_welcome_message, ensure_ascii=False)}")
     if config.perceive_options:
@@ -1426,36 +1468,37 @@ def _perceive_expression(config: BuilderSourceConfig) -> str:
     return f"{config.perceive_module}({', '.join(arguments)})"
 
 
-def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
+def _retrieve_expression_body(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     if config.retrieve_module == "KeywordRetrieve":
         return f"        items={_format_python_literal(list(config.retrieve_items), 14)},"
     if config.retrieve_module == "PassThroughRetrieve":
         return ""
-    arguments = [
-        '        api_key="<填入 API key>",',
-        '        base_url="<填入 OpenAI-compatible base_url>",',
-        '        embedding_model="<填入 embedding model>",',
-        f"        source_path={json.dumps(_semantic_source_path(config), ensure_ascii=False)},",
-        f"        index_path={json.dumps(_semantic_index_path(config), ensure_ascii=False)},",
-        "        rebuild_if_missing=True,",
-        "        rebuild_if_stale=True,",
-    ]
+    arguments = [f"        {argument}," for argument in _llm_arguments("RETRIEVE", binding_role="retrieve", endpoint_bindings=endpoint_bindings)]
+    arguments.extend(
+        [
+            '        source_path=RETRIEVE_CONFIG["source_path"],',
+            '        index_path=RETRIEVE_CONFIG["index_path"],',
+            "        rebuild_if_missing=True,",
+            "        rebuild_if_stale=True,",
+        ]
+    )
     return "\n".join(arguments)
 
 
-def _plan_line(config: BuilderSourceConfig) -> str:
+def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str], endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     description = _retrieve_description(config)
+    plan_binding_role = "action" if "action" in reachable_roles else "perceive"
     arguments = [
-        *_llm_arguments("PLAN"),
+        *_llm_arguments("PLAN", binding_role=plan_binding_role, endpoint_bindings=endpoint_bindings),
         f"retrieve_name={json.dumps(_retrieve_name(config), ensure_ascii=False)}",
         f"retrieve_description={json.dumps(description, ensure_ascii=False)}",
     ]
     return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
 
 
-def _reflect_line(config: BuilderSourceConfig) -> str:
+def _reflect_line(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     reflect_module = config.reflect_module or "ResponseCheckReflect"
-    arguments = _llm_arguments("REFLECT") if reflect_module == "ResponseCheckReflect" else []
+    arguments = _llm_arguments("REFLECT", binding_role="reflect", endpoint_bindings=endpoint_bindings) if reflect_module == "ResponseCheckReflect" else []
     arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
     return (
         f"    reflect={reflect_module}("
@@ -1464,11 +1507,19 @@ def _reflect_line(config: BuilderSourceConfig) -> str:
     )
 
 
-def _llm_arguments(prefix: str) -> list[str]:
+def _llm_arguments(
+    prefix: str,
+    *,
+    binding_role: str | None = None,
+    endpoint_bindings: dict[str, dict[str, str]] | None = None,
+) -> list[str]:
+    constant_prefix = _endpoint_constant_prefix(binding_role or prefix)
+    model_argument = "embedding_model" if binding_role == "retrieve" else "model"
+    model_placeholder_name = "EMBEDDING_MODEL" if binding_role == "retrieve" else "MODEL"
     return [
-        'api_key="<填入 API key>"',
-        'base_url="<填入 OpenAI-compatible base_url>"',
-        'model="<填入模型名稱>"',
+        f'api_key="<{constant_prefix}_API_KEY>"',
+        f'base_url="<{constant_prefix}_API_BASE_URL>"',
+        f'{model_argument}="<{constant_prefix}_{model_placeholder_name}>"',
     ]
 
 
@@ -1516,6 +1567,15 @@ def _semantic_index_path(_config: BuilderSourceConfig) -> str:
     return _DEFAULT_SEMANTIC_INDEX_PATH
 
 
+def _endpoint_constant_prefix(role: str) -> str:
+    return {
+        "perceive": "PERCEIVE",
+        "retrieve": "RETRIEVE",
+        "action": "ACTION",
+        "reflect": "REFLECT",
+    }.get(role, role.upper() or "MODEL")
+
+
 def _task_system_prompt(config: BuilderSourceConfig) -> str | None:
     parts = []
     if config.task_goal:
@@ -1526,27 +1586,38 @@ def _task_system_prompt(config: BuilderSourceConfig) -> str | None:
 
 
 def _format_module_imports(module_names: list[str]) -> str:
-    ordered_names = [
-        name
-        for name in (
-            "DirectAnswerAction",
-            "GenerativeAction",
-            "ToolCallAction",
-            "EvidenceCheckReflect",
-            "PassThroughRetrieve",
-            "KeywordRetrieve",
-            "SemanticRetrieve",
-            "NextStepPlan",
-            "PassThroughPerceive",
-            "TextPerceive",
-            "TextImagePerceive",
-            "ResponseCheckReflect",
-        )
-        if name in set(module_names)
-    ]
+    ordered_names = [name for name in _MODULE_IMPORT_ORDER if name in set(module_names)]
     if not ordered_names:
         return ""
     return "from agentic_sdk.modules import (\n    " + ",\n    ".join(ordered_names) + ",\n)"
+
+
+def _module_names_for_source(python_source: str) -> list[str]:
+    try:
+        tree = ast.parse(python_source)
+    except SyntaxError:
+        return []
+    used_names = {
+        _call_name(node.func)
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call) and _call_name(node.func) in set(_MODULE_IMPORT_ORDER)
+    }
+    return [name for name in _MODULE_IMPORT_ORDER if name in used_names]
+
+
+def _user_authored_action_prompt(prompt: str | None) -> str | None:
+    cleaned = _clean_prompt(str(prompt or ""))
+    if not cleaned:
+        return None
+    if cleaned in _OUTPUT_FORMAT_PROMPTS.values():
+        return None
+    for raw_line in cleaned.splitlines():
+        line = raw_line.strip()
+        if line.startswith("回覆風格與規範："):
+            return line.split("回覆風格與規範：", 1)[1].strip() or None
+    if _prompt_looks_interactive(cleaned):
+        return None
+    return cleaned
 
 
 def _runner_config_block(config: BuilderSourceConfig) -> str:
@@ -1554,6 +1625,22 @@ def _runner_config_block(config: BuilderSourceConfig) -> str:
         return ""
     runner_config = {"starter_questions": list(config.starter_questions)}
     return f"RUNNER_CONFIG = {_format_python_literal(runner_config, 0)}"
+
+
+def _normalize_workflow_description(value: str | None) -> str | None:
+    cleaned = _clean_prompt(str(value or ""))
+    if not cleaned or cleaned in _NON_CONTENT_WORKFLOW_DESCRIPTIONS:
+        return None
+    return cleaned
+
+
+def _task_config_block(config: BuilderSourceConfig) -> str:
+    task_config: dict[str, object] = {}
+    if config.task_success_criteria:
+        task_config["success_criteria"] = config.task_success_criteria
+    if not task_config:
+        return ""
+    return f"TASK_CONFIG = {_format_python_literal(task_config, 0)}"
 
 
 def _format_python_literal(value: object, continuation_indent: int) -> str:
@@ -1570,7 +1657,7 @@ def _normalize_string_items(value: object) -> list[str]:
 
 def get_workflow_summary(python_source: str) -> WorkflowSummary:
     parsed = parse_supported_source(python_source)
-    name = _GENERATED_WORKFLOW_NAMES.get(parsed.workflow_name, parsed.workflow_name)
+    name = _canonical_workflow_name(parsed.workflow_name)
     if parsed.profile_hint == "Recommendation":
         template = "建議卡"
         output_contract = "輸出：建議卡"
@@ -1604,40 +1691,8 @@ def get_workflow_summary(python_source: str) -> WorkflowSummary:
     )
 
 
-def _single_response_instruction_prompt(payload: dict[str, Any], current_prompt: str | None) -> str:
-    response_instruction = _clean_prompt(str(payload.get("response_instruction", "")))
-    parts = [current_prompt or _OUTPUT_FORMAT_PROMPTS["free_text"]]
-    if response_instruction:
-        parts.append(f"回覆風格與規範：{response_instruction}")
-    return "\n".join(parts)
-
-
 def _prompt_looks_interactive(current_prompt: str | None) -> bool:
     return bool(current_prompt and ("可互動元件" in current_prompt or "OpenAI tool calling" in current_prompt or "component.fields" in current_prompt or "api.url" in current_prompt))
-
-
-def _interactive_action_prompt(payload: dict[str, Any], current_prompt: str | None) -> str:
-    response_instruction = _clean_prompt(str(payload.get("response_instruction", "")))
-    component_type = _clean_short_text(str(payload.get("component_type", "confirmation_card")), "confirmation_card")
-    actions = _rule_instruction_from_pairs(str(payload.get("component_actions", "")))
-    contracts = _interactive_api_contracts(payload)
-    parts = [current_prompt or _OUTPUT_FORMAT_PROMPTS["interactive"]]
-    if response_instruction:
-        parts.append(f"回覆風格與規範：{response_instruction}")
-    for index, contract in enumerate(contracts, start=1):
-        prefix = "" if len(contracts) == 1 else f"API {index} - "
-        if contract["interaction_trigger"]:
-            parts.append(f"{prefix}互動元件觸發條件：{contract['interaction_trigger']}")
-        if contract["api_method"] or contract["api_url"]:
-            parts.append(f"{prefix}API 提交設定：{contract['api_method']} {contract['api_url']}".strip())
-        if contract["component_fields"]:
-            parts.append(f"{prefix}需要收集的資訊：\n{contract['component_fields']}")
-    if component_type and "component_type" in payload:
-        parts.append(f"元件類型：{component_type}")
-    if actions:
-        parts.append(f"操作按鈕：\n{actions}")
-    parts.append("互動輸出請使用 OpenAI tools/function calling 呼叫最符合的 submit_api_* 工具；不要把 component.fields、api.method、api.url 或 api.body 當成一般文字 JSON 輸出。需要收集的資訊會對應工具 arguments 的欄位名稱；資料類型決定 arguments 欄位值的型態，包含 string、number、boolean。資訊不足時先用自然語句追問；資訊齊全時呼叫工具。")
-    return "\n".join(parts)
 
 
 def _interactive_api_contracts(payload: dict[str, Any]) -> list[dict[str, str | None]]:

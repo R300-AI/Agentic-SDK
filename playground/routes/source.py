@@ -4,8 +4,9 @@ import ast
 
 from flask import Blueprint, Response, abort, render_template, session
 
+from playground.services.model_endpoints import endpoint_env_bindings_for_source
 from playground.services.mode_context import get_mode_context
-from playground.services.source_builder import build_default_python_source, normalize_python_source
+from playground.services.source_builder import build_default_python_source, normalize_python_source, render_python_source
 
 
 source_bp = Blueprint("source", __name__, url_prefix="/playground/source")
@@ -44,13 +45,15 @@ def export_source():
 
 
 def _current_python_source() -> str:
-    python_source = normalize_python_source(session.get("python_source") or build_default_python_source())
-    session["python_source"] = python_source
-    return python_source
+    canonical_source = normalize_python_source(session.get("python_source") or build_default_python_source())
+    session["python_source"] = canonical_source
+    endpoint_bindings = endpoint_env_bindings_for_source(canonical_source, session.get("runner_endpoint_selections") or {})
+    return render_python_source(canonical_source, endpoint_bindings)
 
 
 def _source_preview_markdown(python_source: str) -> str:
     python_imports, python_workflow = _split_python_source_blocks(python_source)
+    placeholder_notice = "並把 `api_key`、`base_url`、`model` 或 `embedding_model` 的 `<...>` 換成你的部署設定。"
     if python_imports:
         source_steps = f"""3. 複製 Python import 區塊。
 
@@ -58,13 +61,13 @@ def _source_preview_markdown(python_source: str) -> str:
 {python_imports}
 ```
 
-4. 複製 Python Workflow 區塊，並把 `api_key`、`base_url`、`model` 的 `<...>` 換成你的模型端點設定。
+4. 複製 Python Workflow 區塊，{placeholder_notice}
 
 ```python
 {python_workflow}
 ```"""
     else:
-        source_steps = f"""3. 複製下方 Python Workflow 程式碼，並把 `api_key`、`base_url`、`model` 的 `<...>` 換成你的模型端點設定。
+        source_steps = f"""3. 複製下方 Python Workflow 程式碼，{placeholder_notice}
 
 ```python
 {python_workflow}

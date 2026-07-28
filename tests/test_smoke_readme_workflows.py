@@ -17,6 +17,8 @@ TEST_BASE_URL = "https://example.openai.test/v1"
 class ReadmeWorkflowSmokeTests(unittest.TestCase):
     def test_readme_example_one_path(self) -> None:
         workflow = Workflow(
+            workflow_name="知識問答 Agent",
+            description="根據內建關鍵字知識庫回答常見問題。",
             perceive=PassThroughPerceive(),
             retrieve=KeywordRetrieve(
                 items=[
@@ -35,6 +37,8 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
         openai_client = FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")
         with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=openai_client):
             workflow = Workflow(
+                workflow_name="Foundry 回覆 Agent",
+                description="用 OpenAI-compatible 模型整理檢索結果並生成自然語句回覆。",
                 perceive=PassThroughPerceive(),
                 retrieve=KeywordRetrieve(
                     items=[
@@ -77,6 +81,8 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
         openai_client = FoundryOpenAILikeClient(action_text="已準備提交預約資料。", tool_calls=tool_calls)
         with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=openai_client):
             workflow = Workflow(
+                workflow_name="預約工具 Agent",
+                description="根據使用者輸入判斷是否要發出預約工具呼叫。",
                 perceive=PassThroughPerceive(),
                 retrieve=KeywordRetrieve(
                     items=[
@@ -99,6 +105,8 @@ class ReadmeWorkflowSmokeTests(unittest.TestCase):
                 return f"自訂 Action 回傳：{summary}"
 
         workflow = Workflow(
+            workflow_name="摘要處理 Agent",
+            description="把檢索內容交給自訂 Action 做二次整理。",
             perceive=PassThroughPerceive(),
             retrieve=KeywordRetrieve(
                 items=[

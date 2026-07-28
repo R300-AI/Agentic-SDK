@@ -335,7 +335,8 @@ def test_runner_route_renders_task_shell():
     assert b"data-next-step-action=\"copy\"" in response.data
     assert b"data-save-panel" in response.data
     assert b"data-save-action" in response.data
-    assert b"data-save-status" in response.data
+    assert b"data-save-login-modal" in response.data
+    assert b"data-save-status" not in response.data
     assert b"data-history-list" not in response.data
     assert "最近試跑".encode("utf-8") not in response.data
     assert "尚未儲存".encode("utf-8") in response.data
@@ -343,6 +344,7 @@ def test_runner_route_renders_task_shell():
     assert "模式".encode("utf-8") not in response.data
     assert "主要輸入".encode("utf-8") not in response.data
     assert "主要結果".encode("utf-8") not in response.data
+    assert "請先登入 AI Hub".encode("utf-8") in response.data
 
 
 def test_runner_trust_panel_partial_is_rendered():
@@ -543,7 +545,8 @@ def test_route_map_source_and_runner_endpoints():
     assert "history_item" not in execute_response.json
     assert preview_response.status_code == 200
     assert b"from agentic_sdk import Workflow" in preview_response.data
-    assert b"workflow_name=\"Customer Helper\"" in preview_response.data
+    assert "workflow_name=\"客戶回覆 Agent\"".encode("utf-8") in preview_response.data
+    assert b"description=" not in preview_response.data
     assert export_response.status_code == 200
     assert "agentic_workflow.py" in export_response.headers["Content-Disposition"]
 
@@ -664,6 +667,7 @@ def test_builder_name_field_updates_canonical_source_and_summary():
     assert update_response.status_code == 200
     assert update_response.json["workflow_summary"]["name"] == "TSiP 顧問 Agent"
     assert 'workflow_name="TSiP 顧問 Agent"'.encode("utf-8") in preview_response.data
+    assert b'description=' not in preview_response.data
     assert "TSiP 顧問 Agent".encode("utf-8") in runner_response.data
 
 

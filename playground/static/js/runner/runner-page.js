@@ -19,14 +19,33 @@ const attachmentInput = document.querySelector("[data-attachment-input]");
 const artifactList = document.querySelector("[data-artifact-list]");
 const attachmentStatus = document.querySelector("[data-attachment-status]");
 const savePanel = document.querySelector("[data-save-panel]");
-const endpointForm = document.querySelector("[data-endpoint-form]");
-const endpointDeployButton = document.querySelector("[data-endpoint-deploy]");
-const endpointStatus = document.querySelector("[data-endpoint-status]");
 const codePreviewToggles = document.querySelectorAll("[data-code-preview-open]");
 const codePreviewModal = document.querySelector("[data-code-preview-modal]");
+const saveRequiresLogin = document.querySelector("[data-page='runner']")?.dataset.saveRequiresLogin === "true";
+const saveLoginModal = document.querySelector("[data-save-login-modal]");
+const saveLoginCloseButtons = saveLoginModal?.querySelectorAll("[data-save-login-close]") || [];
+const saveLoginForm = document.querySelector("[data-save-login-form]");
+const saveLoginUsername = document.querySelector("[data-save-login-username]");
+const saveLoginPassword = document.querySelector("[data-save-login-password]");
+const saveLoginError = document.querySelector("[data-save-login-error]");
+const saveLoginSubmit = document.querySelector("[data-save-login-submit]");
 const submitButton = form?.querySelector("button[type='submit']");
 const messageInput = form?.querySelector("textarea[name='message']");
+const workflowNameTargets = document.querySelectorAll("[data-workflow-name]");
+const sideWorkflowTitleDisplay = document.querySelector("[data-side-workflow-title-display]");
+const sideWorkflowTitleForm = document.querySelector("[data-side-workflow-title-form]");
+const sideWorkflowTitleInput = document.querySelector("[data-side-workflow-title-input]");
+const workflowDescriptionTargets = document.querySelectorAll("[data-workflow-description]");
+const workflowDescriptionDisplay = document.querySelector("[data-workflow-description-display]");
+const workflowDescriptionForm = document.querySelector("[data-workflow-description-form]");
+const workflowDescriptionInput = document.querySelector("[data-workflow-description-input]");
 let activeRunId = 0;
+let workflowName = sideWorkflowTitleInput?.value.trim() || sideWorkflowTitleDisplay?.textContent?.trim() || "";
+let workflowDescription = workflowDescriptionInput?.value.trim() || workflowDescriptionDisplay?.textContent?.trim() || "";
+let workflowRenameRequest = null;
+let workflowDescriptionRequest = null;
+const workflowDescriptionPlaceholder = workflowDescriptionDisplay?.dataset.placeholder || "";
+let lastSaveTrigger = null;
 
 function actionReplyFrom(result) {
 	if (result.status === "input_error" || result.status === "configuration_error") {
@@ -104,6 +123,207 @@ function scrollResultThread() {
 	}
 }
 
+function renderWorkflowName(nextName) {
+	workflowName = String(nextName || "").trim() || workflowName;
+	workflowNameTargets.forEach((element) => {
+		element.textContent = workflowName;
+	});
+	if (sideWorkflowTitleInput) {
+		sideWorkflowTitleInput.value = workflowName;
+	}
+}
+
+function renderWorkflowDescription(nextDescription) {
+	workflowDescription = String(nextDescription || "").trim();
+	workflowDescriptionTargets.forEach((element) => {
+		element.textContent = workflowDescription;
+		element.classList.toggle("is-placeholder", !workflowDescription);
+	});
+	if (workflowDescriptionInput) {
+		workflowDescriptionInput.value = workflowDescription;
+	}
+}
+
+function openSideWorkflowTitleEditor() {
+	if (!sideWorkflowTitleDisplay || !sideWorkflowTitleForm || !sideWorkflowTitleInput) {
+		return;
+	}
+	sideWorkflowTitleDisplay.hidden = true;
+	sideWorkflowTitleForm.hidden = false;
+	sideWorkflowTitleInput.value = workflowName;
+	queueMicrotask(() => {
+		sideWorkflowTitleInput.focus();
+		sideWorkflowTitleInput.select();
+	});
+}
+
+function closeSideWorkflowTitleEditor() {
+	if (!sideWorkflowTitleDisplay || !sideWorkflowTitleForm || !sideWorkflowTitleInput) {
+		return;
+	}
+	sideWorkflowTitleForm.hidden = true;
+	sideWorkflowTitleDisplay.hidden = false;
+	sideWorkflowTitleInput.value = workflowName;
+}
+
+function openWorkflowDescriptionEditor() {
+	if (!workflowDescriptionDisplay || !workflowDescriptionForm || !workflowDescriptionInput) {
+		return;
+	}
+	workflowDescriptionDisplay.hidden = true;
+	workflowDescriptionForm.hidden = false;
+	workflowDescriptionInput.value = workflowDescription;
+	queueMicrotask(() => {
+		workflowDescriptionInput.focus();
+		workflowDescriptionInput.select();
+	});
+}
+
+function closeWorkflowDescriptionEditor() {
+	if (!workflowDescriptionDisplay || !workflowDescriptionForm || !workflowDescriptionInput) {
+		return;
+	}
+	workflowDescriptionForm.hidden = true;
+	workflowDescriptionDisplay.hidden = false;
+	workflowDescriptionInput.value = workflowDescription;
+}
+
+async function commitWorkflowName() {
+	const activeInput = sideWorkflowTitleInput;
+	if (!activeInput || workflowRenameRequest) {
+		return workflowRenameRequest;
+	}
+	const nextName = activeInput.value.trim();
+	if (!nextName || nextName === workflowName) {
+		closeSideWorkflowTitleEditor();
+		return null;
+	}
+	workflowRenameRequest = (async () => {
+		if (sideWorkflowTitleInput) {
+			sideWorkflowTitleInput.disabled = true;
+		}
+		if (runStatus) {
+			runStatus.textContent = "正在更新 Agent 名稱...";
+		}
+		let result;
+		try {
+			result = await postJson("/playground/run/name", { name: nextName });
+		} catch (error) {
+			result = { updated: false, error: error.message || "更新 Agent 名稱失敗。" };
+		}
+		if (sideWorkflowTitleInput) {
+			sideWorkflowTitleInput.disabled = false;
+		}
+		if (!result.updated) {
+			activeInput.focus();
+			activeInput.select();
+			if (runStatus) {
+				runStatus.textContent = result.error || "更新 Agent 名稱失敗。";
+			}
+			showSavePanel(savePanel, result.error || "更新 Agent 名稱失敗。");
+			return;
+		}
+		renderWorkflowName(result.workflow_summary?.name || nextName);
+		closeSideWorkflowTitleEditor();
+		if (saveStatus) {
+			saveStatus.textContent = "尚未儲存";
+		}
+		async function commitWorkflowDescription() {
+			if (!workflowDescriptionInput || workflowDescriptionRequest) {
+				return workflowDescriptionRequest;
+			}
+			const nextDescription = workflowDescriptionInput.value.trim();
+			if (!nextDescription || nextDescription === workflowDescription) {
+				closeWorkflowDescriptionEditor();
+				return null;
+			}
+			workflowDescriptionRequest = (async () => {
+				workflowDescriptionInput.disabled = true;
+				if (runStatus) {
+					runStatus.textContent = "正在更新 workflow description...";
+				}
+				let result;
+				try {
+					result = await postJson("/playground/run/description", { description: nextDescription });
+				} catch (error) {
+					result = { updated: false, error: error.message || "更新 workflow description 失敗。" };
+				}
+				workflowDescriptionInput.disabled = false;
+				if (!result.updated) {
+					workflowDescriptionInput.focus();
+					workflowDescriptionInput.select();
+					if (runStatus) {
+						runStatus.textContent = result.error || "更新 workflow description 失敗。";
+					}
+					showSavePanel(savePanel, result.error || "更新 workflow description 失敗。");
+					return;
+				}
+				renderWorkflowDescription(result.description || nextDescription);
+				closeWorkflowDescriptionEditor();
+				if (saveStatus) {
+					saveStatus.textContent = "尚未儲存";
+				}
+				if (runStatus) {
+					runStatus.textContent = "workflow description 已更新。";
+				}
+			})().finally(() => {
+				workflowDescriptionRequest = null;
+			});
+			return workflowDescriptionRequest;
+		}
+		if (runStatus) {
+			runStatus.textContent = "Agent 名稱已更新。";
+		}
+	})().finally(() => {
+		workflowRenameRequest = null;
+	});
+	return workflowRenameRequest;
+}
+
+async function commitWorkflowDescription() {
+	if (!workflowDescriptionInput || workflowDescriptionRequest) {
+		return workflowDescriptionRequest;
+	}
+	const nextDescription = workflowDescriptionInput.value.trim();
+	if (nextDescription === workflowDescription) {
+		closeWorkflowDescriptionEditor();
+		return null;
+	}
+	workflowDescriptionRequest = (async () => {
+		workflowDescriptionInput.disabled = true;
+		if (runStatus) {
+			runStatus.textContent = "正在更新 workflow description...";
+		}
+		let result;
+		try {
+			result = await postJson("/playground/run/description", { description: nextDescription });
+		} catch (error) {
+			result = { updated: false, error: error.message || "更新 workflow description 失敗。" };
+		}
+		workflowDescriptionInput.disabled = false;
+		if (!result.updated) {
+			workflowDescriptionInput.focus();
+			workflowDescriptionInput.select();
+			if (runStatus) {
+				runStatus.textContent = result.error || "更新 workflow description 失敗。";
+			}
+			showSavePanel(savePanel, result.error || "更新 workflow description 失敗。");
+			return;
+		}
+		renderWorkflowDescription(result.description ?? nextDescription);
+		closeWorkflowDescriptionEditor();
+		if (saveStatus) {
+			saveStatus.textContent = "尚未儲存";
+		}
+		if (runStatus) {
+			runStatus.textContent = "workflow description 已更新。";
+		}
+	})().finally(() => {
+		workflowDescriptionRequest = null;
+	});
+	return workflowDescriptionRequest;
+}
+
 function hideStarterQuestions() {
 	if (starterQuestions) {
 		starterQuestions.hidden = true;
@@ -175,27 +395,104 @@ function setSurfaceBusy(surface, isBusy) {
 	}
 }
 
-async function syncEndpointSelections() {
-	if (!endpointForm) {
+function openSaveLoginModal() {
+	if (!saveLoginModal) {
 		return;
 	}
-	if (endpointDeployButton) {
-		endpointDeployButton.disabled = true;
+	lastSaveTrigger = saveButton;
+	if (saveLoginError) {
+		saveLoginError.hidden = true;
+		saveLoginError.textContent = "";
 	}
-	const selections = Object.fromEntries(new FormData(endpointForm).entries());
-	const result = await postJson("/playground/run/endpoints", { selections });
-	if (endpointDeployButton) {
-		endpointDeployButton.disabled = false;
+	saveLoginModal.hidden = false;
+	saveLoginModal.classList.add("open");
+	saveLoginModal.dataset.open = "true";
+	queueMicrotask(() => saveLoginUsername?.focus());
+}
+
+function closeSaveLoginModal() {
+	if (!saveLoginModal) {
+		return;
 	}
-	if (endpointStatus) {
-		endpointStatus.textContent = result.error ? "端點設定失敗。" : "端點設定已更新。";
+	saveLoginModal.hidden = true;
+	saveLoginModal.classList.remove("open");
+	saveLoginModal.dataset.open = "false";
+	lastSaveTrigger?.focus?.();
+}
+
+async function saveCurrentWorkflow() {
+	let result;
+	try {
+		result = await postJson("/playground/aihub/config/save");
+	} catch (error) {
+		result = { saved: false, error: error.message || "儲存失敗。" };
 	}
+	return result;
+}
+
+async function loginAndSaveCurrentWorkflow(username, password) {
+	let result;
+	try {
+		result = await postJson("/playground/aihub/config/save-login", { username, password });
+	} catch (error) {
+		result = { saved: false, error: error.message || "登入後儲存失敗。" };
+	}
+	return result;
+}
+
+function saveNeedsLogin(result) {
+	const error = String(result?.error || "");
+	return error === "Current mode cannot save to AI Hub." || error === "AI Hub login is required before saving.";
 }
 
 bindAttachmentPicker(attachmentInput, artifactList, attachmentStatus);
 bindCodePreview(codePreviewToggles, codePreviewModal);
-endpointDeployButton?.addEventListener("click", () => {
-	syncEndpointSelections();
+renderWorkflowDescription(workflowDescriptionInput?.value || workflowDescription);
+sideWorkflowTitleDisplay?.addEventListener("click", () => {
+	openSideWorkflowTitleEditor();
+});
+sideWorkflowTitleForm?.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	await commitWorkflowName();
+});
+sideWorkflowTitleInput?.addEventListener("keydown", async (event) => {
+	if (event.key === "Escape") {
+		event.preventDefault();
+		closeSideWorkflowTitleEditor();
+		sideWorkflowTitleDisplay?.focus();
+		return;
+	}
+	if (event.key === "Enter") {
+		event.preventDefault();
+		await commitWorkflowName();
+		sideWorkflowTitleDisplay?.focus();
+	}
+});
+sideWorkflowTitleInput?.addEventListener("blur", async () => {
+	await commitWorkflowName();
+});
+workflowDescriptionDisplay?.addEventListener("click", () => {
+	openWorkflowDescriptionEditor();
+});
+workflowDescriptionForm?.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	await commitWorkflowDescription();
+});
+workflowDescriptionInput?.addEventListener("keydown", async (event) => {
+	if (event.key === "Escape") {
+		event.preventDefault();
+		closeWorkflowDescriptionEditor();
+		workflowDescriptionDisplay?.focus();
+		return;
+	}
+	if (event.key === "Enter" && !event.shiftKey) {
+		event.preventDefault();
+		await commitWorkflowDescription();
+		workflowDescriptionDisplay?.focus();
+	}
+});
+workflowDescriptionInput?.addEventListener("blur", async () => {
+	await commitWorkflowDescription();
 });
 
 async function runWorkflow(payload, { displayMessage, showUserMessage = true } = {}) {
@@ -335,6 +632,10 @@ resultThread?.addEventListener("runner:tool-call-submit", async (event) => {
 });
 
 saveButton?.addEventListener("click", async () => {
+	if (saveRequiresLogin) {
+		openSaveLoginModal();
+		return;
+	}
 	if (saveButton) {
 		saveButton.disabled = true;
 	}
@@ -344,11 +645,16 @@ saveButton?.addEventListener("click", async () => {
 	if (saveStatus) {
 		saveStatus.textContent = "儲存中...";
 	}
-	let result;
-	try {
-		result = await postJson("/playground/aihub/config/save");
-	} catch (error) {
-		result = { saved: false, error: error.message || "儲存失敗。" };
+	const result = await saveCurrentWorkflow();
+	if (saveNeedsLogin(result)) {
+		if (saveButton) {
+			saveButton.disabled = false;
+		}
+		if (saveStatus) {
+			saveStatus.textContent = "尚未儲存";
+		}
+		openSaveLoginModal();
+		return;
 	}
 	const message = result.saved ? "已儲存。" : (result.error || "儲存失敗。");
 	if (runStatus) {
@@ -360,6 +666,52 @@ saveButton?.addEventListener("click", async () => {
 	showSavePanel(savePanel, message);
 	if (saveButton) {
 		saveButton.disabled = false;
+	}
+});
+
+saveLoginCloseButtons.forEach((button) => button.addEventListener("click", closeSaveLoginModal));
+saveLoginForm?.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	const username = saveLoginUsername?.value.trim() || "";
+	const password = saveLoginPassword?.value || "";
+	if (!username || !password) {
+		if (saveLoginError) {
+			saveLoginError.hidden = false;
+			saveLoginError.textContent = "請輸入 AI Hub 帳號與密碼。";
+		}
+		return;
+	}
+	if (saveLoginSubmit) {
+		saveLoginSubmit.disabled = true;
+	}
+	if (runStatus) {
+		runStatus.textContent = "正在登入並儲存...";
+	}
+	const result = await loginAndSaveCurrentWorkflow(username, password);
+	if (saveLoginSubmit) {
+		saveLoginSubmit.disabled = false;
+	}
+	if (!result.saved) {
+		if (saveLoginError) {
+			saveLoginError.hidden = false;
+			saveLoginError.textContent = result.error || "登入後儲存失敗。";
+		}
+		if (runStatus) {
+			runStatus.textContent = result.error || "登入後儲存失敗。";
+		}
+		return;
+	}
+	closeSaveLoginModal();
+	if (saveStatus) {
+		saveStatus.textContent = "已儲存";
+	}
+	showSavePanel(savePanel, "已儲存。");
+	window.location.href = "/playground/run";
+});
+
+document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape" && saveLoginModal && !saveLoginModal.hidden) {
+		closeSaveLoginModal();
 	}
 });
 

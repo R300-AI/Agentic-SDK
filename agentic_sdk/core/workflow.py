@@ -23,6 +23,7 @@ class Workflow:
     memory_store: PersistentMemory | None = None
     gates: Gates | None = None
     workflow_name: str = "default"
+    description: str | None = None
     entry_module: str = "perceive"
 
     modules: dict[str, Module] = field(init=False)
@@ -78,6 +79,7 @@ class Workflow:
         state = WorkflowState(
             user_message=latest_user_turn.content,
             workflow_name=self.workflow_name,
+            workflow_description=self.description,
             workflow_id=resolved_workflow_id,
             session_id=resolved_session_id,
             memory=state_memory,

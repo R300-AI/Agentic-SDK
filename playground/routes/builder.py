@@ -38,6 +38,13 @@ _REVIEW_STEP_BY_ROLE = {
     "action": "output_format",
     "reflect": "failure_policy",
 }
+_REVIEW_VALUE_STEPS = {
+    "memory_type": ("memory_type",),
+    "input_type": ("input_type", "perceive"),
+    "retrieve_policy": ("retrieve_policy", "retrieve"),
+    "output_format": ("output_format", "action"),
+    "failure_policy": ("failure_policy",),
+}
 
 
 @builder_bp.get("")
@@ -317,9 +324,7 @@ def _builder_review_state(steps: list[object], builder_form_state: dict[str, obj
         if selected_choice is None:
             errors.append("請先選擇這一題的設定。")
         else:
-            step_values = values_state.get(step.key) if isinstance(values_state, dict) else {}
-            if not isinstance(step_values, dict):
-                step_values = {}
+            step_values = _effective_review_step_values(step.key, values_state)
             errors.extend(_logical_required_errors(step.key, selected_choice.label, step_values))
             errors.extend(endpoint_requirements.get(step.key, []))
         review_items.append(
@@ -332,6 +337,17 @@ def _builder_review_state(steps: list[object], builder_form_state: dict[str, obj
             }
         )
     return review_items
+
+
+def _effective_review_step_values(step_key: str, values_state: object) -> dict[str, object]:
+    if not isinstance(values_state, dict):
+        return {}
+    merged: dict[str, object] = {}
+    for value_step in _REVIEW_VALUE_STEPS.get(step_key, (step_key,)):
+        step_values = values_state.get(value_step)
+        if isinstance(step_values, dict):
+            merged.update({str(key): value for key, value in step_values.items()})
+    return merged
 
 
 def _logical_required_errors(step_key: str, choice_label: str, step_values: dict[str, object]) -> list[str]:

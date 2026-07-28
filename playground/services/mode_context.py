@@ -17,12 +17,13 @@ def get_mode_context() -> ModeContext:
     mode = session.get("mode", "anonymous")
     source_origin = session.get("source_origin", "manual_new")
     can_edit = mode in {"anonymous", "manual_auth", "aihub_editable"}
+    can_save = mode in {"manual_auth", "aihub_editable"}
 
     return ModeContext(
         mode=mode,
         label=MODE_LABELS.get(mode, MODE_LABELS["anonymous"]),
         role="direct_user" if mode == "aihub_readonly" else "creator",
-        can_save=can_edit,
+        can_save=can_save,
         can_edit=can_edit,
         can_export=False,
         can_view_code=can_edit,

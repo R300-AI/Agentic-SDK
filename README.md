@@ -38,6 +38,8 @@ from agentic_sdk import Workflow
 from agentic_sdk.modules import DirectAnswerAction, KeywordRetrieve, PassThroughPerceive
 
 workflow = Workflow(
+    workflow_name="知識問答 Agent",
+    description="根據內建關鍵字知識庫回答常見問題。",
     perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
@@ -71,6 +73,8 @@ from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPerceive
 
 workflow = Workflow(
+    workflow_name="Foundry 回覆 Agent",
+    description="用 OpenAI-compatible 模型整理檢索結果並生成自然語句回覆。",
     perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
@@ -125,6 +129,8 @@ tools = [
 ]
 
 workflow = Workflow(
+    workflow_name="預約工具 Agent",
+    description="根據使用者輸入判斷是否要發出預約工具呼叫。",
     perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[
@@ -165,6 +171,8 @@ class SummaryAction:
 
 
 workflow = Workflow(
+    workflow_name="摘要處理 Agent",
+    description="把檢索內容交給自訂 Action 做二次整理。",
     perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[

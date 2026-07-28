@@ -28,6 +28,7 @@ class WorkflowState:
     user_message: str
     workflow_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     workflow_name: str = "default"
+    workflow_description: str | None = None
     session_id: str = "default"
     memory_store: PersistentMemory | None = None
     memory: MemoryStore | None = None

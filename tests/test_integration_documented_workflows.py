@@ -62,8 +62,27 @@ class KnowledgeBase:
 
 
 class DocumentedWorkflowIntegrationTests(unittest.TestCase):
+    def test_workflow_description_is_available_on_runtime_state(self) -> None:
+        class DescriptionEchoAction:
+            def __call__(self, state):
+                return state.workflow_description or "missing"
+
+        workflow = Workflow(
+            workflow_name="說明檢查 Agent",
+            description="把 workflow description 帶進 runtime state。",
+            perceive=PassThroughPerceive(),
+            retrieve=PassThroughRetrieve(),
+            action=DescriptionEchoAction(),
+        )
+
+        result = workflow.run("檢查 description")
+
+        self.assertEqual("把 workflow description 帶進 runtime state。", result.final_message)
+
     def test_minimal_readme_modules_run_in_workflow(self) -> None:
         workflow = Workflow(
+            workflow_name="知識問答 Agent",
+            description="根據關鍵字知識庫直接回答問題。",
             perceive=PassThroughPerceive(),
             retrieve=KeywordRetrieve(
                 items=[{"keywords": ["tsip"], "content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"}]

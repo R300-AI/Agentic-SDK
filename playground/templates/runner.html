@@ -3,12 +3,11 @@
 {% block title %}試跑 Agent - AI Hub Agent 建立工具{% endblock %}
 
 {% block body %}
-<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}">
+<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}" data-save-requires-login="{{ 'true' if not mode_context.can_save and mode_context.can_edit else 'false' }}">
   <header class="context-bar">
     <div>
-      <span class="eyebrow">AI Hub Agent</span>
       <div class="runner-title-row">
-        <strong>{{ workflow_summary.name }}</strong>
+        <strong class="runner-greeting">{{ runner_greeting }}</strong>
         {% if mode_context.can_save %}
         <small class="save-status" data-save-status>{{ '已儲存' if last_aihub_save or mode_context.source_origin == 'aihub_loaded' else '尚未儲存' }}</small>
         {% elif mode_context.is_aihub %}
@@ -17,7 +16,7 @@
       </div>
     </div>
     <div class="context-actions">
-      {% if mode_context.can_save %}
+      {% if mode_context.can_edit %}
       <button class="button button-secondary" type="button" data-save-action>儲存</button>
       {% endif %}
       {% if has_ai_hub_agent and mode_context.can_save %}
@@ -33,18 +32,7 @@
   </header>
 
   <section class="runner-layout m365-chat-layout">
-    <section class="task-surface chat-surface" aria-labelledby="runner-title">
-      <div class="chat-intro">
-        <div class="agent-identity chat-hero">
-          <div class="agent-orb" aria-hidden="true">A</div>
-          <div>
-            <p class="eyebrow">可開始使用</p>
-            <h1 id="runner-title">{{ workflow_summary.name }}</h1>
-          </div>
-        </div>
-        <p class="lede">輸入問題、客戶情境或參考資料。</p>
-      </div>
-
+    <section class="task-surface chat-surface" aria-label="Agent 對話區">
       <div class="chat-thread" aria-label="Agent 對話" data-result-thread>
         {% if starter_questions %}
         <section class="starter-question-panel" data-starter-questions aria-label="預設問題">
@@ -101,27 +89,35 @@
 
     <aside class="runner-side-panel chat-rail" aria-label="試跑頁情境資訊">
       <div class="agent-orb" aria-hidden="true">AI</div>
-      <span class="eyebrow">AI Hub Agent</span>
-      <h2>{{ workflow_summary.name }}</h2>
-      <section class="endpoint-panel" data-endpoint-panel>
-        {% if runner_endpoint_state.requirements %}
-        <form class="endpoint-form" data-endpoint-form>
-          {% for requirement in runner_endpoint_state.requirements %}
-          <label class="endpoint-row">
-            <span class="endpoint-module">
-              <strong>{{ requirement.role_label }}</strong>
-            </span>
-            <select name="{{ requirement.role }}" data-endpoint-select>
-              {% for endpoint in requirement.options %}
-              <option value="{{ endpoint.id }}"{% if runner_endpoint_state.selections.get(requirement.role) == endpoint.id %} selected{% endif %}>{{ endpoint.label }}</option>
-              {% endfor %}
-            </select>
-          </label>
-          {% endfor %}
-          <button class="button button-secondary endpoint-deploy-button" type="button" data-endpoint-deploy>部署</button>
-        </form>
-        {% endif %}
-      </section>
+      <span class="eyebrow">Agentic SDK</span>
+      <div class="workflow-meta-stack">
+        <section class="workflow-meta-field" aria-label="workflow name 設定">
+          {% if mode_context.can_edit %}
+          <div class="workflow-side-title-editor" data-side-workflow-title-editor>
+            <button class="workflow-side-title-trigger" type="button" data-side-workflow-title-display data-workflow-name aria-label="編輯 workflow name">{{ workflow_summary.name }}</button>
+            <form class="workflow-side-title-form" data-side-workflow-title-form hidden>
+              <label class="visually-hidden" for="runner-side-workflow-name">workflow_name</label>
+              <input id="runner-side-workflow-name" class="workflow-side-title-input" name="name" type="text" value="{{ workflow_summary.name }}" maxlength="64" autocomplete="off" data-side-workflow-title-input>
+            </form>
+          </div>
+          {% else %}
+          <h2 class="workflow-side-title" data-workflow-name>{{ workflow_summary.name }}</h2>
+          {% endif %}
+        </section>
+        <section class="workflow-meta-field" aria-label="description 設定">
+          {% if mode_context.can_edit %}
+          <div class="workflow-description-editor" data-workflow-description-editor>
+            <button class="workflow-description-trigger{% if not workflow_description %} is-placeholder{% endif %}" type="button" data-workflow-description-display data-workflow-description data-placeholder="{{ workflow_description_placeholder }}" aria-label="編輯 workflow description">{{ workflow_description }}</button>
+            <form class="workflow-description-form" data-workflow-description-form hidden>
+              <label class="visually-hidden" for="runner-workflow-description">description</label>
+              <textarea id="runner-workflow-description" class="workflow-description-input" name="description" rows="4" maxlength="500" placeholder="{{ workflow_description_placeholder }}" data-workflow-description-input>{{ workflow_description }}</textarea>
+            </form>
+          </div>
+          {% else %}
+          <p class="lede{% if not workflow_description %} is-placeholder{% endif %}" data-workflow-description data-placeholder="{{ workflow_description_placeholder }}">{{ workflow_description }}</p>
+          {% endif %}
+        </section>
+      </div>
     </aside>
   </section>
 
@@ -140,6 +136,33 @@
         </div>
       </header>
       <div class="code-preview-block source-preview-markdown" data-code-preview-content></div>
+    </div>
+  </section>
+  {% endif %}
+  {% if mode_context.can_edit and not mode_context.can_save %}
+  <section class="code-preview-modal" role="dialog" aria-modal="true" aria-labelledby="save-login-title" data-save-login-modal hidden>
+    <button class="code-preview-backdrop" type="button" aria-label="關閉登入視窗" data-save-login-close></button>
+    <div class="code-preview-window save-login-window">
+      <header class="code-preview-header">
+        <div>
+          <span class="eyebrow">登入後儲存</span>
+          <h2 id="save-login-title">請先登入 AI Hub</h2>
+        </div>
+        <div class="context-actions">
+          <button class="button button-ghost" type="button" data-save-login-close>關閉</button>
+        </div>
+      </header>
+      <form class="save-login-form" data-save-login-form>
+        <p class="lede">儲存到 AI Hub 前，請先輸入帳號與密碼完成登入。</p>
+        <label for="runner-save-username">帳戶</label>
+        <input id="runner-save-username" name="username" type="text" autocomplete="username" required data-save-login-username>
+        <label for="runner-save-password">密碼</label>
+        <input id="runner-save-password" name="password" type="password" autocomplete="current-password" required data-save-login-password>
+        <p class="inline-status" role="alert" data-save-login-error hidden></p>
+        <div class="context-actions">
+          <button class="button button-primary" type="submit" data-save-login-submit>登入並儲存</button>
+        </div>
+      </form>
     </div>
   </section>
   {% endif %}

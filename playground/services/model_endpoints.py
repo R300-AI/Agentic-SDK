@@ -115,6 +115,22 @@ def endpoint_params_for_role(role: str, selections: dict[str, str] | None) -> di
     return {"api_key": api_key, "base_url": endpoint.base_url, "model": endpoint.model}
 
 
+def endpoint_env_bindings_for_source(python_source: str | None, selections: dict[str, str] | None) -> dict[str, dict[str, str]]:
+    requirements = _deployment_requirements(config_from_source(python_source))
+    normalized = normalize_endpoint_selections(python_source, selections)
+    bindings: dict[str, dict[str, str]] = {}
+    for requirement in requirements:
+        endpoint = _endpoint_for_role(requirement.role, normalized)
+        if endpoint is None:
+            continue
+        bindings[requirement.role] = {
+            "api_key_env": endpoint.api_key_env,
+            "base_url_env": endpoint.base_url_env,
+            "model_env": endpoint.model_env,
+        }
+    return bindings
+
+
 def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirement]:
     requirements: list[OpenAIRequirement] = []
     reachable_llm_roles = reachable_openai_roles(config)

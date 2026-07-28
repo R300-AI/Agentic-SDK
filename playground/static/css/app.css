@@ -237,6 +237,47 @@ a { color: inherit; text-decoration: none; }
 .context-bar strong { display: block; }
 .context-bar small { color: var(--muted); }
 .runner-title-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.65rem; }
+.runner-greeting { font-size: clamp(1.35rem, 2vw, 1.8rem); font-weight: 700; line-height: 1.2; }
+.workflow-title-editor { display: flex; align-items: baseline; min-width: 0; }
+.workflow-title-static,
+.workflow-title-trigger {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+.workflow-title-trigger {
+  cursor: text;
+}
+.workflow-title-trigger:hover,
+.workflow-title-trigger:focus-visible {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+.workflow-title-form { min-width: min(24rem, 82vw); }
+.workflow-title-input {
+  width: 100%;
+  padding: 0.08rem 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 0.45rem;
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.workflow-title-input:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--amd-red) 50%, white);
+  outline-offset: 0;
+}
 .save-status { color: var(--muted); font-size: 0.86rem; font-weight: 500; }
 .entry-actions, .stage-actions, .context-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 
@@ -883,6 +924,98 @@ a { color: inherit; text-decoration: none; }
 .chat-rail .powered-by,
 .chat-rail .agent-context-list span {
   color: #d7d7d7;
+}
+
+.workflow-meta-stack {
+  display: grid;
+  gap: 1.1rem;
+  width: 100%;
+  margin-top: 1.1rem;
+}
+
+.workflow-meta-field {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.workflow-side-title,
+.workflow-side-title-trigger {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #ffffff;
+  background: transparent;
+  font: inherit;
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
+}
+
+.workflow-side-title-trigger,
+.workflow-description-trigger {
+  cursor: text;
+}
+
+.workflow-side-title-trigger:hover,
+.workflow-side-title-trigger:focus-visible,
+.workflow-description-trigger:hover,
+.workflow-description-trigger:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 0.16em;
+}
+
+.workflow-description-trigger.is-placeholder:hover,
+.workflow-description-trigger.is-placeholder:focus-visible {
+  text-decoration: none;
+}
+
+.workflow-side-title-input,
+.workflow-description-input {
+  width: 100%;
+  border: 1px solid #5a5a5a;
+  border-radius: 0;
+  padding: 0.38rem 0.45rem;
+  color: #ffffff;
+  background: #1b1b1b;
+  font: inherit;
+}
+
+.workflow-side-title-input {
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.workflow-description-trigger,
+.workflow-description-input {
+  margin: 0;
+  color: #d7d7d7;
+  font-size: 0.98rem;
+  line-height: 1.6;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+
+.workflow-description-trigger.is-placeholder,
+.lede.is-placeholder[data-workflow-description] {
+  color: transparent;
+}
+
+.workflow-description-trigger.is-placeholder::before,
+.lede.is-placeholder[data-workflow-description]::before {
+  content: attr(data-placeholder);
+  color: #8d8d8d;
+}
+
+.workflow-description-input {
+  min-height: 6.5rem;
+  resize: vertical;
+  padding: 0.45rem;
+  border: 1px solid #5a5a5a;
+  background: #1b1b1b;
 }
 
 .chat-rail .agent-context-list li {
@@ -1620,6 +1753,27 @@ pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0; color: #
 }
 
 .code-preview-modal.open .code-preview-window { opacity: 1; transform: translateY(0) scale(1); }
+
+.save-login-window {
+  width: min(38rem, calc(100vw - 1rem));
+  height: auto;
+  max-height: calc(100vh - 1rem);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.save-login-form {
+  display: grid;
+  gap: 0.85rem;
+  overflow-y: auto;
+}
+
+.save-login-form input {
+  width: 100%;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--ink);
+}
 
 .code-preview-header {
   display: flex;
