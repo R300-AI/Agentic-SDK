@@ -3,8 +3,9 @@ from __future__ import annotations
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from playground.models import ModeContext
+from playground.services.aihub_bridge import start_builder_bridge_session, start_runner_bridge_session
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
-from playground.services.aihub_client import AiHubCredentials, bridge_credentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials
+from playground.services.aihub_client import AiHubCredentials, bridge_credentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials, verify_handoff_token
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
@@ -67,17 +68,7 @@ def navigate_from_aihub_to_builder():
 @entry_bp.get("/builder")
 @entry_bp.get("/builder/")
 def navigate_from_aihub_bridge_to_builder():
-    credentials = bridge_credentials(request.args.get("token"), api_base_url=request.args.get("apiBase"))
-    session.clear()
-    if credentials:
-        _start_authenticated_session(credentials)
-        session["runtime_mode"] = str(request.args.get("runtimeMode") or "managed")
-        session["ai_hub_api_base"] = credentials.api_base_url
-    else:
-        session["mode"] = "anonymous"
-        session["python_source"] = build_default_python_source()
-        session["source_origin"] = "manual_new"
-    _clear_selected_agent_state()
+    start_builder_bridge_session(request.args)
     return redirect(url_for("builder.builder"))
 
 
@@ -133,42 +124,9 @@ def navigate_from_shared_agent_to_runner():
 @entry_bp.get("/runner")
 @entry_bp.get("/runner/")
 def navigate_from_aihub_bridge_to_runner():
-    mode = str(request.args.get("mode") or "read").strip().lower()
-    agent_id = str(request.args.get("agentId") or request.args.get("agent_id") or "").strip()
-    if not agent_id:
-        return _navigation_login_error("Missing AI Hub agent id."), 400
-    if mode == "edit":
-        credentials = bridge_credentials(request.args.get("token"), api_base_url=request.args.get("apiBase"))
-        if not credentials:
-            return _navigation_login_error("Missing AI Hub bridge token."), 400
-        session.clear()
-        result = load_config(agent_id, credentials=credentials, origin=request.host_url)
-        if not result.get("loaded"):
-            return _navigation_login_error(result.get("error") or "無法載入此 Agent。"), 502
-        _start_authenticated_session(credentials)
-        session["runtime_mode"] = str(request.args.get("runtimeMode") or "managed")
-        session["ai_hub_api_base"] = credentials.api_base_url
-        session["mode"] = "aihub_editable"
-        session["agent_id"] = result["agent_id"]
-        session["agent_name"] = result.get("agent_name") or ""
-        session["python_source"] = result["python_source"]
-        bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
-        if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
-            return _navigation_login_error(_semantic_bundle_restore_error(bundle_result)), 502
-        session["source_origin"] = "aihub_loaded"
-        return redirect(url_for("runner.runner"))
-
-    result = load_public_config(agent_id, origin=request.host_url)
-    if not result.get("loaded"):
-        return _navigation_login_error(result.get("error") or "無法載入此 Agent。"), 502
-    session.clear()
-    session["mode"] = "aihub_readonly"
-    session["account_context_present"] = False
-    session["agent_id"] = result["agent_id"]
-    session["agent_name"] = result.get("agent_name") or ""
-    session["agent_owner"] = str(request.args.get("owner") or "").strip()
-    session["python_source"] = result["python_source"]
-    session["source_origin"] = "aihub_shared_readonly"
+    bridge_result = start_runner_bridge_session(request.args, origin=request.host_url)
+    if not bridge_result.get("started"):
+        return _navigation_login_error(str(bridge_result.get("error") or "無法載入此 Agent。")), int(bridge_result.get("status_code") or 400)
     return redirect(url_for("runner.runner"))
 
 
@@ -248,6 +206,18 @@ def _navigation_payload() -> dict[str, object]:
 
 def _verified_navigation_credentials(payload: dict[str, object] | None = None) -> AiHubCredentials | None:
     payload = payload or _navigation_payload()
+    token = str(payload.get("token") or "").strip()
+    api_base_url = _navigation_api_base_url(payload)
+    if token:
+        verified = verify_handoff_token(token, api_base_url=api_base_url, origin=request.host_url)
+        if not verified:
+            return None
+        requested_agent_id = str(payload.get("agent_id") or "").strip()
+        verified_agent_id = str(verified.get("agent_id") or "").strip()
+        if requested_agent_id and verified_agent_id and requested_agent_id != verified_agent_id:
+            return None
+        return AiHubCredentials(username=verified["username"], password="", token=token, api_base_url=api_base_url)
+
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
     if not username or not password:
@@ -257,12 +227,16 @@ def _verified_navigation_credentials(payload: dict[str, object] | None = None) -
     return AiHubCredentials(username=username, password=password)
 
 
+def _navigation_api_base_url(payload: dict[str, object]) -> str:
+    return str(payload.get("api_base_url") or payload.get("apiBase") or payload.get("api_base") or "").strip().rstrip("/")
+
+
 def _start_authenticated_session(credentials: AiHubCredentials) -> None:
     session.clear()
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
     session["ai_hub_username"] = credentials.username.strip()
-    session["ai_hub_credential_ticket"] = issue_credential_ticket(credentials.username, credentials.password)
+    session["ai_hub_credential_ticket"] = issue_credential_ticket(credentials.username, credentials.password, token=credentials.token, api_base_url=credentials.api_base_url)
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
 

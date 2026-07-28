@@ -5,6 +5,7 @@ from dataclasses import asdict, is_dataclass
 
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, stream_with_context, url_for
 
+from playground.services.aihub_bridge import has_runner_bridge_query, start_runner_bridge_session
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import normalize_endpoint_selections
@@ -18,7 +19,12 @@ runner_bp = Blueprint("runner", __name__, url_prefix="/playground/run")
 
 @runner_bp.get("")
 def runner():
-    apply_aihub_deep_link(request.args.get("mode"), request.args.get("agent_id"))
+    if has_runner_bridge_query(request.args):
+        bridge_result = start_runner_bridge_session(request.args, origin=request.host_url)
+        if not bridge_result.get("started"):
+            return jsonify({"error": bridge_result.get("error")}), int(bridge_result.get("status_code") or 400)
+    else:
+        apply_aihub_deep_link(request.args.get("mode"), request.args.get("agent_id"))
 
     python_source = session.get("python_source")
     if not python_source:

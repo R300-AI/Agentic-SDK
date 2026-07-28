@@ -9,6 +9,7 @@ from playground.routes import aihub as aihub_routes
 from playground.routes import entry as entry_routes
 from playground.routes import runner as runner_routes
 from playground.services import aihub_client
+from playground.services import aihub_bridge
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -67,6 +68,34 @@ def test_verify_credentials_rejects_invalid_or_unreachable_ai_hub(monkeypatch):
     monkeypatch.delenv("AI_HUB_BASE_URL")
     monkeypatch.delenv("AIHUB_BASE_URL", raising=False)
     assert aihub_client.verify_credentials("creator", "secret") is False
+
+
+def test_verify_handoff_token_calls_ai_hub_handoff_api(monkeypatch):
+    calls = []
+
+    def fake_post(url, *, json, headers, timeout):
+        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+        return httpx.Response(200, json={"valid": True, "username": "creator", "agent_id": "agent-1"})
+
+    monkeypatch.setenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", "1.25")
+    monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
+    monkeypatch.setattr(aihub_client.httpx, "post", fake_post)
+
+    result = aihub_client.verify_handoff_token(
+        "handoff-token",
+        api_base_url="https://aihub.example/",
+        origin="https://playground.example/",
+    )
+
+    assert result == {"username": "creator", "agent_id": "agent-1"}
+    assert calls == [
+        {
+            "url": "https://aihub.example/api/playground/handoff/verify",
+            "json": {"token": "handoff-token"},
+            "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
+            "timeout": 1.25,
+        }
+    ]
 
 
 def test_save_config_calls_ai_hub_save_api(monkeypatch):
@@ -350,6 +379,38 @@ def test_aihub_navigation_builder_accepts_json_payload(monkeypatch):
     assert seen == [("creator", "secret", "https://playground.example/")]
 
 
+def test_aihub_navigation_builder_accepts_handoff_token(monkeypatch):
+    seen = []
+
+    def fake_verify(token, *, api_base_url=None, origin=None):
+        seen.append((token, api_base_url, origin))
+        return {"username": "creator", "agent_id": ""}
+
+    monkeypatch.setattr(entry_routes, "verify_handoff_token", fake_verify)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/builder",
+            base_url="https://playground.example",
+            data={"token": "handoff-token", "api_base_url": "https://aihub.example/"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/playground/builder")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "manual_auth"
+            assert session["ai_hub_username"] == "creator"
+            credentials = aihub_client.credentials_for_ticket(session["ai_hub_credential_ticket"])
+
+    assert seen == [("handoff-token", "https://aihub.example", "https://playground.example/")]
+    assert credentials is not None
+    assert credentials.username == "creator"
+    assert credentials.password == ""
+    assert credentials.token == "handoff-token"
+    assert credentials.api_base_url == "https://aihub.example"
+
+
 def test_bridge_builder_url_enters_managed_builder():
     app = create_app()
     app.config.update(TESTING=True, SECRET_KEY="test-secret")
@@ -368,6 +429,24 @@ def test_bridge_builder_url_enters_managed_builder():
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/playground/builder")
+
+
+def test_playground_builder_url_accepts_bridge_query():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/playground/builder?runtimeMode=managed&apiBase=https%3A%2F%2Faihub.example&token=bridge-token",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "manual_auth"
+            assert session["runtime_mode"] == "managed"
+            assert session["ai_hub_api_base"] == "https://aihub.example"
+            assert session["ai_hub_credential_ticket"]
+
+    assert response.status_code == 200
 
 
 def test_aihub_navigation_runner_verifies_and_loads_agent(monkeypatch):
@@ -501,6 +580,44 @@ def test_aihub_navigation_runner_accepts_json_payload(monkeypatch):
     assert response.headers["Location"].endswith("/playground/run")
 
 
+def test_aihub_navigation_runner_accepts_handoff_token(monkeypatch):
+    seen_verify = []
+    seen_load = []
+
+    def fake_verify(token, *, api_base_url=None, origin=None):
+        seen_verify.append((token, api_base_url, origin))
+        return {"username": "creator", "agent_id": "agent-1"}
+
+    def fake_load_config(agent_id, *, credentials=None, origin=None):
+        seen_load.append({"agent_id": agent_id, "credentials": credentials, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Agent One", "python_source": "print('loaded')"}
+
+    monkeypatch.setattr(entry_routes, "verify_handoff_token", fake_verify)
+    monkeypatch.setattr(entry_routes, "load_config", fake_load_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/runner",
+            base_url="https://playground.example",
+            json={"token": "handoff-token", "api_base_url": "https://aihub.example/", "agent_id": "agent-1"},
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_editable"
+            assert session["agent_id"] == "agent-1"
+            assert session["source_origin"] == "aihub_loaded"
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/run")
+    assert seen_verify == [("handoff-token", "https://aihub.example", "https://playground.example/")]
+    assert seen_load[0]["agent_id"] == "agent-1"
+    assert seen_load[0]["credentials"].username == "creator"
+    assert seen_load[0]["credentials"].password == ""
+    assert seen_load[0]["credentials"].token == "handoff-token"
+    assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
+
+
 def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
     seen_load = []
 
@@ -508,7 +625,7 @@ def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
         seen_load.append({"agent_id": agent_id, "credentials": credentials, "origin": origin})
         return {"loaded": True, "agent_id": agent_id, "agent_name": "Agent One", "python_source": "print('loaded')"}
 
-    monkeypatch.setattr(entry_routes, "load_config", fake_load_config)
+    monkeypatch.setattr(aihub_bridge, "load_config", fake_load_config)
     app = create_app()
     app.config.update(TESTING=True, SECRET_KEY="test-secret")
 
@@ -530,6 +647,34 @@ def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
     assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
 
 
+def test_playground_runner_edit_accepts_bridge_query(monkeypatch):
+    seen_load = []
+
+    def fake_load_config(agent_id, *, credentials=None, origin=None):
+        seen_load.append({"agent_id": agent_id, "credentials": credentials, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Agent One", "python_source": "print('loaded')"}
+
+    monkeypatch.setattr(aihub_bridge, "load_config", fake_load_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/playground/run?mode=edit&runtimeMode=managed&apiBase=https%3A%2F%2Faihub.example&token=bridge-token&agentId=agent-1",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_editable"
+            assert session["account_context_present"] is True
+            assert session["agent_id"] == "agent-1"
+            assert session["source_origin"] == "aihub_loaded"
+
+    assert response.status_code == 200
+    assert seen_load[0]["agent_id"] == "agent-1"
+    assert seen_load[0]["credentials"].token == "bridge-token"
+    assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
+
+
 def test_bridge_runner_read_loads_public_agent(monkeypatch):
     seen_load = []
 
@@ -537,7 +682,7 @@ def test_bridge_runner_read_loads_public_agent(monkeypatch):
         seen_load.append({"agent_id": agent_id, "origin": origin})
         return {"loaded": True, "agent_id": agent_id, "agent_name": "Shared Agent", "python_source": "print('shared')"}
 
-    monkeypatch.setattr(entry_routes, "load_public_config", fake_load_public_config)
+    monkeypatch.setattr(aihub_bridge, "load_public_config", fake_load_public_config)
     app = create_app()
     app.config.update(TESTING=True, SECRET_KEY="test-secret")
 
@@ -555,6 +700,33 @@ def test_bridge_runner_read_loads_public_agent(monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/playground/run")
+    assert seen_load == [{"agent_id": "agent-1", "origin": "https://playground.example/"}]
+
+
+def test_playground_runner_read_accepts_bridge_query(monkeypatch):
+    seen_load = []
+
+    def fake_load_public_config(agent_id, *, origin=None):
+        seen_load.append({"agent_id": agent_id, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Shared Agent", "python_source": "print('shared')"}
+
+    monkeypatch.setattr(aihub_bridge, "load_public_config", fake_load_public_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/playground/run?mode=read&owner=creator&agentId=agent-1",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_readonly"
+            assert session["account_context_present"] is False
+            assert session["agent_id"] == "agent-1"
+            assert session["agent_owner"] == "creator"
+            assert session["source_origin"] == "aihub_shared_readonly"
+
+    assert response.status_code == 200
     assert seen_load == [{"agent_id": "agent-1", "origin": "https://playground.example/"}]
 
 

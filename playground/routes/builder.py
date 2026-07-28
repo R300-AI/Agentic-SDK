@@ -6,6 +6,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
 
+from playground.services.aihub_bridge import has_builder_bridge_query, start_builder_bridge_session
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
 from playground.services.semantic_runtime import new_upload_id, runtime_root, source_files_dir
@@ -48,6 +49,8 @@ _REVIEW_VALUE_STEPS = {
 
 @builder_bp.before_request
 def require_builder_edit_mode():
+    if request.endpoint == "builder.builder" and has_builder_bridge_query(request.args):
+        start_builder_bridge_session(request.args)
     if not get_mode_context().can_edit:
         abort(403)
 

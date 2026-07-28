@@ -13,6 +13,7 @@ from playground.services.source_builder import build_default_python_source
 
 
 _AUTH_VERIFY_PATH = "/api/playground/auth/verify"
+_HANDOFF_VERIFY_PATH = "/api/playground/handoff/verify"
 _AGENTS_PATH = "/api/playground/agents"
 _CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/load"
 _PUBLIC_CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/public/load"
@@ -40,11 +41,11 @@ class _CredentialTicket:
 _credential_tickets: dict[str, _CredentialTicket] = {}
 
 
-def issue_credential_ticket(username: str, password: str) -> str:
+def issue_credential_ticket(username: str, password: str, *, token: str = "", api_base_url: str = "") -> str:
     _cleanup_expired_tickets()
     ticket = token_urlsafe(32)
     _credential_tickets[ticket] = _CredentialTicket(
-        credentials=AiHubCredentials(username=username.strip(), password=password),
+        credentials=AiHubCredentials(username=username.strip(), password=password, token=token, api_base_url=api_base_url.strip().rstrip("/")),
         expires_at=time() + _credential_ttl_seconds(),
     )
     return ticket
@@ -85,6 +86,37 @@ def verify_credentials(username: str, password: str, *, origin: str | None = Non
         return False
 
     return payload.get("valid") is True
+
+
+def verify_handoff_token(token: str, *, api_base_url: str | None = None, origin: str | None = None) -> dict[str, str] | None:
+    resolved_token = str(token or "").strip()
+    if not resolved_token:
+        return None
+
+    base_url = (str(api_base_url or "").strip().rstrip("/") or _ai_hub_base_url())
+    if not base_url:
+        return None
+
+    try:
+        response = httpx.post(
+            f"{base_url}{_HANDOFF_VERIFY_PATH}",
+            json={"token": resolved_token},
+            headers=_json_headers(origin),
+            timeout=_request_timeout_seconds(),
+        )
+        if response.status_code >= 400:
+            return None
+        payload = response.json()
+    except (httpx.HTTPError, ValueError):
+        return None
+
+    if payload.get("valid") is not True:
+        return None
+    username = str(payload.get("username") or "").strip()
+    agent_id = str(payload.get("agent_id") or "").strip()
+    if not username:
+        return None
+    return {"username": username, "agent_id": agent_id}
 
 
 def bridge_credentials(token: str | None, *, api_base_url: str | None = None) -> AiHubCredentials | None:
