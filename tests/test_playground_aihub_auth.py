@@ -73,8 +73,8 @@ def test_verify_credentials_rejects_invalid_or_unreachable_ai_hub(monkeypatch):
 def test_verify_handoff_token_calls_ai_hub_handoff_api(monkeypatch):
     calls = []
 
-    def fake_post(url, *, json, headers, timeout):
-        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+    def fake_post(url, *, json, headers, timeout, follow_redirects):
+        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout, "follow_redirects": follow_redirects})
         return httpx.Response(200, json={"valid": True, "username": "creator", "agent_id": "agent-1"})
 
     monkeypatch.setenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", "1.25")
@@ -94,6 +94,7 @@ def test_verify_handoff_token_calls_ai_hub_handoff_api(monkeypatch):
             "json": {"token": "handoff-token"},
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
             "timeout": 1.25,
+            "follow_redirects": True,
         }
     ]
 

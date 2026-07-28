@@ -103,6 +103,7 @@ def verify_handoff_token(token: str, *, api_base_url: str | None = None, origin:
             json={"token": resolved_token},
             headers=_json_headers(origin),
             timeout=_request_timeout_seconds(),
+            follow_redirects=True,
         )
         if response.status_code >= 400:
             return None
