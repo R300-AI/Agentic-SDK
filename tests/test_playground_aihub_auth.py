@@ -710,6 +710,63 @@ def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):
     assert session_source == "print('reloaded')"
 
 
+def test_agent_picker_blocks_semantic_agent_when_bundle_restore_fails(monkeypatch):
+    semantic_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Semantic Agent",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    monkeypatch.setattr(entry_routes, "list_agents", lambda *, credentials=None, origin=None: {"loaded": True, "items": [{"agent_id": "agent-1", "agent_name": "Semantic Agent"}]})
+    monkeypatch.setattr(entry_routes, "load_config", lambda agent_id, *, credentials=None, origin=None: {"loaded": True, "agent_id": agent_id, "agent_name": "Semantic Agent", "python_source": semantic_source})
+    monkeypatch.setattr(entry_routes, "restore_runtime_bundle", lambda **kwargs: {"bundle_restored": False, "bundle_error": "Bundle object was not found."})
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", data={"username": "creator", "password": "secret"})
+        response = client.post("/playground/agents/select", data={"agent_id": "agent-1"})
+
+    assert response.status_code == 502
+    html = response.get_data(as_text=True)
+    assert "Bundle object was not found." in html
+    assert "Semantic Agent" in html
+
+
+def test_reload_blocks_semantic_agent_when_bundle_restore_fails(monkeypatch):
+    semantic_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Semantic Agent",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    monkeypatch.setattr(aihub_routes, "load_config", lambda agent_id, *, credentials=None, origin=None: {"loaded": True, "agent_id": agent_id, "agent_name": "Semantic Agent", "python_source": semantic_source})
+    monkeypatch.setattr(aihub_routes, "restore_runtime_bundle", lambda **kwargs: {"bundle_restored": False, "bundle_error": "Bundle object was not found."})
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", data={"username": "creator", "password": "secret"})
+        with client.session_transaction() as session:
+            session["agent_id"] = "agent-1"
+        response = client.post("/playground/aihub/config/reload")
+
+    assert response.status_code == 502
+    assert response.json["loaded"] is False
+    assert response.json["error"] == "Bundle object was not found."
+    assert response.json["error_code"] == "semantic_bundle_not_restored"
+
+
 def test_agent_picker_new_resets_selected_agent_and_enters_builder(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     app = create_app()

@@ -6,7 +6,7 @@ from playground.models import ModeContext
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
 from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials
 from playground.services.deep_link import apply_aihub_deep_link
-from playground.services.source_builder import build_default_python_source
+from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
 
 entry_bp = Blueprint("entry", __name__)
@@ -85,7 +85,9 @@ def navigate_from_aihub_to_runner():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
-    _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
+    bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
+    if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
+        return _navigation_login_error(_semantic_bundle_restore_error(bundle_result)), 502
     session["source_origin"] = "aihub_loaded"
     return redirect(url_for("runner.runner"))
 
@@ -163,7 +165,16 @@ def select_agent():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
-    _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
+    bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
+    if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
+        agents_result = list_agents(credentials=credentials, origin=request.host_url)
+        agents = agents_result.get("items") if agents_result.get("loaded") else []
+        return render_template(
+            "agent_picker.html",
+            mode_context=ModeContext(mode="manual_auth", label="已登入 AI Hub", can_save=True, can_edit=True, can_view_code=True),
+            agents=agents if isinstance(agents, list) else [],
+            load_error=_semantic_bundle_restore_error(bundle_result),
+        ), 502
     session["source_origin"] = "aihub_loaded"
     session.pop("last_aihub_save", None)
     return redirect(url_for("runner.runner"))
@@ -204,7 +215,7 @@ def _clear_selected_agent_state() -> None:
     session.pop("builder_upload_id", None)
 
 
-def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials) -> None:
+def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials) -> dict[str, object]:
     bundle_result = restore_runtime_bundle(agent_id=agent_id, credentials=credentials, origin=request.host_url)
     if bundle_result.get("bundle_restored"):
         if bundle_result.get("builder_upload_id"):
@@ -214,6 +225,15 @@ def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials)
         session["last_aihub_bundle_load"] = bundle_result
     else:
         session.pop("last_aihub_bundle_load", None)
+    return bundle_result
+
+
+def _semantic_bundle_required_for_result(result: dict[str, object]) -> bool:
+    return semantic_bundle_required_from_source(str(result.get("python_source") or ""))
+
+
+def _semantic_bundle_restore_error(bundle_result: dict[str, object]) -> str:
+    return str(bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not restored.")
 
 
 def _navigation_login_error(message: str = "We could not verify those AI Hub credentials. Check the account and try again."):

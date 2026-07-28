@@ -5,7 +5,7 @@ from flask import Blueprint, jsonify, request, session
 from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials
 from playground.services.security import is_allowed_origin
-from playground.services.source_builder import config_from_source, get_workflow_summary
+from playground.services.source_builder import config_from_source, get_workflow_summary, semantic_bundle_required_from_source
 
 
 aihub_bp = Blueprint("aihub", __name__, url_prefix="/playground/aihub")
@@ -37,6 +37,8 @@ def load_aihub_config():
     session["agent_id"] = loaded["agent_id"]
     session["python_source"] = loaded["python_source"]
     bundle_result = _restore_bundle_for_session(str(loaded["agent_id"]), credentials)
+    if _semantic_bundle_required_for_source(loaded.get("python_source")) and not bundle_result.get("bundle_restored"):
+        return jsonify({**loaded, **bundle_result, "loaded": False, "error": _semantic_bundle_restore_error(bundle_result), "error_code": bundle_result.get("bundle_error_code") or "semantic_bundle_not_restored"}), 502
     if bundle_result.get("bundle_restored") and bundle_result.get("python_source"):
         session["python_source"] = bundle_result["python_source"]
         loaded["python_source"] = bundle_result["python_source"]
@@ -75,6 +77,8 @@ def reload_aihub_config():
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
     bundle_result = _restore_bundle_for_session(str(result["agent_id"]), credentials)
+    if _semantic_bundle_required_for_source(result.get("python_source")) and not bundle_result.get("bundle_restored"):
+        return jsonify({**result, **bundle_result, "loaded": False, "error": _semantic_bundle_restore_error(bundle_result), "error_code": bundle_result.get("bundle_error_code") or "semantic_bundle_not_restored"}), 502
     if bundle_result.get("bundle_restored") and bundle_result.get("python_source"):
         session["python_source"] = bundle_result["python_source"]
         result["python_source"] = bundle_result["python_source"]
@@ -161,4 +165,12 @@ def _restore_bundle_for_session(agent_id: str, credentials) -> dict[str, object]
 
 
 def _semantic_bundle_required(workflow_config) -> bool:
-    return workflow_config.retrieve_module == "SemanticRetrieve" and bool(workflow_config.semantic_support_files or session.get("builder_upload_id"))
+    return workflow_config.retrieve_module == "SemanticRetrieve" and semantic_bundle_required_from_source(session.get("python_source"), builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None)
+
+
+def _semantic_bundle_required_for_source(python_source: object) -> bool:
+    return semantic_bundle_required_from_source(str(python_source or ""))
+
+
+def _semantic_bundle_restore_error(bundle_result: dict[str, object]) -> str:
+    return str(bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not restored.")

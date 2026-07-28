@@ -451,6 +451,16 @@ def config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     return _config_from_source(existing_source)
 
 
+def semantic_bundle_required_from_source(existing_source: str | None, *, builder_upload_id: str | None = None) -> bool:
+    source = existing_source or ""
+    config = _config_from_source(source)
+    if config.retrieve_module != "SemanticRetrieve":
+        return False
+    if builder_upload_id and builder_upload_id.strip():
+        return True
+    return bool(_extract_semantic_sources(source))
+
+
 def normalize_python_source(existing_source: str | None) -> str:
     return _build_source_for_config(_config_from_source(existing_source))
 
