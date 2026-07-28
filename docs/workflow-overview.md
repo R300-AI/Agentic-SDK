@@ -21,7 +21,7 @@ Workflow(
 )
 ```
 
-`workflow_name` 用來標示這條 workflow 的公開名稱；`description` 則是這條 workflow 的說明文字，會保存在 `Workflow` 與 `WorkflowState` 上供應用層或自訂模組使用。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；但某個節點會不會真的在這次執行中被走到，仍取決於前一節點回傳的 `next_module`。
+`workflow_name` 用來標示這條 workflow 的公開名稱；未顯式指定時，SDK 與 Playground 都使用 `default`。`description` 則是這條 workflow 的說明文字，會保存在 `Workflow` 與 `WorkflowState` 上供應用層或自訂模組使用。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；但某個節點會不會真的在這次執行中被走到，仍取決於前一節點回傳的 `next_module`。
 
 執行期間有四層資料分工：
 

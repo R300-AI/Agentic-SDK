@@ -324,8 +324,8 @@ def test_runner_can_clear_workflow_description_and_source_omits_description_argu
 def test_legacy_runner_placeholder_description_is_treated_as_empty():
     app = create_app()
     legacy_source = build_default_python_source().replace(
-        'workflow_name="客戶回覆 Agent",',
-        'workflow_name="客戶回覆 Agent",\n    description="模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。",',
+        'workflow_name="default",',
+        'workflow_name="default",\n    description="模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。",',
     )
 
     with app.test_client() as client:
@@ -605,6 +605,7 @@ def test_source_preview_uses_selected_endpoint_env_bindings(monkeypatch):
     assert "import os" not in source_page
     assert 'TextPerceive(api_key="<PERCEIVE_API_KEY>", base_url="<PERCEIVE_API_BASE_URL>", model="<PERCEIVE_MODEL>"' in source_page
     assert 'NextStepPlan(api_key="<ACTION_API_KEY>", base_url="<ACTION_API_BASE_URL>", model="<ACTION_MODEL>"' in source_page
+    assert "retrieve_name=" not in source_page
     assert 'SemanticRetrieve(' in source_page
     assert 'api_key="<RETRIEVE_API_KEY>"' in source_page
     assert 'base_url="<RETRIEVE_API_BASE_URL>"' in source_page

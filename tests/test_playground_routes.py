@@ -323,7 +323,7 @@ def test_runner_route_renders_task_shell():
         response = client.get("/playground/run")
 
     assert response.status_code == 200
-    assert "客戶回覆 Agent".encode("utf-8") in response.data
+    assert "default".encode("utf-8") in response.data
     assert b"data-result-thread hidden" in response.data
     assert b"data-result-surface hidden" in response.data
     assert b"aria-controls=\"trust-basis-panel\"" in response.data
@@ -567,7 +567,7 @@ def test_route_map_source_and_runner_endpoints():
     assert "history_item" not in execute_response.json
     assert preview_response.status_code == 200
     assert b"from agentic_sdk import Workflow" in preview_response.data
-    assert "workflow_name=\"客戶回覆 Agent\"".encode("utf-8") in preview_response.data
+    assert "workflow_name=\"default\"".encode("utf-8") in preview_response.data
     assert b"description=" not in preview_response.data
     assert export_response.status_code == 200
     assert "agentic_workflow.py" in export_response.headers["Content-Disposition"]

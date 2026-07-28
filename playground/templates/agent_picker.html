@@ -13,29 +13,36 @@
       </div>
     </div>
     <div class="entry-copy">
-      <h1 id="agent-picker-title">選擇要編輯的 Agent。</h1>
-      <p class="lede">可載入既有 Agent 的 Playground 配置，或建立新的 Agent 設定。</p>
+      <h1 id="agent-picker-title">選擇既有的 Agent</h1>
     </div>
 
     {% if load_error %}
     <p class="inline-status error" role="alert">{{ load_error }}</p>
     {% endif %}
 
-    <div class="entry-choice-grid" aria-label="選擇 Agent">
+    <section class="agent-list-panel" aria-labelledby="existing-agent-list-title">
+      <h2 id="existing-agent-list-title">既有 Agent</h2>
+      {% if agents %}
+      <div class="agent-option-list" role="list">
       {% for agent in agents %}
-      <form class="entry-choice-card" method="post" action="{{ url_for('entry.select_agent') }}">
-        <span class="choice-icon" aria-hidden="true">AI</span>
-        <h2>{{ agent.agent_name or agent.agent_id }}</h2>
-        <p>{{ agent.description or '載入此 Agent 最近一次保存的 Playground 配置。' }}</p>
+      <form class="agent-option" role="listitem" method="post" action="{{ url_for('entry.select_agent') }}">
+        <div class="agent-option-main">
+          <strong>{{ agent.agent_name or agent.workflow_name or agent.agent_id }}</strong>
+          {% if agent.description %}<span>{{ agent.description }}</span>{% endif %}
+        </div>
         <input type="hidden" name="agent_id" value="{{ agent.agent_id }}">
-        <button class="button button-primary" type="submit">載入並編輯</button>
+        <button class="button button-secondary" type="submit">編輯</button>
       </form>
       {% endfor %}
+      </div>
+      {% else %}
+      <p class="agent-empty-state">目前沒有可載入的既有 Agent。</p>
+      {% endif %}
+    </section>
 
+    <div class="entry-choice-grid" aria-label="建立新的 Agent">
       <form class="entry-choice-card quiet" method="post" action="{{ url_for('entry.start_new_agent') }}">
-        <span class="choice-icon" aria-hidden="true">NEW</span>
-        <h2>建立新的 Agent</h2>
-        <p>先在 Playground 建立設定；第一次儲存時 AI Hub 會建立 Agent 並回傳 agent_id。</p>
+        <h2>或建立新的Agent</h2>
         <button class="button button-secondary" type="submit">開始新建</button>
       </form>
     </div>

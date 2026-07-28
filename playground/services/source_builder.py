@@ -24,8 +24,8 @@ _LEGACY_GENERATED_WORKFLOW_NAMES = {
     "OpenAI Client Helper": "自然回覆 Agent",
     "Custom Action Helper": "規則處理 Agent",
 }
-_GENERATED_WORKFLOW_NAMES = set(_LEGACY_GENERATED_WORKFLOW_NAMES.values())
-_DEFAULT_WORKFLOW_NAME = "客戶回覆 Agent"
+_DEFAULT_WORKFLOW_NAME = "default"
+_GENERATED_WORKFLOW_NAMES = set(_LEGACY_GENERATED_WORKFLOW_NAMES.values()) | {_DEFAULT_WORKFLOW_NAME}
 _DEFAULT_STRUCTURED_RESULT_WORKFLOW_NAME = "固定格式 Agent"
 
 _ACTION_SPECIFIC_PROFILE_HINTS = {"Structured Result", "Custom Action", "OpenAI Client"}
@@ -1483,7 +1483,6 @@ def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str], endpoint_
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
     arguments = [
         *_llm_arguments("PLAN", binding_role=plan_binding_role, endpoint_bindings=endpoint_bindings),
-        f"retrieve_name={json.dumps(_retrieve_name(config), ensure_ascii=False)}",
         f"retrieve_description={json.dumps(description, ensure_ascii=False)}",
     ]
     return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
