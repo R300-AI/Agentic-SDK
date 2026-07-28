@@ -25,8 +25,9 @@ Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以�
 ```bash
 git clone https://github.com/R300-AI/Agentic-SDK.git
 cd Agentic-SDK
-python -m pip install -r requirements.txt
-python -c "import agentic_sdk; print('Agentic SDK import ok')"
+uv init -p 3.12
+uv add -r requirements.txt
+uv run python -c "import agentic_sdk; print('Agentic SDK import ok')"
 ```
 
 ## 快速開始
@@ -196,7 +197,7 @@ print(result.final_message)
 正式 Playground 是 Flask app，包含 Entry、Builder、Runner、Source preview/export、AI Hub 登入與儲存串接，以及 ToolCallAction 互動面板。
 
 ```bash
-python -m flask --app playground.app:app run --host 127.0.0.1 --port 5050 --no-reload --no-debugger
+uv run python -m flask --app playground.app:app run --host 127.0.0.1 --port 5050 --no-reload --no-debugger
 ```
 
 開啟：
@@ -219,11 +220,11 @@ AI_HUB_PLAYGROUND_ORIGIN=https://agentic-sdk-playground.azurewebsites.net
 ## Demo 與文件
 
 - Demo 範例在 `demo/README.md`。
-- 文件網站來源在 `docs/`，本機可用 `python -m mkdocs build --strict` 驗證。
+- 文件網站來源在 `docs/`，本機可用 `uv run --with-requirements requirements-docs.txt python -m mkdocs build --strict` 驗證。
 - GitHub Actions 到 Azure App Service 的部署說明在 `docs/github_cicd_workflow.md`。
 
 ## 測試
 
 ```bash
-python -m pytest -q
+uv run --with pytest python -m pytest -q
 ```

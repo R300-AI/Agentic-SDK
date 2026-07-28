@@ -4,6 +4,8 @@
 
 AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
 
+語意搜尋支援文件與 FAISS index artifact 的下一版持久化建議，見 [AI Hub Playground Storage API](aihub_playground_storage_api.md)。
+
 ## 這份文件會幫你完成什麼
 
 完成這一頁後，你應該能清楚分辨三種進入 Playground 的方式：

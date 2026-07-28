@@ -80,6 +80,8 @@ def execute_python_source(
     message: str = "",
     attachments: list[dict] | None = None,
     endpoint_selections: dict[str, str] | None = None,
+    semantic_source_path: str | None = None,
+    semantic_index_path: str | None = None,
     tool_call_submission: dict[str, object] | None = None,
     process_observer: Callable[[dict[str, str]], None] | None = None,
 ) -> dict[str, object]:
@@ -124,7 +126,13 @@ def execute_python_source(
         }
 
     try:
-        workflow = _workflow_from_source(python_source, execution_workflow_name, endpoint_selections or {})
+        workflow = _workflow_from_source(
+            python_source,
+            execution_workflow_name,
+            endpoint_selections or {},
+            semantic_source_path=semantic_source_path,
+            semantic_index_path=semantic_index_path,
+        )
         if tool_submission_context is not None:
             workflow_result = _run_tool_submission_continuation(
                 workflow,
@@ -211,6 +219,8 @@ def stream_python_source_execution(
     message: str = "",
     attachments: list[dict] | None = None,
     endpoint_selections: dict[str, str] | None = None,
+    semantic_source_path: str | None = None,
+    semantic_index_path: str | None = None,
     tool_call_submission: dict[str, object] | None = None,
 ) -> Iterator[dict[str, object]]:
     queue: Queue[dict[str, object] | None] = Queue()
@@ -225,6 +235,8 @@ def stream_python_source_execution(
                 message=message,
                 attachments=attachments,
                 endpoint_selections=endpoint_selections,
+                semantic_source_path=semantic_source_path,
+                semantic_index_path=semantic_index_path,
                 tool_call_submission=tool_call_submission,
                 process_observer=publish_process_event,
             )
@@ -254,6 +266,41 @@ def stream_python_source_execution(
         if item is None:
             break
         yield item
+
+
+def stream_python_source_initialization(
+    python_source: str,
+    *,
+    endpoint_selections: dict[str, str] | None = None,
+    semantic_source_path: str | None = None,
+    semantic_index_path: str | None = None,
+) -> Iterator[dict[str, object]]:
+    config = config_from_source(python_source)
+    reachable_roles = reachable_workflow_roles(config)
+    steps = _initialization_steps(config, endpoint_selections or {}, reachable_roles, semantic_source_path, semantic_index_path)
+    total = len(steps)
+    yield {"type": "progress", "completed": 0, "total": total, "message": "正在準備 Agent 初始化..."}
+    completed = 0
+    for role, label, initializer in steps:
+        yield {"type": "progress", "completed": completed, "total": total, "role": role, "message": f"正在初始化{label}..."}
+        try:
+            module = initializer()
+            if role == "retrieve" and config.retrieve_module == "SemanticRetrieve":
+                _warm_semantic_retrieve(module)
+        except Exception as exc:
+            yield {
+                "type": "final",
+                "ready": False,
+                "completed": completed,
+                "total": total,
+                "role": role,
+                "message": f"{label}初始化失敗。",
+                "error": str(exc),
+            }
+            return
+        completed += 1
+        yield {"type": "progress", "completed": completed, "total": total, "role": role, "message": f"{label}已完成。"}
+    yield {"type": "final", "ready": True, "completed": completed, "total": total, "message": "Agent 已準備完成，可以開始對話。"}
 
 
 def _tool_submission_context(config: BuilderSourceConfig, submission: dict[str, object] | None) -> dict[str, object] | None:
@@ -727,7 +774,14 @@ def _to_attachment(raw: dict) -> Attachment:
     )
 
 
-def _workflow_from_source(python_source: str, workflow_name: str, endpoint_selections: dict[str, str]) -> Workflow:
+def _workflow_from_source(
+    python_source: str,
+    workflow_name: str,
+    endpoint_selections: dict[str, str],
+    *,
+    semantic_source_path: str | None = None,
+    semantic_index_path: str | None = None,
+) -> Workflow:
     config = config_from_source(python_source)
     reachable_roles = reachable_workflow_roles(config)
     return Workflow(
@@ -735,10 +789,31 @@ def _workflow_from_source(python_source: str, workflow_name: str, endpoint_selec
         description=config.task_goal or None,
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
-        retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles),
+        retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_source_path, semantic_index_path),
         action=_action_from_config(config, endpoint_selections, reachable_roles),
         reflect=_reflect_from_config(config, endpoint_selections, reachable_roles),
     )
+
+
+def _initialization_steps(
+    config: BuilderSourceConfig,
+    endpoint_selections: dict[str, str],
+    reachable_roles: set[str],
+    semantic_source_path: str | None,
+    semantic_index_path: str | None,
+):
+    steps = []
+    if "perceive" in reachable_roles:
+        steps.append(("perceive", "輸入解析器", lambda: _perceive_from_config(config, endpoint_selections, reachable_roles)))
+    if "plan" in reachable_roles and config.plan_strategy:
+        steps.append(("plan", "流程判斷器", lambda: _plan_from_config(config, endpoint_selections, reachable_roles)))
+    if "retrieve" in reachable_roles:
+        steps.append(("retrieve", _retrieve_process_title(config), lambda: _retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_source_path, semantic_index_path)))
+    if "action" in reachable_roles:
+        steps.append(("action", _action_process_name(config), lambda: _action_from_config(config, endpoint_selections, reachable_roles)))
+    if "reflect" in reachable_roles and config.reflect_module:
+        steps.append(("reflect", "回覆檢核器", lambda: _reflect_from_config(config, endpoint_selections, reachable_roles)))
+    return steps
 
 
 def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
@@ -774,15 +849,21 @@ def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str
     )
 
 
-def _retrieve_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
+def _retrieve_from_config(
+    config: BuilderSourceConfig,
+    endpoint_selections: dict[str, str],
+    reachable_roles: set[str],
+    semantic_source_path: str | None = None,
+    semantic_index_path: str | None = None,
+):
     if "retrieve" not in reachable_roles:
         return None
     if config.retrieve_module == "SemanticRetrieve":
         retrieve_params = endpoint_params_for_role("retrieve", endpoint_selections)
         return SemanticRetrieve(
             top_k=config.retrieve_top_k,
-            source_path="./knowledge",
-            index_path="./.agentic/semantic_index",
+            source_path=semantic_source_path or "./knowledge",
+            index_path=semantic_index_path or "./.agentic/semantic_index",
             rebuild_if_missing=True,
             rebuild_if_stale=True,
             **retrieve_params,
@@ -790,6 +871,13 @@ def _retrieve_from_config(config: BuilderSourceConfig, endpoint_selections: dict
     if config.retrieve_module == "PassThroughRetrieve":
         return PassThroughRetrieve()
     return KeywordRetrieve(items=list(config.retrieve_items), fallback=config.retrieve_fallback)
+
+
+def _warm_semantic_retrieve(module) -> None:
+    knowledge_base = getattr(module, "_knowledge_base", None)
+    ensure_ready = getattr(knowledge_base, "_ensure_ready", None)
+    if callable(ensure_ready):
+        ensure_ready()
 
 
 def _action_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):

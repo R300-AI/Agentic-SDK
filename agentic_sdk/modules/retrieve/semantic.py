@@ -201,9 +201,16 @@ class FaissKnowledgeBase:
             from markitdown import MarkItDown
         except Exception as exc:
             raise RuntimeError(
-                "MarkItDown is required to ingest non-text documents. Install the 'markitdown' package."
+                "非文字檔解析需要 markitdown。請使用 Python 3.12 建立專案虛擬環境，"
+                "再執行 uv add -r requirements.txt。"
             ) from exc
-        result = MarkItDown().convert(str(file_path))
+        try:
+            result = MarkItDown().convert(str(file_path))
+        except Exception as exc:
+            raise RuntimeError(
+                "非文字檔解析需要 MarkItDown 的格式轉換套件。請使用 Python 3.12，"
+                "並執行 uv add -r requirements.txt 安裝 markitdown[all]。"
+            ) from exc
         return str(getattr(result, "text_content", "") or "")
 
     def _is_stale(self) -> bool:

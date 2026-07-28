@@ -51,8 +51,8 @@ idna==3.18
     #   httpx
 jiter==0.15.0
     # via openai
-markitdown==0.1.3
-    # via semantic retrieve document ingestion
+markitdown[all]; python_version < "3.13"
+    # via semantic retrieve document ingestion on the supported Python runtime
 openai==2.41.1
     # via agentic-sdk (pyproject.toml)
 pydantic==2.13.4

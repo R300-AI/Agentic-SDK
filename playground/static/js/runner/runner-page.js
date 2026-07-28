@@ -41,6 +41,10 @@ const workflowDescriptionTargets = document.querySelectorAll("[data-workflow-des
 const workflowDescriptionDisplay = document.querySelector("[data-workflow-description-display]");
 const workflowDescriptionForm = document.querySelector("[data-workflow-description-form]");
 const workflowDescriptionInput = document.querySelector("[data-workflow-description-input]");
+const initializationOverlay = document.querySelector("[data-initialization-overlay]");
+const initializationMessage = document.querySelector("[data-initialization-message]");
+const initializationBar = document.querySelector("[data-initialization-bar]");
+const initializationCount = document.querySelector("[data-initialization-count]");
 let activeRunId = 0;
 let workflowName = sideWorkflowTitleInput?.value.trim() || sideWorkflowTitleDisplay?.textContent?.trim() || "";
 let workflowDescription = workflowDescriptionInput?.value.trim() || workflowDescriptionDisplay?.textContent?.trim() || "";
@@ -48,6 +52,80 @@ let workflowRenameRequest = null;
 let workflowDescriptionRequest = null;
 const workflowDescriptionPlaceholder = workflowDescriptionDisplay?.dataset.placeholder || "";
 let lastSaveTrigger = null;
+let runnerInitialized = !initializationOverlay;
+
+function setRunnerChatEnabled(enabled) {
+	if (submitButton) {
+		submitButton.disabled = !enabled;
+	}
+	if (messageInput) {
+		messageInput.disabled = !enabled;
+	}
+	if (attachmentInput) {
+		attachmentInput.disabled = !enabled;
+	}
+	document.querySelectorAll("[data-starter-question-button]").forEach((button) => {
+		button.disabled = !enabled;
+	});
+}
+
+function updateInitializationProgress(event) {
+	const completed = Number(event?.completed || 0);
+	const total = Number(event?.total || 0);
+	const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+	if (initializationMessage) {
+		initializationMessage.textContent = event?.message || "正在準備 Agent 初始化...";
+	}
+	if (initializationBar) {
+		initializationBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+	}
+	if (initializationCount) {
+		initializationCount.textContent = `${completed} / ${total}`;
+	}
+}
+
+function finishInitialization() {
+	runnerInitialized = true;
+	setRunnerChatEnabled(true);
+	if (initializationOverlay) {
+		initializationOverlay.classList.add("is-complete");
+		window.setTimeout(() => {
+			initializationOverlay.hidden = true;
+		}, 180);
+	}
+}
+
+function failInitialization(message) {
+	runnerInitialized = false;
+	setRunnerChatEnabled(false);
+	if (initializationOverlay) {
+		initializationOverlay.classList.add("has-error");
+	}
+	if (initializationMessage) {
+		initializationMessage.textContent = message || "Agent 初始化失敗，請回到 Builder 檢查設定。";
+	}
+}
+
+async function initializeRunner() {
+	if (!initializationOverlay) {
+		return;
+	}
+	setRunnerChatEnabled(false);
+	try {
+		await postJsonStream("/playground/run/initialize/stream", {}, async (event) => {
+			updateInitializationProgress(event);
+			if (event.type === "final") {
+				if (event.ready) {
+					finishInitialization();
+				} else {
+					failInitialization(event.error || event.message);
+				}
+			}
+		});
+	} catch (error) {
+		failInitialization(error.message || "Agent 初始化失敗，請稍後再試。")
+	}
+}
 
 function actionReplyFrom(result) {
 	if (result.status === "input_error" || result.status === "configuration_error") {
@@ -520,6 +598,10 @@ workflowDescriptionInput?.addEventListener("blur", async () => {
 });
 
 async function runWorkflow(payload, { displayMessage, showUserMessage = true } = {}) {
+	if (!runnerInitialized) {
+		showSavePanel(savePanel, "Agent 還在初始化，完成後才能開始對話。");
+		return;
+	}
 	const runId = ++activeRunId;
 	const prompt = String(payload?.message || "").trim();
 	const submittedToolCall = payload?.tool_call_submission || null;
@@ -769,3 +851,5 @@ if (autoSaveAfterLogin && saveButton && !saveRequiresLogin) {
 		saveButton.click();
 	});
 }
+
+initializeRunner();

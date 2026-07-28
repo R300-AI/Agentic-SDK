@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from dataclasses import asdict, is_dataclass
+from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, stream_with_context, url_for
 
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import normalize_endpoint_selections
-from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution
+from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution, stream_python_source_initialization
 from playground.services.source_builder import _DEFAULT_RUNNER_DESCRIPTION, build_python_source_from_builder_choice, config_from_source, get_workflow_summary
 
 
@@ -57,11 +59,14 @@ def execute_runner():
 
     payload = request.get_json(silent=True) or {}
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    semantic_source_path, semantic_index_path = _semantic_runtime_paths()
     execution = execute_python_source(
         python_source,
         message=str(payload.get("message", "")),
         attachments=payload.get("attachments") or [],
         endpoint_selections=endpoint_selections,
+        semantic_source_path=semantic_source_path,
+        semantic_index_path=semantic_index_path,
         tool_call_submission=payload.get("tool_call_submission") if isinstance(payload.get("tool_call_submission"), dict) else None,
     )
     response_payload = _public_execution_payload(execution)
@@ -78,6 +83,7 @@ def execute_runner_stream():
 
     payload = request.get_json(silent=True) or {}
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    semantic_source_path, semantic_index_path = _semantic_runtime_paths()
 
     def generate():
         for item in stream_python_source_execution(
@@ -85,6 +91,8 @@ def execute_runner_stream():
             message=str(payload.get("message", "")),
             attachments=payload.get("attachments") or [],
             endpoint_selections=endpoint_selections,
+            semantic_source_path=semantic_source_path,
+            semantic_index_path=semantic_index_path,
             tool_call_submission=payload.get("tool_call_submission") if isinstance(payload.get("tool_call_submission"), dict) else None,
         ):
             if item.get("type") == "final":
@@ -95,6 +103,27 @@ def execute_runner_stream():
                 yield json.dumps({"type": "final", "result": response_payload}, ensure_ascii=False) + "\n"
             else:
                 yield json.dumps(item, ensure_ascii=False) + "\n"
+
+    return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
+
+
+@runner_bp.post("/initialize/stream")
+def initialize_runner_stream():
+    python_source = session.get("python_source")
+    if not python_source:
+        return jsonify({"error": "No Python source is available for initialization."}), 400
+
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    semantic_source_path, semantic_index_path = _semantic_runtime_paths()
+
+    def generate():
+        for item in stream_python_source_initialization(
+            python_source,
+            endpoint_selections=endpoint_selections,
+            semantic_source_path=semantic_source_path,
+            semantic_index_path=semantic_index_path,
+        ):
+            yield json.dumps(item, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
 
@@ -166,6 +195,18 @@ def _public_execution_payload(execution: dict[str, object]) -> dict[str, object]
         "result": result,
         "scene_profile": execution.get("scene_profile"),
     }
+
+
+def _semantic_runtime_paths() -> tuple[str | None, str | None]:
+    upload_id = session.get("builder_upload_id")
+    if not isinstance(upload_id, str) or not upload_id.strip():
+        return None, None
+    root = Path(tempfile.gettempdir()) / "agentic-sdk-playground"
+    source_path = root / "builder-uploads" / upload_id
+    index_path = root / "semantic-index" / upload_id
+    return str(source_path), str(index_path)
+
+
 @runner_bp.get("/profile")
 def runner_profile():
     scene_profile = get_scene_profile(session.get("python_source"))

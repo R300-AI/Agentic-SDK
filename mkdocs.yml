@@ -46,6 +46,7 @@ nav:
   - Deploy:
     - GitHub CI/CD 到 Azure App Service: github_cicd_workflow.md
     - AI Hub Playground Handoff API: aihub_playground_api.md
+    - AI Hub Playground Storage API: aihub_playground_storage_api.md
 
 markdown_extensions:
   - admonition

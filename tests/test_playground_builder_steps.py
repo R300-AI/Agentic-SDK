@@ -70,6 +70,10 @@ def _used_exported_module_names(python_source: str) -> set[str]:
     return names
 
 
+def _ndjson_items(data: bytes) -> list[dict[str, object]]:
+    return [json.loads(line) for line in data.decode("utf-8").splitlines() if line.strip()]
+
+
 def test_builder_uses_memory_step_then_configured_perceive_modes():
     steps = get_builder_steps()
 
@@ -91,6 +95,36 @@ def test_builder_uses_memory_step_then_configured_perceive_modes():
     ]
     assert [choice.label for choice in steps[1].choices] == ["pass_through", "text", "text_image"]
     assert [choice.title for choice in steps[1].choices] == ["直接傳遞文字", "整理文字內容", "整理文字與圖片"]
+
+
+def test_runner_page_blocks_chat_with_initialization_overlay():
+    app = create_app()
+
+    with app.test_client() as client:
+        client.post("/playground/start/anonymous")
+        response = client.get("/playground/run")
+
+    assert response.status_code == 200
+    page = response.data.decode("utf-8")
+    assert "data-initialization-overlay" in page
+    assert "data-initialization-message" in page
+    assert "data-initialization-bar" in page
+    assert "正在準備對話環境" in page
+
+
+def test_runner_initialization_stream_reports_progress_and_final_ready():
+    app = create_app()
+
+    with app.test_client() as client:
+        client.post("/playground/start/anonymous")
+        response = client.post("/playground/run/initialize/stream")
+
+    assert response.status_code == 200
+    items = _ndjson_items(response.data)
+    assert items[0]["type"] == "progress"
+    assert items[-1]["type"] == "final"
+    assert items[-1]["ready"] is True
+    assert items[-1]["completed"] == items[-1]["total"]
 
 
 def test_builder_page_does_not_render_legacy_task_type_step():

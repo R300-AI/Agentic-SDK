@@ -5,7 +5,7 @@ This package contains the Flask-based Playground Entry, Builder, and Runner expe
 ## Run Locally
 
 ```powershell
-python -m flask --app playground.app run --debug --port 5050
+uv run python -m flask --app playground.app run --debug --port 5050
 ```
 
 Then open:

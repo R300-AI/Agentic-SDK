@@ -4,6 +4,17 @@
 
 {% block body %}
 <main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}" data-save-requires-login="{{ 'true' if not mode_context.can_save and mode_context.can_edit else 'false' }}" data-auto-save-after-login="{{ 'true' if auto_save_after_login else 'false' }}">
+  <section class="runner-initialization-overlay" role="status" aria-live="polite" aria-label="Agent 初始化進度" data-initialization-overlay>
+    <div class="runner-initialization-card">
+      <span class="eyebrow">Agent 初始化</span>
+      <h2>正在準備對話環境</h2>
+      <p data-initialization-message>正在準備 Agent 初始化...</p>
+      <div class="runner-initialization-progress" aria-hidden="true">
+        <span data-initialization-bar style="width: 0%"></span>
+      </div>
+      <p class="runner-initialization-count" data-initialization-count>0 / 0</p>
+    </div>
+  </section>
   <header class="context-bar">
     <div>
       <div class="runner-title-row">

@@ -1814,6 +1814,65 @@ pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0; color: #
   animation: toast-in 180ms ease-out;
 }
 
+.runner-initialization-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.68);
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+.runner-initialization-overlay.is-complete { opacity: 0; }
+
+.runner-initialization-card {
+  width: min(32rem, calc(100vw - 2rem));
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-top: 4px solid var(--amd-red);
+  background: rgba(16, 16, 16, 0.88);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.36);
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
+}
+
+.runner-initialization-card h2 {
+  margin: 0 0 0.5rem;
+  font-size: clamp(1.35rem, 3vw, 1.85rem);
+}
+
+.runner-initialization-card p {
+  margin: 0.35rem 0 0;
+  color: rgba(255, 255, 255, 0.82);
+  line-height: 1.55;
+}
+
+.runner-initialization-progress {
+  height: 0.72rem;
+  margin-top: 1.15rem;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.runner-initialization-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--amd-red);
+  transition: width 220ms ease;
+}
+
+.runner-initialization-count {
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.runner-initialization-overlay.has-error .runner-initialization-progress span { background: #f9ab00; }
+
 @keyframes toast-in {
   from { opacity: 0; transform: translateY(0.5rem); }
   to { opacity: 1; transform: translateY(0); }

@@ -1138,7 +1138,7 @@ document.querySelectorAll("[data-step-back]").forEach((button) => {
   });
 });
 
-document.querySelectorAll("[data-runner-link]").forEach((link) => {
+document.querySelectorAll("[data-runner-link], [data-complete-link]").forEach((link) => {
   link.addEventListener("click", async (event) => {
     if (link.matches("[data-complete-link]") && link.getAttribute("aria-disabled") === "true") {
       event.preventDefault();
