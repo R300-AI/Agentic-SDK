@@ -1,6 +1,6 @@
 # Azure
 
-此 workflow 會將正式 FastAPI Playground 部署到 Azure App Service。部署檔位於 `.github/workflows/deploy-playground.yml`，觸發條件是 `main` 分支中 `agentic_sdk/`、`playground/`、`.env`、`requirements.txt` 或部署 workflow 本身變更，也可以手動從 GitHub Actions 執行。
+這一頁說明如何用 GitHub Actions 將 Playground 部署到 Azure App Service。部署檔位於 `.github/workflows/deploy-playground.yml`。當 `main` 分支中的 `agentic_sdk/`、`playground/`、`.env`、`requirements.txt` 或部署檔變更時，GitHub 會執行部署；你也可以在 GitHub Actions 手動啟動。
 
 ## Repository Variables
 
@@ -8,45 +8,45 @@
 
 | 變數 | 說明 |
 | --- | --- |
-| `AZURE_CLIENT_ID` | 可透過 OIDC 登入 Azure 的 Entra application client id。 |
+| `AZURE_CLIENT_ID` | 可讓 GitHub Actions 登入 Azure 的 Entra application client id。 |
 | `AZURE_TENANT_ID` | Azure tenant id。 |
 | `AZURE_SUBSCRIPTION_ID` | Azure subscription id。 |
-| `AZURE_RESOURCE_GROUP` | App Service、Plan、Key Vault 所在 resource group。 |
+| `AZURE_RESOURCE_GROUP` | App Service、Plan、Key Vault 所在的 resource group。 |
 | `AZURE_REGION` | Azure region，例如 `eastasia`。 |
-| `AZURE_WEBAPP_NAME` | App Service name，必須全域唯一。 |
-| `KEY_VAULT_NAME` | Key Vault name，必須全域唯一。 |
+| `AZURE_WEBAPP_NAME` | App Service 名稱，必須全域唯一。 |
+| `KEY_VAULT_NAME` | Key Vault 名稱，必須全域唯一。 |
 
-AI Hub host base URL 與 Playground origin 記錄在 repository 根目錄的 `.env`，workflow 會從 `.env` 讀取 `AI_HUB_BASE_URL` 並同步到 App Service，不需要在 GitHub variables 另行設定。`PLAYGROUND_SECRET_KEY` 會由 workflow 讀取既有 App Service setting；如果尚未存在，部署時會在 Azure 端產生一次並寫入 App Service。模型 endpoint 和 API key 建議放在 Key Vault，由 App Service 的 managed identity 在 runtime 讀取。
+AI Hub host base URL 與 Playground origin 記錄在 repository 根目錄的 `.env`。部署流程會從 `.env` 讀取 `AI_HUB_BASE_URL`，並同步到 App Service。`PLAYGROUND_SECRET_KEY` 會沿用既有 App Service setting；第一次部署時，流程會在 Azure 端產生一次並寫入 App Service。模型 endpoint 和 API key 建議放在 Key Vault，由 App Service 的受控身分在執行時讀取。
 
-## Azure OIDC 前置設定
+## Azure 登入設定
 
-在 Azure 建立 Entra application / service principal，並將 GitHub repository 設為 federated credential。Subject 可依環境調整，常見設定為：
+在 Azure 建立 Entra application / service principal，並設定 GitHub repository 可以透過 OIDC 登入 Azure。Subject 可依環境調整，常見設定為：
 
 ```text
 repo:R300-AI/Agentic-SDK:ref:refs/heads/main
 ```
 
-這個 service principal 需要能建立或更新 Resource Group、Linux App Service Plan、App Service、Key Vault，以及 Key Vault role assignment。最小權限可依組織政策拆分；PoC 階段通常會先在目標 resource group scope 授予 Contributor，並在 Key Vault scope 授予可管理 role assignment 的權限。
+這個 service principal 需要能建立或更新 Resource Group、Linux App Service Plan、App Service、Key Vault，以及 Key Vault role assignment。權限可以依組織政策拆分；PoC 階段通常會先在目標 resource group scope 授予 Contributor，並在 Key Vault scope 授予可管理 role assignment 的權限。
 
 ## Workflow 行為
 
 部署流程會：
 
-1. 使用 GitHub OIDC 登入 Azure，不使用 Azure publish profile secret。
-2. 冪等建立 Resource Group、Linux App Service Plan、Python 3.12 App Service、Key Vault。
-3. 啟用 App Service managed identity，並授予 Key Vault Secrets User。
-4. 設定 App Service startup command：
+1. 使用 GitHub OIDC 登入 Azure。
+2. 可重複執行地建立 Resource Group、Linux App Service Plan、Python 3.12 App Service、Key Vault。
+3. 啟用 App Service 受控身分，並授予 Key Vault Secrets User。
+4. 設定 App Service 啟動指令：
 
 ```bash
 python -m playground.main
 ```
 
-5. 設定 `PORT=8000`、`WEBSITES_PORT=8000`、`SCM_DO_BUILD_DURING_DEPLOYMENT=false`、`ENABLE_ORYX_BUILD=false`、`PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot`、`KEY_VAULT_NAME`、`AI_HUB_PLAYGROUND_ORIGIN`、從 `.env` 讀取的 `AI_HUB_BASE_URL`，並沿用或建立 `PLAYGROUND_SECRET_KEY`。Azure App Service 對外仍由平台提供 HTTP/HTTPS 80/443，容器內由 `PORT=8000` 接收流量。
-6. 在 GitHub Actions runner 上安裝 Python dependencies 到 `.python_packages/lib/site-packages`，並用 FastAPI TestClient smoke test `/healthz`、`/playground`、`/playground/builder`。
+5. 設定 `PORT=8000`、`WEBSITES_PORT=8000`、`SCM_DO_BUILD_DURING_DEPLOYMENT=false`、`ENABLE_ORYX_BUILD=false`、`PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot`、`KEY_VAULT_NAME`、`AI_HUB_PLAYGROUND_ORIGIN`、從 `.env` 讀取的 `AI_HUB_BASE_URL`，並沿用或建立 `PLAYGROUND_SECRET_KEY`。Azure App Service 對外由平台提供 HTTP/HTTPS 80/443，容器內由 `PORT=8000` 接收流量。
+6. 在 GitHub Actions runner 上安裝 Python dependencies 到 `.python_packages/lib/site-packages`，並用 FastAPI TestClient 基本檢查 `/healthz`、`/playground`、`/playground/builder`。
 7. 打包 `agentic_sdk/`、`playground/`、`.python_packages/`、`.env`、`requirements.txt` 為 `deploy.zip`。
 8. 使用 `azure/webapps-deploy` 部署到 App Service。
-9. 部署 zip 後 restart App Service，確保 Python worker 載入新的 route map。
-10. 對 `/playground`、`/playground/agents`、`/playground/builder` 做 readiness retry，只確認部署後服務可回應。Playground 產品文案、版面、靜態資源細節與 Builder 匯出 source 的細部契約不放在部署驗證中阻擋發佈。
+9. 部署 zip 後 restart App Service，讓 Python worker 載入新的 route map。
+10. 對 `/playground`、`/playground/agents`、`/playground/builder` 做重試檢查。部署驗證確認服務入口可回應；產品文案、版面、靜態資源細節與 Builder 匯出 source 的細部規格由 Playground 測試負責。
 
 部署完成後，正式入口為：
 

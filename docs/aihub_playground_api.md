@@ -1,21 +1,38 @@
 # AI Hub
 
-當你要把使用者從 AI Hub 導入 Agentic SDK Playground，並決定他是要建立新的 Playground 設定，還是恢復既有的 Playground 設定時，就看這一頁。這一頁只定義進入 Playground 的 handoff API，不重寫 AI Hub 已經定義好的驗證、Agent 清單、config load、config save 契約。
+這一頁說明 AI Hub 如何把使用者帶進 Agentic SDK Playground。使用者可以從首頁進入，也可以由 AI Hub 直接進入 Builder 或 Runner。
 
-AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
+AI Hub 驗證、Agent 清單、設定載入與設定保存以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
 
-原始支援文件、SemanticRetriever vectorstore 與 runtime manifest 以單一 zip bundle 保存到 Storage Account；串接方式見 [Storage](aihub_playground_storage_api.md)。
+原始參考文件、SemanticRetriever vectorstore 與執行資訊會保存成單一 zip bundle；串接方式見 [Storage](aihub_playground_storage_api.md)。
+
+## AI Hub 團隊先看這裡
+
+先用這張表決定要把使用者送到哪裡：
+
+| 使用情境 | AI Hub 要做的事 | Playground 入口 | 需要準備的資料 | 使用者會看到 |
+| --- | --- | --- | --- | --- |
+| 使用者來源或登入狀態還不明確 | 導向 Playground 首頁 | `GET /playground/` | 無 | 使用者自行選擇 AI Hub 登入或匿名試用 |
+| 匿名使用已分享 Agent | 帶 `agent_id` 進入公開 Runner | `GET` / `POST /playground/aihub/navigation/shared-runner` | 可公開載入的 `agent_id` | 唯讀 Runner |
+| 已登入使用者要建立新 Agent | 送出 AI Hub 帳密 | `POST /playground/aihub/navigation/builder` | `username`、`password` | Builder |
+| 已登入使用者要打開既有 Agent | 送出 AI Hub 帳密與 `agent_id` | `POST /playground/aihub/navigation/runner` | `username`、`password`、`agent_id` | Runner |
+
+AI Hub 端需要提供三類能力：
+
+1. 驗證帳密，讓 Playground 建立已登入操作狀態。
+2. 依 `agent_id` 載入既有 Playground 設定，回傳 `python_source`。
+3. 對已分享 Agent 提供公開載入能力，讓匿名使用者進入唯讀 Runner。
 
 ## 這份文件會幫你完成什麼
 
 完成這一頁後，你應該能清楚分辨四種進入 Playground 的方式：
 
 1. 來源未知或未登入的使用者進入 Playground 首頁，自行選擇 AI Hub 登入或匿名試用。
-2. 匿名使用者直接使用別人已建好的 Agent，只能進 Runner 對話，不能修改配置。
+2. 匿名使用者直接使用別人已建好的 Agent，進入唯讀 Runner 對話。
 3. AI Hub 已登入使用者要建立新的 Playground 設定。
 4. AI Hub 已登入使用者要恢復既有的 Playground 設定。
 
-同時，你也能知道 AI Hub 在什麼情境下應該把使用者送到 Builder，什麼情境下應該直接送到 Runner。
+同時，你也能知道 AI Hub 在什麼情境下把使用者送到 Builder，什麼情境下直接送到 Runner。
 
 ## 開始之前
 
@@ -25,12 +42,12 @@ AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.gi
 2. 你現在是否已經知道使用者來源、存取模式，以及要新建設定、匿名使用分享 Agent，還是恢復既有設定。
 3. 如果要恢復既有設定，AI Hub 已經知道要載入的 `agent_id`。
 
-## 入口模式
+## 入口模式細節
 
 | 模式 | 是否帶帳密 | 是否帶 `agent_id` | 進入位置 | 主要結果 |
 | --- | --- | --- | --- | --- |
 | 來源未知 / 未登入 | No | No | `/playground/` 首頁 | 使用者選擇 AI Hub 登入或匿名試用 |
-| 匿名使用已分享 Agent | No | Yes | Runner | 載入公開/分享的 `python_source`，只允許對話 |
+| 匿名使用已分享 Agent | No | Yes | Runner | 載入公開/分享的 `python_source`，進入唯讀對話 |
 | 已登入，新建設定 | Yes | No | Builder | 建立可編輯的新 Playground 設定 |
 | 已登入，恢復既有設定 | Yes | Yes | Runner | 載回既有 `python_source` |
 
@@ -42,30 +59,30 @@ AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.gi
 https://agentic-sdk-playground.azurewebsites.net
 ```
 
-所有 API 都必須使用 HTTPS。請勿把 `username`、`password` 或 `agent_id` 放在 query string。
+所有 API 都使用 HTTPS。`username`、`password` 與 `agent_id` 放在 request body。
 
-## API Overview
+## Playground 入口 API
 
 | API | Method | Path | 用途 |
 | --- | --- | --- | --- |
-| Shared Agent Runner Handoff | `GET` / `POST` | `/playground/aihub/navigation/shared-runner` | 匿名使用者載入已分享 Agent，成功後進唯讀 Runner。 |
-| Create Agent Handoff | `POST` | `/playground/aihub/navigation/builder` | AI Hub 已登入使用者建立新的 Playground 設定，成功後進 Builder。 |
-| Existing Agent Handoff | `POST` | `/playground/aihub/navigation/runner` | AI Hub 已登入使用者帶 `agent_id` 載入既有 Playground 設定，成功後進 Runner。 |
+| 匿名 Runner 入口 | `GET` / `POST` | `/playground/aihub/navigation/shared-runner` | 匿名使用者載入已分享 Agent，成功後進唯讀 Runner。 |
+| 新建設定入口 | `POST` | `/playground/aihub/navigation/builder` | AI Hub 已登入使用者建立新的 Playground 設定，成功後進 Builder。 |
+| 既有設定入口 | `POST` | `/playground/aihub/navigation/runner` | AI Hub 已登入使用者帶 `agent_id` 載入既有 Playground 設定，成功後進 Runner。 |
 
-`shared-runner` 是匿名使用已分享 Agent 的入口；它不建立 AI Hub credential ticket，也不允許使用者修改或儲存配置。`builder` 與 `runner` 是 AI Hub 已登入使用者進入 Playground 的正式入口。Runner 進入後的 save/load/reload 行為會依照 AI Hub connection model 執行，不在本頁重複定義。
+`shared-runner` 是匿名使用已分享 Agent 的入口，進入後提供唯讀 Runner。`builder` 與 `runner` 是 AI Hub 已登入使用者進入 Playground 的正式入口。Runner 進入後的 save/load/reload 行為依照 AI Hub connection model 執行。
 
 匿名試用入口由 Playground 自己提供：
 
 - `GET /playground/`
 - `POST /playground/start/anonymous`
 
-AI Hub 或其他外部入口如果不知道使用者來源、登入狀態或意圖，應導向 `GET /playground/`，讓 Playground 首頁呈現「AI Hub 登入」與「匿名試用」兩種選擇。`POST /playground/start/anonymous` 是首頁表單提交後建立匿名 session 的內部入口，不需要 AI Hub 帳密，也不屬於 AI Hub handoff API。
+AI Hub 或其他外部入口需要讓使用者自行選擇登入或匿名試用時，可以導向 `GET /playground/`。Playground 首頁會呈現「AI Hub 登入」與「匿名試用」兩種選擇。`POST /playground/start/anonymous` 是首頁表單提交後建立匿名 session 的內部入口。
 
 ## GET / POST /playground/aihub/navigation/shared-runner
 
-AI Hub 用這個入口讓未登入使用者直接使用已分享的 Agent。Playground 會進入 `aihub_readonly` 模式，只顯示 Runner 對話能力；不顯示 Builder、儲存、重新載入或程式碼預覽入口。
+AI Hub 用這個入口讓未登入使用者直接使用已分享的 Agent。Playground 會進入 `aihub_readonly` 模式，畫面只提供 Runner 對話能力。
 
-這個入口不接受 AI Hub 帳密。AI Hub 必須用公開載入 API 判斷該 `agent_id` 是否允許匿名使用。
+AI Hub 會用公開載入 API 判斷該 `agent_id` 是否允許匿名使用。
 
 ### Request
 
@@ -113,19 +130,18 @@ Set-Cookie: session=...
 
 Playground 會完成以下動作：
 
-1. 不建立登入 session，也不保存 AI Hub 帳密。
-2. 以公開載入 API 回傳的 `python_source` 建立 Runner session。
+1. 以公開載入 API 回傳的 `python_source` 建立 Runner session。
+2. 保持匿名使用狀態。
 3. 設定 `mode=aihub_readonly` 與 `source_origin=aihub_shared_readonly`。
 4. Redirect 到 `/playground/run`。
 
-### 權限限制
+### 唯讀 Runner 能力
 
-匿名 shared Runner 只允許對話執行：
+匿名 shared Runner 提供以下能力：
 
 - 可以送出訊息並取得 Agent 回覆。
-- 不可進 Builder 修改配置。
-- 不可儲存或重新載入 AI Hub 設定。
-- 不可預覽或匯出 Python source。
+- 畫面停留在 Runner。
+- Agent 設定由 AI Hub 的公開載入結果提供。
 
 ### Error Response
 
@@ -221,16 +237,16 @@ Playground 會完成以下動作：
 | `400` | `username` / `password` 缺漏或驗證失敗 | 回傳登入頁 HTML，顯示驗證錯誤。 |
 | `502` | AI Hub connection model 的 config load 失敗 | 回傳登入頁 HTML，顯示 AI Hub load 錯誤。 |
 
-## Canonical AI Hub API Contract
+## AI Hub 既有 API
 
-以下 API 由 AI Hub 文件定義，本頁只引用，不重寫 request/response：
+以下 API 由 AI Hub 文件定義，本頁引用它們作為 Playground 入口流程的一部分：
 
 - 驗證帳密
 - 列出使用者 Agent
 - 載入指定 Agent config
 - 儲存或建立 Agent config
 
-Canonical 文件：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
+AI Hub 文件：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
 
 ## Playground 站內登入流程
 
@@ -243,14 +259,14 @@ Playground 首頁另有互動式登入流程，供使用者直接在 Playground 
 5. 使用者在 Agent 清單中選擇：
    - 既有 Agent：載回既有 `python_source`，進 Runner。
    - 新建 Agent：初始化新的預設 `python_source`，進 Builder。
-6. 若使用者在首頁選擇匿名試用，首頁送出 `POST /playground/start/anonymous`，Playground 建立匿名 session 並進 Builder；此模式不儲存到 AI Hub。
-7. 若使用者是透過已分享 Agent 連結進入，外部入口應使用 `/playground/aihub/navigation/shared-runner`，直接進唯讀 Runner，不經 Builder。
+6. 若使用者在首頁選擇匿名試用，首頁送出 `POST /playground/start/anonymous`，Playground 建立匿名 session 並進 Builder；設定留在本機 session。
+7. 若使用者是透過已分享 Agent 連結進入，外部入口使用 `/playground/aihub/navigation/shared-runner`，直接進唯讀 Runner。
 
-這條流程適合由 Playground 首頁的人類操作觸發。AI Hub 若不知道使用者要登入還是匿名試用，應導向 `/playground/`。AI Hub 若已經知道使用者是已登入狀態，且知道要新建還是恢復既有設定，才應直接使用本頁定義的 handoff API。
+這條流程適合由 Playground 首頁的人類操作觸發。AI Hub 已經知道使用者狀態與目標時，可以直接使用本頁定義的入口 API。
 
-## Browser Handoff Example
+## 瀏覽器送出範例
 
-瀏覽器 handoff 只是上述 API 的一種提交方式。AI Hub 前端可以用 hidden form 送出 top-level `POST`，讓瀏覽器切到 Playground 並接收 Playground session cookie。
+瀏覽器可以用表單提交上述 API。AI Hub 前端可以用 hidden form 送出 top-level `POST`，讓瀏覽器切到 Playground 並接收 Playground session cookie。
 
 ```html
 <form method="post" action="https://agentic-sdk-playground.azurewebsites.net/playground/aihub/navigation/runner">
@@ -261,8 +277,8 @@ Playground 首頁另有互動式登入流程，供使用者直接在 Playground 
 </form>
 ```
 
-不建議使用 query string 或 cross-origin `fetch` 做 handoff：query string 會留下敏感資訊；`fetch` 不會自然切換使用者畫面，也不適合建立跨站後的瀏覽器 session。
+建議用 top-level form POST。這種方式會切換使用者畫面，也能讓 Playground 建立瀏覽器 session。帳號、密碼與 `agent_id` 應放在表單 body。
 
 ## 建議的下一版安全設計
 
-目前 contract 依需求支援 AI Hub 直接提交帳密給 Playground。正式長期版本建議改成一次性 handoff token：AI Hub 後端發 token，Playground 用 token 向 AI Hub 換取短效 scoped session。這樣可以避免跨系統轉送使用者密碼，也能支援過期、撤銷、audience 限制與 replay protection。
+目前流程依需求支援 AI Hub 直接提交帳密給 Playground。正式長期版本建議改成一次性進入 token：AI Hub 後端發 token，Playground 用 token 向 AI Hub 換取短效 session。這樣可以集中管理過期、撤銷、使用範圍與重放保護。
