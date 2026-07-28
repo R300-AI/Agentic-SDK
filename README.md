@@ -200,31 +200,24 @@ print(result.final_message)
 uv run python -m flask --app playground.app:app run --host 127.0.0.1 --port 5050 --no-reload --no-debugger
 ```
 
-開啟：
+啟動後開啟 Playground 入口：
 
-- `http://127.0.0.1:5050/playground`
-- `http://127.0.0.1:5050/playground/builder`
-- `http://127.0.0.1:5050/playground/run`
-
-Runner 若要使用 OpenAI-compatible endpoint，可以在本機環境或部署環境提供對應的 `*_MODEL`、`*_BASE_URL`、`*_API_KEY` 變數。Azure 部署建議透過 Key Vault 與 App Service managed identity 管理機密。
-
-AI Hub 登入模式會呼叫 AI Hub 提供的帳密驗證 API：`POST /api/playground/auth/verify`。專案根目錄的 [.env](.env) 已記錄 `AI_HUB_BASE_URL`，本機啟動時會自動讀取，不需要另外設定系統環境變數：
-
-```bash
-AI_HUB_BASE_URL=https://ai-hub-portal.azurewebsites.net
-AI_HUB_PLAYGROUND_ORIGIN=https://agentic-sdk-playground.azurewebsites.net
+```text
+http://127.0.0.1:5050/playground
 ```
 
-驗證成功且回傳 `{"valid": true}` 時，Playground 才會進入已登入模式；AI Hub 回傳 invalid，或 API 暫時不可用時，都會拒絕登入。登入成功後，Playground 會以 server-side 暫存 ticket 保留本次 session 的 AI Hub credential，呼叫 `POST /api/playground/agents` 列出同帳號所有 Agent，並可用 `POST /api/playground/agents/<agent_id>/config/load` 載入或重新載入配置。Runner 按「儲存」時會呼叫 `POST /api/playground/config/save`；若 session 尚無 `agent_id`，AI Hub 會建立新 Agent 並回傳 `agent_id`，後續儲存會更新同一個 Agent。若 AI Hub host 之後更換，只需要修改 [.env](.env) 的 `AI_HUB_BASE_URL`。
+以下流程都從 `http://127.0.0.1:5050/playground` 開始；第一頁會看到「使用 AI Hub 登入」與「不登入，匿名試用」兩張卡片。
 
-## Demo 與文件
+### 基本功能
 
-- Demo 範例在 `demo/README.md`。
-- 文件網站來源在 `docs/`，本機可用 `uv run --with-requirements requirements-docs.txt python -m mkdocs build --strict` 驗證。
-- GitHub Actions 到 Azure App Service 的部署說明在 `docs/github_cicd_workflow.md`。
+操作：**`/playground`** -> **開始匿名試用** -> **Builder** -> **開始建立 Agent** -> **Runner**
 
-## 測試
+### 新建與儲存
 
-```bash
-uv run --with pytest python -m pytest -q
-```
+操作：**`/playground`** -> **登入並開始建立** -> **開始新建** -> **Builder** -> **開始建立 Agent** -> **Runner** -> **儲存**
+
+### 載入與更新
+
+操作：**`/playground`** -> **登入並開始建立** -> **編輯** -> **Runner** -> **編輯設定** -> **Runner** -> **儲存**
+
+> Runner 若要呼叫 OpenAI-compatible endpoint，請在啟動 Flask 前於 `.env` 或環境變數提供對應的 `*_MODEL`、`*_BASE_URL`、`*_API_KEY`。

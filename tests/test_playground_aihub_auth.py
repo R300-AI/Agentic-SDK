@@ -172,7 +172,7 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
     monkeypatch.setenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", "1.25")
     monkeypatch.setattr(aihub_client.httpx, "post", fake_post)
 
-    loaded = aihub_client.load_public_config("agent 1", share_token="share-token", origin="https://playground.example/")
+    loaded = aihub_client.load_public_config("agent 1", origin="https://playground.example/")
 
     assert loaded["loaded"] is True
     assert loaded["agent_name"] == "Shared Agent"
@@ -181,7 +181,7 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
     assert calls == [
         {
             "url": "https://aihub.example/api/playground/agents/agent%201/config/public/load",
-            "json": {"share_token": "share-token"},
+            "json": {},
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
             "timeout": 1.25,
         }
@@ -384,8 +384,8 @@ def test_aihub_navigation_runner_requires_agent_id(monkeypatch):
 def test_shared_runner_loads_public_agent_as_read_only(monkeypatch):
     seen_load = []
 
-    def fake_load_public_config(agent_id, *, share_token=None, origin=None):
-        seen_load.append({"agent_id": agent_id, "share_token": share_token, "origin": origin})
+    def fake_load_public_config(agent_id, *, origin=None):
+        seen_load.append({"agent_id": agent_id, "origin": origin})
         return {"loaded": True, "agent_id": agent_id, "agent_name": "Shared Agent", "python_source": "print('shared')"}
 
     monkeypatch.setattr(entry_routes, "load_public_config", fake_load_public_config)
@@ -394,7 +394,7 @@ def test_shared_runner_loads_public_agent_as_read_only(monkeypatch):
 
     with app.test_client() as client:
         response = client.get(
-            "/playground/aihub/navigation/shared-runner?agent_id=agent-1&share_token=share-token",
+            "/playground/aihub/navigation/shared-runner?agent_id=agent-1",
             base_url="https://playground.example",
         )
         assert response.status_code == 302
@@ -413,7 +413,7 @@ def test_shared_runner_loads_public_agent_as_read_only(monkeypatch):
         source_preview_response = client.get("/playground/source/preview", base_url="https://playground.example")
         source_export_response = client.post("/playground/source/export", base_url="https://playground.example")
 
-    assert seen_load == [{"agent_id": "agent-1", "share_token": "share-token", "origin": "https://playground.example/"}]
+    assert seen_load == [{"agent_id": "agent-1", "origin": "https://playground.example/"}]
     assert "編輯設定" not in runner_page
     assert "預覽程式碼" not in runner_page
     assert "data-save-action" not in runner_page

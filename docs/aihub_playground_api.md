@@ -65,14 +65,14 @@ AI Hub 或其他外部入口如果不知道使用者來源、登入狀態或意�
 
 AI Hub 用這個入口讓未登入使用者直接使用已分享的 Agent。Playground 會進入 `aihub_readonly` 模式，只顯示 Runner 對話能力；不顯示 Builder、儲存、重新載入或程式碼預覽入口。
 
-這個入口不接受 AI Hub 帳密。AI Hub 必須用公開或分享載入 API 判斷該 `agent_id` 是否允許匿名使用；若需要分享權杖，可傳 `share_token`。
+這個入口不接受 AI Hub 帳密。AI Hub 必須用公開載入 API 判斷該 `agent_id` 是否允許匿名使用。
 
 ### Request
 
 支援 query string、`application/x-www-form-urlencoded` 或 `application/json`。
 
 ```http
-GET /playground/aihub/navigation/shared-runner?agent_id=agt_public_123&share_token=token_optional HTTP/1.1
+GET /playground/aihub/navigation/shared-runner?agent_id=agt_public_123 HTTP/1.1
 Host: agentic-sdk-playground.azurewebsites.net
 ```
 
@@ -83,13 +83,12 @@ POST /playground/aihub/navigation/shared-runner HTTP/1.1
 Host: agentic-sdk-playground.azurewebsites.net
 Content-Type: application/json
 
-{"agent_id":"agt_public_123","share_token":"token_optional"}
+{"agent_id":"agt_public_123"}
 ```
 
 | 欄位 | 型別 | 必填 | 說明 |
 | --- | --- | --- | --- |
 | `agent_id` | string | Yes | 要匿名使用的 AI Hub Agent id。AI Hub 必須確認此 Agent 可被分享或公開使用。 |
-| `share_token` | string | No | 可選分享權杖。是否需要由 AI Hub 的公開載入規則決定。 |
 
 ### Playground 對 AI Hub 的載入呼叫
 
@@ -99,7 +98,7 @@ Playground 會呼叫 AI Hub 的公開載入 API：
 POST /api/playground/agents/<agent_id>/config/public/load
 Content-Type: application/json
 
-{"share_token":"token_optional"}
+{}
 ```
 
 成功回傳至少需要包含 `python_source`；可選包含 `agent_id`、`agent_name`、`workflow_name`、`description`、`playground_exported_at`。

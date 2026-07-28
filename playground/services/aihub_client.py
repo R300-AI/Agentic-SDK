@@ -182,7 +182,6 @@ def load_config(
 def load_public_config(
     agent_id: str | None,
     *,
-    share_token: str | None = None,
     origin: str | None = None,
 ) -> dict[str, object]:
     resolved_agent_id = (agent_id or "").strip()
@@ -192,11 +191,10 @@ def load_public_config(
     if not base_url:
         return _aihub_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id, loaded=False)
 
-    payload = {"share_token": share_token.strip()} if share_token and share_token.strip() else {}
     try:
         response = httpx.post(
             f"{base_url}{_PUBLIC_CONFIG_LOAD_PATH.format(agent_id=quote(resolved_agent_id, safe=''))}",
-            json=payload,
+            json={},
             headers=_json_headers(origin),
             timeout=_request_timeout_seconds(),
         )

@@ -94,11 +94,10 @@ def navigate_from_aihub_to_runner():
 def navigate_from_shared_agent_to_runner():
     payload = _navigation_payload()
     agent_id = str(payload.get("agent_id") or request.args.get("agent_id") or "").strip()
-    share_token = str(payload.get("share_token") or request.args.get("share_token") or "").strip()
     if not agent_id:
         return _navigation_login_error("Missing AI Hub agent id."), 400
 
-    result = load_public_config(agent_id, share_token=share_token or None, origin=request.host_url)
+    result = load_public_config(agent_id, origin=request.host_url)
     if not result.get("loaded"):
         return _navigation_login_error(result.get("error") or "無法載入此 Agent。"), 502
 
