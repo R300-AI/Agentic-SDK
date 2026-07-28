@@ -61,7 +61,6 @@ _STRUCTURED_OUTPUT_CHOICES = {"table", "json", "custom_schema"}
 _ADVISOR_REQUIRED_FIELDS_TEXT = "目標 = 使用者想完成的結果\n限制 = 時程、預算、規格或其他約束\n現況 = 已知資料、已嘗試方法或目前阻礙"
 _ADVISOR_WELCOME_MESSAGE = "請先描述你想完成的事，我會一步步確認需求。"
 _DEFAULT_RETRIEVE_DESCRIPTION = "依使用者設定的關鍵字支援資料判斷是否需要查詢。"
-_DEFAULT_SEMANTIC_RETRIEVE_NAME = "支援文件"
 _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的支援文件查找與問題最相關的內容。"
 _DEFAULT_SEMANTIC_SAVED_PATH = "./tmp"
 _DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
@@ -1529,12 +1528,6 @@ def _retrieve_description(config: BuilderSourceConfig) -> str:
         if content:
             return content[:120]
     return _DEFAULT_RETRIEVE_DESCRIPTION
-
-
-def _retrieve_name(config: BuilderSourceConfig) -> str:
-    if config.retrieve_module == "SemanticRetrieve" and config.retrieve_name == "支援資料":
-        return _DEFAULT_SEMANTIC_RETRIEVE_NAME
-    return config.retrieve_name
 
 
 def _semantic_source_paths(config: BuilderSourceConfig) -> list[str]:
