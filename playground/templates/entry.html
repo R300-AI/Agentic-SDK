@@ -14,7 +14,7 @@
     </div>
     <div class="entry-copy">
       <h1 id="entry-title">登入以建立並測試 Agent。</h1>
-      <p class="lede">使用 AI Hub 帳戶可儲存設定；也可以先在本機試用，完成後匯出檔案。</p>
+      <p class="lede">使用 AI Hub 帳戶可儲存設定；也可以匿名試用，完成後匯出檔案。</p>
     </div>
 
     <div class="entry-choice-grid" aria-label="選擇進入 Playground 的方式">
@@ -35,9 +35,9 @@
 
       <form class="entry-choice-card quiet" method="post" action="{{ url_for('entry.start_anonymous') }}">
         <span class="choice-icon" aria-hidden="true">PY</span>
-        <h2>不登入，先在本機試用</h2>
+        <h2>不登入，匿名試用</h2>
         <p>先建立與測試流程；內容不會儲存到 AI Hub。</p>
-        <button class="button button-secondary" type="submit">開始本機試用</button>
+        <button class="button button-secondary" type="submit">開始匿名試用</button>
       </form>
     </div>
 

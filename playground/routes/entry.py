@@ -4,7 +4,7 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 
 from playground.models import ModeContext
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
-from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, verify_credentials
+from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source
 
@@ -87,6 +87,28 @@ def navigate_from_aihub_to_runner():
     session["python_source"] = result["python_source"]
     _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     session["source_origin"] = "aihub_loaded"
+    return redirect(url_for("runner.runner"))
+
+
+@entry_bp.route("/playground/aihub/navigation/shared-runner", methods=["GET", "POST"])
+def navigate_from_shared_agent_to_runner():
+    payload = _navigation_payload()
+    agent_id = str(payload.get("agent_id") or request.args.get("agent_id") or "").strip()
+    share_token = str(payload.get("share_token") or request.args.get("share_token") or "").strip()
+    if not agent_id:
+        return _navigation_login_error("Missing AI Hub agent id."), 400
+
+    result = load_public_config(agent_id, share_token=share_token or None, origin=request.host_url)
+    if not result.get("loaded"):
+        return _navigation_login_error(result.get("error") or "無法載入此 Agent。"), 502
+
+    session.clear()
+    session["mode"] = "aihub_readonly"
+    session["account_context_present"] = False
+    session["agent_id"] = result["agent_id"]
+    session["agent_name"] = result.get("agent_name") or ""
+    session["python_source"] = result["python_source"]
+    session["source_origin"] = "aihub_shared_readonly"
     return redirect(url_for("runner.runner"))
 
 

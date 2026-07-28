@@ -12,11 +12,15 @@ from playground.services.source_builder import build_default_python_source, norm
 source_bp = Blueprint("source", __name__, url_prefix="/playground/source")
 
 
+@source_bp.before_request
+def require_source_view_permission():
+    if not get_mode_context().can_view_code:
+        abort(403)
+
+
 @source_bp.get("")
 def source_page():
     mode_context = get_mode_context()
-    if not mode_context.can_view_code:
-        abort(403)
     python_source = _current_python_source()
     python_imports, python_workflow = _split_python_source_blocks(python_source)
     return render_template(

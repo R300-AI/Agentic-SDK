@@ -15,6 +15,7 @@ from playground.services.source_builder import build_default_python_source
 _AUTH_VERIFY_PATH = "/api/playground/auth/verify"
 _AGENTS_PATH = "/api/playground/agents"
 _CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/load"
+_PUBLIC_CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/public/load"
 _CONFIG_SAVE_PATH = "/api/playground/config/save"
 _BUNDLE_SAVE_PATH = "/api/playground/agents/{agent_id}/bundle/save"
 _BUNDLE_LOAD_PATH = "/api/playground/agents/{agent_id}/bundle/load"
@@ -174,6 +175,53 @@ def load_config(
         "python_source": payload.get("python_source") or build_default_python_source(),
         "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or "",
         "integration_status": "aihub",
+        "requires_real_aihub_api": False,
+    }
+
+
+def load_public_config(
+    agent_id: str | None,
+    *,
+    share_token: str | None = None,
+    origin: str | None = None,
+) -> dict[str, object]:
+    resolved_agent_id = (agent_id or "").strip()
+    if not resolved_agent_id:
+        return _aihub_error("Missing AI Hub agent id.", "missing_agent_id", loaded=False)
+    base_url = _ai_hub_base_url()
+    if not base_url:
+        return _aihub_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id, loaded=False)
+
+    payload = {"share_token": share_token.strip()} if share_token and share_token.strip() else {}
+    try:
+        response = httpx.post(
+            f"{base_url}{_PUBLIC_CONFIG_LOAD_PATH.format(agent_id=quote(resolved_agent_id, safe=''))}",
+            json=payload,
+            headers=_json_headers(origin),
+            timeout=_request_timeout_seconds(),
+        )
+        if response.status_code >= 400:
+            return _aihub_error(
+                _response_error_message(response),
+                "aihub_public_load_failed",
+                agent_id=resolved_agent_id,
+                loaded=False,
+                status_code=response.status_code,
+            )
+        response_payload = response.json()
+    except (httpx.HTTPError, ValueError) as error:
+        return _aihub_error(str(error) or "AI Hub public load request failed.", "aihub_public_load_failed", agent_id=resolved_agent_id, loaded=False)
+
+    return {
+        "loaded": True,
+        "agent_id": response_payload.get("agent_id") or resolved_agent_id,
+        "agent_name": response_payload.get("workflow_name") or response_payload.get("agent_name") or "",
+        "workflow_name": response_payload.get("workflow_name") or response_payload.get("agent_name") or "",
+        "description": response_payload.get("description") or "",
+        "python_source": response_payload.get("python_source") or build_default_python_source(),
+        "exported_at": response_payload.get("playground_exported_at") or response_payload.get("exported_at") or "",
+        "integration_status": "aihub",
+        "access_mode": "public_readonly",
         "requires_real_aihub_api": False,
     }
 

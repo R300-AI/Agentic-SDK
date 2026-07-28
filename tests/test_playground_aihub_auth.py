@@ -160,6 +160,34 @@ def test_list_and_load_config_call_ai_hub_agent_apis(monkeypatch):
     assert calls[1]["url"] == "https://aihub.example/api/playground/agents/agent%201/config/load"
 
 
+def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
+    calls = []
+
+    def fake_post(url, *, json, headers, timeout):
+        calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
+        return httpx.Response(200, json={"agent_id": "agent 1", "agent_name": "Shared Agent", "python_source": "print('shared')"})
+
+    monkeypatch.setenv("AI_HUB_BASE_URL", "https://aihub.example/")
+    monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
+    monkeypatch.setenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", "1.25")
+    monkeypatch.setattr(aihub_client.httpx, "post", fake_post)
+
+    loaded = aihub_client.load_public_config("agent 1", share_token="share-token", origin="https://playground.example/")
+
+    assert loaded["loaded"] is True
+    assert loaded["agent_name"] == "Shared Agent"
+    assert loaded["python_source"] == "print('shared')"
+    assert loaded["access_mode"] == "public_readonly"
+    assert calls == [
+        {
+            "url": "https://aihub.example/api/playground/agents/agent%201/config/public/load",
+            "json": {"share_token": "share-token"},
+            "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
+            "timeout": 1.25,
+        }
+    ]
+
+
 def test_bundle_url_requests_call_ai_hub_storage_api(monkeypatch):
     calls = []
 
@@ -351,6 +379,49 @@ def test_aihub_navigation_runner_requires_agent_id(monkeypatch):
 
     assert response.status_code == 400
     assert "Missing AI Hub agent id." in response.get_data(as_text=True)
+
+
+def test_shared_runner_loads_public_agent_as_read_only(monkeypatch):
+    seen_load = []
+
+    def fake_load_public_config(agent_id, *, share_token=None, origin=None):
+        seen_load.append({"agent_id": agent_id, "share_token": share_token, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Shared Agent", "python_source": "print('shared')"}
+
+    monkeypatch.setattr(entry_routes, "load_public_config", fake_load_public_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/playground/aihub/navigation/shared-runner?agent_id=agent-1&share_token=share-token",
+            base_url="https://playground.example",
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/playground/run")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_readonly"
+            assert session["account_context_present"] is False
+            assert session["agent_id"] == "agent-1"
+            assert session["agent_name"] == "Shared Agent"
+            assert session["python_source"] == "print('shared')"
+            assert session["source_origin"] == "aihub_shared_readonly"
+            assert "ai_hub_credential_ticket" not in session
+        runner_page = client.get("/playground/run", base_url="https://playground.example").get_data(as_text=True)
+        builder_response = client.get("/playground/builder", base_url="https://playground.example")
+        builder_state_response = client.post("/playground/builder/state", base_url="https://playground.example", json={"step": "output_format", "choice": "free_text"})
+        source_preview_response = client.get("/playground/source/preview", base_url="https://playground.example")
+        source_export_response = client.post("/playground/source/export", base_url="https://playground.example")
+
+    assert seen_load == [{"agent_id": "agent-1", "share_token": "share-token", "origin": "https://playground.example/"}]
+    assert "編輯設定" not in runner_page
+    assert "預覽程式碼" not in runner_page
+    assert "data-save-action" not in runner_page
+    assert "產生回覆" in runner_page
+    assert builder_response.status_code == 403
+    assert builder_state_response.status_code == 403
+    assert source_preview_response.status_code == 403
+    assert source_export_response.status_code == 403
 
 
 def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):

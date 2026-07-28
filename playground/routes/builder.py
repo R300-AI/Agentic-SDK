@@ -4,7 +4,7 @@ import json
 import shutil
 from pathlib import Path
 
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import Blueprint, abort, jsonify, render_template, request, session
 
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
@@ -44,6 +44,12 @@ _REVIEW_VALUE_STEPS = {
     "output_format": ("output_format", "action"),
     "failure_policy": ("failure_policy",),
 }
+
+
+@builder_bp.before_request
+def require_builder_edit_mode():
+    if not get_mode_context().can_edit:
+        abort(403)
 
 
 @builder_bp.get("")

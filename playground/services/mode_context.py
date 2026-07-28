@@ -6,9 +6,9 @@ from playground.models import ModeContext
 
 
 MODE_LABELS = {
-    "anonymous": "本機試用",
+    "anonymous": "匿名試用",
     "manual_auth": "已登入 AI Hub",
-    "aihub_readonly": "AI Hub 唯讀體驗",
+    "aihub_readonly": "匿名使用已分享 Agent",
     "aihub_editable": "AI Hub 可編輯",
 }
 
