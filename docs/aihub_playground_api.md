@@ -27,6 +27,27 @@ FAE 或 AI Hub 網站開發團隊可以先看 AI Hub 維運文件確認平台責
 | 已登入使用者要建立新 Agent | 送出 AI Hub 帳密 | `POST /playground/aihub/navigation/builder` | `username`、`password` | Builder |
 | 已登入使用者要打開既有 Agent | 送出 AI Hub 帳密與 `agent_id` | `POST /playground/aihub/navigation/runner` | `username`、`password`、`agent_id` | Runner |
 
+## Playground 頁面階段與入口方式
+
+AI Hub 設計導覽時，請先分清楚「頁面階段」與「handoff API」。`/playground` 是服務首頁；builder / runner handoff 才會建立 AI Hub 帳號與 Agent 狀態。
+
+| 入口方式 | URL / Handoff | 使用情境 | 目標頁面 | 權限狀態 |
+| --- | --- | --- | --- | --- |
+| Playground 首頁入口 | `GET /playground/` | 未登入使用者、公開入口、單純進入 Playground 服務首頁 | `/playground/` | 尚未建立 AI Hub handoff session；使用者自行選擇登入或匿名試用 |
+| Create Agent Handoff | `POST /playground/aihub/navigation/builder` | AI Hub 已登入使用者建立新的 Agent / workflow | `/playground/builder` | 可編輯；後續可保存到 AI Hub |
+| Existing Agent Handoff | `POST /playground/aihub/navigation/runner` | AI Hub 已登入使用者載入自己擁有或有權編輯的既有 Agent | `/playground/run` | 可編輯；`mode=aihub_editable`，可 reload/save |
+| Public / Anonymous Runner | `GET` / `POST /playground/aihub/navigation/shared-runner` | 匿名、未登入、或沒有編輯權限但允許公開使用的既有 Agent | `/playground/run` | 可使用、不可編輯；`mode=aihub_readonly` |
+| Runner 頁面 | `GET /playground/run` | 已由首頁、builder、runner handoff 或 shared-runner 建立 Playground session 後進入 | `/playground/run` | 依 session 決定可編輯或唯讀；它本身不是載入既有 Agent 的 handoff API |
+
+導覽規則：
+
+1. 未登入或公開入口導到 `GET /playground/`。
+2. 已登入且要新建 Agent，使用 `POST /playground/aihub/navigation/builder`。
+3. 已登入且要開啟自己擁有或有權編輯的既有 Agent，使用 `POST /playground/aihub/navigation/runner`。
+4. 匿名、未登入、或沒有編輯權限但允許公開使用的既有 Agent，使用 `GET` / `POST /playground/aihub/navigation/shared-runner`，進入可使用但不可編輯的 Runner。
+
+`/playground` 不建立 AI Hub handoff session；AI Hub 已登入使用者若要帶入帳號、Agent id 與編輯權限，應使用 builder 或 runner handoff。Runner 頁面需要明確標示權限狀態：擁有者或有權限者是可編輯，匿名或公開使用者是可使用但不可編輯。
+
 AI Hub 端需要提供三類能力：
 
 1. 驗證帳密，讓 Playground 建立已登入操作狀態。
