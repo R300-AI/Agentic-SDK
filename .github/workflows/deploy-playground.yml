@@ -367,9 +367,14 @@ jobs:
             contains exported-source.py "ToolCallAction(" || return 1
             contains exported-source.py "tools=\[" || return 1
             contains exported-source.py "submit_api_1" || return 1
-            contains exported-source.py "回覆風格與規範：" || return 1
-            contains exported-source.py "互動元件觸發條件：" || return 1
-            contains exported-source.py "API 提交設定：POST https://api.example.com/resource" || return 1
+            contains exported-source.py "設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。" || return 1
+            contains exported-source.py "說明這個元件要協助使用者完成哪項流程" || return 1
+            contains exported-source.py "https://api.example.com/resource" || return 1
+            contains exported-source.py "quantity" || return 1
+            contains exported-source.py "approved" || return 1
+            not_contains exported-source.py "回覆風格與規範：" || return 1
+            not_contains exported-source.py "互動元件觸發條件：" || return 1
+            not_contains exported-source.py "API 提交設定：" || return 1
             not_contains exported-source.py "StructuredAction" || return 1
           }
 
