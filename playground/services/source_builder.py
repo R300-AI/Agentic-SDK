@@ -30,7 +30,7 @@ _ALLOWED_DIRECT_RESULT_KEYS = {
 }
 _ALLOWED_ENTRY_MODULES = {"perceive", "plan", "retrieve", "action"}
 _OUTPUT_FORMAT_PROMPTS = {
-    "free_text": "請依使用者需求自然回覆；語氣、角色、品牌口吻與回覆方式以使用者設定的回覆風格與規範為準。",
+    "free_text": "請依使用者需求自然回覆；語氣、角色與回覆方式以使用者設定的回覆風格與規範為準。",
     "interactive": "請同時支援純文字回覆與 OpenAI tool calling。一般問題可自然回答；當需要使用者選擇或填寫資料時，請呼叫最符合的工具，不要把 component/api JSON 當成一般文字輸出。",
     "natural": "請用自然語句回覆；先給結論，再補必要依據與下一步。",
     "bullets": "請用條列摘要回覆；依序列出結論、依據、下一步。",
@@ -95,7 +95,7 @@ class BuilderSourceConfig:
     custom_action_memory_key: str = "latest_retrieved_content"
     custom_action_fallback: str = "找不到符合的支援資料。"
     custom_action_prefix: str = "自訂處理結果："
-    custom_rule_title: str = "作業規則"
+    custom_rule_title: str = "處理規則"
     custom_rule_instruction: str | None = None
     plan_strategy: str | None = None
     plan_system_prompt: str | None = None
@@ -153,7 +153,7 @@ def get_builder_steps() -> list[BuilderStep]:
             "回覆呈現",
             "",
             (
-                BuilderChoice("free_text", "純文字回覆", "設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。"),
+                BuilderChoice("free_text", "純文字回覆", "設定 Agent 的角色、語氣、回答順序與限制。"),
                 BuilderChoice("interactive", "可互動元件", "沿用同一組回覆風格與規範，再追加抽取欄位與 API 提交合約。"),
             ),
         ),
@@ -322,7 +322,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 custom_action_memory_key=_clean_identifier_text(str(choice_label.get("memory_key", config.custom_action_memory_key)), "latest_retrieved_content"),
                 custom_action_fallback=_clean_short_text(str(choice_label.get("fallback", config.custom_action_fallback)), "找不到符合的支援資料。"),
                 custom_action_prefix=_clean_short_text(str(choice_label.get("prefix", config.custom_action_prefix)), "自訂處理結果："),
-                custom_rule_title=_clean_short_text(str(choice_label.get("rule_title", config.custom_rule_title)), "作業規則"),
+                custom_rule_title=_clean_short_text(str(choice_label.get("rule_title", config.custom_rule_title)), "處理規則"),
                 custom_rule_instruction=(
                     _rule_instruction_from_pairs(str(choice_label.get("rule_pairs", "")))
                     if "rule_pairs" in choice_label
@@ -433,7 +433,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         custom_action_memory_key=_extract_custom_action_memory_key(source, _extract_assignment_value(source, "CUSTOM_ACTION_MEMORY_KEY", "latest_retrieved_content")),
         custom_action_fallback=_extract_custom_action_fallback(source, _extract_assignment_value(source, "CUSTOM_ACTION_FALLBACK", "找不到符合的支援資料。")),
         custom_action_prefix=_extract_custom_action_prefix(source, _extract_assignment_value(source, "CUSTOM_ACTION_PREFIX", "自訂處理結果：")),
-        custom_rule_title=_extract_custom_action_title(source, _extract_assignment_value(source, "BUSINESS_RULE_TITLE", "作業規則")),
+        custom_rule_title=_extract_custom_action_title(source, _extract_assignment_value(source, "BUSINESS_RULE_TITLE", "處理規則")),
         custom_rule_instruction=_extract_custom_action_instruction(source, _extract_assignment_value(source, "BUSINESS_RULE_INSTRUCTION", "")) or None,
         plan_strategy="RouteBySupport" if "NextStepPlan(" in source else None,
         plan_system_prompt=_extract_keyword_value(source, {"NextStepPlan"}, "system_prompt") or None,
@@ -1510,7 +1510,7 @@ def get_workflow_summary(python_source: str) -> WorkflowSummary:
 
     return WorkflowSummary(
         name=name,
-        input_contract="輸入：客戶情境",
+        input_contract="輸入：使用者內容",
         output_contract=output_contract,
         template=template,
         readiness="可開始使用" if parsed.supported_subset else "可預覽",

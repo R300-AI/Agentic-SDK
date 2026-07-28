@@ -162,9 +162,9 @@
           <summary>進階設定</summary>
           <form class="module-param-form" data-param-form data-step-key="perceive" data-input-type-form>
             <label for="v3-perceive-welcome-message">Agent 要優先判讀哪些重點？</label>
-            <textarea id="v3-perceive-welcome-message" name="welcome_message" rows="3" data-input-mode-placeholder data-text-placeholder="例如：需求、目的、限制條件、問題描述、期望結果" data-text-image-placeholder="例如：需求、問題狀況、圖片中的異常處、文字與圖片是否一致" placeholder="例如：需求、目的、限制條件、問題描述、期望結果"></textarea>
+            <textarea id="v3-perceive-welcome-message" name="welcome_message" rows="3" data-input-mode-placeholder data-text-placeholder="例如：目標、限制、已知內容、期望結果" data-text-image-placeholder="例如：目標、限制、文字與圖片中的關鍵資訊" placeholder="例如：目標、限制、已知內容、期望結果"></textarea>
             <label for="v3-perceive-intent-pairs">要擷取哪些欄位資訊？</label>
-            <div data-input-mode-pair-fields data-text-key-placeholder="例如：日期" data-text-image-key-placeholder="例如：產品型號" data-text-value-placeholder="例如：文字中提到的事件時間" data-text-image-value-placeholder="例如：可從文字描述或圖片標示辨識的型號資訊">
+            <div data-input-mode-pair-fields data-text-key-placeholder="例如：欄位名稱" data-text-image-key-placeholder="例如：欄位名稱" data-text-value-placeholder="例如：此欄位的判讀方式" data-text-image-value-placeholder="例如：可從文字或圖片辨識的資訊">
               {{ pair_editor(
                 "v3-perceive-intent-pairs",
                 "intent_pairs",
@@ -172,8 +172,8 @@
                 "欄位說明",
                 "新增欄位",
                 none,
-                "例如：日期",
-                "例如：文字中提到的事件時間",
+                "例如：欄位名稱",
+                "例如：此欄位的判讀方式",
                 "input-signals-editor",
                 "",
                 true,
@@ -202,7 +202,7 @@
               <ul class="semantic-upload-list" data-semantic-upload-list aria-label="已上傳支援文件"></ul>
             </div>
             <label for="v3-retrieve-semantic-search-goal">這批資料要讓 Agent 查什麼？</label>
-            <textarea id="v3-retrieve-semantic-search-goal" name="semantic_search_goal" rows="3" placeholder="例如：退款條件、保固限制、產品規格差異"></textarea>
+            <textarea id="v3-retrieve-semantic-search-goal" name="semantic_search_goal" rows="3" placeholder="例如：查找規則、條件、限制或差異"></textarea>
           </form>
         </details>
         <details class="advanced-disclosure step-advanced" data-visible-choices="keyword" open>
@@ -216,8 +216,8 @@
               "命中內容",
               "新增欄位",
               none,
-              "例如：保固",
-              "例如：提供保固期限與申請方式",
+              "例如：關鍵字",
+              "例如：命中後要提供的內容",
               "input-signals-editor",
               "",
               true,
@@ -234,7 +234,7 @@
           <summary>回覆風格與規範</summary>
           <form class="module-param-form" data-param-form data-step-key="action">
             <label for="v3-action-response-instruction">回覆風格與規範</label>
-            <textarea id="v3-action-response-instruction" name="response_instruction" rows="5" placeholder="例如：設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。"></textarea>
+            <textarea id="v3-action-response-instruction" name="response_instruction" rows="5" placeholder="例如：設定 Agent 的角色、語氣、回答順序與限制。"></textarea>
           </form>
         </details>
         <details class="advanced-disclosure step-advanced" data-visible-choices="interactive" open>
@@ -249,7 +249,7 @@
                     <button class="button button-ghost api-contract-remove" type="button" data-api-remove hidden>移除API</button>
                   </div>
                   <label for="v3-action-interaction-trigger">功能說明</label>
-                  <textarea id="v3-action-interaction-trigger" name="interaction_trigger" rows="3" placeholder="例如：說明這個元件要協助使用者完成哪項流程、需要取得哪些必要資訊，以及資料齊全後如何交給後續處理。" data-api-trigger></textarea>
+                  <textarea id="v3-action-interaction-trigger" name="interaction_trigger" rows="3" placeholder="例如：說明何時需要呼叫這個工具、要收集哪些資訊，以及資料齊全後如何處理。" data-api-trigger></textarea>
                   <div class="api-endpoint-row">
                     <div class="api-method-field">
                       <label for="v3-action-api-method">Method</label>
@@ -262,7 +262,7 @@
                     </div>
                     <div>
                       <label for="v3-action-api-url">API URL<span class="form-required">必填</span></label>
-                      <input id="v3-action-api-url" name="api_url" type="url" autocomplete="off" placeholder="例如：https://api.example.com/bookings" data-api-url>
+                      <input id="v3-action-api-url" name="api_url" type="url" autocomplete="off" placeholder="例如：https://api.example.com/endpoint" data-api-url>
                     </div>
                   </div>
                   <label for="v3-action-component-fields">需要收集的資訊<span class="form-required">必填</span></label>

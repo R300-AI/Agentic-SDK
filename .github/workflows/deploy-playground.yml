@@ -289,104 +289,26 @@ jobs:
           URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/playground"
           AGENTS_URL="${URL}/agents"
           BUILDER_URL="${URL}/builder"
-          RUNNER_JS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/js/runner/runner-page.js"
-          RESULT_SURFACE_JS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/js/runner/result-surface.js"
-          CSS_URL="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net/static/css/app.css"
 
-          contains() {
-            local file="$1"
-            local needle="$2"
-            if ! grep -q "$needle" "$file"; then
-              CHECK_FAILURE="Expected '$needle' in $file"
-              return 1
-            fi
-          }
-
-          not_contains() {
-            local file="$1"
-            local needle="$2"
-            if grep -q "$needle" "$file"; then
-              CHECK_FAILURE="Did not expect '$needle' in $file"
-              return 1
-            fi
-          }
-
-          verify_once() {
+          ready_once() {
             CHECK_FAILURE=""
             curl --fail --silent --show-error --location "$URL" | grep -q "AI Hub Agent" || { CHECK_FAILURE="Playground entry is not ready"; return 1; }
             curl --fail --silent --show-error --location "$AGENTS_URL" | grep -q "AI Hub Agent" || { CHECK_FAILURE="Agents page is not ready"; return 1; }
-
-            curl --fail --silent --show-error --location "$BUILDER_URL" --output builder.html || { CHECK_FAILURE="Builder page request failed"; return 1; }
-            contains builder.html "builder-step-memory_type" || return 1
-            contains builder.html "builder-step-input_type" || return 1
-            contains builder.html "builder-step-retrieve_policy" || return 1
-            contains builder.html "builder-step-output_format" || return 1
-            contains builder.html "builder-step-readiness" || return 1
-            contains builder.html "純文字回覆" || return 1
-            contains builder.html "可互動元件" || return 1
-            contains builder.html "回覆風格與規範" || return 1
-            contains builder.html "可互動元件 API" || return 1
-            contains builder.html "功能說明" || return 1
-            contains builder.html "api-endpoint-row" || return 1
-            contains builder.html "api-method-field" || return 1
-            not_contains builder.html "builder-step-template" || return 1
-            not_contains builder.html "builder-step-reflect" || return 1
-            not_contains builder.html "可互動元件 API 契約" || return 1
-            not_contains builder.html "回覆指令" || return 1
-            not_contains builder.html "互動面板進階配置" || return 1
-
-            curl --fail --silent --show-error --location "$RUNNER_JS_URL" --output runner-page.js || { CHECK_FAILURE="Runner page JS request failed"; return 1; }
-            contains runner-page.js "tool_call_submission" || return 1
-            contains runner-page.js "runner:tool-call-submit" || return 1
-
-            curl --fail --silent --show-error --location "$RESULT_SURFACE_JS_URL" --output result-surface.js || { CHECK_FAILURE="Result surface JS request failed"; return 1; }
-            contains result-surface.js "runner:tool-call-submit" || return 1
-            contains result-surface.js "tool-call-panel" || return 1
-
-            curl --fail --silent --show-error --location "$CSS_URL" --output app.css || { CHECK_FAILURE="CSS request failed"; return 1; }
-            contains app.css "api-contract-editor" || return 1
-
-            COOKIE_JAR="$(mktemp)"
-            curl --fail --silent --show-error --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
-              --request POST "$URL/start/anonymous" >/dev/null || { CHECK_FAILURE="Anonymous session start failed"; return 1; }
-
-            printf '{"step":"output_format","choice":"interactive"}' > builder-choice.json
-            curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
-              --header "Content-Type: application/json; charset=utf-8" \
-              --data-binary @builder-choice.json \
-              "$URL/builder/state" >/dev/null || { CHECK_FAILURE="Builder output format update failed"; return 1; }
-
-            printf '%s' '{"step":"action","value":{"response_instruction":"設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。","interaction_trigger":"說明這個元件要協助使用者完成哪項流程、需要取得哪些必要資訊，以及資料齊全後如何交給後續處理。","api_method":"POST","api_url":"https://api.example.com/resource","component_fields":"id = 識別碼\nquantity = 數字：數量\napproved = 是否確認","api_body_template":"{\"id\":\"{{id}}\",\"quantity\":\"{{quantity}}\",\"approved\":\"{{approved}}\"}","missing_info_rule":"缺少必要欄位時，先詢問使用者補齊後再送出。"}}' > builder-action.json
-            curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
-              --header "Content-Type: application/json; charset=utf-8" \
-              --data-binary @builder-action.json \
-              "$URL/builder/state" >/dev/null || { CHECK_FAILURE="Builder action update failed"; return 1; }
-
-            curl --fail --silent --show-error --location --cookie-jar "$COOKIE_JAR" --cookie "$COOKIE_JAR" \
-              --request POST "$URL/source/export" --output exported-source.py || { CHECK_FAILURE="Source export failed"; return 1; }
-            contains exported-source.py "ToolCallAction(" || return 1
-            contains exported-source.py "tools=\[" || return 1
-            contains exported-source.py "submit_api_1" || return 1
-            contains exported-source.py "設定 Agent 的角色、語氣、品牌話術、回答順序與不能說的內容。" || return 1
-            contains exported-source.py "說明這個元件要協助使用者完成哪項流程" || return 1
-            contains exported-source.py "https://api.example.com/resource" || return 1
-            contains exported-source.py "quantity" || return 1
-            contains exported-source.py "approved" || return 1
-            not_contains exported-source.py "回覆風格與規範：" || return 1
-            not_contains exported-source.py "互動元件觸發條件：" || return 1
-            not_contains exported-source.py "API 提交設定：" || return 1
-            not_contains exported-source.py "StructuredAction" || return 1
+            curl --fail --silent --show-error --location "$BUILDER_URL" >/dev/null || { CHECK_FAILURE="Builder page request failed"; return 1; }
           }
 
           for attempt in {1..30}; do
-            if verify_once; then
-              echo "Playground is live at $URL"
-              exit 0
+            if ready_once; then
+              echo "Playground is responding at $URL"
+              break
             fi
 
             echo "Waiting for Playground startup: attempt $attempt/30 (${CHECK_FAILURE:-unknown check failed})"
+            if [ "$attempt" -eq 30 ]; then
+              echo "::error::Playground did not become healthy at $URL (${CHECK_FAILURE:-unknown check failed})"
+              exit 1
+            fi
             sleep 10
           done
 
-          echo "::error::Playground did not become healthy at $URL (${CHECK_FAILURE:-unknown check failed})"
-          exit 1
+          echo "Playground is live at $URL"

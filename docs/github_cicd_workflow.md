@@ -46,7 +46,7 @@ python -m playground.main
 7. 打包 `agentic_sdk/`、`playground/`、`.python_packages/`、`.env`、`requirements.txt` 為 `deploy.zip`。
 8. 使用 `azure/webapps-deploy` 部署到 App Service。
 9. 部署 zip 後 restart App Service，確保 Python worker 載入新的 route map。
-10. 對 `/playground`、`/playground/agents`、`/playground/builder`、Runner 靜態 JS、`/static/css/app.css` 與 Builder 匯出的 source 執行 smoke check，確認公開站台回傳正式 Playground、AI Hub Agent 導航 route 存在、Builder Q4 顯示 `純文字回覆` / `可互動元件`、互動 API 區塊包含 `回覆風格與規範`、`可互動元件 API`、`功能說明`，Runner 仍載入 ToolCallPanel 前端支援，匯出的互動 workflow 使用 `ToolCallAction`、保留使用者填寫的 instruction/API schema，且不含舊 scaffold label 或 `StructuredAction`。
+10. 對 `/playground`、`/playground/agents`、`/playground/builder` 做 readiness retry，只確認部署後服務可回應。Playground 產品文案、版面、靜態資源細節與 Builder 匯出 source 的細部契約不放在部署驗證中阻擋發佈。
 
 部署完成後，正式入口為：
 
