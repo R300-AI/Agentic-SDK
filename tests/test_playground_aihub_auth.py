@@ -215,6 +215,33 @@ def test_aihub_navigation_builder_verifies_credentials_and_enters_builder(monkey
     assert seen == [("creator", "secret", "https://playground.example/")]
 
 
+def test_aihub_navigation_builder_accepts_json_payload(monkeypatch):
+    seen = []
+
+    def fake_verify(username, password, *, origin=None):
+        seen.append((username, password, origin))
+        return True
+
+    monkeypatch.setattr(entry_routes, "verify_credentials", fake_verify)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/builder",
+            base_url="https://playground.example",
+            json={"username": "creator", "password": "secret"},
+        )
+        assert response.status_code == 302
+        assert response.headers["Location"].endswith("/playground/builder")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "manual_auth"
+            assert session["account_context_present"] is True
+            assert "agent_id" not in session
+
+    assert seen == [("creator", "secret", "https://playground.example/")]
+
+
 def test_aihub_navigation_runner_verifies_and_loads_agent(monkeypatch):
     seen_verify = []
     seen_load = []
@@ -254,6 +281,22 @@ def test_aihub_navigation_runner_verifies_and_loads_agent(monkeypatch):
     assert seen_load[0]["origin"] == "https://playground.example/"
     assert seen_load[0]["credentials"].username == "creator"
     assert seen_load[0]["credentials"].password == "secret"
+
+
+def test_aihub_navigation_runner_requires_agent_id(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/runner",
+            base_url="https://playground.example",
+            data={"username": "creator", "password": "secret"},
+        )
+
+    assert response.status_code == 400
+    assert "Missing AI Hub agent id." in response.get_data(as_text=True)
 
 
 def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
@@ -315,6 +358,32 @@ def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):
     assert session_source == "print('reloaded')"
 
 
+def test_agent_picker_new_resets_selected_agent_and_enters_builder(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", data={"username": "creator", "password": "secret"})
+        with client.session_transaction() as session:
+            session["agent_id"] = "agent-1"
+            session["agent_name"] = "Agent One"
+            session["last_aihub_save"] = {"saved": True}
+            session["python_source"] = "print('stale')"
+            session["source_origin"] = "aihub_loaded"
+        response = client.post("/playground/agents/new")
+        with client.session_transaction() as session:
+            assert "agent_id" not in session
+            assert "agent_name" not in session
+            assert "last_aihub_save" not in session
+            assert session["mode"] == "manual_auth"
+            assert session["source_origin"] == "manual_new"
+            assert session["python_source"] != "print('stale')"
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/builder")
+
+
 def test_aihub_save_route_requires_login_ticket(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     monkeypatch.setattr(aihub_routes, "save_config", lambda *args, **kwargs: {"agent_id": "agent-new", "saved": True, "integration_status": "aihub", "requires_real_aihub_api": False})
@@ -341,64 +410,6 @@ def test_aihub_save_route_requires_login_ticket(monkeypatch):
     assert created_response.json["agent_id"] == "agent-new"
     assert missing_ticket_response.status_code == 401
     assert missing_ticket_response.json["error"] == "AI Hub login is required before saving."
-
-
-def test_aihub_save_route_retries_existing_fixed_playground_agent_on_duplicate_create(monkeypatch):
-    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
-    save_calls = []
-
-    def fake_save_config(agent_id, python_source, *, agent_name=None, credentials=None, origin=None):
-        save_calls.append({"agent_id": agent_id, "python_source": python_source, "agent_name": agent_name, "origin": origin, "username": credentials.username if credentials else None})
-        if not agent_id:
-            return {
-                "saved": False,
-                "error": "同一位使用者的 Agent 名稱必須唯一。",
-                "error_code": "aihub_save_failed",
-                "status_code": 409,
-                "integration_status": "aihub",
-                "requires_real_aihub_api": False,
-            }
-        return {
-            "agent_id": agent_id,
-            "agent_name": "Playground Agent - creator",
-            "saved": True,
-            "integration_status": "aihub",
-            "requires_real_aihub_api": False,
-        }
-
-    monkeypatch.setattr(aihub_routes, "save_config", fake_save_config)
-    monkeypatch.setattr(
-        aihub_routes,
-        "list_agents",
-        lambda *, credentials=None, origin=None: {
-            "loaded": True,
-            "items": [{"agent_id": "agt_fixed_001", "agent_name": "Playground Agent - creator"}],
-            "integration_status": "aihub",
-            "requires_real_aihub_api": False,
-        },
-    )
-    app = create_app()
-    app.config.update(TESTING=True, SECRET_KEY="test-secret")
-
-    with app.test_client() as client:
-        login_response = client.post(
-            "/playground/auth/login",
-            base_url="https://playground.example",
-            data={"username": "creator", "password": "secret"},
-        )
-        assert login_response.status_code == 302
-        with client.session_transaction(base_url="https://playground.example") as session:
-            session["python_source"] = "print('hello')"
-        save_response = client.post("/playground/aihub/config/save", base_url="https://playground.example")
-        with client.session_transaction(base_url="https://playground.example") as session:
-            saved_agent_id = session["agent_id"]
-
-    assert save_response.status_code == 200
-    assert save_response.json["saved"] is True
-    assert save_calls[0]["agent_id"] in (None, "")
-    assert save_calls[1]["agent_id"] == "agt_fixed_001"
-    assert save_calls[1]["agent_name"] == "Untitled Agent"
-    assert saved_agent_id == "agt_fixed_001"
 
 
 def test_aihub_login_route_authenticates_without_saving(monkeypatch):

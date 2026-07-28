@@ -1,8 +1,34 @@
 # AI Hub Playground Handoff API
 
-這份文件只定義 AI Hub 進入 Agentic SDK Playground 的 handoff API。AI Hub 已經定義好的 Agent list、config load、config save 等 API，以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
+當你要把使用者從 AI Hub 導入 Agentic SDK Playground，並決定他是要建立新的 Playground 設定，還是恢復既有的 Playground 設定時，就看這一頁。這一頁只定義進入 Playground 的 handoff API，不重寫 AI Hub 已經定義好的驗證、Agent 清單、config load、config save 契約。
 
-本頁不重新定義 AI Hub 的 save/load request 或 response，避免兩邊文件 drift。
+AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
+
+## 這份文件會幫你完成什麼
+
+完成這一頁後，你應該能清楚分辨三種進入 Playground 的方式：
+
+1. 不登入，先在本機試用。
+2. AI Hub 已登入使用者要建立新的 Playground 設定。
+3. AI Hub 已登入使用者要恢復既有的 Playground 設定。
+
+同時，你也能知道 AI Hub 在什麼情境下應該把使用者送到 Builder，什麼情境下應該直接送到 Runner。
+
+## 開始之前
+
+開始前，先確認三件事：
+
+1. Playground 的來源網域已被 AI Hub 的 Playground Origin 設定允許。
+2. 你現在要處理的是匿名試用、新建設定，還是恢復既有設定。
+3. 如果要恢復既有設定，AI Hub 已經知道要載入的 `agent_id`。
+
+## 入口模式
+
+| 模式 | 是否帶帳密 | 是否帶 `agent_id` | 進入位置 | 主要結果 |
+| --- | --- | --- | --- | --- |
+| 匿名試用 | No | No | Builder | 初始化新的預設 `python_source` |
+| 已登入，新建設定 | Yes | No | Builder | 建立可編輯的新 Playground 設定 |
+| 已登入，恢復既有設定 | Yes | Yes | Runner | 載回既有 `python_source` |
 
 ## Base URL
 
@@ -18,10 +44,16 @@ https://agentic-sdk-playground.azurewebsites.net
 
 | API | Method | Path | 用途 |
 | --- | --- | --- | --- |
-| Create Agent Handoff | `POST` | `/playground/aihub/navigation/builder` | AI Hub 已登入使用者直接建立新 Agent，成功後進 Builder。 |
-| Existing Agent Handoff | `POST` | `/playground/aihub/navigation/runner` | AI Hub 已登入使用者帶 `agent_id` 載入既有 Agent，成功後進 Runner。 |
+| Create Agent Handoff | `POST` | `/playground/aihub/navigation/builder` | AI Hub 已登入使用者建立新的 Playground 設定，成功後進 Builder。 |
+| Existing Agent Handoff | `POST` | `/playground/aihub/navigation/runner` | AI Hub 已登入使用者帶 `agent_id` 載入既有 Playground 設定，成功後進 Runner。 |
 
-這兩個 endpoint 是 AI Hub 把已登入使用者送入 Playground 的入口。Runner 進入後的 save/load/reload 行為會依照 AI Hub connection model 執行，不在本頁重複定義。
+這兩個 endpoint 是 AI Hub 已登入使用者進入 Playground 的正式入口。Runner 進入後的 save/load/reload 行為會依照 AI Hub connection model 執行，不在本頁重複定義。
+
+匿名試用入口由 Playground 自己提供：
+
+- `POST /playground/start/anonymous`
+
+這條入口不需要 AI Hub 帳密，也不屬於 AI Hub handoff API。
 
 ## POST /playground/aihub/navigation/builder
 
@@ -55,11 +87,9 @@ Set-Cookie: session=...
 Playground 會完成以下動作：
 
 1. 呼叫 AI Hub `POST /api/playground/auth/verify` 驗證帳密。
-2. 建立 Playground server-side session。
-3. 建立 AI Hub credential ticket，供後續依 AI Hub connection model 執行 save/reload 時使用。
-4. 清除舊的 `agent_id`、`agent_name`、`last_aihub_save`。
-5. 初始化預設 `python_source`。
-6. Redirect 到 `/playground/builder`。
+2. 建立可供後續 save/reload 使用的已登入 Playground 編輯上下文。
+3. 以新的預設 `python_source` 開始一份新設定。
+4. Redirect 到 `/playground/builder`。
 
 ### Error Response
 
@@ -100,12 +130,9 @@ Set-Cookie: session=...
 Playground 會完成以下動作：
 
 1. 呼叫 AI Hub `POST /api/playground/auth/verify` 驗證帳密。
-2. 清除目前瀏覽器上的舊 Playground session 狀態。
+2. 建立可供後續 save/reload 使用的已登入 Playground 編輯上下文。
 3. 依 AI Hub connection model 載入指定 `agent_id` 的 Playground config。
-4. 建立 Playground server-side session。
-5. 設定 `mode=aihub_editable`。
-6. 寫入 `agent_id`、`agent_name`、`python_source`、`source_origin=aihub_loaded`。
-7. Redirect 到 `/playground/run`。
+4. Redirect 到 `/playground/run`。
 
 ### Error Response
 
@@ -125,6 +152,19 @@ Playground 會完成以下動作：
 - 儲存或建立 Agent config
 
 Canonical 文件：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
+
+## Playground 站內登入流程
+
+Playground 首頁另有互動式登入流程，供使用者直接在 Playground 站內操作：
+
+1. 使用者在首頁送出 `POST /playground/auth/login`。
+2. Playground 驗證 AI Hub 帳密後，進入已登入操作狀態。
+3. Redirect 到 `/playground/agents`。
+4. 使用者在 Agent 清單中選擇：
+   - 既有 Agent：載回既有 `python_source`，進 Runner。
+   - 新建 Agent：初始化新的預設 `python_source`，進 Builder。
+
+這條流程適合由 Playground 首頁的人類操作觸發。AI Hub 若已經知道使用者要新建還是恢復既有設定，應直接使用本頁定義的 handoff API。
 
 ## Browser Handoff Example
 

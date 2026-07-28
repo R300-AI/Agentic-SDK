@@ -48,13 +48,7 @@ def login():
             login_error="We could not verify those AI Hub credentials. Check the account and try again.",
         ), 400
 
-    session.clear()
-    session["mode"] = "manual_auth"
-    session["account_context_present"] = True
-    session["ai_hub_username"] = normalized_username
-    session["ai_hub_credential_ticket"] = issue_credential_ticket(normalized_username, password)
-    session["python_source"] = build_default_python_source()
-    session["source_origin"] = "manual_new"
+    _start_authenticated_session(AiHubCredentials(username=normalized_username, password=password))
     return redirect(url_for("entry.agent_picker"))
 
 
@@ -65,9 +59,7 @@ def navigate_from_aihub_to_builder():
         return _navigation_login_error(), 400
 
     _start_authenticated_session(credentials)
-    session.pop("agent_id", None)
-    session.pop("agent_name", None)
-    session.pop("last_aihub_save", None)
+    _clear_selected_agent_state()
     return redirect(url_for("builder.builder"))
 
 
@@ -117,9 +109,7 @@ def start_new_agent():
     if not credentials_for_ticket(session.get("ai_hub_credential_ticket")):
         return redirect(url_for("entry.entry"))
 
-    session.pop("agent_id", None)
-    session.pop("agent_name", None)
-    session.pop("last_aihub_save", None)
+    _clear_selected_agent_state()
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
     session["python_source"] = build_default_python_source()
@@ -181,6 +171,12 @@ def _start_authenticated_session(credentials: AiHubCredentials) -> None:
     session["ai_hub_credential_ticket"] = issue_credential_ticket(credentials.username, credentials.password)
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
+
+
+def _clear_selected_agent_state() -> None:
+    session.pop("agent_id", None)
+    session.pop("agent_name", None)
+    session.pop("last_aihub_save", None)
 
 
 def _navigation_login_error(message: str = "We could not verify those AI Hub credentials. Check the account and try again."):

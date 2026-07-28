@@ -94,10 +94,6 @@ def save_aihub_config():
     agent_id = payload.get("agent_id") or session.get("agent_id")
     agent_name = get_workflow_summary(python_source).name
     result = save_config(agent_id, python_source, agent_name=agent_name, credentials=credentials, origin=request.host_url)
-    if _should_retry_playground_agent_save(result, agent_id):
-        fallback_agent_id = _existing_playground_agent_id(credentials, request.host_url)
-        if fallback_agent_id:
-            result = save_config(fallback_agent_id, python_source, agent_name=agent_name, credentials=credentials, origin=request.host_url)
     if result.get("saved"):
         if result.get("agent_id"):
             session["agent_id"] = result["agent_id"]
@@ -107,31 +103,6 @@ def save_aihub_config():
         session["last_aihub_save"] = result
     status_code = 200 if result.get("saved") else 502
     return jsonify(result), status_code
-
-
-def _should_retry_playground_agent_save(result: dict[str, object], agent_id: str | None) -> bool:
-    if agent_id:
-        return False
-    return (
-        result.get("saved") is False
-        and result.get("status_code") == 409
-        and str(result.get("error_code") or "") == "aihub_save_failed"
-        and "Agent 名稱必須唯一" in str(result.get("error") or "")
-    )
-
-
-def _existing_playground_agent_id(credentials, origin: str) -> str | None:
-    username = str(session.get("ai_hub_username") or credentials.username or "").strip()
-    if not username:
-        return None
-    result = list_agents(credentials=credentials, origin=origin)
-    if not result.get("loaded"):
-        return None
-    fallback_name = f"Playground Agent - {username}"
-    for item in result.get("items") or []:
-        if isinstance(item, dict) and str(item.get("agent_name") or "").strip() == fallback_name:
-            return str(item.get("agent_id") or "").strip() or None
-    return None
 
 
 @aihub_bp.post("/auth/login")
