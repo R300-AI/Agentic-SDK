@@ -182,13 +182,7 @@ def execute_python_source(
     if final_message == "No matching entries.":
         final_message = _source_fallback_text(python_source) or "目前沒有找到符合的支援資料。"
     tool_calls = workflow_result.entities.get("latest_tool_calls", [])
-    legacy_tool_payload = _legacy_tool_call_payload_from_text(final_message)
-    if legacy_tool_payload:
-        legacy_message = str(legacy_tool_payload.get("message") or "").strip()
-        final_message = legacy_message or _message_without_legacy_tool_payload(final_message) or "請確認以下選項。"
     tool_call_panels = _tool_call_panels_from(config.action_tools, tool_calls)
-    if not tool_call_panels and legacy_tool_payload:
-        tool_call_panels = _legacy_tool_call_panels_from(config.action_tools, legacy_tool_payload)
     result = {
         "title": "回覆結果",
         "message": final_message,
@@ -870,7 +864,6 @@ def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str
     endpoint_role = "action" if "action" in reachable_roles else "perceive"
     return NextStepPlan(
         system_prompt=config.plan_system_prompt,
-        retrieve_name=config.retrieve_name,
         retrieve_description=config.retrieve_description,
         **endpoint_params_for_role(endpoint_role, endpoint_selections),
     )
@@ -974,113 +967,6 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
             }
         )
     return panels
-
-
-def _legacy_tool_call_payload_from_text(message: str) -> dict[str, object] | None:
-    raw_message = str(message or "").strip()
-    if not raw_message:
-        return None
-    for payload in _json_object_candidates_from_text(raw_message):
-        component = payload.get("component")
-        api = payload.get("api")
-        fields = component.get("fields") if isinstance(component, dict) else None
-        if isinstance(component, dict) and isinstance(api, dict) and isinstance(fields, list) and fields:
-            return payload
-    return None
-
-
-def _message_without_legacy_tool_payload(message: str) -> str:
-    raw_message = str(message or "")
-    stripped_message = re.sub(r"```(?:json|JSON)?\s*[\s\S]*?```", "", raw_message).strip()
-    if _legacy_tool_call_payload_from_text(stripped_message):
-        return ""
-    return stripped_message
-
-
-def _json_object_candidates_from_text(text: str) -> list[dict[str, object]]:
-    candidates: list[dict[str, object]] = []
-    raw_text = str(text or "").strip()
-    if not raw_text:
-        return candidates
-    whole_object = _safe_json_object(raw_text)
-    if whole_object:
-        candidates.append(whole_object)
-    for match in re.finditer(r"```(?:json|JSON)?\s*([\s\S]*?)```", raw_text):
-        fenced_object = _safe_json_object(match.group(1).strip())
-        if fenced_object:
-            candidates.append(fenced_object)
-    decoder = json.JSONDecoder()
-    for start_index, character in enumerate(raw_text):
-        if character != "{":
-            continue
-        try:
-            decoded, _ = decoder.raw_decode(raw_text[start_index:])
-        except ValueError:
-            continue
-        if isinstance(decoded, dict):
-            candidates.append(decoded)
-    return candidates
-
-
-def _legacy_tool_call_panels_from(action_tools: tuple[dict[str, object], ...], payload: dict[str, object]) -> list[dict[str, object]]:
-    schemas = _function_schemas_by_name(action_tools)
-    function_name = next(iter(schemas), "submit_api_1")
-    schema = schemas.get(function_name, {})
-    component = payload.get("component")
-    api = payload.get("api")
-    api_contract = _legacy_api_contract(api)
-    raw_fields = component.get("fields") if isinstance(component, dict) else []
-    raw_body = api.get("body") if isinstance(api, dict) else {}
-    arguments = raw_body if isinstance(raw_body, dict) else {}
-    parameters = schema.get("parameters")
-    properties = parameters.get("properties") if isinstance(parameters, dict) else {}
-    required = parameters.get("required") if isinstance(parameters, dict) else []
-    properties = properties if isinstance(properties, dict) else {}
-    required_names = {str(name) for name in required} if isinstance(required, list) else set()
-    fields: list[dict[str, object]] = []
-    for raw_field in raw_fields if isinstance(raw_fields, list) else []:
-        if not isinstance(raw_field, dict):
-            continue
-        name = str(raw_field.get("name") or raw_field.get("key") or "").strip()
-        if not name:
-            continue
-        field_schema = properties.get(name)
-        if not isinstance(field_schema, dict):
-            field_schema = {}
-        value = arguments.get(name)
-        field_type = _tool_call_field_type(raw_field.get("type") or field_schema.get("type"), value)
-        required_value = raw_field.get("required")
-        fields.append(
-            {
-                "name": name,
-                "label": str(raw_field.get("label") or raw_field.get("title") or name),
-                "type": field_type,
-                "panel_type": f"tool-call-panel-{field_type}",
-                "description": str(raw_field.get("description") or raw_field.get("hint") or field_schema.get("description") or ""),
-                "required": name in required_names or (required_value is None or bool(required_value)),
-                "value": value if value is not None else "",
-            }
-        )
-    if not fields:
-        return []
-    title = str(schema.get("description") or function_name)
-    return [
-        {
-            "id": "legacy_tool_call_1",
-            "function_name": function_name,
-            "title": title,
-            "description": title if title != function_name else "",
-            "api": _tool_api_from_schema(schema) or api_contract,
-            "raw_arguments": json.dumps(arguments, ensure_ascii=False),
-            "fields": fields,
-        }
-    ]
-
-
-def _legacy_api_contract(api: object) -> dict[str, str] | None:
-    if not isinstance(api, dict):
-        return None
-    return _validated_tool_api(str(api.get("method") or "POST"), str(api.get("url") or ""))
 
 
 def _function_schemas_by_name(action_tools: tuple[dict[str, object], ...]) -> dict[str, dict[str, object]]:

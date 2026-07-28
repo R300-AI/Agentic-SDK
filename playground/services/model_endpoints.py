@@ -7,9 +7,6 @@ from playground.services.source_builder import BuilderSourceConfig, config_from_
 from playground.services.workflow_reachability import reachable_openai_roles, reachable_workflow_roles
 
 
-_LEGACY_SELECTION_KEY = "model_endpoint"
-
-
 @dataclass(frozen=True)
 class ModelEndpoint:
     id: str
@@ -90,14 +87,13 @@ def normalize_endpoint_selections(python_source: str | None, selections: dict[st
         return {}
 
     raw = selections or {}
-    legacy_endpoint_id = str(raw.get(_LEGACY_SELECTION_KEY) or "")
     normalized: dict[str, str] = {}
     for requirement in requirements:
         endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(requirement.role))
         if not endpoints_by_id:
             continue
         default_endpoint_id = next(iter(endpoints_by_id))
-        endpoint_id = str(raw.get(requirement.role) or legacy_endpoint_id or default_endpoint_id)
+        endpoint_id = str(raw.get(requirement.role) or default_endpoint_id)
         if endpoint_id not in endpoints_by_id:
             endpoint_id = default_endpoint_id
         normalized[requirement.role] = endpoint_id
@@ -148,7 +144,7 @@ def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirem
 
 def _endpoint_for_role(role: str, selections: dict[str, str]) -> ModelEndpoint | None:
     endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(role))
-    endpoint_id = selections.get(role, selections.get(_LEGACY_SELECTION_KEY, ""))
+    endpoint_id = selections.get(role, "")
     if endpoint_id:
         return endpoints_by_id.get(endpoint_id)
     return next(iter(endpoints_by_id.values()), None)

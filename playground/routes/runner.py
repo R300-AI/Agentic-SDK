@@ -9,7 +9,7 @@ from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import normalize_endpoint_selections
 from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution, stream_python_source_initialization
-from playground.services.semantic_runtime import runtime_root, source_files_dir_with_legacy_fallback
+from playground.services.semantic_runtime import runtime_root, source_files_dir
 from playground.services.source_builder import _DEFAULT_RUNNER_DESCRIPTION, build_python_source_from_builder_choice, config_from_source, get_workflow_summary
 
 
@@ -200,7 +200,7 @@ def _semantic_runtime_paths() -> tuple[list[str] | None, str | None]:
     upload_id = session.get("builder_upload_id")
     if not isinstance(upload_id, str) or not upload_id.strip():
         return None, None
-    source_path = source_files_dir_with_legacy_fallback(upload_id)
+    source_path = source_files_dir(upload_id)
     saved_path = runtime_root(upload_id)
     return [str(source_path)], str(saved_path)
 

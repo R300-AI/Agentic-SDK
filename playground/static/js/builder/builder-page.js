@@ -523,24 +523,7 @@ function setApiEditorValue(output, value) {
 }
 
 function normalizePairType(value) {
-  const normalized = String(value || "").trim();
-  const legacyMap = {
-    "文字輸入": "文字選項 / string",
-    "選單": "文字選項 / string",
-    "按鈕": "是/否確認 / boolean",
-    "文字內容": "文字選項 / string",
-    "文字選項": "文字",
-    "文字選項 / string": "文字",
-    "文字 / string": "文字",
-    "數字資料": "數字",
-    "數字資料 / number": "數字",
-    "數字 / number": "數字",
-    "是/否確認": "是/否",
-    "是/否確認 / boolean": "是/否",
-    "是/否 / boolean": "是/否",
-    "清單 / array": "清單",
-  };
-  return legacyMap[normalized] || normalized;
+  return String(value || "").trim();
 }
 
 function setFieldValue(field, value) {
@@ -805,20 +788,9 @@ function updateApiBlock(block, index) {
       });
     }
   });
-  const legacyNames = new Map([
-    ["[data-api-trigger]", "interaction_trigger"],
-    ["[data-api-method]", "api_method"],
-    ["[data-api-url]", "api_url"],
-    ["[data-pair-output]", "component_fields"],
-  ]);
-  legacyNames.forEach((name, selector) => {
+  ["[data-api-trigger]", "[data-api-method]", "[data-api-url]", "[data-pair-output]"].forEach((selector) => {
     const field = block.querySelector(selector);
-    if (!field) {
-      return;
-    }
-    if (index === 0) {
-      field.name = name;
-    } else {
+    if (field) {
       field.removeAttribute("name");
     }
   });

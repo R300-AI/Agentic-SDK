@@ -23,17 +23,17 @@ def test_parse_supported_default_source_name():
 
 
 def test_parse_generated_profile_hint_for_summary():
-    python_source = _sample_workflow_source("Review Summary Helper")
+    python_source = _sample_workflow_source("default", "Summary")
     parsed = parse_supported_source(python_source)
     summary = get_workflow_summary(python_source)
 
     assert parsed.profile_hint == "Summary"
-    assert summary.name == "審閱摘要 Agent"
+    assert summary.name == "default"
     assert summary.can_roundtrip is True
 
 
 def test_parse_structured_action_profile_hint():
-    python_source = _sample_workflow_source("Structured Result Helper")
+    python_source = _sample_workflow_source("default", "Structured Result")
     parsed = parse_supported_source(python_source)
     summary = get_workflow_summary(python_source)
 
@@ -41,13 +41,13 @@ def test_parse_structured_action_profile_hint():
     assert summary.template == "結構化結果"
 
 
-def test_parse_readme_starter_template_hints():
-    openai_source = _sample_workflow_source("OpenAI Client Helper")
-    custom_source = _sample_workflow_source("Custom Action Helper")
+def test_parse_profile_hint_templates():
+    openai_source = _sample_workflow_source("default", "OpenAI Client")
+    custom_source = _sample_workflow_source("default", "Custom Action")
 
-    assert parse_supported_source(openai_source).workflow_name == "OpenAI Client Helper"
+    assert parse_supported_source(openai_source).workflow_name == "default"
     assert get_workflow_summary(openai_source).template == "模型回覆"
-    assert parse_supported_source(custom_source).workflow_name == "Custom Action Helper"
+    assert parse_supported_source(custom_source).workflow_name == "default"
     assert get_workflow_summary(custom_source).template == "自訂處理"
 
 

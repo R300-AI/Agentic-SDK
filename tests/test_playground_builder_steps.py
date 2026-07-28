@@ -321,26 +321,6 @@ def test_runner_can_clear_workflow_description_and_source_omits_description_argu
     assert 'description=' not in preview_source
 
 
-def test_legacy_runner_placeholder_description_is_treated_as_empty():
-    app = create_app()
-    legacy_source = build_default_python_source().replace(
-        'workflow_name="default",',
-        'workflow_name="default",\n    description="模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。",',
-    )
-
-    with app.test_client() as client:
-        with client.session_transaction() as session_state:
-            session_state["mode"] = "manual_anonymous"
-            session_state["python_source"] = legacy_source
-            session_state["source_origin"] = "manual_new"
-        runner_page = client.get("/playground/run").data.decode("utf-8")
-        preview_source = client.get("/playground/source/preview").data.decode("utf-8")
-
-    assert "模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。" not in runner_page
-    assert 'data-placeholder="可填寫這個 Agent 的用途、適用情境或回覆目標。"' in runner_page
-    assert "模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。" not in preview_source
-
-
 def test_builder_step2_choices_update_perceive_source():
     app = create_app()
 

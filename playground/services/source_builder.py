@@ -12,30 +12,14 @@ from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
 
 
-_LEGACY_GENERATED_WORKFLOW_NAMES = {
-    "Customer Helper": "客戶回覆 Agent",
-    "Advisor Helper": "問答引導 Agent",
-    "Retrieve Answer Helper": "查資料回答 Agent",
-    "Recommendation Helper": "建議型 Agent",
-    "Review Summary Helper": "審閱摘要 Agent",
-    "Document Review Helper": "審閱摘要 Agent",
-    "Structured Intake Helper": "結構化收件 Agent",
-    "Structured Result Helper": "固定格式 Agent",
-    "OpenAI Client Helper": "自然回覆 Agent",
-    "Custom Action Helper": "規則處理 Agent",
-}
 _DEFAULT_WORKFLOW_NAME = "default"
-_GENERATED_WORKFLOW_NAMES = set(_LEGACY_GENERATED_WORKFLOW_NAMES.values()) | {_DEFAULT_WORKFLOW_NAME}
-_DEFAULT_STRUCTURED_RESULT_WORKFLOW_NAME = "固定格式 Agent"
+_GENERATED_WORKFLOW_NAMES = {_DEFAULT_WORKFLOW_NAME}
 
 _ACTION_SPECIFIC_PROFILE_HINTS = {"Structured Result", "Custom Action", "OpenAI Client"}
 _ACTION_SPECIFIC_WORKFLOW_NAMES = {
     "固定格式 Agent",
     "規則處理 Agent",
     "自然回覆 Agent",
-    "Structured Result Helper",
-    "Custom Action Helper",
-    "OpenAI Client Helper",
 }
 _ALLOWED_DIRECT_RESULT_KEYS = {
     "latest_retrieved_content",
@@ -65,10 +49,6 @@ _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的支援文件查找與問�
 _DEFAULT_SEMANTIC_SAVED_PATH = "./tmp"
 _DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
 _DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
-_NON_CONTENT_WORKFLOW_DESCRIPTIONS = {
-    "模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。",
-    _DEFAULT_RUNNER_DESCRIPTION,
-}
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
     "TextPerceive",
@@ -90,10 +70,7 @@ class BuilderSourceConfig:
     workflow_name: str
     profile_hint: str | None = None
     task_goal: str | None = None
-    task_success_criteria: str | None = None
     input_kind: str = "Message"
-    input_description: str | None = None
-    input_fields: tuple[dict[str, str], ...] = ()
     starter_questions: tuple[str, ...] = ()
     perceive_module: str = "PassThroughPerceive"
     perceive_input_label: str | None = None
@@ -102,7 +79,6 @@ class BuilderSourceConfig:
     perceive_importance: float = 1.0
     perceive_image_instruction: str | None = None
     retrieve_module: str = "KeywordRetrieve"
-    retrieve_name: str = "支援資料"
     retrieve_description: str | None = None
     retrieve_items: tuple[dict[str, object], ...] = ()
     retrieve_fallback: str = "沒有命中任何條目。"
@@ -122,11 +98,9 @@ class BuilderSourceConfig:
     custom_rule_title: str = "作業規則"
     custom_rule_instruction: str | None = None
     plan_strategy: str | None = None
-    plan_direct_rule: str | None = None
     plan_system_prompt: str | None = None
     reflect_module: str | None = None
     reflect_on_failure: str | None = None
-    reflect_criteria: str | None = None
     entry_module: str = "perceive"
     max_node_hops: int = 50
     max_revisit: int = 5
@@ -265,7 +239,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             action_module = "ToolCallAction" if choice in _TOOL_CALL_OUTPUT_CHOICES else "GenerativeAction"
             structured_result = action_module == "ToolCallAction" or choice in _STRUCTURED_OUTPUT_CHOICES
             profile_hint = "Structured Result" if structured_result else config.profile_hint
-            workflow_name = _workflow_name_for_profile(existing_source, _DEFAULT_STRUCTURED_RESULT_WORKFLOW_NAME) if structured_result else config.workflow_name
+            workflow_name = config.workflow_name
             if not structured_result and action_module == "GenerativeAction" and config.profile_hint in _ACTION_SPECIFIC_PROFILE_HINTS and config.workflow_name in _ACTION_SPECIFIC_WORKFLOW_NAMES:
                 profile_hint = None
                 workflow_name = _DEFAULT_WORKFLOW_NAME
@@ -311,7 +285,6 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
         if isinstance(choice_label, dict):
             updated = _replace_config(
                 config,
-                retrieve_name=_clean_short_text(str(choice_label.get("retrieve_name", config.retrieve_name)), "支援資料") if "retrieve_name" in choice_label else config.retrieve_name,
                 retrieve_description=_clean_prompt(str(choice_label.get("retrieve_description", config.retrieve_description or ""))) if "retrieve_description" in choice_label else config.retrieve_description,
                 retrieve_items=_retrieve_items_from_payload(choice_label) if {"keyword_pairs", "keywords", "content"} & set(choice_label) else config.retrieve_items,
                 retrieve_fallback=_clean_short_text(str(choice_label.get("fallback", config.retrieve_fallback)), "沒有命中任何條目。") if "fallback" in choice_label else config.retrieve_fallback,
@@ -368,10 +341,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "workflow_name": config.workflow_name,
         "profile_hint": config.profile_hint,
         "task_goal": config.task_goal,
-        "task_success_criteria": config.task_success_criteria,
         "input_kind": config.input_kind,
-        "input_description": config.input_description,
-        "input_fields": config.input_fields,
         "starter_questions": config.starter_questions,
         "perceive_module": config.perceive_module,
         "perceive_input_label": config.perceive_input_label,
@@ -380,7 +350,6 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "perceive_importance": config.perceive_importance,
         "perceive_image_instruction": config.perceive_image_instruction,
         "retrieve_module": config.retrieve_module,
-        "retrieve_name": config.retrieve_name,
         "retrieve_description": config.retrieve_description,
         "retrieve_items": config.retrieve_items,
         "retrieve_fallback": config.retrieve_fallback,
@@ -400,11 +369,9 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "custom_rule_title": config.custom_rule_title,
         "custom_rule_instruction": config.custom_rule_instruction,
         "plan_strategy": config.plan_strategy,
-        "plan_direct_rule": config.plan_direct_rule,
         "plan_system_prompt": config.plan_system_prompt,
         "reflect_module": config.reflect_module,
         "reflect_on_failure": config.reflect_on_failure,
-        "reflect_criteria": config.reflect_criteria,
         "entry_module": config.entry_module,
         "max_node_hops": config.max_node_hops,
         "max_revisit": config.max_revisit,
@@ -421,64 +388,47 @@ def _plan_strategy_for_retrieve_policy(config: BuilderSourceConfig) -> str | Non
 def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     source = existing_source or build_default_python_source()
     parsed = parse_supported_source(source)
-    workflow_name = _canonical_workflow_name(parsed.workflow_name if parsed.workflow_name != "Untitled Agent" else _DEFAULT_WORKFLOW_NAME)
+    workflow_name = parsed.workflow_name if parsed.workflow_name != "Untitled Agent" else _DEFAULT_WORKFLOW_NAME
     action_call_name = _workflow_action_call_name(source)
-    is_custom_action = bool(action_call_name and action_call_name not in {"DirectAnswerAction", "GenerativeAction", "StructuredAction", "ToolCallAction"})
-    task_config = _safe_config_dict(_extract_assignment_literal(source, "TASK_CONFIG", {}))
-    input_config = _safe_config_dict(_extract_assignment_literal(source, "INPUT_CONFIG", {}))
+    is_custom_action = bool(action_call_name and action_call_name not in {"DirectAnswerAction", "GenerativeAction", "ToolCallAction"})
     runner_config = _safe_config_dict(_extract_assignment_literal(source, "RUNNER_CONFIG", {}))
-    perceive_config = _safe_config_dict(_extract_assignment_literal(source, "PERCEIVE_CONFIG", {}))
-    retrieve_config = _safe_config_dict(_extract_assignment_literal(source, "RETRIEVE_CONFIG", {}))
     semantic_sources = _extract_semantic_sources(source)
-    action_config = _safe_config_dict(_extract_assignment_literal(source, "ACTION_CONFIG", {}))
-    plan_config = _safe_config_dict(_extract_assignment_literal(source, "PLAN_CONFIG", {}))
-    reflect_config = _safe_config_dict(_extract_assignment_literal(source, "REFLECT_CONFIG", {}))
-    raw_action_prompt = _extract_keyword_value(source, {"GenerativeAction", "StructuredAction", "ToolCallAction"}, "system_prompt") or _clean_prompt(str(action_config.get("output_guidance", ""))) or None
-    action_tools = tuple(_normalize_tool_items(_extract_keyword_literal(source, {"ToolCallAction"}, "tools", action_config.get("tools", []))))
-    if not action_tools and raw_action_prompt:
-        action_tools = tuple(_tools_from_interactive_prompt(raw_action_prompt))
+    raw_action_prompt = _extract_keyword_value(source, {"GenerativeAction", "ToolCallAction"}, "system_prompt")
+    action_tools = tuple(_normalize_tool_items(_extract_keyword_literal(source, {"ToolCallAction"}, "tools", [])))
     action_prompt = _user_authored_action_prompt(raw_action_prompt)
     action_module = "CustomAction" if is_custom_action else action_call_name or "DirectAnswerAction"
-    if action_module == "StructuredAction":
-        action_module = "ToolCallAction" if action_tools and _prompt_looks_interactive(raw_action_prompt) else "GenerativeAction"
-    perceive_module = _first_call_name(source, {"PassThroughPerceive", "TextPerceive", "StructuredPerceive", "TextImagePerceive"}) or "PassThroughPerceive"
-    if perceive_module == "StructuredPerceive":
-        perceive_module = "TextPerceive"
+    perceive_module = _first_call_name(source, {"PassThroughPerceive", "TextPerceive", "TextImagePerceive"}) or "PassThroughPerceive"
 
     retrieve_module = _first_call_name(source, {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}) or "KeywordRetrieve"
     workflow_description = _normalize_workflow_description(
-        _extract_keyword_value(source, {"Workflow"}, "description") or _clean_prompt(str(task_config.get("goal", "")))
+        _extract_keyword_value(source, {"Workflow"}, "description")
     )
 
     return BuilderSourceConfig(
         workflow_name=workflow_name,
         profile_hint=parsed.profile_hint,
         task_goal=workflow_description,
-        task_success_criteria=_clean_prompt(str(task_config.get("success_criteria", ""))),
-        input_kind=str(input_config.get("kind") or _input_kind_from_source(source)),
-        input_description=_clean_prompt(str(input_config.get("description", ""))),
-        input_fields=tuple(_normalize_config_items(input_config.get("fields"))),
+        input_kind=_input_kind_from_source(source),
         starter_questions=tuple(_normalize_string_items(runner_config.get("starter_questions"))),
         perceive_module=perceive_module,
-        perceive_input_label=_extract_keyword_value(source, {"PassThroughPerceive"}, "input_label") or _clean_short_text(str(perceive_config.get("input_label", "")), "") or None,
-        perceive_welcome_message=_extract_keyword_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "welcome_message"),
-        perceive_options=tuple(_normalize_option_items(_extract_keyword_literal(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "options", perceive_config.get("options")))),
-        perceive_importance=_extract_float_value(source, {"TextPerceive", "StructuredPerceive", "TextImagePerceive"}, "importance", _clean_float(perceive_config.get("importance"), 1.0, 0.0, 5.0)),
-        perceive_image_instruction=_extract_keyword_value(source, {"TextImagePerceive"}, "image_instruction") or _clean_prompt(str(perceive_config.get("image_instruction", ""))),
+        perceive_input_label=_extract_keyword_value(source, {"PassThroughPerceive"}, "input_label"),
+        perceive_welcome_message=_extract_keyword_value(source, {"TextPerceive", "TextImagePerceive"}, "welcome_message"),
+        perceive_options=tuple(_normalize_option_items(_extract_keyword_literal(source, {"TextPerceive", "TextImagePerceive"}, "options", []))),
+        perceive_importance=_extract_float_value(source, {"TextPerceive", "TextImagePerceive"}, "importance", 1.0),
+        perceive_image_instruction=_extract_keyword_value(source, {"TextImagePerceive"}, "image_instruction"),
         retrieve_module=retrieve_module,
-        retrieve_name=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_name") or _clean_short_text(str(retrieve_config.get("name", "支援資料")), "支援資料"),
-        retrieve_description=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_description") or _clean_prompt(str(retrieve_config.get("description", ""))),
+        retrieve_description=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_description"),
         retrieve_items=tuple(_extract_keyword_items(source)),
-        retrieve_fallback=_extract_keyword_value(source, {"KeywordRetrieve"}, "fallback") or _clean_short_text(str(retrieve_config.get("fallback", "沒有命中任何條目。")), "沒有命中任何條目。"),
-        retrieve_top_k=_extract_int_value(source, {"SemanticRetrieve"}, "top_k", _clean_int(retrieve_config.get("top_k"), 3, 1, 20)),
-        semantic_support_files=tuple(_semantic_support_files_from_sources(semantic_sources) or _normalize_string_items(retrieve_config.get("semantic_support_files"))),
-        semantic_search_goal=_clean_prompt(str(retrieve_config.get("semantic_search_goal", ""))),
+        retrieve_fallback=_extract_keyword_value(source, {"KeywordRetrieve"}, "fallback") or "沒有命中任何條目。",
+        retrieve_top_k=_extract_int_value(source, {"SemanticRetrieve"}, "top_k", 3),
+        semantic_support_files=tuple(_semantic_support_files_from_sources(semantic_sources)),
+        semantic_search_goal=None,
         action_module=action_module,
         action_prompt=action_prompt,
         action_tools=action_tools,
-        direct_answer_memory_key=_clean_allowed_value(_extract_keyword_value(source, {"DirectAnswerAction"}, "memory_key") or str(action_config.get("direct_memory_key", "latest_retrieved_content")), _ALLOWED_DIRECT_RESULT_KEYS, "latest_retrieved_content"),
-        direct_answer_fallback=_extract_keyword_value(source, {"DirectAnswerAction"}, "fallback") or _clean_short_text(str(action_config.get("direct_fallback", "沒有命中任何條目。")), "沒有命中任何條目。"),
-        direct_answer_prefix=_extract_keyword_value(source, {"DirectAnswerAction"}, "prefix") or _clean_short_text(str(action_config.get("direct_prefix", "")), ""),
+        direct_answer_memory_key=_clean_allowed_value(_extract_keyword_value(source, {"DirectAnswerAction"}, "memory_key") or "latest_retrieved_content", _ALLOWED_DIRECT_RESULT_KEYS, "latest_retrieved_content"),
+        direct_answer_fallback=_extract_keyword_value(source, {"DirectAnswerAction"}, "fallback") or "沒有命中任何條目。",
+        direct_answer_prefix=_extract_keyword_value(source, {"DirectAnswerAction"}, "prefix") or "",
         custom_action_class=action_call_name if is_custom_action else "BusinessRule",
         custom_action_memory_key=_extract_custom_action_memory_key(source, _extract_assignment_value(source, "CUSTOM_ACTION_MEMORY_KEY", "latest_retrieved_content")),
         custom_action_fallback=_extract_custom_action_fallback(source, _extract_assignment_value(source, "CUSTOM_ACTION_FALLBACK", "找不到符合的支援資料。")),
@@ -486,11 +436,9 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         custom_rule_title=_extract_custom_action_title(source, _extract_assignment_value(source, "BUSINESS_RULE_TITLE", "作業規則")),
         custom_rule_instruction=_extract_custom_action_instruction(source, _extract_assignment_value(source, "BUSINESS_RULE_INSTRUCTION", "")) or None,
         plan_strategy="RouteBySupport" if "NextStepPlan(" in source else None,
-        plan_direct_rule=_clean_prompt(str(plan_config.get("direct_rule", ""))),
-        plan_system_prompt=_extract_keyword_value(source, {"NextStepPlan"}, "system_prompt") or _clean_prompt(str(plan_config.get("route_rule", ""))) or None,
+        plan_system_prompt=_extract_keyword_value(source, {"NextStepPlan"}, "system_prompt") or None,
         reflect_module=_first_call_name(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}),
         reflect_on_failure=_extract_keyword_value(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}, "on_failure"),
-        reflect_criteria=_clean_prompt(str(reflect_config.get("criteria", ""))),
         entry_module=_clean_allowed_value(_extract_keyword_value(source, {"Workflow"}, "entry_module") or "perceive", _ALLOWED_ENTRY_MODULES, "perceive"),
         max_node_hops=_extract_gates_value(source, "max_node_hops", 50),
         max_revisit=_extract_gates_value(source, "max_revisit", 5),
@@ -514,7 +462,7 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
     config = _config_from_source(python_source)
     values: dict[str, dict[str, object]] = {}
 
-    if config.workflow_name not in _GENERATED_WORKFLOW_NAMES and config.workflow_name not in _LEGACY_GENERATED_WORKFLOW_NAMES and config.workflow_name != "Untitled Agent":
+    if config.workflow_name not in _GENERATED_WORKFLOW_NAMES and config.workflow_name != "Untitled Agent":
         _add_form_value(values, "name", "agent_name", config.workflow_name)
 
     _add_form_value(values, "memory_type", "starter_questions", _lines_text_from_items(config.starter_questions))
@@ -692,18 +640,6 @@ def _string_items_from_lines(value: str) -> list[str]:
     return [item for item in (line.strip() for line in value.splitlines()) if item]
 
 
-def _workflow_name_for_profile(existing_source: str | None, default_name: str) -> str:
-    parsed = parse_supported_source(existing_source or "")
-    workflow_name = _canonical_workflow_name(parsed.workflow_name)
-    if workflow_name and workflow_name not in _GENERATED_WORKFLOW_NAMES and workflow_name != "Untitled Agent":
-        return workflow_name
-    return default_name
-
-
-def _canonical_workflow_name(workflow_name: str | None) -> str:
-    return _LEGACY_GENERATED_WORKFLOW_NAMES.get(str(workflow_name or ""), str(workflow_name or ""))
-
-
 def _clean_workflow_name(workflow_name: str) -> str:
     return " ".join(workflow_name.split()).strip()[:64]
 
@@ -746,54 +682,6 @@ def _action_prompt_from_payload(payload: dict[str, Any], current_prompt: str | N
 
 def _payload_has_interactive_contract(payload: dict[str, Any]) -> bool:
     return bool({"interaction_trigger", "api_method", "api_url", "component_fields", "api_contracts"} & set(payload))
-
-
-def _tools_from_interactive_prompt(prompt: str) -> tuple[dict[str, object], ...]:
-    if not _prompt_looks_interactive(prompt):
-        return ()
-    contracts: list[dict[str, str]] = []
-    current = {"interaction_trigger": "", "api_method": "POST", "api_url": "", "component_fields": ""}
-    field_lines: list[str] = []
-    collecting_fields = False
-    for raw_line in str(prompt).splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        if "互動元件觸發條件：" in line:
-            if field_lines:
-                current["component_fields"] = "\n".join(field_lines)
-                contracts.append(dict(current))
-                current = {"interaction_trigger": "", "api_method": "POST", "api_url": "", "component_fields": ""}
-                field_lines = []
-            collecting_fields = False
-            current["interaction_trigger"] = line.split("互動元件觸發條件：", 1)[1].strip()
-            continue
-        if "API 提交設定：" in line:
-            collecting_fields = False
-            api_text = line.split("API 提交設定：", 1)[1].strip()
-            api_parts = api_text.split(None, 1)
-            if api_parts:
-                current["api_method"] = api_parts[0].upper()
-            if len(api_parts) > 1:
-                current["api_url"] = api_parts[1].strip()
-            continue
-        if "需要收集的資訊：" in line:
-            collecting_fields = True
-            trailing = line.split("需要收集的資訊：", 1)[1].strip()
-            if trailing:
-                field_lines.append(trailing)
-            continue
-        if collecting_fields:
-            if line.startswith(("互動輸出請", "回覆風格", "元件類型", "操作按鈕")) or "API 提交設定：" in line:
-                collecting_fields = False
-                continue
-            field_lines.append(line)
-    if field_lines:
-        current["component_fields"] = "\n".join(field_lines)
-        contracts.append(dict(current))
-    if not contracts:
-        return ()
-    return _tools_from_action_payload({"api_contracts": json.dumps(contracts, ensure_ascii=False)})
 
 
 def _fixed_format_action_prompt_from_payload(payload: dict[str, Any], current_prompt: str | None) -> str | None:
@@ -937,9 +825,9 @@ def _field_description_and_json_type(raw_value: str) -> tuple[str, str]:
     if marker in value and value.endswith("）"):
         value, raw_type = value.rsplit(marker, 1)
         normalized_type = raw_type.removesuffix("）").strip().lower()
-        if "number" in normalized_type:
+        if "number" in normalized_type or "數字" in normalized_type:
             json_type = "number"
-        elif "boolean" in normalized_type:
+        elif "boolean" in normalized_type or "是/否" in normalized_type:
             json_type = "boolean"
     return (_clean_prompt(value) or "", json_type)
 
@@ -1183,20 +1071,6 @@ def _safe_config_dict(value: object) -> dict[str, object]:
     return value if isinstance(value, dict) else {}
 
 
-def _normalize_config_items(value: object) -> list[dict[str, str]]:
-    if not isinstance(value, list):
-        return []
-    items: list[dict[str, str]] = []
-    for raw_item in value:
-        if not isinstance(raw_item, dict):
-            continue
-        key = _clean_short_text(str(raw_item.get("key", "")), "")
-        item_value = _clean_short_text(str(raw_item.get("value", "")), "")
-        if key and item_value:
-            items.append({"key": key, "value": item_value})
-    return items[:20]
-
-
 def _normalize_option_items(value: object) -> list[dict[str, object]]:
     if not isinstance(value, list):
         return []
@@ -1293,8 +1167,6 @@ def _workflow_action_call_name(python_source: str) -> str | None:
 def _input_kind_from_source(python_source: str) -> str:
     if "TextImagePerceive(" in python_source:
         return "TextImage"
-    if "StructuredPerceive(" in python_source or "Structured Intake Helper" in python_source:
-        return "Form"
     if "TextPerceive(" in python_source:
         return "Document"
     return "Message"
@@ -1334,9 +1206,6 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
     sections = [_core_import_line(endpoint_bindings)]
     if import_block:
         sections.append(import_block)
-    task_config_block = _task_config_block(config)
-    if task_config_block:
-        sections.append(task_config_block)
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
@@ -1380,9 +1249,6 @@ workflow = Workflow(
     sections = [_core_import_line(endpoint_bindings)]
     if import_block:
         sections.append(import_block)
-    task_config_block = _task_config_block(config)
-    if task_config_block:
-        sections.append(task_config_block)
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
@@ -1424,7 +1290,7 @@ def _workflow_argument_lines(
 def _action_class_for_config(config: BuilderSourceConfig) -> str:
     if config.action_module == "ToolCallAction":
         return "ToolCallAction"
-    if config.action_module in {"GenerativeAction", "StructuredAction"}:
+    if config.action_module == "GenerativeAction":
         return "GenerativeAction"
     return "DirectAnswerAction"
 
@@ -1562,15 +1428,6 @@ def _endpoint_constant_prefix(role: str) -> str:
     }.get(role, role.upper() or "MODEL")
 
 
-def _task_system_prompt(config: BuilderSourceConfig) -> str | None:
-    parts = []
-    if config.task_goal:
-        parts.append(f"任務目標：{config.task_goal}")
-    if config.task_success_criteria:
-        parts.append(f"成功條件：{config.task_success_criteria}")
-    return "\n".join(parts) or None
-
-
 def _format_module_imports(module_names: list[str]) -> str:
     ordered_names = [name for name in _MODULE_IMPORT_ORDER if name in set(module_names)]
     if not ordered_names:
@@ -1597,12 +1454,6 @@ def _user_authored_action_prompt(prompt: str | None) -> str | None:
         return None
     if cleaned in _OUTPUT_FORMAT_PROMPTS.values():
         return None
-    for raw_line in cleaned.splitlines():
-        line = raw_line.strip()
-        if line.startswith("回覆風格與規範："):
-            return line.split("回覆風格與規範：", 1)[1].strip() or None
-    if _prompt_looks_interactive(cleaned):
-        return None
     return cleaned
 
 
@@ -1615,18 +1466,9 @@ def _runner_config_block(config: BuilderSourceConfig) -> str:
 
 def _normalize_workflow_description(value: str | None) -> str | None:
     cleaned = _clean_prompt(str(value or ""))
-    if not cleaned or cleaned in _NON_CONTENT_WORKFLOW_DESCRIPTIONS:
+    if not cleaned:
         return None
     return cleaned
-
-
-def _task_config_block(config: BuilderSourceConfig) -> str:
-    task_config: dict[str, object] = {}
-    if config.task_success_criteria:
-        task_config["success_criteria"] = config.task_success_criteria
-    if not task_config:
-        return ""
-    return f"TASK_CONFIG = {_format_python_literal(task_config, 0)}"
 
 
 def _format_python_literal(value: object, continuation_indent: int) -> str:
@@ -1643,7 +1485,7 @@ def _normalize_string_items(value: object) -> list[str]:
 
 def get_workflow_summary(python_source: str) -> WorkflowSummary:
     parsed = parse_supported_source(python_source)
-    name = _canonical_workflow_name(parsed.workflow_name)
+    name = parsed.workflow_name
     if parsed.profile_hint == "Recommendation":
         template = "建議卡"
         output_contract = "輸出：建議卡"
@@ -1677,44 +1519,29 @@ def get_workflow_summary(python_source: str) -> WorkflowSummary:
     )
 
 
-def _prompt_looks_interactive(current_prompt: str | None) -> bool:
-    return bool(current_prompt and ("可互動元件" in current_prompt or "OpenAI tool calling" in current_prompt or "component.fields" in current_prompt or "api.url" in current_prompt))
-
-
 def _interactive_api_contracts(payload: dict[str, Any]) -> list[dict[str, str | None]]:
     raw_contracts = str(payload.get("api_contracts", "") or "").strip()
     contracts: list[dict[str, str | None]] = []
-    if raw_contracts:
-        try:
-            decoded_contracts = json.loads(raw_contracts)
-        except json.JSONDecodeError:
-            decoded_contracts = []
-        if isinstance(decoded_contracts, list):
-            for contract in decoded_contracts:
-                if not isinstance(contract, dict):
-                    continue
-                fields = _rule_instruction_from_pairs(str(contract.get("component_fields", "")))
-                trigger = _clean_prompt(str(contract.get("interaction_trigger", "")))
-                api_method = _clean_short_text(str(contract.get("api_method", "POST")), "POST").upper()
-                api_url = _clean_prompt(str(contract.get("api_url", "")))
-                if trigger or api_url or fields:
-                    contracts.append({
-                        "interaction_trigger": trigger,
-                        "api_method": api_method,
-                        "api_url": api_url,
-                        "component_fields": fields,
-                    })
-    if contracts:
-        return contracts
-    fields = _rule_instruction_from_pairs(str(payload.get("component_fields", "")))
-    trigger = _clean_prompt(str(payload.get("interaction_trigger", "")))
-    api_method = _clean_short_text(str(payload.get("api_method", "POST")), "POST").upper()
-    api_url = _clean_prompt(str(payload.get("api_url", "")))
-    if trigger or api_url or fields:
-        return [{
-            "interaction_trigger": trigger,
-            "api_method": api_method,
-            "api_url": api_url,
-            "component_fields": fields,
-        }]
-    return []
+    if not raw_contracts:
+        return []
+    try:
+        decoded_contracts = json.loads(raw_contracts)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(decoded_contracts, list):
+        return []
+    for contract in decoded_contracts:
+        if not isinstance(contract, dict):
+            continue
+        fields = _rule_instruction_from_pairs(str(contract.get("component_fields", "")))
+        trigger = _clean_prompt(str(contract.get("interaction_trigger", "")))
+        api_method = _clean_short_text(str(contract.get("api_method", "POST")), "POST").upper()
+        api_url = _clean_prompt(str(contract.get("api_url", "")))
+        if trigger or api_url or fields:
+            contracts.append({
+                "interaction_trigger": trigger,
+                "api_method": api_method,
+                "api_url": api_url,
+                "component_fields": fields,
+            })
+    return contracts

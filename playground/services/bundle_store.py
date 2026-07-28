@@ -166,21 +166,13 @@ def download_bundle_zip(download_payload: dict[str, object]) -> dict[str, object
 def _builder_upload_dir(upload_id: str | None) -> Path | None:
     if not upload_id or not upload_id.strip():
         return None
-    source_dir = _semantic_source_files_dir(upload_id)
-    legacy_source_dir = _legacy_builder_upload_dir(upload_id)
-    if source_dir.exists() or not legacy_source_dir.exists():
-        return source_dir
-    return legacy_source_dir
+    return _semantic_source_files_dir(upload_id)
 
 
 def _semantic_index_dir(upload_id: str | None) -> Path | None:
     if not upload_id or not upload_id.strip():
         return None
-    vectorstore_dir = _semantic_vectorstore_dir(upload_id)
-    legacy_vectorstore_dir = _legacy_semantic_index_dir(upload_id)
-    if vectorstore_dir.exists() or not legacy_vectorstore_dir.exists():
-        return vectorstore_dir
-    return legacy_vectorstore_dir
+    return _semantic_vectorstore_dir(upload_id)
 
 
 def _semantic_source_files_dir(upload_id: str) -> Path:
@@ -189,14 +181,6 @@ def _semantic_source_files_dir(upload_id: str) -> Path:
 
 def _semantic_vectorstore_dir(upload_id: str) -> Path:
     return _RUNTIME_ROOT / "semantic-runtime" / upload_id / "vectorstore"
-
-
-def _legacy_builder_upload_dir(upload_id: str) -> Path:
-    return _RUNTIME_ROOT / "builder-uploads" / upload_id
-
-
-def _legacy_semantic_index_dir(upload_id: str) -> Path:
-    return _RUNTIME_ROOT / "semantic-index" / upload_id
 
 
 def _relative_files(root: Path | None) -> list[PurePosixPath]:
