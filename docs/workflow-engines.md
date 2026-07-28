@@ -1,4 +1,4 @@
-# Workflow 記憶體類型
+# Workflow 記憶類型
 
 這一頁說明 `Workflow` 執行時使用的引擎層。分工如下：`Workflow` 負責串接節點，`MemoryStore` 是上層記憶抽象，`InContextMemory` 與 `PersistentMemory` 是同層、可互換的記憶類型，`WorkflowState` 承接本次 `run()` 的中繼狀態。
 

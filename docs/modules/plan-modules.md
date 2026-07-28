@@ -6,6 +6,8 @@ Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一�
 
 ## NextStepPlan
 
+參考論文：[ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)
+
 `NextStepPlan` 根據感知摘要、完整對話歷史與已有上下文，決定下一步要查資料還是直接回答。閱讀這個模組時，可以把它理解成一個明確的路由點：先看它讀進哪些線索，再看它交出哪些決策欄位給後續節點使用。
 
 此模組需要明確的 OpenAI-compatible 連線設定：`api_key`、`base_url`、`model`。不同 Plan 模組可以與 Perceive 或 Action 使用不同模型。

@@ -4,6 +4,8 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 ## DirectAnswerAction
 
+參考論文：無特定 arXiv 對應；此模組是工程化 baseline。
+
 `DirectAnswerAction` 直接根據取回內容組成最終回應，以條目內容為主完成回答。它適合 README 最小流程與條目式固定回答，也代表 Action 家族裡最直接的交付方式。
 
 ### 初始化參數
@@ -24,6 +26,8 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
 
 ## GenerativeAction
+
+參考論文：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)
 
 `GenerativeAction` 根據完整對話歷史、輸入摘要與取回內容生成最終回應。當流程要把多筆條目、歷史紀錄或摘要整合成一段自然語言時，就會接到這個模組。
 
@@ -51,6 +55,8 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
 
 ## ToolCallAction
+
+參考論文：[Toolformer: Language Models Can Teach Themselves to Use Tools](https://arxiv.org/abs/2302.04761)
 
 `ToolCallAction` 使用 OpenAI SDK 標準的 `tools`、`tool_choice` 與 `message.tool_calls` 介面。當 workflow 需要讓模型根據完整對話與目前檢索內容決定是否呼叫外部 API、後端函式或應用程式工具時，這個模組會把 tool schema 交給模型，並把模型回傳的 tool calls 保存到 workflow 結果中。
 

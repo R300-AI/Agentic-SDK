@@ -1,4 +1,4 @@
-# GitHub CI/CD 到 Azure App Service
+# Azure
 
 此 workflow 會將正式 FastAPI Playground 部署到 Azure App Service。部署檔位於 `.github/workflows/deploy-playground.yml`，觸發條件是 `main` 分支中 `agentic_sdk/`、`playground/`、`.env`、`requirements.txt` 或部署 workflow 本身變更，也可以手動從 GitHub Actions 執行。
 

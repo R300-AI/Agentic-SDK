@@ -30,7 +30,7 @@ nav:
   - 首頁: index.md
   - Workflow:
     - 總覽: workflow-overview.md
-    - 記憶體類型: workflow-engines.md
+    - 記憶類型: workflow-engines.md
   - Module Family:
     - modules/index.md
     - Perceive: modules/perceive-modules.md
@@ -43,10 +43,10 @@ nav:
     - LaNew 售鞋顧問: use-cases/lanew-footwear-advisor.md
     - BCI 射箭教練: use-cases/bci-archery-coach.md
     - ICOPE 六力評估助手: use-cases/icope-six-capacity-assistant.md
-  - Deploy:
-    - GitHub CI/CD 到 Azure App Service: github_cicd_workflow.md
-    - AI Hub Playground Handoff API: aihub_playground_api.md
-    - AI Hub Playground Storage API: aihub_playground_storage_api.md
+  - Integrations:
+    - Azure: github_cicd_workflow.md
+    - AI Hub: aihub_playground_api.md
+    - Storage: aihub_playground_storage_api.md
 
 markdown_extensions:
   - admonition

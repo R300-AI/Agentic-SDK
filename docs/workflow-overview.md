@@ -55,7 +55,7 @@ Workflow(
 
 README 裡的幾個範例，實際上都是在示範同一個公開組裝模型可以如何替換節點組合：你可以保留預設實作，也可以只替換其中一個節點，或另外注入自訂節點物件。對 `Workflow` 來說，這些差異都會回到同一套執行規則，也就是讀取 `WorkflowState`、必要時補進最新 user turn、執行目前節點、根據 `next_module` 推進下一步，最後把 assistant turn 追加回當前的 `MemoryStore` 實作。
 
-如果你要進一步看 workflow 執行時由哪一層承接這份狀態，下一步應該看 [Workflow 記憶體類型](workflow-engines.md)。
+如果你要進一步看 workflow 執行時由哪一層承接這份狀態，下一步應該看 [Workflow 記憶類型](workflow-engines.md)。
 
 ## Entities
 
@@ -82,8 +82,8 @@ README 裡的幾個範例，實際上都是在示範同一個公開組裝模型�
 
 | 你現在要做的事 | 先看哪一頁 | 再看哪一頁 |
 | --- | --- | --- |
-| 理解 workflow 怎麼組 | Workflow Overview | [Workflow 記憶體類型](workflow-engines.md) |
-| 理解 workflow 預設使用哪種記憶體 | [Workflow 記憶體類型](workflow-engines.md) | [Module Family](modules/index.md) |
+| 理解 workflow 怎麼組 | Workflow Overview | [Workflow 記憶類型](workflow-engines.md) |
+| 理解 workflow 預設使用哪種記憶體 | [Workflow 記憶類型](workflow-engines.md) | [Module Family](modules/index.md) |
 | 直接找某一類模組規格 | [Module Family](modules/index.md) | 對應的功能模組頁 |
 
-下一步建議先看 [Workflow 記憶體類型](workflow-engines.md)，再回到 [Module Family](modules/index.md) 與各功能模組頁查節點規格。
+下一步建議先看 [Workflow 記憶類型](workflow-engines.md)，再回到 [Module Family](modules/index.md) 與各功能模組頁查節點規格。

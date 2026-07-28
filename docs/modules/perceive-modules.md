@@ -4,6 +4,8 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 
 ## PassThroughPerceive
 
+參考論文：無特定 arXiv 對應；此模組是工程化 baseline。
+
 `PassThroughPerceive` 將最新一輪使用者輸入直接整理成查詢內容，交給後續節點接手。它適合 README 的最小流程，也適合作為文字型流程的直接入口。這個模組代表的是最短路徑：收到新訊息後，先把可查詢的內容穩定交出去。
 
 ### 初始化參數
@@ -20,6 +22,8 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 | `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模組讀取完整對話歷史的共同抽象；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
 
 ## TextPerceive
+
+參考論文：[ReAct: Synergizing Reasoning and Acting in Language Models](https://arxiv.org/abs/2210.03629)
 
 `TextPerceive` 依文字內容做語意判讀，將輸入整理成後續可用的查詢、標籤與摘要。當流程需要的不只是原句，而是對需求做一次語意整理時，就會接到這個模組。模型輸入會包含完整對話歷史，再加上本模組自己的 guidance 與 fields 設定。
 
@@ -47,6 +51,8 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 | `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
 
 ## TextImagePerceive
+
+參考論文：[Flamingo: a Visual Language Model for Few-Shot Learning](https://arxiv.org/abs/2204.14198)
 
 `TextImagePerceive` 將文字與圖片內容一起整理成後續可用的查詢與摘要。當流程同時需要讀取文字與圖片時，這個模組會把兩類資訊整合成後續可用的感知結果，支援 `image/png`、`image/jpeg`、`image/webp` 三種格式。模型輸入同樣會保留前面各輪的 user / assistant 歷史，最後一輪 user turn 則可轉成 OpenAI content parts。
 

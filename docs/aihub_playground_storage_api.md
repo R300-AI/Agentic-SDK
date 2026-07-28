@@ -1,4 +1,4 @@
-# AI Hub Playground Storage API
+# Storage
 
 這份文件定義 Agentic SDK Playground 與 AI Hub Storage API 的 MVP 串接方式。它補充 AI Hub connection model，不取代既有 config save / load API。
 

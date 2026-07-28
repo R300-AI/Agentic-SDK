@@ -1,10 +1,10 @@
-# AI Hub Playground Handoff API
+# AI Hub
 
 當你要把使用者從 AI Hub 導入 Agentic SDK Playground，並決定他是要建立新的 Playground 設定，還是恢復既有的 Playground 設定時，就看這一頁。這一頁只定義進入 Playground 的 handoff API，不重寫 AI Hub 已經定義好的驗證、Agent 清單、config load、config save 契約。
 
 AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
 
-原始支援文件、SemanticRetriever vectorstore 與 runtime manifest 以單一 zip bundle 保存到 Storage Account；串接方式見 [AI Hub Playground Storage API](aihub_playground_storage_api.md)。
+原始支援文件、SemanticRetriever vectorstore 與 runtime manifest 以單一 zip bundle 保存到 Storage Account；串接方式見 [Storage](aihub_playground_storage_api.md)。
 
 ## 這份文件會幫你完成什麼
 

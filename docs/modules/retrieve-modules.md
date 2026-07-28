@@ -6,6 +6,8 @@ Retrieve 模組負責把 workflow 需要的內容取回來。這一頁先整理 
 
 ## KeywordRetrieve
 
+參考論文：無特定 arXiv 對應；此模組是關鍵字檢索 baseline。
+
 `KeywordRetrieve` 依關鍵字規則取回內容，適合 README 的最小流程與條目式知識查找。它代表的是最直接的檢索路徑：有明確查詢字串，就回傳最對應的條目內容。
 
 ### 初始化參數
@@ -16,6 +18,8 @@ Retrieve 模組負責把 workflow 需要的內容取回來。這一頁先整理 
 | `fallback` | `string` | 否 | `"No matching entries."` | 沒有命中任何條目時寫入取回內容的文字。 |
 
 ## SemanticRetrieve
+
+參考論文：[Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks](https://arxiv.org/abs/2005.11401)
 
 `SemanticRetrieve` 依語意相似度從知識來源取回內容。當流程需要從較長知識片段裡找出真正相關的內容時，這個模組會把檢索重心放在語意接近度。
 
@@ -72,6 +76,8 @@ SemanticRetrieve(
 ```
 
 ## Retrieve 配套元件：VisionQueryBuilder
+
+參考論文：[Flamingo: a Visual Language Model for Few-Shot Learning](https://arxiv.org/abs/2204.14198)
 
 前面三個模組直接參與 workflow 的 Retrieve 節點；這個配套元件則負責在檢索前先把圖文輸入整理成可檢索的查詢字串，讓圖像輸入也能順利接上同一套檢索流程。
 
