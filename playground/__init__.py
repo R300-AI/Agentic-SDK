@@ -1,4 +1,4 @@
-"""Playground V2 frontend package."""
+"""Playground frontend package."""
 
 from playground.app import create_app
 

@@ -1,1 +1,1 @@
-"""Domain services for Playground V2 frontend state."""
+"""Domain services for Playground frontend state."""

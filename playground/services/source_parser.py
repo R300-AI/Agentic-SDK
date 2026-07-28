@@ -73,7 +73,7 @@ def _call_name(func: ast.expr) -> str:
 
 
 def _profile_hint(python_source: str, workflow_name: str) -> str | None:
-    prefix = "# Playground V2 profile hint:"
+    prefix = "# Playground profile hint:"
     for line in python_source.splitlines():
         if line.startswith(prefix):
             return line.removeprefix(prefix).strip()

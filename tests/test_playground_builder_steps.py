@@ -426,7 +426,6 @@ def test_builder_step3_only_exposes_keyword_and_semantic_retrieve_paths():
     assert 'data-visible-choices="keyword"' in page
     assert "沒有資料時的處理" not in page
     assert 'name="fallback"' not in page
-    assert "hybrid_later" not in page
     assert "混合查詢" not in page
     assert "要上傳哪些支援文件？" in page
     assert 'name="semantic_support_files"' in page

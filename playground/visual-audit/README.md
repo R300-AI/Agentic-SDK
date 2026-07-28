@@ -1,4 +1,4 @@
-# Playground V2 Visual Audit
+# Playground Visual Audit
 
 This folder contains real browser screenshots captured with Playwright against the local Flask app.
 

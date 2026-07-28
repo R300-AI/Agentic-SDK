@@ -1,6 +1,6 @@
-# Playground V2 Frontend Package
+# Playground Frontend Package
 
-This package is the first implementation slice for the Playground V2 blueprint. It is intentionally separate from the existing Vite/React Flow `playground/` app so the new Entry / Builder / Runner experience can evolve without breaking the current playground.
+This package contains the Flask-based Playground Entry, Builder, and Runner experience.
 
 ## Run Locally
 

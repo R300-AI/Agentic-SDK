@@ -4,7 +4,7 @@ from playground.services.runner_service import execute_python_source
 
 
 def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None) -> str:
-    hint_line = f"# Playground V2 profile hint: {profile_hint}\n" if profile_hint else ""
+    hint_line = f"# Playground profile hint: {profile_hint}\n" if profile_hint else ""
     return (
         "from agentic_sdk import Workflow\n\n"
         f"{hint_line}"

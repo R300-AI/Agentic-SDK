@@ -1,1 +1,1 @@
-"""Route blueprints for Playground V2."""
+"""Route blueprints for Playground."""
