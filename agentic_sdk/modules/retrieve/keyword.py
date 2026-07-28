@@ -1,12 +1,13 @@
 ﻿from __future__ import annotations
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
+from agentic_sdk.defaults import DEFAULT_NO_MATCHING_ENTRIES_MESSAGE
 
 
 class KeywordRetrieve:
     name = "retrieve"
 
-    def __init__(self, items: list[dict] | None = None, fallback: str = "No matching entries.") -> None:
+    def __init__(self, items: list[dict] | None = None, fallback: str = DEFAULT_NO_MATCHING_ENTRIES_MESSAGE) -> None:
         self._items = items or []
         self._fallback = fallback
 

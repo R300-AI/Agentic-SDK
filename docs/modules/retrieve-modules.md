@@ -2,9 +2,9 @@
 
 Retrieve 模組負責把 workflow 需要的內容取回來。這一頁先整理 Retrieve 家族中的檢索角色，再依序展開目前文件採用的檢索模組與配套元件。每個模組會先列出建立物件時使用的初始化參數；檢索過程讀寫的中間欄位統一回到 [Module Family](index.md) 的 `Entities` 中央定義理解。
 
-## KeywordRetrieve
+透過 `WorkflowConfig` / `ModuleSpec.params` 建立模組時，SDK 只會接受各模組在本頁列出的初始化參數。展示標籤、個案名稱或舊版輔助欄位不會被注入 module constructor。
 
-舊名對應：`KeywordRetrieve`
+## KeywordRetrieve
 
 `KeywordRetrieve` 依關鍵字規則取回內容，適合 README 的最小流程與條目式知識查找。它代表的是最直接的檢索路徑：有明確查詢字串，就回傳最對應的條目內容。
 
@@ -13,15 +13,15 @@ Retrieve 模組負責把 workflow 需要的內容取回來。這一頁先整理 
 | 參數 | 型態 | 必填 | 預設值 | 說明 |
 | --- | --- | --- | --- | --- |
 | `items` | `array<object>` | 否 | `[]` | 關鍵字條目清單；每筆通常包含 `keywords` 與 `content`。 |
-| `fallback` | `string` | 否 | `"沒有命中任何條目。"` | 沒有命中任何條目時寫入取回內容的文字。 |
+| `fallback` | `string` | 否 | `"No matching entries."` | 沒有命中任何條目時寫入取回內容的文字。 |
 
 ## SemanticRetrieve
-
-舊名對應：`SemanticRetrieve`
 
 `SemanticRetrieve` 依語意相似度從知識來源取回內容。當流程需要從較長知識片段裡找出真正相關的內容時，這個模組會把檢索重心放在語意接近度。
 
 `SemanticRetrieve` 對外採用統一路徑介面：應用層用 `sources` 提供要檢索的檔案或目錄清單，並用 `saved_path` 指定唯一儲存目錄。SDK 會先把 `sources` 複製到 `saved_path/source-files/`，再以這份 copy 建立索引；FAISS artifacts 會放在 `saved_path/vectorstore/`。後續備份、打包與部署都以 `saved_path` 內容為準，不再依賴原始 `sources` 路徑。若你要自訂底層行為，仍可用 `embedder` 與 `knowledge_base` 覆蓋預設組裝。
+
+`top_k`、`saved_path`、`source-files` 與 `vectorstore` 的標準預設值由 `agentic_sdk.defaults` 定義，讓 SDK、Playground 與文件共用同一組中性預設。
 
 ### 初始化參數
 
@@ -72,8 +72,6 @@ SemanticRetrieve(
 ```
 
 ## Retrieve 配套元件：VisionQueryBuilder
-
-舊名對應：`FoundryVisionQuery`
 
 前面三個模組直接參與 workflow 的 Retrieve 節點；這個配套元件則負責在檢索前先把圖文輸入整理成可檢索的查詢字串，讓圖像輸入也能順利接上同一套檢索流程。
 

@@ -24,13 +24,12 @@ class NextStepPlan:
         model: str | None = None,
         system_prompt: str | None = None,
         retrieve_description: str | None = None,
-        retrieve_name: str | None = None,
     ) -> None:
         self._model = require_model(model, self.__class__.__name__)
         self._client = resolve_openai_client(self.__class__.__name__, api_key=api_key, base_url=base_url)
         retrieve_hint = ""
-        if retrieve_name or retrieve_description:
-            retrieve_hint = f"\nAvailable retrieve source: {retrieve_name or ''} {retrieve_description or ''}."
+        if retrieve_description:
+            retrieve_hint = f"\nAvailable retrieve source: {retrieve_description}."
         self._system_prompt = system_prompt or (_SYSTEM_PROMPT + retrieve_hint)
 
     @property

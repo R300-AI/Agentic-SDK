@@ -28,6 +28,47 @@ class WorkflowConfig:
     modules: dict[str, ModuleSpec] = field(default_factory=dict)
 
 
+_MODULE_CONFIG_PARAMS: dict[str, set[str]] = {
+    "direct_answer": {"memory_key", "fallback", "prefix"},
+    "evidence_check": {"on_failure"},
+    "generative": {"api_key", "base_url", "model", "temperature", "system_prompt"},
+    "keyword": {"items", "fallback"},
+    "next_step": {"api_key", "base_url", "model", "system_prompt", "retrieve_description"},
+    "pass_through": {"input_label"},
+    "pass_through_retrieve": set(),
+    "response_check": {"on_failure", "api_key", "base_url", "model"},
+    "semantic": {
+        "top_k",
+        "provider",
+        "api_key",
+        "base_url",
+        "embedding_model",
+        "sources",
+        "saved_path",
+        "index_path",
+        "source_path",
+        "rebuild_if_missing",
+        "rebuild_if_stale",
+        "chunk_size",
+        "chunk_overlap",
+        "embedder",
+        "knowledge_base",
+        "vision_query",
+    },
+    "text": {"welcome_message", "options", "importance", "api_key", "base_url", "model"},
+    "text_image": {
+        "welcome_message",
+        "options",
+        "importance",
+        "image_instruction",
+        "api_key",
+        "base_url",
+        "model",
+    },
+    "tool_call_action": {"api_key", "base_url", "model", "temperature", "system_prompt", "tools", "tool_choice"},
+}
+
+
 def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module] | None = None) -> Workflow:
     overrides = module_overrides or {}
 
@@ -77,4 +118,8 @@ def build_module(spec: ModuleSpec) -> Module:
         constructor = registry[spec.kind]
     except KeyError as exc:
         raise ValueError(f"unknown module kind {spec.kind!r}") from exc
+    unsupported = sorted(set(spec.params) - _MODULE_CONFIG_PARAMS[spec.kind])
+    if unsupported:
+        allowed = ", ".join(sorted(_MODULE_CONFIG_PARAMS[spec.kind])) or "none"
+        raise ValueError(f"unsupported params for module kind {spec.kind!r}: {unsupported}. Allowed params: {allowed}")
     return constructor(**spec.params)

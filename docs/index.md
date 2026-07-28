@@ -2,7 +2,7 @@
 
 這套文件站以 SDK reference 為主，目標是讓進階開發者快速查到 `Workflow` 的公開組裝模型、五大功能的模組分類、各模組的參數與輸入輸出契約，以及 `Workflow` 在執行時如何使用 `MemoryStore`、`InContextMemory` 與 `PersistentMemory`。
 
-這一版文件只聚焦 README 已定稿的公開敘事，不展開 deployment、demo 操作導覽或內部替身實作。所有需要模型的模組，都以 `OpenAI SDK form` 作為統一接入規格。
+這一版文件聚焦公開 SDK 規格、模組參數與文件站導覽。所有需要模型的模組，都使用 OpenAI 相容介面作為統一接入方式。
 
 ## 這個文件站回答什麼
 
@@ -14,7 +14,7 @@
 
 列出目前文件涵蓋的模組、其初始化參數與適用情境。
 
-### Workflow 引擎選項
+### Workflow 記憶體類型
 
 說明 `Workflow` 如何用 `MemoryStore` 承接模組可讀的共同 memory，並以 `InContextMemory` 與 `PersistentMemory` 這兩種同層 memory 類型實作不同的記憶策略。
 
@@ -26,7 +26,7 @@
 
 - [Workflow Overview](workflow-overview.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
 - [Module Family](modules/index.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
-- [Workflow 引擎選項](workflow-engines.md)：查 `Workflow` 如何分工 `memory_type`、`MemoryStore`、`InContextMemory`、`PersistentMemory` 與 `WorkflowState`。
+- [Workflow 記憶體類型](workflow-engines.md)：查 `Workflow` 如何分工 `memory_type`、`MemoryStore`、`InContextMemory`、`PersistentMemory` 與 `WorkflowState`。
 - [Use Case](use-cases/index.md)：查看 LaNew 售鞋顧問、BCI 射箭教練與 ICOPE 六力評估助手三個實施例，理解場景拆法與模組組合。
 
 ## 模組總表
@@ -73,7 +73,7 @@
       <td><a href="modules/retrieve-modules.md#semanticretrieve">SemanticRetrieve</a></td>
       <td>yes</td>
       <td>OpenAI</td>
-      <td>用語意去找真正相關的內容，不只看字面相同，較適合需要提高召回率與理解能力的情境。</td>
+      <td>用語意相似度找出相關內容，適合需要提高召回率與理解能力的情境。</td>
     </tr>
     <tr>
       <td rowspan="3">Action</td>

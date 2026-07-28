@@ -1,12 +1,18 @@
 ﻿from __future__ import annotations
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
+from agentic_sdk.defaults import DEFAULT_NO_MATCHING_ENTRIES_MESSAGE, DEFAULT_RETRIEVED_CONTENT_KEY
 
 
 class DirectAnswerAction:
     name = "action"
 
-    def __init__(self, memory_key: str = "latest_retrieved_content", fallback: str = "No matching entries.", prefix: str = "") -> None:
+    def __init__(
+        self,
+        memory_key: str = DEFAULT_RETRIEVED_CONTENT_KEY,
+        fallback: str = DEFAULT_NO_MATCHING_ENTRIES_MESSAGE,
+        prefix: str = "",
+    ) -> None:
         self._memory_key = memory_key
         self._fallback = fallback
         self._prefix = prefix

@@ -4,6 +4,9 @@ import unittest
 from unittest.mock import patch
 
 from agentic_sdk import (
+    DEFAULT_NO_MATCHING_ENTRIES_MESSAGE,
+    DEFAULT_RETRIEVED_CONTENT_KEY,
+    SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH,
     EvidenceCheckReflect,
     GenerativeAction,
     ModuleSpec,
@@ -73,7 +76,29 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "explicit model"):
             build_workflow(config)
 
+    def test_workflow_config_rejects_case_name_injected_module_params(self) -> None:
+        config = WorkflowConfig(
+            modules={
+                "plan": ModuleSpec(
+                    kind="next_step",
+                    params={"retrieve_name": "支援文件", **_llm_params()},
+                )
+            }
+        )
+
+        with self.assertRaisesRegex(ValueError, "unsupported params.*retrieve_name"):
+            build_workflow(config)
+
+    def test_workflow_config_rejects_unknown_module_params_before_constructor_call(self) -> None:
+        config = WorkflowConfig(modules={"retrieve": ModuleSpec(kind="keyword", params={"items": [], "case_name": "demo"})})
+
+        with self.assertRaisesRegex(ValueError, "unsupported params.*case_name"):
+            build_workflow(config)
+
     def test_top_level_exports_expose_canonical_names(self) -> None:
+        self.assertEqual("No matching entries.", DEFAULT_NO_MATCHING_ENTRIES_MESSAGE)
+        self.assertEqual("latest_retrieved_content", DEFAULT_RETRIEVED_CONTENT_KEY)
+        self.assertEqual("./tmp", SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH)
         self.assertTrue(issubclass(PassThroughPerceive, object))
         self.assertTrue(issubclass(TextPerceive, object))
         self.assertTrue(issubclass(NextStepPlan, object))

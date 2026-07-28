@@ -7,6 +7,13 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
+from agentic_sdk.defaults import (
+    DEFAULT_NO_RETRIEVED_CONTEXT_MESSAGE,
+    SEMANTIC_RETRIEVE_DEFAULT_INDEX_DIRNAME,
+    SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH,
+    SEMANTIC_RETRIEVE_DEFAULT_SOURCE_DIRNAME,
+    SEMANTIC_RETRIEVE_DEFAULT_TOP_K,
+)
 from agentic_sdk.llm import require_model, resolve_openai_client
 
 
@@ -283,7 +290,7 @@ class FaissKnowledgeBase:
 
 
 class SemanticRetrieve:
-    DEFAULT_TOP_K = 3
+    DEFAULT_TOP_K = SEMANTIC_RETRIEVE_DEFAULT_TOP_K
     DEFAULT_CHUNK_SIZE = FaissKnowledgeBase._DEFAULT_CHUNK_SIZE
     DEFAULT_CHUNK_OVERLAP = FaissKnowledgeBase._DEFAULT_CHUNK_OVERLAP
 
@@ -297,7 +304,7 @@ class SemanticRetrieve:
         base_url: str | None = None,
         embedding_model: str | None = None,
         sources: list[str] | tuple[str, ...] | None = None,
-        saved_path: str = "./tmp",
+        saved_path: str = SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH,
         index_path: str | None = None,
         source_path: str | None = None,
         rebuild_if_missing: bool = True,
@@ -325,9 +332,9 @@ class SemanticRetrieve:
             )
 
         resolved_sources = [str(path).strip() for path in (sources or []) if str(path).strip()]
-        resolved_saved_path = str(saved_path or "./tmp").strip() or "./tmp"
-        resolved_index_path = index_path or str(Path(resolved_saved_path) / "vectorstore")
-        resolved_saved_source_path = str(Path(resolved_saved_path) / "source-files") if resolved_sources else None
+        resolved_saved_path = str(saved_path or SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH).strip() or SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
+        resolved_index_path = index_path or str(Path(resolved_saved_path) / SEMANTIC_RETRIEVE_DEFAULT_INDEX_DIRNAME)
+        resolved_saved_source_path = str(Path(resolved_saved_path) / SEMANTIC_RETRIEVE_DEFAULT_SOURCE_DIRNAME) if resolved_sources else None
         should_build_default_kb = self._knowledge_base is None and bool(resolved_sources or index_path or source_path)
         if should_build_default_kb:
             if self._embedder is None:
@@ -372,7 +379,7 @@ class SemanticRetrieve:
             metadata["memory_hit_count"] = len(results)
             if results:
                 sections.append(_format_memory_hits(results))
-        snippet = "\n\n".join(sections) if sections else "No matching memory or knowledge entries."
+        snippet = "\n\n".join(sections) if sections else DEFAULT_NO_RETRIEVED_CONTEXT_MESSAGE
         metadata["source"] = "semantic_retrieve"
         return ModuleOutput(
             next_module="action",

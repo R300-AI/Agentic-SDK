@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from agentic_sdk.defaults import SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 from playground.models import BuilderChoice, BuilderStep, WorkflowSummary
 from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
@@ -44,9 +45,9 @@ _TOOL_CALL_OUTPUT_CHOICES = {"interactive"}
 _STRUCTURED_OUTPUT_CHOICES = {"table", "json", "custom_schema"}
 _ADVISOR_REQUIRED_FIELDS_TEXT = "目標 = 使用者想完成的結果\n限制 = 時程、預算、規格或其他約束\n現況 = 已知資料、已嘗試方法或目前阻礙"
 _ADVISOR_WELCOME_MESSAGE = "請先描述你想完成的事，我會一步步確認需求。"
-_DEFAULT_RETRIEVE_DESCRIPTION = "依使用者設定的關鍵字支援資料判斷是否需要查詢。"
-_DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的支援文件查找與問題最相關的內容。"
-_DEFAULT_SEMANTIC_SAVED_PATH = "./tmp"
+_DEFAULT_RETRIEVE_DESCRIPTION = "依使用者設定的關鍵字參考資料判斷是否需要查詢。"
+_DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的參考文件查找與問題最相關的內容。"
+_DEFAULT_SEMANTIC_SAVED_PATH = SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 _DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
 _DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
 _MODULE_IMPORT_ORDER = (
@@ -93,7 +94,7 @@ class BuilderSourceConfig:
     direct_answer_prefix: str = ""
     custom_action_class: str = "BusinessRule"
     custom_action_memory_key: str = "latest_retrieved_content"
-    custom_action_fallback: str = "找不到符合的支援資料。"
+    custom_action_fallback: str = "找不到符合的參考資料。"
     custom_action_prefix: str = "自訂處理結果："
     custom_rule_title: str = "處理規則"
     custom_rule_instruction: str | None = None
@@ -143,7 +144,7 @@ def get_builder_steps() -> list[BuilderStep]:
             (
                 BuilderChoice("none", "不用查", "直接根據輸入或既有流程產生結果。"),
                 BuilderChoice("keyword", "關鍵字查詢", "用 key/value 對照表命中固定內容。"),
-                BuilderChoice("semantic", "語意搜尋", "依意思找最相關的支援資料。"),
+                BuilderChoice("semantic", "語意搜尋", "依意思找最相關的參考資料。"),
             ),
         ),
         BuilderStep(
@@ -320,7 +321,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 direct_answer_prefix=_clean_short_text(str(choice_label.get("direct_prefix", config.direct_answer_prefix)), "") if "direct_prefix" in choice_label else config.direct_answer_prefix,
                 custom_action_class=_clean_python_identifier(str(choice_label.get("class_name", config.custom_action_class)), "BusinessRule"),
                 custom_action_memory_key=_clean_identifier_text(str(choice_label.get("memory_key", config.custom_action_memory_key)), "latest_retrieved_content"),
-                custom_action_fallback=_clean_short_text(str(choice_label.get("fallback", config.custom_action_fallback)), "找不到符合的支援資料。"),
+                custom_action_fallback=_clean_short_text(str(choice_label.get("fallback", config.custom_action_fallback)), "找不到符合的參考資料。"),
                 custom_action_prefix=_clean_short_text(str(choice_label.get("prefix", config.custom_action_prefix)), "自訂處理結果："),
                 custom_rule_title=_clean_short_text(str(choice_label.get("rule_title", config.custom_rule_title)), "處理規則"),
                 custom_rule_instruction=(
@@ -431,7 +432,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         direct_answer_prefix=_extract_keyword_value(source, {"DirectAnswerAction"}, "prefix") or "",
         custom_action_class=action_call_name if is_custom_action else "BusinessRule",
         custom_action_memory_key=_extract_custom_action_memory_key(source, _extract_assignment_value(source, "CUSTOM_ACTION_MEMORY_KEY", "latest_retrieved_content")),
-        custom_action_fallback=_extract_custom_action_fallback(source, _extract_assignment_value(source, "CUSTOM_ACTION_FALLBACK", "找不到符合的支援資料。")),
+        custom_action_fallback=_extract_custom_action_fallback(source, _extract_assignment_value(source, "CUSTOM_ACTION_FALLBACK", "找不到符合的參考資料。")),
         custom_action_prefix=_extract_custom_action_prefix(source, _extract_assignment_value(source, "CUSTOM_ACTION_PREFIX", "自訂處理結果：")),
         custom_rule_title=_extract_custom_action_title(source, _extract_assignment_value(source, "BUSINESS_RULE_TITLE", "處理規則")),
         custom_rule_instruction=_extract_custom_action_instruction(source, _extract_assignment_value(source, "BUSINESS_RULE_INSTRUCTION", "")) or None,
@@ -1383,7 +1384,7 @@ def _llm_arguments(
 def _retrieve_description(config: BuilderSourceConfig) -> str:
     if config.retrieve_module == "SemanticRetrieve":
         if config.semantic_search_goal:
-            return f"優先從這批支援文件查找：{config.semantic_search_goal}"[:240]
+            return f"優先從這批參考文件查找：{config.semantic_search_goal}"[:240]
         if config.retrieve_description:
             return config.retrieve_description[:240]
         return _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION

@@ -1,28 +1,28 @@
-# Workflow 引擎選項
+# Workflow 記憶體類型
 
-這一頁說明 `Workflow` 執行時依賴的引擎層。對外文件的正確分層是：`Workflow` 負責串接節點，`MemoryStore` 是上層 memory 抽象，`InContextMemory` 與 `PersistentMemory` 是同層、可互換的 memory 類型，`WorkflowState` 則承接本次 run 的中繼狀態。
+這一頁說明 `Workflow` 執行時使用的引擎層。分工如下：`Workflow` 負責串接節點，`MemoryStore` 是上層記憶抽象，`InContextMemory` 與 `PersistentMemory` 是同層、可互換的記憶類型，`WorkflowState` 承接本次 `run()` 的中繼狀態。
 
 ## MemoryStore：共同 memory 抽象
 
-`MemoryStore` 是模組層依賴的共同 memory 抽象。如果這個專案裡的 memory 都必須保有對話順序，那 conversation 就不是另一層額外抽象，而是 `MemoryStore` 共同核心的一部分。
+`MemoryStore` 是模組層依賴的共同記憶抽象。它負責保存模組需要讀取的對話內容與順序，讓不同記憶實作可以使用同一個介面。
 
-模組只應依賴這個共同抽象，不應直接綁死在 `InContextMemory` 這個 concrete class。
+模組依賴 `MemoryStore` 介面，就能在 `InContextMemory` 與 `PersistentMemory` 之間切換。
 
-## InContextMemory：對話工作記憶類型
+## InContextMemory：對話工作記憶
 
 `InContextMemory` 是 `MemoryStore` 的一種實作，偏重對話工作記憶。它保存同一個 session 中依時間排序的完整 turn 歷史，讓需要模型的模組可以直接讀取前文。
 
 適合把它理解成：
 
 - 本次與前次 turn 共同組成的對話工作記憶
-- 所有需要模型的模組共用的 conversation input
-- 可由 `Workflow(memory_type=InContextMemory)` 直接承接的 transcript
+- 所有需要模型的模組共用的對話輸入
+- 可由 `Workflow(memory_type=InContextMemory)` 直接承接的對話紀錄
 
-`InContextMemory` 不是 `WorkflowState` 的別名，也不是 `Entities` 的別名。它的責任只有一件事：保存完整對話順序。
+`InContextMemory` 的責任是保存完整對話順序；`WorkflowState` 與 `Entities` 則處理單次 `run()` 期間的中繼資料。
 
-## PersistentMemory：持久化記憶類型
+## PersistentMemory：持久化記憶
 
-`PersistentMemory` 也是 `MemoryStore` 的一種實作，和 `InContextMemory` 同層。它的差異不在於層級比較低，而在於記憶策略不同：通常更強調跨執行期保留、搜尋、索引、回查與長期累積。
+`PersistentMemory` 也是 `MemoryStore` 的一種實作，和 `InContextMemory` 同層。它偏重跨執行期保留、搜尋、索引、回查與長期累積。
 
 ## WorkflowState：本次 run 的執行狀態
 
@@ -35,7 +35,7 @@
 - `attachments`
 - `last_action_result` 與 `last_action_error`
 
-也就是說，`WorkflowState` 關心的是「這次 run 現在推進到哪裡」，不是「完整對話 transcript 長什麼樣」。新的模組契約應以 `memory` 為主。
+`WorkflowState` 關心的是「這次 `run()` 目前推進到哪裡」。完整對話紀錄由 `memory` 承接，模組需要前文時應讀取 `memory`。
 
 ## Workflow 可注入的其他引擎層
 
@@ -48,11 +48,11 @@
 | conversation-oriented memory | `InContextMemory` | 偏重 session 內完整對話承接的 `MemoryStore` 實作 |
 | durable memory | `PersistentMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
 
-因此這套文件站把 `InContextMemory` 與 `PersistentMemory` 視為同層 memory 類型，而不是上下層關係；真正的上層抽象是 `MemoryStore`。
+這套文件站把 `MemoryStore` 視為共同抽象，`InContextMemory` 與 `PersistentMemory` 則是同層記憶類型。
 
 ## 什麼時候看這一頁
 
-- 當你要理解 workflow 內到底哪一層保存完整對話
+- 當你要理解 workflow 內哪一層保存完整對話
 - 當你要判斷是否只用單輪 `run()`，還是要用 `memory_type=InContextMemory` 承接多輪對話
 - 當你要替 workflow 指定特定 `MemoryStore` 類型，例如 `InContextMemory` 或 `PersistentMemory`
 - 當你要分清楚「workflow 節點規格」與「workflow 執行引擎」是兩個不同層次
@@ -61,6 +61,6 @@
 
 模組頁負責回答每個節點做什麼，以及 workflow 邊界上有哪些模組化差異。
 
-這一頁負責回答 `Workflow` 在執行時由哪一層提供共同 memory 抽象、哪兩種 memory 類型可以互換、以及哪一層保存本次 run 狀態。
+這一頁負責回答 `Workflow` 在執行時由哪一層提供共同記憶抽象、哪兩種記憶類型可以互換、以及哪一層保存本次 `run()` 狀態。
 
 如果你現在要先理解 workflow 如何組裝，先看 [Workflow Overview](workflow-overview.md)。如果你接下來要看節點層的規格，再進 [Module Family](modules/index.md) 與對應模組頁。

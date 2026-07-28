@@ -4,8 +4,6 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 
 ## PassThroughPerceive
 
-舊名對應：`InputPerceive`
-
 `PassThroughPerceive` 將最新一輪使用者輸入直接整理成查詢內容，交給後續節點接手。它適合 README 的最小流程，也適合作為文字型流程的直接入口。這個模組代表的是最短路徑：收到新訊息後，先把可查詢的內容穩定交出去。
 
 ### 初始化參數
@@ -18,12 +16,10 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `user_message` | `string` | `"請介紹 TSiP"` | 本輪最新的使用者文字。 |
+| `user_message` | `string` | `"請介紹 Agentic SDK"` | 本輪最新的使用者文字。 |
 | `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模組讀取完整對話歷史的共同抽象；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
 
 ## TextPerceive
-
-舊名對應：`LLMBasedPerceive`
 
 `TextPerceive` 依文字內容做語意判讀，將輸入整理成後續可用的查詢、標籤與摘要。當流程需要的不只是原句，而是對需求做一次語意整理時，就會接到這個模組。模型輸入會包含完整對話歷史，再加上本模組自己的 guidance 與 fields 設定。
 
@@ -44,15 +40,13 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `user_message` | `string` | `"我最近久站後足弓很酸，想找比較有支撐的鞋"` | 本輪最新的使用者文字。 |
+| `user_message` | `string` | `"我無法登入後台，請幫我整理問題重點"` | 本輪最新的使用者文字。 |
 | `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
 | `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
 
 ## TextImagePerceive
-
-舊名對應：`MultimodalPerceive`
 
 `TextImagePerceive` 將文字與圖片內容一起整理成後續可用的查詢與摘要。當流程同時需要讀取文字與圖片時，這個模組會把兩類資訊整合成後續可用的感知結果，支援 `image/png`、`image/jpeg`、`image/webp` 三種格式。模型輸入同樣會保留前面各輪的 user / assistant 歷史，最後一輪 user turn 則可轉成 OpenAI content parts。
 
@@ -74,8 +68,8 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
-| `user_message` | `string` | `"請根據這張足測圖推薦鞋款"` | 本輪最新的使用者文字。 |
+| `user_message` | `string` | `"請根據這張截圖整理錯誤訊息"` | 本輪最新的使用者文字。 |
 | `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
-| `input_images` | `array<object>` | `[{"mime_type":"image/png","name":"foot_scan.png","content_ref":"blob://foot_scan.png"}]` | 圖片清單；只允許 `image/png`、`image/jpeg`、`image/webp`。 |
+| `input_images` | `array<object>` | `[{"mime_type":"image/png","name":"error-screen.png","content_ref":"blob://error-screen.png"}]` | 圖片清單；只允許 `image/png`、`image/jpeg`、`image/webp`。 |

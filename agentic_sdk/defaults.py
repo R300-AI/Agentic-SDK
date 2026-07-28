@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+DEFAULT_WORKFLOW_NAME = "default"
+DEFAULT_SESSION_ID = "default"
+
+DEFAULT_RETRIEVED_CONTENT_KEY = "latest_retrieved_content"
+DEFAULT_NO_MATCHING_ENTRIES_MESSAGE = "No matching entries."
+DEFAULT_NO_RETRIEVED_CONTEXT_MESSAGE = "No matching memory or knowledge entries."
+
+SEMANTIC_RETRIEVE_DEFAULT_TOP_K = 3
+SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH = "./tmp"
+SEMANTIC_RETRIEVE_DEFAULT_INDEX_DIRNAME = "vectorstore"
+SEMANTIC_RETRIEVE_DEFAULT_SOURCE_DIRNAME = "source-files"

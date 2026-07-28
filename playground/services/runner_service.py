@@ -180,7 +180,7 @@ def execute_python_source(
 
     final_message = workflow_result.final_message or get_runner_demo_result(scene_profile)["message"]
     if final_message == "No matching entries.":
-        final_message = _source_fallback_text(python_source) or "目前沒有找到符合的支援資料。"
+        final_message = _source_fallback_text(python_source) or "目前沒有找到符合的參考資料。"
     tool_calls = workflow_result.entities.get("latest_tool_calls", [])
     tool_call_panels = _tool_call_panels_from(config.action_tools, tool_calls)
     result = {
@@ -559,7 +559,7 @@ def _process_events_for_execution(config: BuilderSourceConfig, workflow_result: 
         title, detail = _retrieve_process_event(config, retrieve_entries, _retrieve_missed(retrieve_entries))
         events.append(_process_event("retrieve", title, detail))
     elif "retrieve" in workflow_result.visit_counts:
-        events.append(_process_event("retrieve", "整理相關來源", "已嘗試整理支援資料，但這次沒有留下可用內容。"))
+        events.append(_process_event("retrieve", "整理相關來源", "已嘗試整理參考資料，但這次沒有留下可用內容。"))
 
     action_entry = _latest_entry(workflow_result.entries, ContextEntryType.ACTION_RESULT)
     if action_entry is not None:
@@ -611,7 +611,7 @@ def _module_start_process_event(config: BuilderSourceConfig, module: str) -> dic
         return _process_event("plan", "判斷工具順序", "正在判斷這次需要先整理來源，或可以直接準備回覆。")
     if module == "retrieve":
         title = _retrieve_process_title(config)
-        return _process_event("retrieve", title, "正在整理這一步可用的支援內容。")
+        return _process_event("retrieve", title, "正在整理這一步可用的參考內容。")
     if module == "action":
         return _process_event("action", "準備輸出回覆", f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。")
     if module == "reflect":
@@ -646,7 +646,7 @@ def _module_finish_process_event(config: BuilderSourceConfig, module: str, state
     if module == "retrieve":
         retrieve_entries = [entry for entry in state.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
         if not retrieve_entries:
-            return _process_event("retrieve", _retrieve_process_title(config), "已嘗試整理支援資料，但這次沒有留下可用內容。")
+            return _process_event("retrieve", _retrieve_process_title(config), "已嘗試整理參考資料，但這次沒有留下可用內容。")
         title, detail = _retrieve_process_event(config, retrieve_entries, _retrieve_missed(retrieve_entries))
         return _process_event("retrieve", title, detail)
     if module == "action":
@@ -678,7 +678,7 @@ def _retrieve_process_title(config: BuilderSourceConfig) -> str:
         return "整合相關來源"
     if config.retrieve_module == "PassThroughRetrieve":
         return "沿用輸入內容"
-    return "比對支援資料"
+    return "比對參考資料"
 
 
 def _process_event(role: str, title: str, description: str) -> dict[str, str]:
@@ -693,8 +693,8 @@ def _retrieve_process_event(config: BuilderSourceConfig, entries: list[ContextEn
     if "hit_count" in metadata:
         hit_count = int(metadata.get("hit_count") or 0)
         if hit_count == 0:
-            return "比對支援資料", "已依關鍵字比對支援資料，沒有命中條目，會改用 fallback 內容。"
-        return "比對支援資料", f"已依關鍵字比對支援資料，命中 {hit_count} 筆。整理出的內容：{preview}"
+            return "比對參考資料", "已依關鍵字比對參考資料，沒有命中條目，會改用 fallback 內容。"
+        return "比對參考資料", f"已依關鍵字比對參考資料，命中 {hit_count} 筆。整理出的內容：{preview}"
     if source == "semantic_retrieve":
         hit_total = int(metadata.get("kb_hit_count") or 0) + int(metadata.get("memory_hit_count") or 0)
         if missed:
@@ -702,7 +702,7 @@ def _retrieve_process_event(config: BuilderSourceConfig, entries: list[ContextEn
         return "整合相關來源", f"已搜尋 memory 與 knowledge 來源，命中 {hit_total} 筆。整理出的內容：{preview}"
     if source == "pass_through_retrieve":
         return "沿用輸入內容", f"這次不用查外部資料，已把使用者輸入整理成可交給回覆器的內容：{preview}"
-    return "整理相關來源", f"已整理可用支援內容：{preview}"
+    return "整理相關來源", f"已整理可用參考內容：{preview}"
 
 
 def _action_process_name(config: BuilderSourceConfig) -> str:

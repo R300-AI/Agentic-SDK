@@ -359,7 +359,7 @@ def _logical_required_errors(step_key: str, choice_label: str, step_values: dict
     if step_key == "retrieve_policy" and choice_label == "keyword" and not _has_pair_entries(step_values.get("keyword_pairs")):
         return ["請填寫「要對照哪些關鍵字內容？」。"]
     if step_key == "retrieve_policy" and choice_label == "semantic" and not _has_line_entries(step_values.get("semantic_support_files")):
-        return ["請完成「要上傳哪些支援文件？」。"]
+        return ["請完成「要上傳哪些參考文件？」。"]
     if step_key == "output_format" and choice_label == "interactive" and not _has_valid_interactive_contract(step_values.get("api_contracts")):
         return ["請至少完成一組「API URL」與「需要收集的資訊」。"]
     return []

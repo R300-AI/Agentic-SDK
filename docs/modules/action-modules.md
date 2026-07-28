@@ -4,8 +4,6 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 ## DirectAnswerAction
 
-舊名對應：`DirectAnswerAction`
-
 `DirectAnswerAction` 直接根據取回內容組成最終回應，以條目內容為主完成回答。它適合 README 最小流程與條目式固定回答，也代表 Action 家族裡最直接的交付方式。
 
 ### 初始化參數
@@ -13,7 +11,7 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | 參數 | 型態 | 必填 | 預設值 | 說明 |
 | --- | --- | --- | --- | --- |
 | `memory_key` | `string` | 否 | `"latest_retrieved_content"` | 從 workflow state 讀取最終回答內容的 key。 |
-| `fallback` | `string` | 否 | `"沒有命中任何條目。"` | 指定 key 沒有內容時使用的回答文字。 |
+| `fallback` | `string` | 否 | `"No matching entries."` | 指定 key 沒有內容時使用的回答文字。 |
 | `prefix` | `string` | 否 | `""` | 加在回答文字前的固定前綴。 |
 
 ### 標準輸出參數
@@ -21,13 +19,11 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
-| `final_message` | `string` | `"TSiP 是工研院主導的國產 AI 晶片落地藍圖。"` | 對外回應文字。 |
+| `final_message` | `string` | `"Agentic SDK 可以用 workflow 組裝 agent 行為。"` | 對外回應文字。 |
 | `final_data` | `object|null` | `null` | 純文字回應時固定 `null`。 |
 | `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
 
 ## GenerativeAction
-
-舊名對應：`CompletionAction`
 
 `GenerativeAction` 根據完整對話歷史、輸入摘要與取回內容生成最終回應。當流程要把多筆條目、歷史紀錄或摘要整合成一段自然語言時，就會接到這個模組。
 
@@ -50,13 +46,11 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
-| `final_message` | `string` | `"建議優先考慮支撐型慢跑鞋，因為較適合久站與足弓支撐需求。"` | 對外回應文字。 |
+| `final_message` | `string` | `"建議先確認目前設定，再依錯誤訊息建立任務記錄。"` | 對外回應文字。 |
 | `final_data` | `object|null` | `null` | SDK 不解析模型文字；若需要固定格式，請在 `system_prompt` 約束輸出內容，應用層再自行解析。 |
 | `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
 
 ## ToolCallAction
-
-舊名對應：無。這是 OpenAI tool calling 專用 Action。
 
 `ToolCallAction` 使用 OpenAI SDK 標準的 `tools`、`tool_choice` 與 `message.tool_calls` 介面。當 workflow 需要讓模型根據完整對話與目前檢索內容決定是否呼叫外部 API、後端函式或應用程式工具時，這個模組會把 tool schema 交給模型，並把模型回傳的 tool calls 保存到 workflow 結果中。
 
@@ -80,7 +74,7 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | --- | --- | --- | --- |
 | `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
 | `final_message` | `string` | `"已產生工具呼叫。"` | 對外回應文字；若模型只回傳 tool calls 而沒有文字內容，SDK 會保留一段簡短訊息。 |
-| `tool_calls` | `array<object>` | `[{"id":"call_123","type":"function","function":{"name":"submit_booking","arguments":"{...}"}}]` | OpenAI `message.tool_calls` 的標準化結果，會保存在 workflow `Entities` 的 `latest_tool_calls`。 |
+| `tool_calls` | `array<object>` | `[{"id":"call_123","type":"function","function":{"name":"record_task","arguments":"{...}"}}]` | OpenAI `message.tool_calls` 的標準化結果，會保存在 workflow `Entities` 的 `latest_tool_calls`。 |
 | `final_data` | `object|null` | `null` | `ToolCallAction` 不直接執行工具，因此不在此放入外部 API 執行結果。 |
 | `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
 
@@ -94,15 +88,15 @@ tools = [
 	{
 		"type": "function",
 		"function": {
-			"name": "submit_booking",
-			"description": "提交球場預約資料。",
+			"name": "record_task",
+			"description": "建立任務記錄。",
 			"parameters": {
 				"type": "object",
 				"properties": {
-					"customer_name": {"type": "string", "description": "預約人姓名。"},
-					"booking_time": {"type": "string", "description": "使用者想預約的日期與時間。"},
+					"task_summary": {"type": "string", "description": "使用者要記錄的任務摘要。"},
+					"priority": {"type": "string", "description": "任務優先度。"},
 				},
-				"required": ["customer_name", "booking_time"],
+				"required": ["task_summary", "priority"],
 				"additionalProperties": False,
 			},
 		},
@@ -114,8 +108,8 @@ workflow = Workflow(
 	retrieve=KeywordRetrieve(
 		items=[
 			{
-				"keywords": ["booking", "預約", "球場"],
-				"content": "球場預約需要留下姓名與預約時間。",
+				"keywords": ["任務", "記錄", "優先度"],
+				"content": "建立任務記錄時需要任務摘要與優先度。",
 			}
 		]
 	),
@@ -127,7 +121,7 @@ workflow = Workflow(
 	),
 )
 
-result = workflow.run("我想預約明天下午三點的球場，姓名是王小明。")
+result = workflow.run("請把這件事記成高優先度任務：整理部署檢查清單。")
 print(result.final_message)
 print(result.entities["latest_tool_calls"])
 ```

@@ -650,8 +650,8 @@ function syncSemanticUploadPanel(panel) {
   );
   status.classList.remove("error");
   status.textContent = items.length
-    ? `已上傳 ${items.length} 份支援文件。`
-    : "尚未上傳支援文件。";
+    ? `已上傳 ${items.length} 份參考文件。`
+    : "尚未上傳參考文件。";
 }
 
 function uploadSemanticFiles(panel) {
@@ -665,7 +665,7 @@ function uploadSemanticFiles(panel) {
   }
 
   status.classList.remove("error");
-  status.textContent = `準備上傳 ${files.length} 份支援文件...`;
+  status.textContent = `準備上傳 ${files.length} 份參考文件...`;
   progress.hidden = false;
   progress.value = 0;
 
