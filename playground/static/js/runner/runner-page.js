@@ -767,18 +767,28 @@ saveButton?.addEventListener("click", async () => {
 		openSaveLoginModal();
 		return;
 	}
-	const message = result.saved ? "已儲存。" : (result.error || "儲存失敗。");
+	const message = saveResultMessage(result);
 	if (runStatus) {
 		runStatus.textContent = message;
 	}
 	if (saveStatus) {
-		saveStatus.textContent = result.saved ? "已儲存" : "儲存失敗";
+		saveStatus.textContent = result.saved ? "已儲存" : (result.config_saved ? "知識庫未儲存" : "儲存失敗");
 	}
 	showSavePanel(savePanel, message);
 	if (saveButton) {
 		saveButton.disabled = false;
 	}
 });
+
+function saveResultMessage(result) {
+	if (result?.saved) {
+		return "已儲存。";
+	}
+	if (result?.config_saved && result?.bundle_saved === false) {
+		return `Agent 設定已儲存，但 SemanticRetrieve 知識庫未儲存：${result.bundle_error || result.error || "請確認 AI Hub bundle storage API。"}`;
+	}
+	return result?.error || "儲存失敗。";
+}
 
 saveLoginCloseButtons.forEach((button) => button.addEventListener("click", closeSaveLoginModal));
 saveLoginForm?.addEventListener("submit", async (event) => {

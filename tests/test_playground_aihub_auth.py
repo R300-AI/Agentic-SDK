@@ -7,6 +7,7 @@ from dotenv import dotenv_values
 from playground import create_app
 from playground.routes import aihub as aihub_routes
 from playground.routes import entry as entry_routes
+from playground.routes import runner as runner_routes
 from playground.services import aihub_client
 
 
@@ -269,6 +270,31 @@ def test_login_uses_ai_hub_verification_before_entering_authenticated_mode(monke
     assert seen == [("creator", "secret", "https://playground.example/")]
 
 
+def test_entry_page_supports_unknown_or_manual_choice():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get("/playground/", base_url="https://playground.example")
+
+    assert response.status_code == 200
+
+
+def test_start_anonymous_enters_builder_with_local_source():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post("/playground/start/anonymous", base_url="https://playground.example")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "anonymous"
+            assert session["source_origin"] == "manual_new"
+            assert "python_source" in session
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/builder")
+
+
 def test_aihub_navigation_builder_verifies_credentials_and_enters_builder(monkeypatch):
     seen = []
 
@@ -365,6 +391,96 @@ def test_aihub_navigation_runner_verifies_and_loads_agent(monkeypatch):
     assert seen_load[0]["credentials"].password == "secret"
 
 
+def test_aihub_navigation_runner_restores_semantic_bundle_runtime_paths(monkeypatch):
+    semantic_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Semantic Agent",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+    captured = {}
+
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda username, password, *, origin=None: True)
+    monkeypatch.setattr(
+        entry_routes,
+        "load_config",
+        lambda agent_id, *, credentials=None, origin=None: {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "Semantic Agent",
+            "python_source": semantic_source,
+        },
+    )
+    monkeypatch.setattr(
+        entry_routes,
+        "restore_runtime_bundle",
+        lambda *, agent_id=None, credentials=None, origin=None: {
+            "bundle_restored": True,
+            "builder_upload_id": "restored-upload",
+            "python_source": semantic_source,
+            "bundle_source_file_count": 1,
+            "bundle_vectorstore_file_count": 2,
+        },
+    )
+
+    def fake_execute_python_source(python_source, **kwargs):
+        captured.update(kwargs)
+        return {"status": "ok", "final_message": "ok", "result": {}, "debug_messages": [], "process_events": []}
+
+    monkeypatch.setattr(runner_routes, "execute_python_source", fake_execute_python_source)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/runner",
+            base_url="https://playground.example",
+            json={"username": "creator", "password": "secret", "agent_id": "agent-1"},
+        )
+        assert response.status_code == 302
+        execute_response = client.post("/playground/run/execute", base_url="https://playground.example", json={"message": "policy?"})
+
+    assert execute_response.status_code == 200
+    semantic_sources = [Path(item).as_posix() for item in captured["semantic_sources"]]
+    semantic_saved_path = Path(captured["semantic_saved_path"]).as_posix()
+    assert semantic_sources[0].endswith("semantic-runtime/restored-upload/source-files")
+    assert semantic_saved_path.endswith("semantic-runtime/restored-upload")
+
+
+def test_aihub_navigation_runner_accepts_json_payload(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda username, password, *, origin=None: username == "creator" and password == "secret")
+    monkeypatch.setattr(
+        entry_routes,
+        "load_config",
+        lambda agent_id, *, credentials=None, origin=None: {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "Agent One",
+            "python_source": "print('loaded')",
+        },
+    )
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/runner",
+            base_url="https://playground.example",
+            json={"username": "creator", "password": "secret", "agent_id": "agent-1"},
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_editable"
+            assert session["agent_id"] == "agent-1"
+            assert session["source_origin"] == "aihub_loaded"
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/run")
+
+
 def test_aihub_navigation_runner_requires_agent_id(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     app = create_app()
@@ -424,6 +540,58 @@ def test_shared_runner_loads_public_agent_as_read_only(monkeypatch):
     assert source_export_response.status_code == 403
 
 
+def test_shared_runner_accepts_post_json_payload(monkeypatch):
+    seen_load = []
+
+    def fake_load_public_config(agent_id, *, origin=None):
+        seen_load.append({"agent_id": agent_id, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Shared Agent", "python_source": "print('shared')"}
+
+    monkeypatch.setattr(entry_routes, "load_public_config", fake_load_public_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/shared-runner",
+            base_url="https://playground.example",
+            json={"agent_id": "agent-1"},
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_readonly"
+            assert session["agent_id"] == "agent-1"
+            assert session["source_origin"] == "aihub_shared_readonly"
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/run")
+    assert seen_load == [{"agent_id": "agent-1", "origin": "https://playground.example/"}]
+
+
+def test_shared_runner_accepts_post_form_payload(monkeypatch):
+    monkeypatch.setattr(
+        entry_routes,
+        "load_public_config",
+        lambda agent_id, *, origin=None: {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "Shared Agent",
+            "python_source": "print('shared')",
+        },
+    )
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/shared-runner",
+            base_url="https://playground.example",
+            data={"agent_id": "agent-1"},
+        )
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/run")
+
+
 def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     seen = []
@@ -457,6 +625,57 @@ def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     assert seen[0]["origin"] == "https://playground.example/"
     assert seen[0]["credentials"].username == "creator"
     assert seen[0]["credentials"].password == "secret"
+
+
+def test_aihub_save_route_reports_semantic_bundle_failure(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    semantic_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Semantic Agent",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+
+    monkeypatch.setattr(
+        aihub_routes,
+        "save_config",
+        lambda agent_id, python_source, *, workflow_name=None, description=None, credentials=None, origin=None: {
+            "agent_id": agent_id or "agent-new",
+            "workflow_name": workflow_name,
+            "description": description or "",
+            "saved": True,
+            "integration_status": "aihub",
+        },
+    )
+    monkeypatch.setattr(
+        aihub_routes,
+        "save_runtime_bundle",
+        lambda **kwargs: {
+            "bundle_saved": False,
+            "bundle_error": "AI Hub bundle storage API is not available.",
+            "bundle_error_code": "missing_bundle_api",
+        },
+    )
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", base_url="https://playground.example", data={"username": "creator", "password": "secret"})
+        with client.session_transaction(base_url="https://playground.example") as session:
+            session["mode"] = "manual_auth"
+            session["python_source"] = semantic_source
+            session["builder_upload_id"] = "upload-1"
+        response = client.post("/playground/aihub/config/save", base_url="https://playground.example")
+
+    assert response.status_code == 502
+    assert response.json["config_saved"] is True
+    assert response.json["saved"] is False
+    assert response.json["bundle_saved"] is False
+    assert response.json["error_code"] == "missing_bundle_api"
 
 
 def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):

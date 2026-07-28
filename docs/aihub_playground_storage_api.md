@@ -6,6 +6,11 @@ AI Hub 相關文件：
 
 - Connection model: <https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>
 - Storage API: <https://r300-ai.github.io/ai-hub-webui/playground/storage-api/>
+- 維運導讀：[整合自訂遊樂場](https://r300-ai.github.io/ai-hub-webui/platform-maintenance/custom-playground-integration/)
+- 責任邊界：[連線方式與責任邊界](https://r300-ai.github.io/ai-hub-webui/platform-maintenance/custom-playground-integration/connection-and-responsibility/)
+- 保存與讀回：[工作流保存與讀回](https://r300-ai.github.io/ai-hub-webui/platform-maintenance/custom-playground-integration/workflow-save-load/)
+
+本頁對應 AI Hub 維運文件中的「工作流保存與讀回」：AI Hub 簽發短效上傳/下載 URL，Playground 打包、上傳、下載與還原 `agentic_playground_bundle.zip`。
 
 ## AI Hub 團隊先看這裡
 
@@ -22,6 +27,8 @@ AI Hub 端需要協助處理：
 2. 依 `agent_id` 驗證使用者是否能保存或讀回 bundle。
 3. 簽發可直接對 Storage Account `PUT` / `GET` 的短效 URL。
 4. 回傳 URL、HTTP method、必要 headers 與過期時間。
+
+對 `SemanticRetrieve` Agent 來說，bundle save/load 是必要流程，不是附加備份。若 AI Hub 只完成 config save/load，使用者當次建立時仍可能查得到上傳資料，但重新載入後不會有原本的參考文件與 vectorstore。
 
 ## 這份文件會幫你完成什麼
 
@@ -87,6 +94,8 @@ Playground 拿到 URL 後，直接對 Storage Account `PUT` / `GET`。
 6. Playground 使用 response 中的 `upload_method`、`upload_url` 與 `upload_headers` 直接 PUT zip 到 Storage Account。
 7. Storage Account PUT 成功後，Playground 才能視為完整保存成功。
 
+若此 Agent 使用 `SemanticRetrieve` 且 bundle 保存失敗，Playground 會回傳 `config_saved: true`、`saved: false`、`bundle_saved: false`。這表示 AI Hub 的 config 已保存，但知識庫 runtime 尚未保存，之後重新載入不能保證語意搜尋可用。
+
 Upload URL response 範例：
 
 ```json
@@ -126,6 +135,8 @@ Download URL response 範例：
 ```
 
 如果 bundle 尚未建立，Playground 可以先載入 config，並提示語意搜尋參考文件與 vectorstore 尚未恢復。
+
+匿名分享入口目前只載入公開 `python_source`。如果 AI Hub 需要讓匿名唯讀 Runner 也能使用 `SemanticRetrieve` 知識庫，AI Hub 需要另行提供可公開授權的 bundle 讀回方式，或在公開 config load 回應中提供等價的 bundle download 能力。
 
 ## Playground 實作分工
 

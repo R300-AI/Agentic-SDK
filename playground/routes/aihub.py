@@ -122,6 +122,11 @@ def save_aihub_config():
             builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None,
         )
         result = {**result, **bundle_result}
+        if _semantic_bundle_required(workflow_config) and not bundle_result.get("bundle_saved"):
+            result["config_saved"] = True
+            result["saved"] = False
+            result["error"] = bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not saved."
+            result["error_code"] = bundle_result.get("bundle_error_code") or "semantic_bundle_not_saved"
         session["last_aihub_save"] = result
     status_code = 200 if result.get("saved") else 502
     return jsonify(result), status_code
@@ -153,3 +158,7 @@ def _restore_bundle_for_session(agent_id: str, credentials) -> dict[str, object]
     if bundle_result.get("bundle_restored") and bundle_result.get("builder_upload_id"):
         session["builder_upload_id"] = bundle_result["builder_upload_id"]
     return bundle_result
+
+
+def _semantic_bundle_required(workflow_config) -> bool:
+    return workflow_config.retrieve_module == "SemanticRetrieve" and bool(workflow_config.semantic_support_files or session.get("builder_upload_id"))

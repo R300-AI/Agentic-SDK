@@ -6,6 +6,16 @@ AI Hub 驗證、Agent 清單、設定載入與設定保存以 AI Hub connection 
 
 原始參考文件、SemanticRetriever vectorstore 與執行資訊會保存成單一 zip bundle；串接方式見 [Storage](aihub_playground_storage_api.md)。
 
+AI Hub 維運文件對應：
+
+| AI Hub 文件 | 這一頁對應內容 | Playground 實作位置 |
+| --- | --- | --- |
+| [整合自訂遊樂場](https://r300-ai.github.io/ai-hub-webui/platform-maintenance/custom-playground-integration/) | 整合總覽與責任分工 | `Integrations` 章節的 `AI Hub` 與 `Storage` 兩頁 |
+| [連線方式與責任邊界](https://r300-ai.github.io/ai-hub-webui/platform-maintenance/custom-playground-integration/connection-and-responsibility/) | 登入、Agent 清單、設定載入與設定保存 | 本頁的入口模式、Playground 入口 API、AI Hub 既有 API |
+| [工作流保存與讀回](https://r300-ai.github.io/ai-hub-webui/platform-maintenance/custom-playground-integration/workflow-save-load/) | bundle 保存、讀回與短效 URL | [Storage](aihub_playground_storage_api.md) |
+
+FAE 或 AI Hub 網站開發團隊可以先看 AI Hub 維運文件確認平台責任，再回到本頁查 Playground 實際入口 URL 與表單欄位。
+
 ## AI Hub 團隊先看這裡
 
 先用這張表決定要把使用者送到哪裡：
@@ -22,6 +32,8 @@ AI Hub 端需要提供三類能力：
 1. 驗證帳密，讓 Playground 建立已登入操作狀態。
 2. 依 `agent_id` 載入既有 Playground 設定，回傳 `python_source`。
 3. 對已分享 Agent 提供公開載入能力，讓匿名使用者進入唯讀 Runner。
+
+如果 Agent 使用 `SemanticRetrieve` 並上傳過參考文件，只保存 `python_source` 不算完整保存。AI Hub 還需要依 [Storage](aihub_playground_storage_api.md) 提供 bundle save/load URL，否則重新打開 Agent 時只能恢復流程設定，無法恢復原本的參考文件與 vectorstore。
 
 ## 這份文件會幫你完成什麼
 
@@ -49,7 +61,7 @@ AI Hub 端需要提供三類能力：
 | 來源未知 / 未登入 | No | No | `/playground/` 首頁 | 使用者選擇 AI Hub 登入或匿名試用 |
 | 匿名使用已分享 Agent | No | Yes | Runner | 載入公開/分享的 `python_source`，進入唯讀對話 |
 | 已登入，新建設定 | Yes | No | Builder | 建立可編輯的新 Playground 設定 |
-| 已登入，恢復既有設定 | Yes | Yes | Runner | 載回既有 `python_source` |
+| 已登入，恢復既有設定 | Yes | Yes | Runner | 載回既有 `python_source`；若有 SemanticRetrieve bundle，會一併還原參考文件與 vectorstore |
 
 ## Base URL
 
@@ -59,7 +71,7 @@ AI Hub 端需要提供三類能力：
 https://agentic-sdk-playground.azurewebsites.net
 ```
 
-所有 API 都使用 HTTPS。`username`、`password` 與 `agent_id` 放在 request body。
+所有 API 都使用 HTTPS。`POST` 入口的 `username`、`password` 與 `agent_id` 放在 request body；`shared-runner` 也支援用 `GET` query string 帶 `agent_id`。
 
 ## Playground 入口 API
 
