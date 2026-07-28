@@ -4,7 +4,7 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 
 from playground.models import ModeContext
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
-from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials
+from playground.services.aihub_client import AiHubCredentials, bridge_credentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
@@ -64,6 +64,23 @@ def navigate_from_aihub_to_builder():
     return redirect(url_for("builder.builder"))
 
 
+@entry_bp.get("/builder")
+@entry_bp.get("/builder/")
+def navigate_from_aihub_bridge_to_builder():
+    credentials = bridge_credentials(request.args.get("token"), api_base_url=request.args.get("apiBase"))
+    session.clear()
+    if credentials:
+        _start_authenticated_session(credentials)
+        session["runtime_mode"] = str(request.args.get("runtimeMode") or "managed")
+        session["ai_hub_api_base"] = credentials.api_base_url
+    else:
+        session["mode"] = "anonymous"
+        session["python_source"] = build_default_python_source()
+        session["source_origin"] = "manual_new"
+    _clear_selected_agent_state()
+    return redirect(url_for("builder.builder"))
+
+
 @entry_bp.post("/playground/aihub/navigation/runner")
 def navigate_from_aihub_to_runner():
     payload = _navigation_payload()
@@ -108,6 +125,48 @@ def navigate_from_shared_agent_to_runner():
     session["account_context_present"] = False
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
+    session["python_source"] = result["python_source"]
+    session["source_origin"] = "aihub_shared_readonly"
+    return redirect(url_for("runner.runner"))
+
+
+@entry_bp.get("/runner")
+@entry_bp.get("/runner/")
+def navigate_from_aihub_bridge_to_runner():
+    mode = str(request.args.get("mode") or "read").strip().lower()
+    agent_id = str(request.args.get("agentId") or request.args.get("agent_id") or "").strip()
+    if not agent_id:
+        return _navigation_login_error("Missing AI Hub agent id."), 400
+    if mode == "edit":
+        credentials = bridge_credentials(request.args.get("token"), api_base_url=request.args.get("apiBase"))
+        if not credentials:
+            return _navigation_login_error("Missing AI Hub bridge token."), 400
+        session.clear()
+        result = load_config(agent_id, credentials=credentials, origin=request.host_url)
+        if not result.get("loaded"):
+            return _navigation_login_error(result.get("error") or "無法載入此 Agent。"), 502
+        _start_authenticated_session(credentials)
+        session["runtime_mode"] = str(request.args.get("runtimeMode") or "managed")
+        session["ai_hub_api_base"] = credentials.api_base_url
+        session["mode"] = "aihub_editable"
+        session["agent_id"] = result["agent_id"]
+        session["agent_name"] = result.get("agent_name") or ""
+        session["python_source"] = result["python_source"]
+        bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
+        if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
+            return _navigation_login_error(_semantic_bundle_restore_error(bundle_result)), 502
+        session["source_origin"] = "aihub_loaded"
+        return redirect(url_for("runner.runner"))
+
+    result = load_public_config(agent_id, origin=request.host_url)
+    if not result.get("loaded"):
+        return _navigation_login_error(result.get("error") or "無法載入此 Agent。"), 502
+    session.clear()
+    session["mode"] = "aihub_readonly"
+    session["account_context_present"] = False
+    session["agent_id"] = result["agent_id"]
+    session["agent_name"] = result.get("agent_name") or ""
+    session["agent_owner"] = str(request.args.get("owner") or "").strip()
     session["python_source"] = result["python_source"]
     session["source_origin"] = "aihub_shared_readonly"
     return redirect(url_for("runner.runner"))

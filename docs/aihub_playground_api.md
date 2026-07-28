@@ -48,6 +48,19 @@ AI Hub 設計導覽時，請先分清楚「頁面階段」與「handoff API」�
 
 `/playground` 不建立 AI Hub handoff session；AI Hub 已登入使用者若要帶入帳號、Agent id 與編輯權限，應使用 builder 或 runner handoff。Runner 頁面需要明確標示權限狀態：擁有者或有權限者是可編輯，匿名或公開使用者是可使用但不可編輯。
 
+目前 AI Hub WebUI 維運文件描述的是 API-based integration：Playground 作為外部自訂遊樂場服務，呼叫 AI Hub 的 auth、config、bundle API 完成登入、載入、保存與讀回。若要改成 AI Hub 以 bridge token query string 直接導入頁面，需另行定義相容入口；那不是目前三份維運文件中的既有契約。
+
+目前正式 handoff 入口不是下列直接頁面 URL：
+
+```text
+{PLAYGROUND_ORIGIN}/builder/
+{PLAYGROUND_ORIGIN}/runner/
+{PLAYGROUND_ORIGIN}/runner/?mode=edit
+{PLAYGROUND_ORIGIN}/runner/?mode=read
+```
+
+如果 AI Hub 只要產生一般頁面 URL，路徑保留 `/playground` 前綴：`/playground/`、`/playground/builder`、`/playground/run`。如果 AI Hub 要帶入帳號、`agent_id` 或公開 Agent 狀態，請使用本頁定義的 handoff API。`runtimeMode`、`token`、`owner` 或 `mode=edit/read` query string 可作為 bridge-token 相容模式的設計項目，但需要與目前 API-based 契約分開定義與測試。
+
 AI Hub 端需要提供三類能力：
 
 1. 驗證帳密，讓 Playground 建立已登入操作狀態。

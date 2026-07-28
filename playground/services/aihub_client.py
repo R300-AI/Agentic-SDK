@@ -27,6 +27,8 @@ _DEFAULT_CREDENTIAL_TTL_SECONDS = 8 * 60 * 60
 class AiHubCredentials:
     username: str
     password: str
+    token: str = ""
+    api_base_url: str = ""
 
 
 @dataclass(frozen=True)
@@ -85,8 +87,19 @@ def verify_credentials(username: str, password: str, *, origin: str | None = Non
     return payload.get("valid") is True
 
 
+def bridge_credentials(token: str | None, *, api_base_url: str | None = None) -> AiHubCredentials | None:
+    resolved_token = str(token or "").strip()
+    if not resolved_token:
+        return None
+    return AiHubCredentials(username="", password="", token=resolved_token, api_base_url=str(api_base_url or "").strip().rstrip("/"))
+
+
 def _ai_hub_base_url() -> str:
     return (os.environ.get("AI_HUB_BASE_URL") or os.environ.get("AIHUB_BASE_URL") or "").strip().rstrip("/")
+
+
+def _base_url_for_credentials(credentials: AiHubCredentials | None = None) -> str:
+    return ((credentials.api_base_url if credentials else "") or _ai_hub_base_url()).strip().rstrip("/")
 
 
 def _playground_origin(origin: str | None) -> str:
@@ -104,17 +117,17 @@ def _request_timeout_seconds() -> float:
 
 
 def list_agents(*, credentials: AiHubCredentials | None = None, origin: str | None = None) -> dict[str, object]:
-    if not credentials or not credentials.username or not credentials.password:
+    if not _has_aihub_auth(credentials):
         return _aihub_error("AI Hub login is required before listing agents.", "missing_credentials")
-    base_url = _ai_hub_base_url()
+    base_url = _base_url_for_credentials(credentials)
     if not base_url:
         return _aihub_error("AI Hub base URL is not configured.", "missing_base_url")
 
     try:
         response = httpx.post(
             f"{base_url}{_AGENTS_PATH}",
-            json={"username": credentials.username, "password": credentials.password},
-            headers=_json_headers(origin),
+            json=_credential_payload(credentials),
+            headers=_auth_headers(credentials, origin),
             timeout=_request_timeout_seconds(),
         )
         if response.status_code >= 400:
@@ -141,17 +154,17 @@ def load_config(
     resolved_agent_id = (agent_id or "").strip()
     if not resolved_agent_id:
         return _aihub_error("Missing AI Hub agent id.", "missing_agent_id", loaded=False)
-    if not credentials or not credentials.username or not credentials.password:
+    if not _has_aihub_auth(credentials):
         return _aihub_error("AI Hub login is required before loading.", "missing_credentials", agent_id=resolved_agent_id, loaded=False)
-    base_url = _ai_hub_base_url()
+    base_url = _base_url_for_credentials(credentials)
     if not base_url:
         return _aihub_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id, loaded=False)
 
     try:
         response = httpx.post(
             f"{base_url}{_CONFIG_LOAD_PATH.format(agent_id=quote(resolved_agent_id, safe=''))}",
-            json={"username": credentials.username, "password": credentials.password},
-            headers=_json_headers(origin),
+            json=_credential_payload(credentials),
+            headers=_auth_headers(credentials, origin),
             timeout=_request_timeout_seconds(),
         )
         if response.status_code >= 400:
@@ -235,10 +248,10 @@ def save_config(
 ) -> dict[str, object]:
     if not python_source:
         return _save_error("No Python source is available to save.", "missing_python_source", agent_id=agent_id)
-    if not credentials or not credentials.username or not credentials.password:
+    if not _has_aihub_auth(credentials):
         return _save_error("AI Hub login is required before saving.", "missing_credentials", agent_id=agent_id)
 
-    base_url = _ai_hub_base_url()
+    base_url = _base_url_for_credentials(credentials)
     if not base_url:
         return _save_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=agent_id)
 
@@ -248,12 +261,11 @@ def save_config(
         return _save_error("Workflow name is required before saving to AI Hub.", "missing_workflow_name", agent_id=agent_id)
 
     payload = {
-        "username": credentials.username,
-        "password": credentials.password,
         "python_source": python_source,
         "workflow_name": resolved_workflow_name,
         "description": resolved_description,
     }
+    payload.update(_credential_payload(credentials))
     resolved_agent_id = (agent_id or "").strip()
     if resolved_agent_id:
         payload["agent_id"] = resolved_agent_id
@@ -262,7 +274,7 @@ def save_config(
         response = httpx.post(
             f"{base_url}{_CONFIG_SAVE_PATH}",
             json=payload,
-            headers=_json_headers(origin),
+            headers=_auth_headers(credentials, origin),
             timeout=_request_timeout_seconds(),
         )
         if response.status_code >= 400:
@@ -320,9 +332,9 @@ def _request_bundle_url(
     resolved_agent_id = (agent_id or "").strip()
     if not resolved_agent_id:
         return _bundle_error("Missing AI Hub agent id.", "missing_agent_id", agent_id=resolved_agent_id)
-    if not credentials or not credentials.username or not credentials.password:
+    if not _has_aihub_auth(credentials):
         return _bundle_error("AI Hub login is required before accessing the bundle.", "missing_credentials", agent_id=resolved_agent_id)
-    base_url = _ai_hub_base_url()
+    base_url = _base_url_for_credentials(credentials)
     if not base_url:
         return _bundle_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id)
 
@@ -332,18 +344,14 @@ def _request_bundle_url(
         if direction == "upload":
             response = httpx.post(
                 url,
-                json={"username": credentials.username, "password": credentials.password},
-                headers=_json_headers(origin),
+                json=_credential_payload(credentials),
+                headers=_auth_headers(credentials, origin),
                 timeout=_request_timeout_seconds(),
             )
         else:
             response = httpx.get(
                 url,
-                headers={
-                    **_json_headers(origin),
-                    "X-Playground-Username": credentials.username,
-                    "X-Playground-Password": credentials.password,
-                },
+                headers=_bundle_download_headers(credentials, origin),
                 timeout=_request_timeout_seconds(),
             )
         if response.status_code >= 400:
@@ -386,6 +394,31 @@ def _json_headers(origin: str | None) -> dict[str, str]:
     if request_origin:
         headers["Origin"] = request_origin
     return headers
+
+
+def _auth_headers(credentials: AiHubCredentials, origin: str | None) -> dict[str, str]:
+    headers = _json_headers(origin)
+    if credentials.token:
+        headers["Authorization"] = f"Bearer {credentials.token}"
+    return headers
+
+
+def _bundle_download_headers(credentials: AiHubCredentials, origin: str | None) -> dict[str, str]:
+    headers = _auth_headers(credentials, origin)
+    if not credentials.token:
+        headers["X-Playground-Username"] = credentials.username
+        headers["X-Playground-Password"] = credentials.password
+    return headers
+
+
+def _credential_payload(credentials: AiHubCredentials) -> dict[str, str]:
+    if credentials.token:
+        return {"token": credentials.token}
+    return {"username": credentials.username, "password": credentials.password}
+
+
+def _has_aihub_auth(credentials: AiHubCredentials | None) -> bool:
+    return bool(credentials and (credentials.token or (credentials.username and credentials.password)))
 
 
 def _response_error_message(response: httpx.Response) -> str:

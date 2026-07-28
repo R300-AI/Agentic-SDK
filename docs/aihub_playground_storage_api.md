@@ -134,7 +134,7 @@ Download URL response 範例：
 }
 ```
 
-如果 bundle 尚未建立，Playground 可以先載入 config，並提示語意搜尋參考文件與 vectorstore 尚未恢復。
+如果 bundle 尚未建立，一般非檢索型 Agent 可以先載入 config。對使用 `SemanticRetrieve` 且依賴上傳支援文件的 Agent，bundle 是恢復知識庫的必要資料；Playground 需要阻止它以「已完整載入」狀態進入 Runner，或明確停在可修復的錯誤狀態。
 
 匿名分享入口目前只載入公開 `python_source`。如果 AI Hub 需要讓匿名唯讀 Runner 也能使用 `SemanticRetrieve` 知識庫，AI Hub 需要另行提供可公開授權的 bundle 讀回方式，或在公開 config load 回應中提供等價的 bundle download 能力。
 
@@ -157,6 +157,8 @@ config/save 成功 + bundle upload URL 成功 + Storage Account PUT 成功
 ```text
 config/load 成功 + bundle download URL 成功 + Storage Account GET 成功 + zip 還原成功
 ```
+
+對不需要 runtime bundle 的 Agent，config/load 成功即可建立 Runner session；對 `SemanticRetrieve` 知識庫型 Agent，上述 bundle 條件必須成立，否則只能算 config 讀回成功，不能算知識庫恢復成功。
 
 ## 後續擴充項目
 

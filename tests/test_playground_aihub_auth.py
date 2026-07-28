@@ -350,6 +350,26 @@ def test_aihub_navigation_builder_accepts_json_payload(monkeypatch):
     assert seen == [("creator", "secret", "https://playground.example/")]
 
 
+def test_bridge_builder_url_enters_managed_builder():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/builder/?runtimeMode=managed&apiBase=https%3A%2F%2Faihub.example&token=bridge-token",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "manual_auth"
+            assert session["runtime_mode"] == "managed"
+            assert session["ai_hub_api_base"] == "https://aihub.example"
+            assert session["ai_hub_credential_ticket"]
+            assert "agent_id" not in session
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/builder")
+
+
 def test_aihub_navigation_runner_verifies_and_loads_agent(monkeypatch):
     seen_verify = []
     seen_load = []
@@ -479,6 +499,63 @@ def test_aihub_navigation_runner_accepts_json_payload(monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/playground/run")
+
+
+def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
+    seen_load = []
+
+    def fake_load_config(agent_id, *, credentials=None, origin=None):
+        seen_load.append({"agent_id": agent_id, "credentials": credentials, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Agent One", "python_source": "print('loaded')"}
+
+    monkeypatch.setattr(entry_routes, "load_config", fake_load_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/runner/?mode=edit&runtimeMode=managed&apiBase=https%3A%2F%2Faihub.example&token=bridge-token&agentId=agent-1",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_editable"
+            assert session["account_context_present"] is True
+            assert session["agent_id"] == "agent-1"
+            assert session["source_origin"] == "aihub_loaded"
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/run")
+    assert seen_load[0]["agent_id"] == "agent-1"
+    assert seen_load[0]["credentials"].token == "bridge-token"
+    assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
+
+
+def test_bridge_runner_read_loads_public_agent(monkeypatch):
+    seen_load = []
+
+    def fake_load_public_config(agent_id, *, origin=None):
+        seen_load.append({"agent_id": agent_id, "origin": origin})
+        return {"loaded": True, "agent_id": agent_id, "agent_name": "Shared Agent", "python_source": "print('shared')"}
+
+    monkeypatch.setattr(entry_routes, "load_public_config", fake_load_public_config)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/runner/?mode=read&owner=creator&agentId=agent-1",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_readonly"
+            assert session["account_context_present"] is False
+            assert session["agent_id"] == "agent-1"
+            assert session["agent_owner"] == "creator"
+            assert session["source_origin"] == "aihub_shared_readonly"
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/run")
+    assert seen_load == [{"agent_id": "agent-1", "origin": "https://playground.example/"}]
 
 
 def test_aihub_navigation_runner_requires_agent_id(monkeypatch):
