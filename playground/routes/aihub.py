@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, session
 
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials
 from playground.services.security import is_allowed_origin
+from playground.services.source_builder import get_workflow_summary
 
 
 aihub_bp = Blueprint("aihub", __name__, url_prefix="/playground/aihub")
@@ -91,7 +92,12 @@ def save_aihub_config():
         return jsonify({"saved": False, "error": "No Python source is available to save."}), 400
 
     agent_id = payload.get("agent_id") or session.get("agent_id")
-    result = save_config(agent_id, python_source, credentials=credentials, origin=request.host_url)
+    agent_name = get_workflow_summary(python_source).name
+    result = save_config(agent_id, python_source, agent_name=agent_name, credentials=credentials, origin=request.host_url)
+    if _should_retry_playground_agent_save(result, agent_id):
+        fallback_agent_id = _existing_playground_agent_id(credentials, request.host_url)
+        if fallback_agent_id:
+            result = save_config(fallback_agent_id, python_source, agent_name=agent_name, credentials=credentials, origin=request.host_url)
     if result.get("saved"):
         if result.get("agent_id"):
             session["agent_id"] = result["agent_id"]
@@ -103,36 +109,47 @@ def save_aihub_config():
     return jsonify(result), status_code
 
 
-@aihub_bp.post("/config/save-login")
-def save_aihub_config_with_login():
+def _should_retry_playground_agent_save(result: dict[str, object], agent_id: str | None) -> bool:
+    if agent_id:
+        return False
+    return (
+        result.get("saved") is False
+        and result.get("status_code") == 409
+        and str(result.get("error_code") or "") == "aihub_save_failed"
+        and "Agent 名稱必須唯一" in str(result.get("error") or "")
+    )
+
+
+def _existing_playground_agent_id(credentials, origin: str) -> str | None:
+    username = str(session.get("ai_hub_username") or credentials.username or "").strip()
+    if not username:
+        return None
+    result = list_agents(credentials=credentials, origin=origin)
+    if not result.get("loaded"):
+        return None
+    fallback_name = f"Playground Agent - {username}"
+    for item in result.get("items") or []:
+        if isinstance(item, dict) and str(item.get("agent_name") or "").strip() == fallback_name:
+            return str(item.get("agent_id") or "").strip() or None
+    return None
+
+
+@aihub_bp.post("/auth/login")
+def login_aihub_session():
     if not is_allowed_origin(request):
-        return jsonify({"saved": False, "error": "Origin is not allowed for AI Hub config access."}), 403
+        return jsonify({"authenticated": False, "error": "Origin is not allowed for AI Hub config access."}), 403
 
     payload = request.get_json(silent=True) or {}
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
     if not username or not password:
-        return jsonify({"saved": False, "error": "請輸入 AI Hub 帳號與密碼。"}), 400
+        return jsonify({"authenticated": False, "error": "請輸入 AI Hub 帳號與密碼。"}), 400
     if not verify_credentials(username, password, origin=request.host_url):
-        return jsonify({"saved": False, "error": "帳號或密碼驗證失敗。"}), 401
+        return jsonify({"authenticated": False, "error": "帳號或密碼驗證失敗。"}), 401
 
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
     session["ai_hub_username"] = username
     session["ai_hub_credential_ticket"] = issue_credential_ticket(username, password)
-
-    python_source = payload.get("python_source") or session.get("python_source")
-    if not python_source:
-        return jsonify({"saved": False, "error": "No Python source is available to save."}), 400
-
-    agent_id = payload.get("agent_id") or session.get("agent_id")
-    result = save_config(agent_id, python_source, credentials=credentials_for_ticket(session.get("ai_hub_credential_ticket")), origin=request.host_url)
-    if result.get("saved"):
-        if result.get("agent_id"):
-            session["agent_id"] = result["agent_id"]
-        if result.get("agent_name"):
-            session["agent_name"] = result["agent_name"]
-        session["source_origin"] = "aihub_loaded"
-        session["last_aihub_save"] = result
-    status_code = 200 if result.get("saved") else 502
-    return jsonify(result), status_code
+    session["pending_runner_auto_save"] = True
+    return jsonify({"authenticated": True, "username": username, "redirect_url": "/playground/run"})

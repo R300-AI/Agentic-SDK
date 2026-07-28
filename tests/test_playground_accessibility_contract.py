@@ -18,7 +18,8 @@ def test_runner_keyboard_and_status_contract():
     assert b"<label for=\"runner-message\">" in page
     assert b"<label for=\"runner-attachments\">" in page
     assert "type=\"submit\">產生回覆".encode("utf-8") in page
-    assert b"role=\"status\" data-run-status" in page
+    assert b"data-run-status" not in page
+    assert b"data-save-panel" in page
     assert b"aria-live=\"polite\"" in page
     assert b"aria-expanded=\"false\"" in page
     assert b"aria-controls=\"trust-basis-panel\"" in page

@@ -20,16 +20,16 @@ async function main() {
     throw new Error("Runner submit button was not reachable by keyboard tab navigation.");
   }
 
-  const statusRole = await page.locator("[data-run-status]").getAttribute("role");
+  const statusRole = await page.locator("[data-save-panel]").getAttribute("role");
   const trustToggleCount = await page.locator("[data-trust-toggle]").count();
 
   await browser.close();
 
   if (statusRole !== "status" || trustToggleCount !== 0) {
-    throw new Error("Runner execution details must stay in the status line, not a trust panel component.");
+    throw new Error("Runner status should stay on the toast panel, not a trust panel component.");
   }
 
-  console.log("keyboard-audit ok: runner submit is keyboard reachable and execution status stays inline");
+  console.log("keyboard-audit ok: runner submit is keyboard reachable and status stays on the toast panel");
 }
 
 main().catch(async (error) => {

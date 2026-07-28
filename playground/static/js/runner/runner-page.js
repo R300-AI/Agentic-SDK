@@ -21,7 +21,9 @@ const attachmentStatus = document.querySelector("[data-attachment-status]");
 const savePanel = document.querySelector("[data-save-panel]");
 const codePreviewToggles = document.querySelectorAll("[data-code-preview-open]");
 const codePreviewModal = document.querySelector("[data-code-preview-modal]");
-const saveRequiresLogin = document.querySelector("[data-page='runner']")?.dataset.saveRequiresLogin === "true";
+const runnerPage = document.querySelector("[data-page='runner']");
+const saveRequiresLogin = runnerPage?.dataset.saveRequiresLogin === "true";
+const autoSaveAfterLogin = runnerPage?.dataset.autoSaveAfterLogin === "true";
 const saveLoginModal = document.querySelector("[data-save-login-modal]");
 const saveLoginCloseButtons = saveLoginModal?.querySelectorAll("[data-save-login-close]") || [];
 const saveLoginForm = document.querySelector("[data-save-login-form]");
@@ -430,12 +432,34 @@ async function saveCurrentWorkflow() {
 	return result;
 }
 
-async function loginAndSaveCurrentWorkflow(username, password) {
+async function flushWorkflowMetadataEdits() {
+	if (workflowRenameRequest) {
+		await workflowRenameRequest;
+	}
+	if (sideWorkflowTitleForm && !sideWorkflowTitleForm.hidden) {
+		await commitWorkflowName();
+	}
+	if (workflowRenameRequest) {
+		await workflowRenameRequest;
+	}
+	if (workflowDescriptionRequest) {
+		await workflowDescriptionRequest;
+	}
+	if (workflowDescriptionForm && !workflowDescriptionForm.hidden) {
+		await commitWorkflowDescription();
+	}
+	if (workflowDescriptionRequest) {
+		await workflowDescriptionRequest;
+	}
+	return (!sideWorkflowTitleForm || sideWorkflowTitleForm.hidden) && (!workflowDescriptionForm || workflowDescriptionForm.hidden);
+}
+
+async function loginAiHubSession(username, password) {
 	let result;
 	try {
-		result = await postJson("/playground/aihub/config/save-login", { username, password });
+		result = await postJson("/playground/aihub/auth/login", { username, password });
 	} catch (error) {
-		result = { saved: false, error: error.message || "登入後儲存失敗。" };
+		result = { authenticated: false, error: error.message || "登入失敗。" };
 	}
 	return result;
 }
@@ -632,6 +656,11 @@ resultThread?.addEventListener("runner:tool-call-submit", async (event) => {
 });
 
 saveButton?.addEventListener("click", async () => {
+	const readyToSave = await flushWorkflowMetadataEdits();
+	if (!readyToSave) {
+		showSavePanel(savePanel, "請先完成名稱或 description 的更新。");
+		return;
+	}
 	if (saveRequiresLogin) {
 		openSaveLoginModal();
 		return;
@@ -685,28 +714,25 @@ saveLoginForm?.addEventListener("submit", async (event) => {
 		saveLoginSubmit.disabled = true;
 	}
 	if (runStatus) {
-		runStatus.textContent = "正在登入並儲存...";
+		runStatus.textContent = "正在登入...";
 	}
-	const result = await loginAndSaveCurrentWorkflow(username, password);
+	const result = await loginAiHubSession(username, password);
 	if (saveLoginSubmit) {
 		saveLoginSubmit.disabled = false;
 	}
-	if (!result.saved) {
+	if (!result.authenticated) {
 		if (saveLoginError) {
 			saveLoginError.hidden = false;
-			saveLoginError.textContent = result.error || "登入後儲存失敗。";
+			saveLoginError.textContent = result.error || "登入失敗。";
 		}
 		if (runStatus) {
-			runStatus.textContent = result.error || "登入後儲存失敗。";
+			runStatus.textContent = result.error || "登入失敗。";
 		}
 		return;
 	}
 	closeSaveLoginModal();
-	if (saveStatus) {
-		saveStatus.textContent = "已儲存";
-	}
-	showSavePanel(savePanel, "已儲存。");
-	window.location.href = "/playground/run";
+	showSavePanel(savePanel, "已登入 AI Hub，正在儲存...");
+	window.location.href = result.redirect_url || "/playground/run";
 });
 
 document.addEventListener("keydown", (event) => {
@@ -737,3 +763,9 @@ reloadButton?.addEventListener("click", async () => {
 	showSavePanel(savePanel, message);
 	reloadButton.disabled = false;
 });
+
+if (autoSaveAfterLogin && saveButton && !saveRequiresLogin) {
+	queueMicrotask(() => {
+		saveButton.click();
+	});
+}

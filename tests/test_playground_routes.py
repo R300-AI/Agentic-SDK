@@ -345,6 +345,8 @@ def test_runner_route_renders_task_shell():
     assert "主要輸入".encode("utf-8") not in response.data
     assert "主要結果".encode("utf-8") not in response.data
     assert "請先登入 AI Hub".encode("utf-8") in response.data
+    assert "登入並儲存".encode("utf-8") not in response.data
+    assert "登入".encode("utf-8") in response.data
 
 
 def test_runner_trust_panel_partial_is_rendered():
@@ -358,6 +360,26 @@ def test_runner_trust_panel_partial_is_rendered():
     assert b"id=\"trust-basis-panel\"" in response.data
     assert b"data-evidence-list" in response.data
     assert Path("playground/templates/partials/trust_panel.html").exists()
+
+
+def test_runner_marks_one_time_auto_save_after_login():
+    app = create_app()
+
+    with app.test_client() as client:
+        client.post("/playground/start/anonymous")
+        with client.session_transaction() as session:
+            session["mode"] = "manual_auth"
+            session["account_context_present"] = True
+            session["ai_hub_username"] = "creator"
+            session["ai_hub_credential_ticket"] = "ticket-1"
+            session["pending_runner_auto_save"] = True
+        response = client.get("/playground/run")
+        with client.session_transaction() as session:
+            flag_cleared = "pending_runner_auto_save" not in session
+
+    assert response.status_code == 200
+    assert b'data-auto-save-after-login="true"' in response.data
+    assert flag_cleared is True
 
 
 def test_runner_without_source_redirects_to_builder():

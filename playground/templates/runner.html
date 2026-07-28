@@ -3,7 +3,7 @@
 {% block title %}試跑 Agent - AI Hub Agent 建立工具{% endblock %}
 
 {% block body %}
-<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}" data-save-requires-login="{{ 'true' if not mode_context.can_save and mode_context.can_edit else 'false' }}">
+<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}" data-save-requires-login="{{ 'true' if not mode_context.can_save and mode_context.can_edit else 'false' }}" data-auto-save-after-login="{{ 'true' if auto_save_after_login else 'false' }}">
   <header class="context-bar">
     <div>
       <div class="runner-title-row">
@@ -82,7 +82,6 @@
             <p class="inline-status" data-attachment-status>尚未選擇附件。</p>
             <ul class="artifact-list" data-artifact-list aria-label="已選擇的參考資料"></ul>
           </div>
-          <p class="inline-status" role="status" data-run-status>可以開始產生回覆。</p>
         </div>
       </form>
     </section>
@@ -153,14 +152,14 @@
         </div>
       </header>
       <form class="save-login-form" data-save-login-form>
-        <p class="lede">儲存到 AI Hub 前，請先輸入帳號與密碼完成登入。</p>
+        <p class="lede">如要儲存到 AI Hub，請先輸入帳號與密碼完成登入。</p>
         <label for="runner-save-username">帳戶</label>
         <input id="runner-save-username" name="username" type="text" autocomplete="username" required data-save-login-username>
         <label for="runner-save-password">密碼</label>
         <input id="runner-save-password" name="password" type="password" autocomplete="current-password" required data-save-login-password>
         <p class="inline-status" role="alert" data-save-login-error hidden></p>
         <div class="context-actions">
-          <button class="button button-primary" type="submit" data-save-login-submit>登入並儲存</button>
+          <button class="button button-primary" type="submit" data-save-login-submit>登入</button>
         </div>
       </form>
     </div>

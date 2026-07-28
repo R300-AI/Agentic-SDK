@@ -178,6 +178,7 @@ def save_config(
     agent_id: str | None,
     python_source: str | None,
     *,
+    agent_name: str | None = None,
     credentials: AiHubCredentials | None = None,
     origin: str | None = None,
 ) -> dict[str, object]:
@@ -192,8 +193,11 @@ def save_config(
 
     payload = {"username": credentials.username, "password": credentials.password, "python_source": python_source}
     resolved_agent_id = (agent_id or "").strip()
+    resolved_agent_name = (agent_name or "").strip()
     if resolved_agent_id:
         payload["agent_id"] = resolved_agent_id
+    if resolved_agent_name:
+        payload["agent_name"] = resolved_agent_name
 
     try:
         response = httpx.post(

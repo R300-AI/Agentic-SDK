@@ -31,6 +31,7 @@ def runner():
     starter_questions = list(config.starter_questions)
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
     session["runner_endpoint_selections"] = endpoint_selections
+    auto_save_after_login = bool(session.pop("pending_runner_auto_save", False)) and mode_context.can_save
 
     return render_template(
         "runner.html",
@@ -44,6 +45,7 @@ def runner():
         starter_questions=starter_questions,
         last_aihub_save=session.get("last_aihub_save"),
         has_ai_hub_agent=bool(session.get("agent_id")),
+        auto_save_after_login=auto_save_after_login,
     )
 
 
