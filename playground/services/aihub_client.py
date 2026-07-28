@@ -16,6 +16,8 @@ _AUTH_VERIFY_PATH = "/api/playground/auth/verify"
 _AGENTS_PATH = "/api/playground/agents"
 _CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/load"
 _CONFIG_SAVE_PATH = "/api/playground/config/save"
+_BUNDLE_SAVE_PATH = "/api/playground/agents/{agent_id}/bundle/save"
+_BUNDLE_LOAD_PATH = "/api/playground/agents/{agent_id}/bundle/load"
 _DEFAULT_TIMEOUT_SECONDS = 5.0
 _DEFAULT_CREDENTIAL_TTL_SECONDS = 8 * 60 * 60
 
@@ -166,7 +168,9 @@ def load_config(
     return {
         "loaded": True,
         "agent_id": payload.get("agent_id") or resolved_agent_id,
-        "agent_name": payload.get("agent_name") or "",
+        "agent_name": payload.get("workflow_name") or payload.get("agent_name") or "",
+        "workflow_name": payload.get("workflow_name") or payload.get("agent_name") or "",
+        "description": payload.get("description") or "",
         "python_source": payload.get("python_source") or build_default_python_source(),
         "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or "",
         "integration_status": "aihub",
@@ -178,7 +182,8 @@ def save_config(
     agent_id: str | None,
     python_source: str | None,
     *,
-    agent_name: str | None = None,
+    workflow_name: str | None = None,
+    description: str | None = None,
     credentials: AiHubCredentials | None = None,
     origin: str | None = None,
 ) -> dict[str, object]:
@@ -191,13 +196,21 @@ def save_config(
     if not base_url:
         return _save_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=agent_id)
 
-    payload = {"username": credentials.username, "password": credentials.password, "python_source": python_source}
+    resolved_workflow_name = (workflow_name or "").strip()
+    resolved_description = (description or "").strip()
+    if not resolved_workflow_name:
+        return _save_error("Workflow name is required before saving to AI Hub.", "missing_workflow_name", agent_id=agent_id)
+
+    payload = {
+        "username": credentials.username,
+        "password": credentials.password,
+        "python_source": python_source,
+        "workflow_name": resolved_workflow_name,
+        "description": resolved_description,
+    }
     resolved_agent_id = (agent_id or "").strip()
-    resolved_agent_name = (agent_name or "").strip()
     if resolved_agent_id:
         payload["agent_id"] = resolved_agent_id
-    if resolved_agent_name:
-        payload["agent_name"] = resolved_agent_name
 
     try:
         response = httpx.post(
@@ -224,12 +237,78 @@ def save_config(
         saved = True
     return {
         "agent_id": payload.get("agent_id") or resolved_agent_id,
-        "agent_name": payload.get("agent_name") or "",
+        "workflow_name": payload.get("workflow_name") or payload.get("agent_name") or resolved_workflow_name,
+        "description": payload.get("description") or resolved_description,
         "saved": bool(saved),
         "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or payload.get("saved_at") or datetime.now(timezone.utc).isoformat(),
         "integration_status": "aihub",
         "requires_real_aihub_api": False,
     }
+
+
+def request_bundle_upload_url(
+    agent_id: str | None,
+    *,
+    credentials: AiHubCredentials | None = None,
+    origin: str | None = None,
+) -> dict[str, object]:
+    return _request_bundle_url(agent_id, credentials=credentials, origin=origin, direction="upload")
+
+
+def request_bundle_download_url(
+    agent_id: str | None,
+    *,
+    credentials: AiHubCredentials | None = None,
+    origin: str | None = None,
+) -> dict[str, object]:
+    return _request_bundle_url(agent_id, credentials=credentials, origin=origin, direction="download")
+
+
+def _request_bundle_url(
+    agent_id: str | None,
+    *,
+    credentials: AiHubCredentials | None,
+    origin: str | None,
+    direction: str,
+) -> dict[str, object]:
+    resolved_agent_id = (agent_id or "").strip()
+    if not resolved_agent_id:
+        return _bundle_error("Missing AI Hub agent id.", "missing_agent_id", agent_id=resolved_agent_id)
+    if not credentials or not credentials.username or not credentials.password:
+        return _bundle_error("AI Hub login is required before accessing the bundle.", "missing_credentials", agent_id=resolved_agent_id)
+    base_url = _ai_hub_base_url()
+    if not base_url:
+        return _bundle_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=resolved_agent_id)
+
+    path_template = _BUNDLE_SAVE_PATH if direction == "upload" else _BUNDLE_LOAD_PATH
+    url = f"{base_url}{path_template.format(agent_id=quote(resolved_agent_id, safe=''))}"
+    try:
+        if direction == "upload":
+            response = httpx.post(
+                url,
+                json={"username": credentials.username, "password": credentials.password},
+                headers=_json_headers(origin),
+                timeout=_request_timeout_seconds(),
+            )
+        else:
+            response = httpx.get(
+                url,
+                headers={
+                    **_json_headers(origin),
+                    "X-Playground-Username": credentials.username,
+                    "X-Playground-Password": credentials.password,
+                },
+                timeout=_request_timeout_seconds(),
+            )
+        if response.status_code >= 400:
+            return _bundle_error(_response_error_message(response), f"aihub_bundle_{direction}_url_failed", agent_id=resolved_agent_id, status_code=response.status_code)
+        payload = response.json()
+    except (httpx.HTTPError, ValueError) as error:
+        return _bundle_error(str(error) or f"AI Hub bundle {direction} URL request failed.", f"aihub_bundle_{direction}_url_failed", agent_id=resolved_agent_id)
+
+    payload.setdefault("agent_id", resolved_agent_id)
+    payload["ok"] = True
+    return payload
 
 
 def _aihub_error(
@@ -279,6 +358,21 @@ def _response_error_message(response: httpx.Response) -> str:
 def _save_error(message: str, code: str, *, agent_id: str | None = None, status_code: int | None = None) -> dict[str, object]:
     result: dict[str, object] = {
         "saved": False,
+        "error": message,
+        "error_code": code,
+        "integration_status": "aihub",
+        "requires_real_aihub_api": False,
+    }
+    if agent_id:
+        result["agent_id"] = agent_id
+    if status_code is not None:
+        result["status_code"] = status_code
+    return result
+
+
+def _bundle_error(message: str, code: str, *, agent_id: str | None = None, status_code: int | None = None) -> dict[str, object]:
+    result: dict[str, object] = {
+        "ok": False,
         "error": message,
         "error_code": code,
         "integration_status": "aihub",

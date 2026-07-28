@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
@@ -61,6 +62,8 @@ class FaissKnowledgeBase:
         index_path: str,
         embedder: Embedder,
         source_path: str | None = None,
+        source_paths: list[str] | tuple[str, ...] | None = None,
+        saved_source_path: str | None = None,
         rebuild_if_missing: bool = False,
         rebuild_if_stale: bool = False,
         chunk_size: int = _DEFAULT_CHUNK_SIZE,
@@ -71,7 +74,12 @@ class FaissKnowledgeBase:
             raise ValueError("FaissKnowledgeBase requires explicit index_path.")
         self._embedder = embedder
         self._index_root = Path(resolved_index_path)
-        self._source_path = Path(source_path) if source_path else None
+        resolved_source_paths = [str(path).strip() for path in (source_paths or []) if str(path).strip()]
+        if source_path:
+            resolved_source_paths.insert(0, str(source_path).strip())
+        self._configured_source_paths = [Path(path) for path in resolved_source_paths]
+        self._saved_source_root = Path(saved_source_path) if saved_source_path else None
+        self._source_paths = self._prepare_source_paths()
         self._rebuild_if_missing = rebuild_if_missing
         self._rebuild_if_stale = rebuild_if_stale
         self._chunk_size = max(1, int(chunk_size))
@@ -129,8 +137,8 @@ class FaissKnowledgeBase:
         self._entries = json.loads(self._metadata_file().read_text(encoding="utf-8"))
 
     def _build_index(self) -> None:
-        if self._source_path is None:
-            raise ValueError("FaissKnowledgeBase cannot rebuild without source_path.")
+        if not self._source_paths:
+            raise ValueError("FaissKnowledgeBase cannot rebuild without sources.")
         documents = self._load_documents()
         if not documents:
             self._index = None
@@ -160,15 +168,47 @@ class FaissKnowledgeBase:
         self._entries = entries
 
     def _load_documents(self) -> list[dict[str, Any]]:
-        if self._source_path is None or not self._source_path.exists():
-            return []
         documents: list[dict[str, Any]] = []
-        for file_path in sorted(path for path in self._source_path.rglob("*") if path.is_file()):
+        for file_path in self._iter_source_files():
             content = self._read_document(file_path)
             if not content:
                 continue
             documents.extend(self._chunk_document(file_path, content))
         return documents
+
+    def _iter_source_files(self) -> list[Path]:
+        files: list[Path] = []
+        for source_path in self._source_paths:
+            if source_path.is_file():
+                files.append(source_path)
+            elif source_path.is_dir():
+                files.extend(path for path in source_path.rglob("*") if path.is_file())
+        return sorted(files)
+
+    def _prepare_source_paths(self) -> list[Path]:
+        if self._saved_source_root is None:
+            return self._configured_source_paths
+        self._saved_source_root.mkdir(parents=True, exist_ok=True)
+        copied_paths: list[Path] = []
+        for source_path in self._configured_source_paths:
+            if not source_path.exists():
+                continue
+            if _is_relative_to(source_path, self._saved_source_root):
+                copied_paths.append(source_path)
+                continue
+            if source_path.is_file():
+                target_path = self._saved_source_root / source_path.name
+                _copy_source_file(source_path, target_path)
+                copied_paths.append(target_path)
+                continue
+            if source_path.is_dir():
+                target_root = self._saved_source_root / source_path.name
+                for file_path in sorted(path for path in source_path.rglob("*") if path.is_file()):
+                    _copy_source_file(file_path, target_root / file_path.relative_to(source_path))
+                copied_paths.append(target_root)
+        if copied_paths:
+            return copied_paths
+        return [self._saved_source_root]
 
     def _chunk_document(self, file_path: Path, content: str) -> list[dict[str, Any]]:
         normalized = content.strip()
@@ -214,10 +254,11 @@ class FaissKnowledgeBase:
         return str(getattr(result, "text_content", "") or "")
 
     def _is_stale(self) -> bool:
-        if self._source_path is None or not self._source_path.exists():
+        source_files = self._iter_source_files()
+        if not source_files:
             return False
         artifact_mtime = min(self._index_file().stat().st_mtime, self._metadata_file().stat().st_mtime)
-        newest_source = max((path.stat().st_mtime for path in self._source_path.rglob("*") if path.is_file()), default=0.0)
+        newest_source = max((path.stat().st_mtime for path in source_files), default=0.0)
         return newest_source > artifact_mtime
 
     def _index_file(self) -> Path:
@@ -255,10 +296,12 @@ class SemanticRetrieve:
         api_key: str | None = None,
         base_url: str | None = None,
         embedding_model: str | None = None,
+        sources: list[str] | tuple[str, ...] | None = None,
+        saved_path: str = "./tmp",
         index_path: str | None = None,
         source_path: str | None = None,
-        rebuild_if_missing: bool = False,
-        rebuild_if_stale: bool = False,
+        rebuild_if_missing: bool = True,
+        rebuild_if_stale: bool = True,
         chunk_size: int = DEFAULT_CHUNK_SIZE,
         chunk_overlap: int = DEFAULT_CHUNK_OVERLAP,
         embedder: Embedder | None = None,
@@ -281,15 +324,21 @@ class SemanticRetrieve:
                 model=str(embedding_model or ""),
             )
 
-        should_build_default_kb = self._knowledge_base is None and any(value is not None for value in (index_path, source_path))
+        resolved_sources = [str(path).strip() for path in (sources or []) if str(path).strip()]
+        resolved_saved_path = str(saved_path or "./tmp").strip() or "./tmp"
+        resolved_index_path = index_path or str(Path(resolved_saved_path) / "vectorstore")
+        resolved_saved_source_path = str(Path(resolved_saved_path) / "source-files") if resolved_sources else None
+        should_build_default_kb = self._knowledge_base is None and bool(resolved_sources or index_path or source_path)
         if should_build_default_kb:
             if self._embedder is None:
                 raise ValueError(
-                    "SemanticRetrieve requires embedder or embedding_model/api_key/base_url when index_path/source_path is configured."
+                    "SemanticRetrieve requires embedder or embedding_model/api_key/base_url when sources/saved_path is configured."
                 )
             self._knowledge_base = FaissKnowledgeBase(
-                index_path=str(index_path or ""),
+                index_path=str(resolved_index_path),
                 source_path=source_path,
+                source_paths=resolved_sources,
+                saved_source_path=resolved_saved_source_path,
                 embedder=self._embedder,
                 rebuild_if_missing=rebuild_if_missing,
                 rebuild_if_stale=rebuild_if_stale,
@@ -373,6 +422,28 @@ def _skip_leading_whitespace(text: str, start: int) -> int:
     while start < len(text) and text[start].isspace():
         start += 1
     return start
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def _copy_source_file(source_path: Path, target_path: Path) -> None:
+    if _is_relative_to(source_path, target_path.parent) and source_path.resolve() == target_path.resolve():
+        return
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        source_stat = source_path.stat()
+        target_stat = target_path.stat()
+    except FileNotFoundError:
+        shutil.copy2(source_path, target_path)
+        return
+    if source_stat.st_size != target_stat.st_size or source_stat.st_mtime > target_stat.st_mtime:
+        shutil.copy2(source_path, target_path)
 
 
 def _format_knowledge_hits(hits: list[Any]) -> str:

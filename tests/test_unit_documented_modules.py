@@ -94,6 +94,28 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertTrue(all(entry["chunk_count"] == len(documents) for entry in documents))
         self.assertTrue(all(len(entry["content"]) <= FaissKnowledgeBase._DEFAULT_CHUNK_SIZE for entry in documents))
 
+    def test_faiss_knowledge_base_uses_saved_source_copy(self) -> None:
+        from agentic_sdk.modules.retrieve.semantic import FaissKnowledgeBase
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_dir = Path(temp_dir) / "external"
+            saved_dir = Path(temp_dir) / "saved"
+            original_dir.mkdir()
+            original_path = original_dir / "policy.md"
+            original_path.write_text("Policy text", encoding="utf-8")
+
+            knowledge_base = FaissKnowledgeBase(
+                index_path=str(saved_dir / "vectorstore"),
+                source_paths=[str(original_path)],
+                saved_source_path=str(saved_dir / "source-files"),
+                embedder=StaticEmbedder(),
+            )
+
+            documents = knowledge_base._load_documents()
+            copied_path = saved_dir / "source-files" / "policy.md"
+            self.assertTrue(copied_path.exists())
+            self.assertEqual({str(copied_path)}, {entry["path"] for entry in documents})
+
     def test_semantic_retrieve_facade_forwards_chunk_config(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         kb = KnowledgeBase(entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是 AI 晶片藍圖。")])
@@ -110,13 +132,18 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                 api_key=TEST_API_KEY,
                 base_url=TEST_BASE_URL,
                 embedding_model="text-embedding-3-small",
-                index_path="./artifacts/kb",
-                source_path="./knowledge",
+                sources=["./knowledge/guide.md"],
+                saved_path="./artifacts/kb",
                 chunk_size=800,
                 chunk_overlap=120,
             )(state)
 
         _, kwargs = kb_cls.call_args
+        self.assertEqual("artifacts/kb/vectorstore", kwargs["index_path"].replace("\\", "/").lstrip("./"))
+        self.assertEqual(["./knowledge/guide.md"], kwargs["source_paths"])
+        self.assertEqual("artifacts/kb/source-files", kwargs["saved_source_path"].replace("\\", "/").lstrip("./"))
+        self.assertIs(True, kwargs["rebuild_if_missing"])
+        self.assertIs(True, kwargs["rebuild_if_stale"])
         self.assertEqual(800, kwargs["chunk_size"])
         self.assertEqual(120, kwargs["chunk_overlap"])
 
@@ -136,12 +163,18 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                 api_key=TEST_API_KEY,
                 base_url=TEST_BASE_URL,
                 embedding_model="text-embedding-3-small",
-                index_path="./artifacts/kb",
-                source_path="./knowledge",
+                sources=["./knowledge"],
+                saved_path="./artifacts/kb",
             )(state)
 
         embedder_cls.assert_called_once()
         kb_cls.assert_called_once()
+        _, kwargs = kb_cls.call_args
+        self.assertEqual("artifacts/kb/vectorstore", kwargs["index_path"].replace("\\", "/").lstrip("./"))
+        self.assertEqual(["./knowledge"], kwargs["source_paths"])
+        self.assertEqual("artifacts/kb/source-files", kwargs["saved_source_path"].replace("\\", "/").lstrip("./"))
+        self.assertIs(True, kwargs["rebuild_if_missing"])
+        self.assertIs(True, kwargs["rebuild_if_stale"])
         self.assertIn("TSiP 是 AI 晶片藍圖", output["payload"]["retrieved_snippet"])
 
     def test_semantic_retrieve_override_components_take_precedence(self) -> None:
@@ -156,8 +189,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                 api_key=TEST_API_KEY,
                 base_url=TEST_BASE_URL,
                 embedding_model="text-embedding-3-small",
-                index_path="./artifacts/kb",
-                source_path="./knowledge",
+                sources=["./knowledge"],
+                saved_path="./artifacts/kb",
                 embedder=object(),
                 knowledge_base=kb,
             )(state)

@@ -70,8 +70,8 @@ SDK 內部仍保留：
 - `api_key`
 - `base_url`
 - `embedding_model`
-- `index_path`
-- `source_path`
+- `sources`
+- `saved_path`
 - `top_k`
 - `rebuild_if_missing`
 - `rebuild_if_stale`
@@ -216,8 +216,8 @@ README 目前只有：
 - `api_key`
 - `base_url`
 - `embedding_model`
-- `index_path`
-- `source_path`
+- `sources`
+- `saved_path`
 
 而不是先建立多個內部元件。
 

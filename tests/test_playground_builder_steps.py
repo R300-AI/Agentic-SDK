@@ -544,17 +544,15 @@ def test_builder_step3_semantic_questions_roundtrip_to_source_and_form_state():
 
     state = _builder_form_state(builder_page)
     assert state == {"choices": {}, "values": {}}
-    assert 'RETRIEVE_CONFIG = {' in source_page
-    assert '"semantic_support_files": [' in source_page
-    assert '"產品手冊.pdf"' in source_page
-    assert '"退款政策.docx"' in source_page
-    assert '"semantic_search_goal": "退款條件與保固限制"' in source_page
+    assert 'RETRIEVE_CONFIG = {' not in source_page
     assert 'SemanticRetrieve(' in source_page
     assert 'embedding_model=' in source_page
-    assert 'source_path=RETRIEVE_CONFIG["source_path"]' in source_page
-    assert 'index_path=RETRIEVE_CONFIG["index_path"]' in source_page
-    assert 'rebuild_if_missing=True' in source_page
-    assert 'rebuild_if_stale=True' in source_page
+    assert 'sources=[' in source_page
+    assert '"./產品手冊.pdf"' in source_page
+    assert '"./退款政策.docx"' in source_page
+    assert 'saved_path="./tmp"' not in source_page
+    assert 'rebuild_if_missing=True' not in source_page
+    assert 'rebuild_if_stale=True' not in source_page
 
 
 def test_source_preview_uses_selected_endpoint_env_bindings(monkeypatch):
@@ -611,8 +609,9 @@ def test_source_preview_uses_selected_endpoint_env_bindings(monkeypatch):
     assert 'api_key="<RETRIEVE_API_KEY>"' in source_page
     assert 'base_url="<RETRIEVE_API_BASE_URL>"' in source_page
     assert 'embedding_model="<RETRIEVE_EMBEDDING_MODEL>"' in source_page
-    assert 'source_path=RETRIEVE_CONFIG["source_path"]' in source_page
-    assert 'index_path=RETRIEVE_CONFIG["index_path"]' in source_page
+    assert 'sources=[' in source_page
+    assert '"./產品手冊.pdf"' in source_page
+    assert 'saved_path="./tmp"' not in source_page
     assert 'ToolCallAction(api_key="<ACTION_API_KEY>", base_url="<ACTION_API_BASE_URL>", model="<ACTION_MODEL>", system_prompt="先摘要重點，再引導使用者完成確認。"' in source_page
     assert "並把 `api_key`、`base_url`、`model` 或 `embedding_model` 的 `<...>` 換成你的部署設定。" in source_page
 
@@ -717,8 +716,8 @@ def test_builder_step3_semantic_upload_route_updates_state_and_source():
     assert payload["semantic_support_files"] == ["產品手冊.pdf", "退款政策.docx"]
     state = _builder_form_state(builder_page)
     assert state == {"choices": {}, "values": {}}
-    assert '"產品手冊.pdf"' in source_page
-    assert '"退款政策.docx"' in source_page
+    assert '"./產品手冊.pdf"' in source_page
+    assert '"./退款政策.docx"' in source_page
 
 
 def test_builder_step6_endpoint_selection_roundtrips_before_runner(monkeypatch):

@@ -83,7 +83,8 @@ def test_save_config_calls_ai_hub_save_api(monkeypatch):
     result = aihub_client.save_config(
         "agent 1",
         "print('hello')",
-        agent_name="Agent One",
+        workflow_name="Agent One",
+        description="Demo agent",
         credentials=aihub_client.AiHubCredentials(username="creator", password="secret"),
         origin="https://playground.example/",
     )
@@ -94,7 +95,14 @@ def test_save_config_calls_ai_hub_save_api(monkeypatch):
     assert calls == [
         {
             "url": "https://aihub.example/api/playground/config/save",
-            "json": {"username": "creator", "password": "secret", "python_source": "print('hello')", "agent_id": "agent 1", "agent_name": "Agent One"},
+            "json": {
+                "username": "creator",
+                "password": "secret",
+                "python_source": "print('hello')",
+                "workflow_name": "Agent One",
+                "description": "Demo agent",
+                "agent_id": "agent 1",
+            },
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
             "timeout": 1.25,
         }
@@ -115,7 +123,8 @@ def test_save_config_can_create_agent_without_agent_id(monkeypatch):
     result = aihub_client.save_config(
         None,
         "print('hello')",
-        agent_name="Playground Agent",
+        workflow_name="Playground Agent",
+        description="",
         credentials=aihub_client.AiHubCredentials(username="creator", password="secret"),
         origin="https://playground.example/",
     )
@@ -124,7 +133,7 @@ def test_save_config_can_create_agent_without_agent_id(monkeypatch):
     assert result["agent_id"] == "agent-new"
     assert calls[0]["url"] == "https://aihub.example/api/playground/config/save"
     assert "agent_id" not in calls[0]["json"]
-    assert calls[0]["json"]["agent_name"] == "Playground Agent"
+    assert calls[0]["json"]["workflow_name"] == "Playground Agent"
 
 
 def test_list_and_load_config_call_ai_hub_agent_apis(monkeypatch):
@@ -149,6 +158,51 @@ def test_list_and_load_config_call_ai_hub_agent_apis(monkeypatch):
     assert loaded["python_source"] == "print('loaded')"
     assert calls[0]["url"] == "https://aihub.example/api/playground/agents"
     assert calls[1]["url"] == "https://aihub.example/api/playground/agents/agent%201/config/load"
+
+
+def test_bundle_url_requests_call_ai_hub_storage_api(monkeypatch):
+    calls = []
+
+    def fake_post(url, *, json, headers, timeout):
+        calls.append({"method": "POST", "url": url, "json": json, "headers": headers, "timeout": timeout})
+        return httpx.Response(200, json={"upload_url": "https://storage.example/upload", "upload_method": "PUT", "upload_headers": {"x-ms-blob-type": "BlockBlob"}})
+
+    def fake_get(url, *, headers, timeout):
+        calls.append({"method": "GET", "url": url, "headers": headers, "timeout": timeout})
+        return httpx.Response(200, json={"download_url": "https://storage.example/download", "download_method": "GET"})
+
+    credentials = aihub_client.AiHubCredentials(username="creator", password="secret")
+    monkeypatch.setenv("AI_HUB_BASE_URL", "https://aihub.example/")
+    monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
+    monkeypatch.setenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", "1.25")
+    monkeypatch.setattr(aihub_client.httpx, "post", fake_post)
+    monkeypatch.setattr(aihub_client.httpx, "get", fake_get)
+
+    upload = aihub_client.request_bundle_upload_url("agent 1", credentials=credentials, origin="https://playground.example/")
+    download = aihub_client.request_bundle_download_url("agent 1", credentials=credentials, origin="https://playground.example/")
+
+    assert upload["ok"] is True
+    assert upload["upload_url"] == "https://storage.example/upload"
+    assert download["ok"] is True
+    assert download["download_url"] == "https://storage.example/download"
+    assert calls[0] == {
+        "method": "POST",
+        "url": "https://aihub.example/api/playground/agents/agent%201/bundle/save",
+        "json": {"username": "creator", "password": "secret"},
+        "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
+        "timeout": 1.25,
+    }
+    assert calls[1] == {
+        "method": "GET",
+        "url": "https://aihub.example/api/playground/agents/agent%201/bundle/load",
+        "headers": {
+            "Accept": "application/json",
+            "Origin": "https://playground.example",
+            "X-Playground-Username": "creator",
+            "X-Playground-Password": "secret",
+        },
+        "timeout": 1.25,
+    }
 
 
 def test_save_config_fails_closed_without_required_data(monkeypatch):
@@ -303,9 +357,9 @@ def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     seen = []
 
-    def fake_save_config(agent_id, python_source, *, agent_name=None, credentials=None, origin=None):
-        seen.append({"agent_id": agent_id, "python_source": python_source, "agent_name": agent_name, "credentials": credentials, "origin": origin})
-        return {"agent_id": agent_id or "agent-new", "agent_name": "Agent New", "saved": True, "integration_status": "aihub", "requires_real_aihub_api": False}
+    def fake_save_config(agent_id, python_source, *, workflow_name=None, description=None, credentials=None, origin=None):
+        seen.append({"agent_id": agent_id, "python_source": python_source, "workflow_name": workflow_name, "description": description, "credentials": credentials, "origin": origin})
+        return {"agent_id": agent_id or "agent-new", "workflow_name": "Agent New", "description": description or "", "saved": True, "integration_status": "aihub", "requires_real_aihub_api": False}
 
     monkeypatch.setattr(aihub_routes, "save_config", fake_save_config)
     app = create_app()
@@ -327,7 +381,8 @@ def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     assert save_response.json["saved"] is True
     assert seen[0]["agent_id"] == "agent-1"
     assert seen[0]["python_source"] == "print('hello')"
-    assert seen[0]["agent_name"] == "Untitled Agent"
+    assert seen[0]["workflow_name"] == "Untitled Agent"
+    assert seen[0]["description"] == ""
     assert seen[0]["origin"] == "https://playground.example/"
     assert seen[0]["credentials"].username == "creator"
     assert seen[0]["credentials"].password == "secret"

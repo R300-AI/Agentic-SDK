@@ -80,6 +80,8 @@ def execute_python_source(
     message: str = "",
     attachments: list[dict] | None = None,
     endpoint_selections: dict[str, str] | None = None,
+    semantic_sources: list[str] | None = None,
+    semantic_saved_path: str | None = None,
     semantic_source_path: str | None = None,
     semantic_index_path: str | None = None,
     tool_call_submission: dict[str, object] | None = None,
@@ -94,6 +96,7 @@ def execute_python_source(
         "supported_subset": parsed_source.supported_subset,
     }
     config = config_from_source(python_source)
+    resolved_semantic_sources = _semantic_sources(semantic_sources, semantic_source_path)
     tool_submission_context = _tool_submission_context(config, tool_call_submission)
     user_message = _message_with_tool_submission(message.strip(), tool_submission_context)
     try:
@@ -130,7 +133,8 @@ def execute_python_source(
             python_source,
             execution_workflow_name,
             endpoint_selections or {},
-            semantic_source_path=semantic_source_path,
+            semantic_sources=resolved_semantic_sources,
+            semantic_saved_path=semantic_saved_path,
             semantic_index_path=semantic_index_path,
         )
         if tool_submission_context is not None:
@@ -219,6 +223,8 @@ def stream_python_source_execution(
     message: str = "",
     attachments: list[dict] | None = None,
     endpoint_selections: dict[str, str] | None = None,
+    semantic_sources: list[str] | None = None,
+    semantic_saved_path: str | None = None,
     semantic_source_path: str | None = None,
     semantic_index_path: str | None = None,
     tool_call_submission: dict[str, object] | None = None,
@@ -235,6 +241,8 @@ def stream_python_source_execution(
                 message=message,
                 attachments=attachments,
                 endpoint_selections=endpoint_selections,
+                semantic_sources=semantic_sources,
+                semantic_saved_path=semantic_saved_path,
                 semantic_source_path=semantic_source_path,
                 semantic_index_path=semantic_index_path,
                 tool_call_submission=tool_call_submission,
@@ -272,12 +280,21 @@ def stream_python_source_initialization(
     python_source: str,
     *,
     endpoint_selections: dict[str, str] | None = None,
+    semantic_sources: list[str] | None = None,
+    semantic_saved_path: str | None = None,
     semantic_source_path: str | None = None,
     semantic_index_path: str | None = None,
 ) -> Iterator[dict[str, object]]:
     config = config_from_source(python_source)
     reachable_roles = reachable_workflow_roles(config)
-    steps = _initialization_steps(config, endpoint_selections or {}, reachable_roles, semantic_source_path, semantic_index_path)
+    steps = _initialization_steps(
+        config,
+        endpoint_selections or {},
+        reachable_roles,
+        _semantic_sources(semantic_sources, semantic_source_path),
+        semantic_saved_path,
+        semantic_index_path,
+    )
     total = len(steps)
     yield {"type": "progress", "completed": 0, "total": total, "message": "正在準備 Agent 初始化..."}
     completed = 0
@@ -774,12 +791,21 @@ def _to_attachment(raw: dict) -> Attachment:
     )
 
 
+def _semantic_sources(sources: list[str] | None, source_path: str | None) -> list[str] | None:
+    if sources:
+        return [str(source).strip() for source in sources if str(source).strip()]
+    if source_path and source_path.strip():
+        return [source_path.strip()]
+    return None
+
+
 def _workflow_from_source(
     python_source: str,
     workflow_name: str,
     endpoint_selections: dict[str, str],
     *,
-    semantic_source_path: str | None = None,
+    semantic_sources: list[str] | None = None,
+    semantic_saved_path: str | None = None,
     semantic_index_path: str | None = None,
 ) -> Workflow:
     config = config_from_source(python_source)
@@ -789,7 +815,7 @@ def _workflow_from_source(
         description=config.task_goal or None,
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
-        retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_source_path, semantic_index_path),
+        retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_sources, semantic_saved_path, semantic_index_path),
         action=_action_from_config(config, endpoint_selections, reachable_roles),
         reflect=_reflect_from_config(config, endpoint_selections, reachable_roles),
     )
@@ -799,7 +825,8 @@ def _initialization_steps(
     config: BuilderSourceConfig,
     endpoint_selections: dict[str, str],
     reachable_roles: set[str],
-    semantic_source_path: str | None,
+    semantic_sources: list[str] | None,
+    semantic_saved_path: str | None,
     semantic_index_path: str | None,
 ):
     steps = []
@@ -808,7 +835,7 @@ def _initialization_steps(
     if "plan" in reachable_roles and config.plan_strategy:
         steps.append(("plan", "流程判斷器", lambda: _plan_from_config(config, endpoint_selections, reachable_roles)))
     if "retrieve" in reachable_roles:
-        steps.append(("retrieve", _retrieve_process_title(config), lambda: _retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_source_path, semantic_index_path)))
+        steps.append(("retrieve", _retrieve_process_title(config), lambda: _retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_sources, semantic_saved_path, semantic_index_path)))
     if "action" in reachable_roles:
         steps.append(("action", _action_process_name(config), lambda: _action_from_config(config, endpoint_selections, reachable_roles)))
     if "reflect" in reachable_roles and config.reflect_module:
@@ -853,7 +880,8 @@ def _retrieve_from_config(
     config: BuilderSourceConfig,
     endpoint_selections: dict[str, str],
     reachable_roles: set[str],
-    semantic_source_path: str | None = None,
+    semantic_sources: list[str] | None = None,
+    semantic_saved_path: str | None = None,
     semantic_index_path: str | None = None,
 ):
     if "retrieve" not in reachable_roles:
@@ -862,10 +890,9 @@ def _retrieve_from_config(
         retrieve_params = endpoint_params_for_role("retrieve", endpoint_selections)
         return SemanticRetrieve(
             top_k=config.retrieve_top_k,
-            source_path=semantic_source_path or "./knowledge",
-            index_path=semantic_index_path or "./.agentic/semantic_index",
-            rebuild_if_missing=True,
-            rebuild_if_stale=True,
+            sources=semantic_sources or ["./tmp/source-files"],
+            saved_path=semantic_saved_path or "./tmp",
+            index_path=semantic_index_path,
             **retrieve_params,
         )
     if config.retrieve_module == "PassThroughRetrieve":

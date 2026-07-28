@@ -3,6 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from playground.models import ModeContext
+from playground.services.aihub_bundle_flow import restore_runtime_bundle
 from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, verify_credentials
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source
@@ -84,6 +85,7 @@ def navigate_from_aihub_to_runner():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     session["source_origin"] = "aihub_loaded"
     return redirect(url_for("runner.runner"))
 
@@ -140,6 +142,7 @@ def select_agent():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     session["source_origin"] = "aihub_loaded"
     session.pop("last_aihub_save", None)
     return redirect(url_for("runner.runner"))
@@ -177,6 +180,19 @@ def _clear_selected_agent_state() -> None:
     session.pop("agent_id", None)
     session.pop("agent_name", None)
     session.pop("last_aihub_save", None)
+    session.pop("builder_upload_id", None)
+
+
+def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials) -> None:
+    bundle_result = restore_runtime_bundle(agent_id=agent_id, credentials=credentials, origin=request.host_url)
+    if bundle_result.get("bundle_restored"):
+        if bundle_result.get("builder_upload_id"):
+            session["builder_upload_id"] = bundle_result["builder_upload_id"]
+        if bundle_result.get("python_source"):
+            session["python_source"] = bundle_result["python_source"]
+        session["last_aihub_bundle_load"] = bundle_result
+    else:
+        session.pop("last_aihub_bundle_load", None)
 
 
 def _navigation_login_error(message: str = "We could not verify those AI Hub credentials. Check the account and try again."):

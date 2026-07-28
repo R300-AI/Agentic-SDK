@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import json
 import shutil
-import tempfile
-import uuid
 from pathlib import Path
 
 from flask import Blueprint, jsonify, render_template, request, session
 
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
+from playground.services.semantic_runtime import new_upload_id, runtime_root, source_files_dir
 from playground.services.source_builder import (
     build_default_python_source,
     build_python_source_from_builder_choice,
@@ -253,9 +252,9 @@ def _is_locked_builder_choice(step_key: str, choice_label: object) -> bool:
 def _builder_upload_dir() -> Path:
     upload_id = session.get("builder_upload_id")
     if not isinstance(upload_id, str) or not upload_id.strip():
-        upload_id = uuid.uuid4().hex
+        upload_id = new_upload_id()
         session["builder_upload_id"] = upload_id
-    return Path(tempfile.gettempdir()) / "agentic-sdk-playground" / "builder-uploads" / upload_id
+    return source_files_dir(upload_id)
 
 
 def _existing_semantic_support_files() -> list[str]:
@@ -283,9 +282,9 @@ def _should_reset_transient_builder_state() -> bool:
 
 
 def _reset_transient_builder_state() -> None:
-    upload_dir = _builder_upload_dir_for_id(session.get("builder_upload_id"))
-    if upload_dir is not None:
-        shutil.rmtree(upload_dir, ignore_errors=True)
+    runtime_dir = _semantic_runtime_dir_for_id(session.get("builder_upload_id"))
+    if runtime_dir is not None:
+        shutil.rmtree(runtime_dir, ignore_errors=True)
     session.pop("builder_form_state", None)
     session.pop("builder_has_user_config", None)
     session.pop("runner_endpoint_selections", None)
@@ -293,10 +292,10 @@ def _reset_transient_builder_state() -> None:
     session["python_source"] = build_default_python_source()
 
 
-def _builder_upload_dir_for_id(upload_id: object) -> Path | None:
+def _semantic_runtime_dir_for_id(upload_id: object) -> Path | None:
     if not isinstance(upload_id, str) or not upload_id.strip():
         return None
-    return Path(tempfile.gettempdir()) / "agentic-sdk-playground" / "builder-uploads" / upload_id
+    return runtime_root(upload_id)
 
 
 def _builder_review_payload(steps: list[object], builder_form_state: dict[str, object], builder_endpoint_state: dict[str, object]) -> dict[str, object]:

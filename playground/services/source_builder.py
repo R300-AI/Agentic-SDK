@@ -4,6 +4,7 @@ import ast
 import keyword
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from playground.models import BuilderChoice, BuilderStep, WorkflowSummary
@@ -62,8 +63,8 @@ _ADVISOR_WELCOME_MESSAGE = "請先描述你想完成的事，我會一步步確�
 _DEFAULT_RETRIEVE_DESCRIPTION = "依使用者設定的關鍵字支援資料判斷是否需要查詢。"
 _DEFAULT_SEMANTIC_RETRIEVE_NAME = "支援文件"
 _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的支援文件查找與問題最相關的內容。"
-_DEFAULT_SEMANTIC_SOURCE_PATH = "./knowledge"
-_DEFAULT_SEMANTIC_INDEX_PATH = "./.agentic/semantic_index"
+_DEFAULT_SEMANTIC_SAVED_PATH = "./tmp"
+_DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
 _DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
 _NON_CONTENT_WORKFLOW_DESCRIPTIONS = {
     "模型部署與端點選擇已在建立流程完成；這裡只保留試跑與結果檢視。",
@@ -429,6 +430,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     runner_config = _safe_config_dict(_extract_assignment_literal(source, "RUNNER_CONFIG", {}))
     perceive_config = _safe_config_dict(_extract_assignment_literal(source, "PERCEIVE_CONFIG", {}))
     retrieve_config = _safe_config_dict(_extract_assignment_literal(source, "RETRIEVE_CONFIG", {}))
+    semantic_sources = _extract_semantic_sources(source)
     action_config = _safe_config_dict(_extract_assignment_literal(source, "ACTION_CONFIG", {}))
     plan_config = _safe_config_dict(_extract_assignment_literal(source, "PLAN_CONFIG", {}))
     reflect_config = _safe_config_dict(_extract_assignment_literal(source, "REFLECT_CONFIG", {}))
@@ -470,7 +472,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         retrieve_items=tuple(_extract_keyword_items(source)),
         retrieve_fallback=_extract_keyword_value(source, {"KeywordRetrieve"}, "fallback") or _clean_short_text(str(retrieve_config.get("fallback", "沒有命中任何條目。")), "沒有命中任何條目。"),
         retrieve_top_k=_extract_int_value(source, {"SemanticRetrieve"}, "top_k", _clean_int(retrieve_config.get("top_k"), 3, 1, 20)),
-        semantic_support_files=tuple(_normalize_string_items(retrieve_config.get("semantic_support_files"))),
+        semantic_support_files=tuple(_semantic_support_files_from_sources(semantic_sources) or _normalize_string_items(retrieve_config.get("semantic_support_files"))),
         semantic_search_goal=_clean_prompt(str(retrieve_config.get("semantic_search_goal", ""))),
         action_module=action_module,
         action_prompt=action_prompt,
@@ -1339,9 +1341,6 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
-    retrieve_config_block = _retrieve_config_block(config)
-    if retrieve_config_block:
-        sections.append(retrieve_config_block)
     sections.append(workflow_block)
     return "\n\n".join(sections) + "\n"
 
@@ -1388,9 +1387,6 @@ workflow = Workflow(
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
-    retrieve_config_block = _retrieve_config_block(config)
-    if retrieve_config_block:
-        sections.append(retrieve_config_block)
     sections.append(workflow_block)
     return "\n\n".join(sections) + "\n"
 
@@ -1476,10 +1472,7 @@ def _retrieve_expression_body(config: BuilderSourceConfig, endpoint_bindings: di
     arguments = [f"        {argument}," for argument in _llm_arguments("RETRIEVE", binding_role="retrieve", endpoint_bindings=endpoint_bindings)]
     arguments.extend(
         [
-            '        source_path=RETRIEVE_CONFIG["source_path"],',
-            '        index_path=RETRIEVE_CONFIG["index_path"],',
-            "        rebuild_if_missing=True,",
-            "        rebuild_if_stale=True,",
+            f"        sources={_format_python_literal(_semantic_source_paths(config), 16)},",
         ]
     )
     return "\n".join(arguments)
@@ -1545,26 +1538,27 @@ def _retrieve_name(config: BuilderSourceConfig) -> str:
     return config.retrieve_name
 
 
-def _retrieve_config_block(config: BuilderSourceConfig) -> str:
-    if config.retrieve_module != "SemanticRetrieve" and not config.semantic_support_files and not config.semantic_search_goal:
-        return ""
-    retrieve_config: dict[str, object] = {}
-    if config.retrieve_module == "SemanticRetrieve":
-        retrieve_config["source_path"] = _semantic_source_path(config)
-        retrieve_config["index_path"] = _semantic_index_path(config)
-    if config.semantic_support_files:
-        retrieve_config["semantic_support_files"] = list(config.semantic_support_files)
-    if config.semantic_search_goal:
-        retrieve_config["semantic_search_goal"] = config.semantic_search_goal
-    return f"RETRIEVE_CONFIG = {_format_python_literal(retrieve_config, 0)}"
+def _semantic_source_paths(config: BuilderSourceConfig) -> list[str]:
+    if not config.semantic_support_files:
+        return []
+    return [f"./{Path(filename).name}" for filename in config.semantic_support_files]
 
 
-def _semantic_source_path(_config: BuilderSourceConfig) -> str:
-    return _DEFAULT_SEMANTIC_SOURCE_PATH
+def _extract_semantic_sources(source: str) -> list[str]:
+    return _normalize_string_items(_extract_keyword_literal(source, {"SemanticRetrieve"}, "sources", []))
 
 
-def _semantic_index_path(_config: BuilderSourceConfig) -> str:
-    return _DEFAULT_SEMANTIC_INDEX_PATH
+def _semantic_support_files_from_sources(sources: list[str]) -> list[str]:
+    prefix = f"{_DEFAULT_SEMANTIC_SOURCE_DIR}/"
+    filenames: list[str] = []
+    for source in sources:
+        normalized = source.replace("\\", "/")
+        if normalized == _DEFAULT_SEMANTIC_SOURCE_DIR:
+            continue
+        filename = normalized[len(prefix):] if normalized.startswith(prefix) else Path(normalized).name
+        if filename:
+            filenames.append(filename)
+    return filenames
 
 
 def _endpoint_constant_prefix(role: str) -> str:

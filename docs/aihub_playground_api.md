@@ -4,7 +4,7 @@
 
 AI Hub 既有 API 以 AI Hub connection model 文件為準：<https://r300-ai.github.io/ai-hub-webui/playground/connection-model/>。
 
-語意搜尋支援文件與 FAISS index artifact 的下一版持久化建議，見 [AI Hub Playground Storage API](aihub_playground_storage_api.md)。
+原始支援文件、SemanticRetriever vectorstore 與 runtime manifest 以單一 zip bundle 保存到 Storage Account；串接方式見 [AI Hub Playground Storage API](aihub_playground_storage_api.md)。
 
 ## 這份文件會幫你完成什麼
 

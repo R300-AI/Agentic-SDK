@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, session
 
+from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials
 from playground.services.security import is_allowed_origin
-from playground.services.source_builder import get_workflow_summary
+from playground.services.source_builder import config_from_source, get_workflow_summary
 
 
 aihub_bp = Blueprint("aihub", __name__, url_prefix="/playground/aihub")
@@ -35,8 +36,12 @@ def load_aihub_config():
     session["mode"] = "aihub_editable" if editable else "aihub_readonly"
     session["agent_id"] = loaded["agent_id"]
     session["python_source"] = loaded["python_source"]
+    bundle_result = _restore_bundle_for_session(str(loaded["agent_id"]), credentials)
+    if bundle_result.get("bundle_restored") and bundle_result.get("python_source"):
+        session["python_source"] = bundle_result["python_source"]
+        loaded["python_source"] = bundle_result["python_source"]
     session["source_origin"] = "aihub_loaded" if editable else "aihub_shared_readonly"
-    return jsonify({**loaded, "mode": session["mode"]})
+    return jsonify({**loaded, **bundle_result, "mode": session["mode"]})
 
 
 @aihub_bp.post("/agents")
@@ -69,9 +74,13 @@ def reload_aihub_config():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    bundle_result = _restore_bundle_for_session(str(result["agent_id"]), credentials)
+    if bundle_result.get("bundle_restored") and bundle_result.get("python_source"):
+        session["python_source"] = bundle_result["python_source"]
+        result["python_source"] = bundle_result["python_source"]
     session["source_origin"] = "aihub_loaded"
     session.pop("last_aihub_save", None)
-    return jsonify(result)
+    return jsonify({**result, **bundle_result})
 
 
 @aihub_bp.post("/config/save")
@@ -92,14 +101,27 @@ def save_aihub_config():
         return jsonify({"saved": False, "error": "No Python source is available to save."}), 400
 
     agent_id = payload.get("agent_id") or session.get("agent_id")
-    agent_name = get_workflow_summary(python_source).name
-    result = save_config(agent_id, python_source, agent_name=agent_name, credentials=credentials, origin=request.host_url)
+    workflow_summary = get_workflow_summary(python_source)
+    workflow_config = config_from_source(python_source)
+    workflow_name = workflow_summary.name
+    description = workflow_config.task_goal or ""
+    result = save_config(agent_id, python_source, workflow_name=workflow_name, description=description, credentials=credentials, origin=request.host_url)
     if result.get("saved"):
         if result.get("agent_id"):
             session["agent_id"] = result["agent_id"]
-        if result.get("agent_name"):
-            session["agent_name"] = result["agent_name"]
+        if result.get("workflow_name"):
+            session["agent_name"] = result["workflow_name"]
         session["source_origin"] = "aihub_loaded"
+        bundle_result = save_runtime_bundle(
+            agent_id=str(result.get("agent_id") or agent_id or ""),
+            credentials=credentials,
+            origin=request.host_url,
+            python_source=python_source,
+            workflow_name=workflow_name,
+            description=description,
+            builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None,
+        )
+        result = {**result, **bundle_result}
         session["last_aihub_save"] = result
     status_code = 200 if result.get("saved") else 502
     return jsonify(result), status_code
@@ -124,3 +146,10 @@ def login_aihub_session():
     session["ai_hub_credential_ticket"] = issue_credential_ticket(username, password)
     session["pending_runner_auto_save"] = True
     return jsonify({"authenticated": True, "username": username, "redirect_url": "/playground/run"})
+
+
+def _restore_bundle_for_session(agent_id: str, credentials) -> dict[str, object]:
+    bundle_result = restore_runtime_bundle(agent_id=agent_id, credentials=credentials, origin=request.host_url)
+    if bundle_result.get("bundle_restored") and bundle_result.get("builder_upload_id"):
+        session["builder_upload_id"] = bundle_result["builder_upload_id"]
+    return bundle_result
