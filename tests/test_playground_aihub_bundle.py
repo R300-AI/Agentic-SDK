@@ -1,7 +1,16 @@
 from pathlib import Path
 import zipfile
 
+import pytest
+
+from agentic_sdk.modules import SemanticRetrieve
 from playground.services import bundle_store
+
+
+class KeywordEmbedder:
+    def embed(self, text: str) -> list[float]:
+        normalized = text.lower()
+        return [1.0, 0.0] if "r300_semantic_restore_test" in normalized else [0.0, 1.0]
 
 
 def test_agent_bundle_zip_round_trips_runtime_files(tmp_path, monkeypatch):
@@ -45,6 +54,44 @@ def test_agent_bundle_zip_round_trips_runtime_files(tmp_path, monkeypatch):
     assert restored_metadata.read_text(encoding="utf-8") == '{"chunks": 1}'
 
 
+def test_restored_bundle_can_be_loaded_by_semantic_retrieve_saved_path(tmp_path, monkeypatch):
+    pytest.importorskip("faiss")
+    pytest.importorskip("numpy")
+    runtime_root = tmp_path / "agentic-sdk-playground"
+    monkeypatch.setattr(bundle_store, "_RUNTIME_ROOT", runtime_root)
+
+    upload_id = "upload-1"
+    saved_path = runtime_root / "semantic-runtime" / upload_id
+    source_dir = saved_path / "source-files"
+    source_dir.mkdir(parents=True)
+    (source_dir / "policy.md").write_text("R300_SEMANTIC_RESTORE_TEST appears in this saved policy.", encoding="utf-8")
+
+    initial = SemanticRetrieve(sources=[str(source_dir)], saved_path=str(saved_path), embedder=KeywordEmbedder())
+    assert initial._knowledge_base.search("R300_SEMANTIC_RESTORE_TEST", top_k=1)
+
+    built = bundle_store.create_agent_bundle_zip(
+        python_source="print('semantic')",
+        workflow_name="Semantic Agent",
+        description="",
+        builder_upload_id=upload_id,
+    )
+    shutil_source_dir = source_dir
+    assert shutil_source_dir.exists()
+
+    restored = bundle_store.restore_agent_bundle_zip(built.zip_path)
+    restored_saved_path = runtime_root / "semantic-runtime" / restored.builder_upload_id
+    restored_source_dir = restored_saved_path / "source-files"
+    restored_index_dir = restored_saved_path / "vectorstore"
+
+    assert restored_source_dir.joinpath("policy.md").exists()
+    assert restored_index_dir.joinpath("index.faiss").exists()
+    restored_retrieve = SemanticRetrieve(saved_path=str(restored_saved_path), embedder=KeywordEmbedder(), rebuild_if_missing=False, rebuild_if_stale=False)
+
+    hits = restored_retrieve._knowledge_base.search("R300_SEMANTIC_RESTORE_TEST", top_k=1)
+    assert hits
+    assert "R300_SEMANTIC_RESTORE_TEST" in hits[0].content
+
+
 def test_bundle_upload_and_download_use_signed_urls(tmp_path, monkeypatch):
     uploaded = {}
 
@@ -62,7 +109,7 @@ def test_bundle_upload_and_download_use_signed_urls(tmp_path, monkeypatch):
         uploaded["url"] = url
         uploaded["headers"] = headers
         uploaded["timeout"] = timeout
-        uploaded["content"] = content.read()
+        uploaded["content"] = content
         return FakePutResponse()
 
     def fake_get(url, *, timeout):
@@ -85,7 +132,7 @@ def test_bundle_upload_and_download_use_signed_urls(tmp_path, monkeypatch):
 
     assert upload_result["uploaded"] is True
     assert uploaded["url"] == "https://storage.example/upload"
-    assert uploaded["headers"] == {"x-ms-blob-type": "BlockBlob"}
+    assert uploaded["headers"] == {"x-ms-blob-type": "BlockBlob", "Content-Length": "9"}
     assert uploaded["content"] == b"zip-bytes"
     assert download_result["downloaded"] is True
     assert Path(download_result["zip_path"]).read_bytes() == b"zip-bytes"

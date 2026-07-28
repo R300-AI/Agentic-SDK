@@ -314,6 +314,33 @@ def stream_python_source_initialization(
     yield {"type": "final", "ready": True, "completed": completed, "total": total, "message": "Agent 已準備完成，可以開始對話。"}
 
 
+def prepare_semantic_runtime(
+    python_source: str,
+    *,
+    endpoint_selections: dict[str, str] | None = None,
+    semantic_sources: list[str] | None = None,
+    semantic_saved_path: str | None = None,
+    semantic_source_path: str | None = None,
+    semantic_index_path: str | None = None,
+) -> dict[str, object]:
+    config = config_from_source(python_source)
+    if config.retrieve_module != "SemanticRetrieve":
+        return {"prepared": False, "reason": "not_semantic_retrieve"}
+    reachable_roles = reachable_workflow_roles(config)
+    if "retrieve" not in reachable_roles:
+        return {"prepared": False, "reason": "retrieve_not_reachable"}
+    module = _retrieve_from_config(
+        config,
+        endpoint_selections or {},
+        reachable_roles,
+        _semantic_sources(semantic_sources, semantic_source_path),
+        semantic_saved_path,
+        semantic_index_path,
+    )
+    _warm_semantic_retrieve(module)
+    return {"prepared": True}
+
+
 def _tool_submission_context(config: BuilderSourceConfig, submission: dict[str, object] | None) -> dict[str, object] | None:
     if not isinstance(submission, dict):
         return None

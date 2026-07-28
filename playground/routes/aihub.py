@@ -4,7 +4,10 @@ from flask import Blueprint, jsonify, request, session
 
 from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials
+from playground.services.model_endpoints import normalize_endpoint_selections
+from playground.services.runner_service import prepare_semantic_runtime
 from playground.services.security import is_allowed_origin
+from playground.services.semantic_runtime import runtime_root, source_files_dir
 from playground.services.source_builder import config_from_source, get_workflow_summary, semantic_bundle_required_from_source
 
 
@@ -116,6 +119,16 @@ def save_aihub_config():
         if result.get("workflow_name"):
             session["agent_name"] = result["workflow_name"]
         session["source_origin"] = "aihub_loaded"
+        semantic_ready = _prepare_semantic_runtime_for_save(python_source) if _semantic_bundle_required(workflow_config) else {"prepared": False}
+        if semantic_ready.get("error"):
+            result["config_saved"] = True
+            result["saved"] = False
+            result["bundle_saved"] = False
+            result["bundle_error"] = semantic_ready["error"]
+            result["error"] = semantic_ready["error"]
+            result["error_code"] = "semantic_bundle_not_prepared"
+            session["last_aihub_save"] = result
+            return jsonify(result), 502
         bundle_result = save_runtime_bundle(
             agent_id=str(result.get("agent_id") or agent_id or ""),
             credentials=credentials,
@@ -174,3 +187,20 @@ def _semantic_bundle_required_for_source(python_source: object) -> bool:
 
 def _semantic_bundle_restore_error(bundle_result: dict[str, object]) -> str:
     return str(bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not restored.")
+
+
+def _prepare_semantic_runtime_for_save(python_source: str) -> dict[str, object]:
+    upload_id = session.get("builder_upload_id")
+    if not isinstance(upload_id, str) or not upload_id.strip():
+        return {"error": "SemanticRetrieve knowledge files are not available in this Playground session."}
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    session["runner_endpoint_selections"] = endpoint_selections
+    try:
+        return prepare_semantic_runtime(
+            python_source,
+            endpoint_selections=endpoint_selections,
+            semantic_sources=[str(source_files_dir(upload_id))],
+            semantic_saved_path=str(runtime_root(upload_id)),
+        )
+    except Exception as error:
+        return {"error": str(error) or "SemanticRetrieve knowledge bundle could not be prepared."}

@@ -678,6 +678,61 @@ workflow = Workflow(
     assert response.json["error_code"] == "missing_bundle_api"
 
 
+def test_aihub_save_route_prepares_semantic_saved_path_before_bundle_upload(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    semantic_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Semantic Agent",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+    calls = []
+
+    monkeypatch.setattr(
+        aihub_routes,
+        "save_config",
+        lambda agent_id, python_source, *, workflow_name=None, description=None, credentials=None, origin=None: {
+            "agent_id": agent_id or "agent-new",
+            "workflow_name": workflow_name,
+            "description": description or "",
+            "saved": True,
+            "integration_status": "aihub",
+        },
+    )
+
+    def fake_prepare_semantic_runtime(python_source, **kwargs):
+        calls.append(("prepare", kwargs))
+        return {"prepared": True}
+
+    def fake_save_runtime_bundle(**kwargs):
+        calls.append(("save_bundle", kwargs))
+        return {"bundle_saved": True, "bundle_source_file_count": 1, "bundle_vectorstore_file_count": 2}
+
+    monkeypatch.setattr(aihub_routes, "prepare_semantic_runtime", fake_prepare_semantic_runtime)
+    monkeypatch.setattr(aihub_routes, "save_runtime_bundle", fake_save_runtime_bundle)
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", base_url="https://playground.example", data={"username": "creator", "password": "secret"})
+        with client.session_transaction(base_url="https://playground.example") as session:
+            session["mode"] = "manual_auth"
+            session["python_source"] = semantic_source
+            session["builder_upload_id"] = "upload-1"
+        response = client.post("/playground/aihub/config/save", base_url="https://playground.example")
+
+    assert response.status_code == 200
+    assert response.json["saved"] is True
+    assert [call[0] for call in calls] == ["prepare", "save_bundle"]
+    prepare_kwargs = calls[0][1]
+    assert Path(prepare_kwargs["semantic_sources"][0]).as_posix().endswith("semantic-runtime/upload-1/source-files")
+    assert Path(prepare_kwargs["semantic_saved_path"]).as_posix().endswith("semantic-runtime/upload-1")
+
+
 def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     monkeypatch.setattr(entry_routes, "list_agents", lambda *, credentials=None, origin=None: {"loaded": True, "items": [{"agent_id": "agent-1", "agent_name": "Agent One"}]})

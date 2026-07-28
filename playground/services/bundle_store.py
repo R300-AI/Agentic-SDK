@@ -133,8 +133,10 @@ def upload_bundle_zip(upload_payload: dict[str, object], zip_path: Path) -> dict
         return {"uploaded": False, "error": f"Unsupported bundle upload method: {method}."}
 
     try:
-        with zip_path.open("rb") as bundle_file:
-            response = httpx.put(upload_url, content=bundle_file, headers={str(key): str(value) for key, value in headers.items()}, timeout=_bundle_transfer_timeout_seconds())
+        bundle_bytes = zip_path.read_bytes()
+        upload_headers = {str(key): str(value) for key, value in headers.items()}
+        upload_headers.setdefault("Content-Length", str(len(bundle_bytes)))
+        response = httpx.put(upload_url, content=bundle_bytes, headers=upload_headers, timeout=_bundle_transfer_timeout_seconds())
         response.raise_for_status()
     except (OSError, httpx.HTTPError) as error:
         return {"uploaded": False, "error": str(error) or "Bundle upload failed."}

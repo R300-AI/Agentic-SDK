@@ -335,7 +335,9 @@ class SemanticRetrieve:
         resolved_saved_path = str(saved_path or SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH).strip() or SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
         resolved_index_path = index_path or str(Path(resolved_saved_path) / SEMANTIC_RETRIEVE_DEFAULT_INDEX_DIRNAME)
         resolved_saved_source_path = str(Path(resolved_saved_path) / SEMANTIC_RETRIEVE_DEFAULT_SOURCE_DIRNAME) if resolved_sources else None
-        should_build_default_kb = self._knowledge_base is None and bool(resolved_sources or index_path or source_path)
+        has_configured_knowledge_source = bool(resolved_sources or index_path or source_path)
+        has_saved_index = _index_artifacts_exist(Path(resolved_index_path))
+        should_build_default_kb = self._knowledge_base is None and (has_configured_knowledge_source or (has_saved_index and self._embedder is not None))
         if should_build_default_kb:
             if self._embedder is None:
                 raise ValueError(
@@ -429,6 +431,12 @@ def _skip_leading_whitespace(text: str, start: int) -> int:
     while start < len(text) and text[start].isspace():
         start += 1
     return start
+
+
+def _index_artifacts_exist(index_root: Path) -> bool:
+    if index_root.suffix.lower() == ".faiss":
+        return index_root.exists() and index_root.with_suffix(".json").exists()
+    return (index_root / "index.faiss").exists() and (index_root / "metadata.json").exists()
 
 
 def _is_relative_to(path: Path, root: Path) -> bool:
