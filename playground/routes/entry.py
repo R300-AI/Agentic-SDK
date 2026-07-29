@@ -5,7 +5,7 @@ from flask import Blueprint, redirect, render_template, request, session, url_fo
 from playground.models import ModeContext
 from playground.services.aihub_bridge import start_builder_bridge_session, start_runner_bridge_session
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
-from playground.services.aihub_client import AiHubCredentials, bridge_credentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials, verify_handoff_token
+from playground.services.aihub_client import AiHubCredentials, bridge_credentials, credentials_for_ticket, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials, verify_handoff_token, verify_identity
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
@@ -43,14 +43,15 @@ def login():
     password = request.form.get("password", "")
     normalized_username = username.strip()
 
-    if not verify_credentials(normalized_username, password, origin=request.host_url):
+    identity = _verified_identity(normalized_username, password)
+    if not identity:
         return render_template(
             "entry.html",
             mode_context=ModeContext(),
             login_error="We could not verify those AI Hub credentials. Check the account and try again.",
         ), 400
 
-    _start_authenticated_session(AiHubCredentials(username=normalized_username, password=password))
+    _start_authenticated_session(AiHubCredentials(username=identity["username"], password=password, display_name=identity.get("display_name", "")))
     return redirect(url_for("entry.agent_picker"))
 
 
@@ -68,7 +69,7 @@ def navigate_from_aihub_to_builder():
 @entry_bp.get("/builder")
 @entry_bp.get("/builder/")
 def navigate_from_aihub_bridge_to_builder():
-    start_builder_bridge_session(request.args)
+    start_builder_bridge_session(request.args, origin=request.host_url)
     return redirect(url_for("builder.builder"))
 
 
@@ -216,15 +217,25 @@ def _verified_navigation_credentials(payload: dict[str, object] | None = None) -
         verified_agent_id = str(verified.get("agent_id") or "").strip()
         if requested_agent_id and verified_agent_id and requested_agent_id != verified_agent_id:
             return None
-        return AiHubCredentials(username=verified["username"], password="", token=token, api_base_url=api_base_url)
+        return AiHubCredentials(username=verified["username"], password="", token=token, api_base_url=api_base_url, display_name=verified.get("display_name", ""))
 
     username = str(payload.get("username") or "").strip()
     password = str(payload.get("password") or "")
     if not username or not password:
         return None
-    if not verify_credentials(username, password, origin=request.host_url):
+    identity = _verified_identity(username, password)
+    if not identity:
         return None
-    return AiHubCredentials(username=username, password=password)
+    return AiHubCredentials(username=identity["username"], password=password, display_name=identity.get("display_name", ""))
+
+
+def _verified_identity(username: str, password: str) -> dict[str, str] | None:
+    identity = verify_identity(username, password, origin=request.host_url)
+    if identity:
+        return identity
+    if verify_credentials(username, password, origin=request.host_url):
+        return {"username": username.strip(), "display_name": ""}
+    return None
 
 
 def _navigation_api_base_url(payload: dict[str, object]) -> str:
@@ -236,7 +247,8 @@ def _start_authenticated_session(credentials: AiHubCredentials) -> None:
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
     session["ai_hub_username"] = credentials.username.strip()
-    session["ai_hub_credential_ticket"] = issue_credential_ticket(credentials.username, credentials.password, token=credentials.token, api_base_url=credentials.api_base_url)
+    session["ai_hub_display_name"] = credentials.display_name.strip()
+    session["ai_hub_credential_ticket"] = issue_credential_ticket(credentials.username, credentials.password, token=credentials.token, api_base_url=credentials.api_base_url, display_name=credentials.display_name)
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
 

@@ -87,7 +87,7 @@ def test_verify_handoff_token_calls_ai_hub_handoff_api(monkeypatch):
         origin="https://playground.example/",
     )
 
-    assert result == {"username": "creator", "agent_id": "agent-1"}
+    assert result == {"username": "creator", "agent_id": "agent-1", "display_name": ""}
     assert calls == [
         {
             "url": "https://aihub.example/api/playground/handoff/verify",
@@ -97,6 +97,30 @@ def test_verify_handoff_token_calls_ai_hub_handoff_api(monkeypatch):
             "follow_redirects": True,
         }
     ]
+
+
+def test_runner_greeting_prefers_display_name_when_present():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_request_context("/playground/run"):
+        from flask import session
+        session["ai_hub_username"] = "creator"
+        session["ai_hub_display_name"] = "R300"
+
+        assert runner_routes._runner_greeting() == "Hi! R300"
+
+
+def test_runner_greeting_falls_back_to_username_when_display_name_blank():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_request_context("/playground/run"):
+        from flask import session
+        session["ai_hub_username"] = "creator"
+        session["ai_hub_display_name"] = "  "
+
+        assert runner_routes._runner_greeting() == "Hi! creator"
 
 
 def test_save_config_calls_ai_hub_save_api(monkeypatch):
@@ -677,12 +701,18 @@ def test_aihub_navigation_runner_accepts_handoff_token(monkeypatch):
 
 def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
     seen_load = []
+    seen_verify = []
 
     def fake_load_config(agent_id, *, credentials=None, origin=None):
         seen_load.append({"agent_id": agent_id, "credentials": credentials, "origin": origin})
         return {"loaded": True, "agent_id": agent_id, "agent_name": "Agent One", "python_source": "print('loaded')"}
 
+    def fake_verify_handoff_token(token, *, api_base_url=None, origin=None):
+        seen_verify.append((token, api_base_url, origin))
+        return {"username": "creator", "agent_id": "agent-1", "display_name": "R300"}
+
     monkeypatch.setattr(aihub_bridge, "load_config", fake_load_config)
+    monkeypatch.setattr(aihub_bridge, "verify_handoff_token", fake_verify_handoff_token)
     app = create_app()
     app.config.update(TESTING=True, SECRET_KEY="test-secret")
 
@@ -695,11 +725,16 @@ def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
             assert session["mode"] == "aihub_editable"
             assert session["account_context_present"] is True
             assert session["agent_id"] == "agent-1"
+            assert session["ai_hub_username"] == "creator"
+            assert session["ai_hub_display_name"] == "R300"
             assert session["source_origin"] == "aihub_loaded"
 
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/playground/run")
+    assert seen_verify == [("bridge-token", "https://aihub.example", "https://playground.example/")]
     assert seen_load[0]["agent_id"] == "agent-1"
+    assert seen_load[0]["credentials"].username == "creator"
+    assert seen_load[0]["credentials"].display_name == "R300"
     assert seen_load[0]["credentials"].token == "bridge-token"
     assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
 

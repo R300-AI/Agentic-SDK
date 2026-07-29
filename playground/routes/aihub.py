@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request, session
 
 from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
-from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials
+from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials, verify_identity
 from playground.services.model_endpoints import normalize_endpoint_selections
 from playground.services.runner_service import prepare_semantic_runtime
 from playground.services.security import is_allowed_origin
@@ -17,8 +17,8 @@ aihub_bp = Blueprint("aihub", __name__, url_prefix="/playground/aihub")
 @aihub_bp.post("/auth/verify")
 def verify_auth():
     payload = request.get_json(silent=True) or {}
-    valid = verify_credentials(payload.get("username", ""), payload.get("password", ""), origin=request.host_url)
-    return jsonify({"valid": valid})
+    identity = _verified_identity(payload.get("username", ""), payload.get("password", ""))
+    return jsonify({"valid": bool(identity), **(identity or {})})
 
 
 @aihub_bp.post("/config/load")
@@ -153,15 +153,26 @@ def login_aihub_session():
     password = str(payload.get("password") or "")
     if not username or not password:
         return jsonify({"authenticated": False, "error": "請輸入 AI Hub 帳號與密碼。"}), 400
-    if not verify_credentials(username, password, origin=request.host_url):
+    identity = _verified_identity(username, password)
+    if not identity:
         return jsonify({"authenticated": False, "error": "帳號或密碼驗證失敗。"}), 401
 
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
-    session["ai_hub_username"] = username
-    session["ai_hub_credential_ticket"] = issue_credential_ticket(username, password)
+    session["ai_hub_username"] = identity["username"]
+    session["ai_hub_display_name"] = identity.get("display_name", "")
+    session["ai_hub_credential_ticket"] = issue_credential_ticket(identity["username"], password, display_name=identity.get("display_name", ""))
     session["pending_runner_auto_save"] = True
-    return jsonify({"authenticated": True, "username": username, "redirect_url": "/playground/run"})
+    return jsonify({"authenticated": True, "username": identity["username"], "display_name": identity.get("display_name", ""), "redirect_url": "/playground/run"})
+
+
+def _verified_identity(username: str, password: str) -> dict[str, str] | None:
+    identity = verify_identity(username, password, origin=request.host_url)
+    if identity:
+        return identity
+    if verify_credentials(username, password, origin=request.host_url):
+        return {"username": username.strip(), "display_name": ""}
+    return None
 
 
 def _restore_bundle_for_session(agent_id: str, credentials) -> dict[str, object]:

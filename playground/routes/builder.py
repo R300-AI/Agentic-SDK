@@ -50,7 +50,7 @@ _REVIEW_VALUE_STEPS = {
 @builder_bp.before_request
 def require_builder_edit_mode():
     if request.endpoint == "builder.builder" and has_builder_bridge_query(request.args):
-        start_builder_bridge_session(request.args)
+        start_builder_bridge_session(request.args, origin=request.host_url)
     if not get_mode_context().can_edit:
         abort(403)
 

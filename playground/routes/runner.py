@@ -233,4 +233,6 @@ def _store_builder_name(name: str) -> None:
 
 def _runner_greeting() -> str:
     username = str(session.get("ai_hub_username") or "").strip()
-    return f"Hi! {username}" if username else "Hi! 訪客"
+    display_name = str(session.get("ai_hub_display_name") or "").strip()
+    account_label = display_name or username
+    return f"Hi! {account_label}" if account_label else "Hi! 訪客"

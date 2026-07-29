@@ -30,6 +30,7 @@ class AiHubCredentials:
     password: str
     token: str = ""
     api_base_url: str = ""
+    display_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -41,11 +42,11 @@ class _CredentialTicket:
 _credential_tickets: dict[str, _CredentialTicket] = {}
 
 
-def issue_credential_ticket(username: str, password: str, *, token: str = "", api_base_url: str = "") -> str:
+def issue_credential_ticket(username: str, password: str, *, token: str = "", api_base_url: str = "", display_name: str = "") -> str:
     _cleanup_expired_tickets()
     ticket = token_urlsafe(32)
     _credential_tickets[ticket] = _CredentialTicket(
-        credentials=AiHubCredentials(username=username.strip(), password=password, token=token, api_base_url=api_base_url.strip().rstrip("/")),
+        credentials=AiHubCredentials(username=username.strip(), password=password, token=token, api_base_url=api_base_url.strip().rstrip("/"), display_name=display_name.strip()),
         expires_at=time() + _credential_ttl_seconds(),
     )
     return ticket
@@ -64,13 +65,17 @@ def credentials_for_ticket(ticket: str | None) -> AiHubCredentials | None:
 
 
 def verify_credentials(username: str, password: str, *, origin: str | None = None) -> bool:
+    return verify_identity(username, password, origin=origin) is not None
+
+
+def verify_identity(username: str, password: str, *, origin: str | None = None) -> dict[str, str] | None:
     username = username.strip()
     if not username or not password:
-        return False
+        return None
 
     base_url = _ai_hub_base_url()
     if not base_url:
-        return False
+        return None
 
     try:
         response = httpx.post(
@@ -80,12 +85,17 @@ def verify_credentials(username: str, password: str, *, origin: str | None = Non
             timeout=_request_timeout_seconds(),
         )
         if response.status_code >= 400:
-            return False
+            return None
         payload = response.json()
     except (httpx.HTTPError, ValueError):
-        return False
+        return None
 
-    return payload.get("valid") is True
+    if payload.get("valid") is not True:
+        return None
+    return {
+        "username": str(payload.get("username") or username).strip(),
+        "display_name": str(payload.get("display_name") or "").strip(),
+    }
 
 
 def verify_handoff_token(token: str, *, api_base_url: str | None = None, origin: str | None = None) -> dict[str, str] | None:
@@ -117,7 +127,7 @@ def verify_handoff_token(token: str, *, api_base_url: str | None = None, origin:
     agent_id = str(payload.get("agent_id") or "").strip()
     if not username:
         return None
-    return {"username": username, "agent_id": agent_id}
+    return {"username": username, "agent_id": agent_id, "display_name": str(payload.get("display_name") or "").strip()}
 
 
 def bridge_credentials(token: str | None, *, api_base_url: str | None = None) -> AiHubCredentials | None:

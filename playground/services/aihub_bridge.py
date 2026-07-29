@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from flask import session
 
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
-from playground.services.aihub_client import AiHubCredentials, bridge_credentials, issue_credential_ticket, load_config, load_public_config
+from playground.services.aihub_client import AiHubCredentials, bridge_credentials, issue_credential_ticket, load_config, load_public_config, verify_handoff_token
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
 
@@ -18,8 +18,8 @@ def has_runner_bridge_query(args: Mapping[str, object]) -> bool:
     return mode in {"edit", "read"} or bool(_arg(args, "runtimeMode") or _arg(args, "apiBase") or _arg(args, "token") or _arg(args, "owner"))
 
 
-def start_builder_bridge_session(args: Mapping[str, object]) -> None:
-    credentials = bridge_credentials(_arg(args, "token"), api_base_url=_arg(args, "apiBase"))
+def start_builder_bridge_session(args: Mapping[str, object], *, origin: str | None = None) -> None:
+    credentials = _bridge_credentials(args, origin=origin)
     session.clear()
     if credentials:
         _start_authenticated_session(credentials)
@@ -38,7 +38,7 @@ def start_runner_bridge_session(args: Mapping[str, object], *, origin: str | Non
         return {"started": False, "error": "Missing AI Hub agent id.", "status_code": 400}
 
     if mode == "edit":
-        credentials = bridge_credentials(_arg(args, "token"), api_base_url=_arg(args, "apiBase"))
+        credentials = _bridge_credentials(args, origin=origin)
         if not credentials:
             return {"started": False, "error": "Missing AI Hub bridge token.", "status_code": 400}
         result = load_config(agent_id, credentials=credentials, origin=origin)
@@ -72,14 +72,33 @@ def _start_authenticated_session(credentials: AiHubCredentials) -> None:
     session["mode"] = "manual_auth"
     session["account_context_present"] = True
     session["ai_hub_username"] = credentials.username.strip()
+    session["ai_hub_display_name"] = credentials.display_name.strip()
     session["ai_hub_credential_ticket"] = issue_credential_ticket(
         credentials.username,
         credentials.password,
         token=credentials.token,
         api_base_url=credentials.api_base_url,
+        display_name=credentials.display_name,
     )
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
+
+
+def _bridge_credentials(args: Mapping[str, object], *, origin: str | None = None) -> AiHubCredentials | None:
+    token = _arg(args, "token")
+    credentials = bridge_credentials(token, api_base_url=_arg(args, "apiBase"))
+    if not credentials:
+        return None
+    verified = verify_handoff_token(token, api_base_url=credentials.api_base_url, origin=origin)
+    if not verified:
+        return credentials
+    return AiHubCredentials(
+        username=verified["username"],
+        password="",
+        token=credentials.token,
+        api_base_url=credentials.api_base_url,
+        display_name=verified.get("display_name", ""),
+    )
 
 
 def _store_bridge_context(args: Mapping[str, object], credentials: AiHubCredentials) -> None:
