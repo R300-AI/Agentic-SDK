@@ -1204,8 +1204,8 @@ def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):
     picker_html = picker_response.get_data(as_text=True)
     assert "Select Your Agentic SDK Workflow" in picker_html
     assert "Agent One" in picker_html
-    assert "既有工作流" in picker_html
-    assert "選擇工作流" in picker_html
+    assert "選擇既有工作流" in picker_html
+    assert '<label for="agent_id">選擇工作流</label>' not in picker_html
     assert "使用" in picker_html
     assert "建立新工作流" in picker_html
     assert "開始新建" in picker_html

@@ -18,11 +18,10 @@
         {% endif %}
 
         <section class="agent-picker-section" aria-labelledby="existing-agent-list-title">
-          <h2 id="existing-agent-list-title">既有工作流</h2>
+          <h2 id="existing-agent-list-title">選擇既有工作流</h2>
           {% if agents %}
           <form class="agent-picker-form" method="post" action="{{ url_for('entry.select_agent') }}">
-            <label for="agent_id">選擇工作流</label>
-            <select id="agent_id" name="agent_id" required>
+            <select id="agent_id" name="agent_id" aria-label="選擇既有工作流" required>
               {% for agent in agents %}
               <option value="{{ agent.agent_id }}">{{ agent.agent_name or agent.workflow_name or agent.agent_id }}</option>
               {% endfor %}
