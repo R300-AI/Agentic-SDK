@@ -769,6 +769,51 @@ def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
     assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
 
 
+def test_bridge_runner_read_hides_owner_only_controls(monkeypatch):
+    python_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Shared Chat Agent",
+    task_goal="Answer shared chat requests.",
+    action=DirectAnswerAction(),
+)
+"""
+
+    monkeypatch.setattr(
+        aihub_bridge,
+        "load_public_config",
+        lambda agent_id, *, origin=None: {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "Shared Chat Agent",
+            "python_source": python_source,
+        },
+    )
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/playground/run?owner=creator&agentId=agent-1",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            assert session["mode"] == "aihub_readonly"
+            assert session["account_context_present"] is False
+            assert session["source_origin"] == "aihub_shared_readonly"
+
+    body = response.get_data(as_text=True)
+    assert response.status_code == 200
+    assert "Shared Chat Agent" in body
+    assert "data-save-action" not in body
+    assert "data-reload-action" not in body
+    assert "data-code-preview-open" not in body
+    assert "編輯設定" not in body
+    assert "data-save-login-modal" not in body
+
+
 def test_bridge_runner_edit_keeps_latest_config_source_when_bundle_has_stale_recipe(monkeypatch):
     latest_source = """
 from agentic_sdk import Workflow
