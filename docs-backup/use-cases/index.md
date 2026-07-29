@@ -1,4 +1,4 @@
-# Use Case 實施例
+# Use Case
 
 這一區用案例文章的方式，示範 Agentic SDK 如何被導入到具體應用。每一篇都會從場景背景、導入挑戰、流程設計到可擴展性，完整說明 Agentic SDK 在真實系統裡扮演什麼角色，以及五個模組家族如何組成一條可落地的流程。
 
@@ -23,5 +23,5 @@
 ## 閱讀方式
 
 1. 先看案例文章，理解商業背景、導入問題與系統責任。
-2. 再對照 [工作流程](../workflow/index.md) 看這些場景是如何映射到 `Perceive`、`Plan`、`Retrieve`、`Action`、`Reflect`。
+2. 再對照 [Workflow Overview](../workflow-overview.md) 看這些場景是如何映射到 `Perceive`、`Plan`、`Retrieve`、`Action`、`Reflect`。
 3. 最後回到各功能頁，細化你要採用的模組與初始化參數。

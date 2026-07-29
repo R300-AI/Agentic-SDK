@@ -28,25 +28,21 @@ theme:
 
 nav:
   - 首頁: index.md
-  - Workflow:
-    - 總覽: workflow-overview.md
-    - 記憶類型: workflow-engines.md
-  - Module Family:
+  - 工作流程:
+    - workflow/index.md
+    - 記憶類型: workflow/memory-types.md
+  - 模組家族:
     - modules/index.md
-    - Perceive: modules/perceive-modules.md
-    - Plan: modules/plan-modules.md
-    - Retrieve: modules/retrieve-modules.md
-    - Action: modules/action-modules.md
-    - Reflect: modules/reflect-modules.md
-  - Use Case:
+    - 輸入理解: modules/perceive-modules.md
+    - 參考資料: modules/retrieve-modules.md
+    - 規劃與推理: modules/plan-modules.md
+    - 回覆與動作: modules/action-modules.md
+    - 安全控制: modules/reflect-modules.md
+  - Use Case 實施例:
     - use-cases/index.md
     - LaNew 售鞋顧問: use-cases/lanew-footwear-advisor.md
     - BCI 射箭教練: use-cases/bci-archery-coach.md
     - ICOPE 六力評估助手: use-cases/icope-six-capacity-assistant.md
-  - Integrations:
-    - Azure: github_cicd_workflow.md
-    - AI Hub: aihub_playground_api.md
-    - Storage: aihub_playground_storage_api.md
 
 markdown_extensions:
   - admonition
