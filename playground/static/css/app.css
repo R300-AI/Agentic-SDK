@@ -92,53 +92,178 @@ a { color: inherit; text-decoration: none; }
 }
 
 .entry-page {
-  display: grid;
   min-height: 100vh;
-  place-items: center;
-  padding: clamp(1.5rem, 6vw, 5rem);
-  background:
-    linear-gradient(135deg, rgba(237, 28, 36, 0.13) 0 12rem, transparent 12rem),
-    linear-gradient(315deg, rgba(16, 16, 16, 0.08) 0 16rem, transparent 16rem),
-    linear-gradient(180deg, #ffffff 0%, #f3f3f3 100%);
-}
-
-.entry-card {
-  width: min(100%, 34rem);
-  padding: clamp(2rem, 5vw, 3.25rem);
-  border: 1px solid #dfe3ea;
-  border-top: 4px solid var(--amd-red);
-  border-radius: 0;
   background: #ffffff;
-  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%);
-  box-shadow: 0 2px 8px rgba(60, 64, 67, 0.14), 0 12px 34px rgba(60, 64, 67, 0.12);
 }
 
-.official-brand-row {
+.entry-hero {
   display: flex;
+  min-height: 100vh;
   align-items: center;
-  gap: 0.9rem;
-  margin-bottom: 2rem;
-}
-
-.brand-mark {
-  display: grid;
-  width: 2.4rem;
-  height: 2.4rem;
-  place-items: center;
+  justify-content: center;
+  padding: 5rem 4rem;
   background:
-    linear-gradient(135deg, var(--amd-red) 0 45%, transparent 45%),
-    linear-gradient(135deg, var(--amd-black), var(--amd-charcoal));
-  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+    linear-gradient(90deg, rgba(4, 23, 45, 0.36), rgba(4, 23, 45, 0.08)),
+    url("../images/login_background.png") center / cover no-repeat;
 }
 
-.brand-mark span { display: none; }
+.entry-hero-content {
+  position: relative;
+  display: flex;
+  width: min(100%, 87.5rem);
+  min-height: calc(100vh - 10rem);
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
 
-.entry-card h1, .builder-stage h1, .task-surface h1 {
+.entry-copy {
+  display: flex;
+  max-width: 38rem;
+  flex-direction: column;
+  color: #cffafe;
+}
+
+.entry-logo {
+  width: auto;
+  height: 2.5rem;
+  align-self: flex-start;
+  object-fit: contain;
+}
+
+.entry-card h1, .entry-copy h1, .builder-stage h1, .task-surface h1 {
   margin: 0;
   max-width: 56rem;
   line-height: 1.1;
   letter-spacing: 0;
 }
+
+.entry-copy h1 {
+  margin-top: 4rem;
+  color: #cffafe;
+  font-size: 1.875rem;
+  font-weight: 900;
+  line-height: 1.18;
+  text-transform: capitalize;
+}
+
+.entry-copy .lede {
+  max-width: 36rem;
+  margin: 2.5rem 0 0;
+  color: #cffafe;
+  font-size: 0.875rem;
+  letter-spacing: 0.015em;
+  line-height: 1.55;
+}
+
+.entry-auth-panel {
+  width: min(100%, 29.75rem);
+  padding: 1.25rem;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 1rem;
+  color: #ffffff;
+  background: rgba(0, 0, 0, 0.2);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.25);
+  backdrop-filter: blur(14px);
+}
+
+.entry-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  margin-bottom: 1.5rem;
+  padding: 0.25rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.entry-tab {
+  min-height: 2.25rem;
+  border: 0;
+  border-radius: 999px;
+  color: #cffafe;
+  background: transparent;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.entry-tab:hover { color: #ffffff; }
+
+.entry-tab.is-active {
+  color: #082f49;
+  background: #ffffff;
+}
+
+.entry-auth-form {
+  display: grid;
+  gap: 1.5rem;
+}
+
+.entry-field-group {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.entry-field-group label {
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.entry-auth-form input {
+  width: 100%;
+  min-height: 3.25rem;
+  border: 0;
+  border-radius: 0.5rem;
+  padding: 0.95rem 1.25rem;
+  color: #52525b;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  outline: none;
+}
+
+.entry-auth-form input:focus {
+  box-shadow: 0 0 0 3px rgba(125, 211, 252, 0.45);
+}
+
+.entry-submit {
+  width: 100%;
+  min-height: 2.5rem;
+  border-radius: 999px;
+  clip-path: none;
+  font-size: 1rem;
+}
+
+.entry-anonymous-copy {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.entry-anonymous-copy h2,
+.entry-anonymous-copy p { margin: 0; }
+
+.entry-anonymous-copy h2 {
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+.entry-anonymous-copy p {
+  color: #d8f3ff;
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.entry-auth-panel .button-primary {
+  background: #0c4a6e;
+  box-shadow: 0 10px 20px rgba(8, 47, 73, 0.24);
+}
+
+.entry-auth-panel .button-primary:hover { background: #075985; }
 
 .entry-card h1 { font-size: clamp(2rem, 4vw, 2.75rem); }
 
@@ -208,30 +333,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--muted);
 }
 
-.entry-choice-grid {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.85rem;
-  margin-top: 2rem;
-}
-
-.entry-choice-card {
-  display: grid;
-  gap: 0.72rem;
-  padding: 1rem 0;
-  border-top: 1px solid var(--line-soft);
-  background: var(--surface);
-}
-
-.entry-choice-card h2, .entry-choice-card p { margin: 0; }
-
-.entry-choice-card label {
-  color: var(--muted);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-
-.entry-choice-card input, .structured-input-grid input, .structured-input-grid select {
+.structured-input-grid input, .structured-input-grid select {
   min-height: 2.65rem;
   border: 1px solid var(--line);
   border-radius: 0;
@@ -243,6 +345,36 @@ a { color: inherit; text-decoration: none; }
 
 .inline-status { margin: 0; color: var(--muted); font-size: 0.88rem; }
 .inline-status.error { color: #b42318; }
+.entry-auth-panel .inline-status { color: #d8f3ff; }
+.entry-auth-panel .inline-status.error {
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  border-radius: 0.5rem;
+  color: #fecaca;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+@media (max-width: 768px) {
+  .entry-hero {
+    padding: 5rem 1.25rem;
+  }
+
+  .entry-hero-content {
+    min-height: 0;
+    flex-wrap: wrap;
+    gap: 2.5rem;
+  }
+
+  .entry-copy,
+  .entry-auth-panel {
+    width: 100%;
+    max-width: none;
+  }
+
+  .entry-copy h1 {
+    margin-top: 2.5rem;
+  }
+}
 .semantic-upload-panel {
   display: grid;
   gap: 0.75rem;

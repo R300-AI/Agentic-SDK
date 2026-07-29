@@ -4,44 +4,45 @@
 
 {% block body %}
 <main class="entry-page" data-page="entry">
-  <section class="entry-card official-auth-card" aria-labelledby="entry-title">
-    <div class="official-brand-row">
-      <div class="brand-mark" aria-hidden="true"><span></span></div>
-      <div>
-        <p class="eyebrow">AI Hub Agent 建立工具</p>
-        <strong>Agentic SDK</strong>
+  <section class="entry-hero" aria-labelledby="entry-title">
+    <div class="entry-hero-content">
+      <div class="entry-copy">
+        <img class="entry-logo" src="{{ url_for('static', filename='images/logo_white_en.png') }}" alt="AI Hub">
+        <h1 id="entry-title">Build Agentic SDK Workflows<br>With AI Hub</h1>
+        <p class="lede">Design, test, and run Agentic SDK agents with AI Hub credentials, or start a fast anonymous trial.</p>
+      </div>
+
+      <div class="entry-auth-panel" aria-label="選擇進入 Playground 的方式">
+        <div class="entry-tabs" role="tablist" aria-label="Playground 使用模式">
+          <button type="button" class="entry-tab is-active" id="entry-tab-login" data-entry-tab="login" role="tab" aria-selected="true" aria-controls="entry-panel-login">登入</button>
+          <button type="button" class="entry-tab" id="entry-tab-anonymous" data-entry-tab="anonymous" role="tab" aria-selected="false" aria-controls="entry-panel-anonymous">匿名試用</button>
+        </div>
+
+        <form class="entry-auth-form" id="entry-panel-login" method="post" action="{{ url_for('entry.login') }}" data-entry-panel="login" data-login-form role="tabpanel" aria-labelledby="entry-tab-login">
+          {% if login_error %}
+          <p id="login-error" class="inline-status error" role="alert">{{ login_error }}</p>
+          {% endif %}
+          <div class="entry-field-group">
+            <label for="username">帳號</label>
+            <input id="username" name="username" type="text" autocomplete="username" placeholder="請輸入帳號" required>
+          </div>
+          <div class="entry-field-group">
+            <label for="password">密碼</label>
+            <input id="password" name="password" type="password" autocomplete="current-password" placeholder="・・・・・・・・・・" required>
+          </div>
+          <button class="button button-primary entry-submit" type="submit" data-login-submit>登入</button>
+          <p class="inline-status" role="status" aria-live="polite" data-login-status></p>
+        </form>
+
+        <form class="entry-auth-form" id="entry-panel-anonymous" method="post" action="{{ url_for('entry.start_anonymous') }}" data-entry-panel="anonymous" role="tabpanel" aria-labelledby="entry-tab-anonymous" hidden>
+          <div class="entry-anonymous-copy">
+            <h2>不用登入也能先試跑 Agentic SDK。</h2>
+            <p>匿名試用會建立本機 Playground 工作階段；內容不會儲存到 AI Hub。</p>
+          </div>
+          <button class="button button-primary entry-submit" type="submit">開始匿名試用</button>
+        </form>
       </div>
     </div>
-    <div class="entry-copy">
-      <h1 id="entry-title">登入以建立並測試 Agent。</h1>
-      <p class="lede">使用 AI Hub 帳戶可儲存設定；也可以匿名試用，完成後匯出檔案。</p>
-    </div>
-
-    <div class="entry-choice-grid" aria-label="選擇進入 Playground 的方式">
-      <form class="entry-choice-card" method="post" action="{{ url_for('entry.login') }}" data-login-form>
-        <span class="choice-icon" aria-hidden="true">AI</span>
-        <h2>使用 AI Hub 登入</h2>
-        <p id="login-help">若需儲存設定到 AI Hub，請使用此模式。</p>
-        <label for="username">帳戶</label>
-        <input id="username" name="username" autocomplete="username" aria-describedby="login-help" required>
-        <label for="password">密碼</label>
-        <input id="password" name="password" type="password" autocomplete="current-password" required>
-        {% if login_error %}
-        <p id="login-error" class="inline-status error" role="alert">{{ login_error }}</p>
-        {% endif %}
-        <button class="button button-primary" type="submit" data-login-submit>登入並開始建立</button>
-        <p class="inline-status" role="status" aria-live="polite" data-login-status></p>
-      </form>
-
-      <form class="entry-choice-card quiet" method="post" action="{{ url_for('entry.start_anonymous') }}">
-        <span class="choice-icon" aria-hidden="true">PY</span>
-        <h2>不登入，匿名試用</h2>
-        <p>先建立與測試流程；內容不會儲存到 AI Hub。</p>
-        <button class="button button-secondary" type="submit">開始匿名試用</button>
-      </form>
-    </div>
-
-    <footer class="entry-footer">Agentic SDK</footer>
   </section>
 </main>
 {% endblock %}
