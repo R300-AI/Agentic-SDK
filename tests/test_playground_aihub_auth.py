@@ -1001,12 +1001,16 @@ def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):
 
     assert picker_response.status_code == 200
     picker_html = picker_response.get_data(as_text=True)
-    assert "選擇既有的 Agent" in picker_html
+    assert "Select Your Agentic SDK Workflow" in picker_html
+    assert "Agent One" in picker_html
+    assert "既有工作流" in picker_html
+    assert "選擇工作流" in picker_html
+    assert "使用" in picker_html
+    assert "建立新工作流" in picker_html
+    assert "開始新建" in picker_html
+    assert "編輯" not in picker_html
     assert "選擇要編輯的 Agent" not in picker_html
     assert "可載入既有 Agent 的 Playground 配置" not in picker_html
-    assert "Agent One" in picker_html
-    assert "既有 Agent" in picker_html
-    assert "或建立新的Agent" in picker_html
     assert "第一次儲存時 AI Hub 會建立 Agent" not in picker_html
     assert select_response.status_code == 302
     assert select_response.headers["Location"].endswith("/playground/run")

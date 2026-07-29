@@ -4,47 +4,46 @@
 
 {% block body %}
 <main class="entry-page" data-page="agent-picker">
-  <section class="entry-card official-auth-card" aria-labelledby="agent-picker-title">
-    <div class="official-brand-row">
-      <div class="brand-mark" aria-hidden="true"><span></span></div>
-      <div>
-        <p class="eyebrow">AI Hub Agent 建立工具</p>
-        <strong>Agentic SDK</strong>
+  <section class="entry-hero" aria-labelledby="agent-picker-title">
+    <div class="entry-hero-content">
+      <div class="entry-copy">
+        <img class="entry-logo" src="{{ url_for('static', filename='images/logo_white_en.png') }}" alt="AI Hub">
+        <h1 id="agent-picker-title">Select Your Agentic SDK Workflow<br>With AI Hub</h1>
+        <p class="lede">Use an existing workflow from your account, or start a new Agentic SDK build path.</p>
       </div>
-    </div>
-    <div class="entry-copy">
-      <h1 id="agent-picker-title">選擇既有的 Agent</h1>
-    </div>
 
-    {% if load_error %}
-    <p class="inline-status error" role="alert">{{ load_error }}</p>
-    {% endif %}
+      <div class="entry-auth-panel agent-picker-panel" aria-label="選擇既有工作流或建立新工作流">
+        {% if load_error %}
+        <p class="inline-status error" role="alert">{{ load_error }}</p>
+        {% endif %}
 
-    <section class="agent-list-panel" aria-labelledby="existing-agent-list-title">
-      <h2 id="existing-agent-list-title">既有 Agent</h2>
-      {% if agents %}
-      <div class="agent-option-list" role="list">
-      {% for agent in agents %}
-      <form class="agent-option" role="listitem" method="post" action="{{ url_for('entry.select_agent') }}">
-        <div class="agent-option-main">
-          <strong>{{ agent.agent_name or agent.workflow_name or agent.agent_id }}</strong>
-          {% if agent.description %}<span>{{ agent.description }}</span>{% endif %}
-        </div>
-        <input type="hidden" name="agent_id" value="{{ agent.agent_id }}">
-        <button class="button button-secondary" type="submit">編輯</button>
-      </form>
-      {% endfor %}
+        <section class="agent-picker-section" aria-labelledby="existing-agent-list-title">
+          <h2 id="existing-agent-list-title">既有工作流</h2>
+          {% if agents %}
+          <form class="agent-picker-form" method="post" action="{{ url_for('entry.select_agent') }}">
+            <label for="agent_id">選擇工作流</label>
+            <select id="agent_id" name="agent_id" required>
+              {% for agent in agents %}
+              <option value="{{ agent.agent_id }}">{{ agent.agent_name or agent.workflow_name or agent.agent_id }}</option>
+              {% endfor %}
+            </select>
+            <button class="button button-primary entry-submit" type="submit">使用</button>
+          </form>
+          {% else %}
+          <p class="agent-empty-state">目前沒有可使用的既有工作流。</p>
+          {% endif %}
+        </section>
+
+        <section class="agent-picker-section new-workflow-section" aria-labelledby="new-agent-title">
+          <div>
+            <h2 id="new-agent-title">建立新工作流</h2>
+            <p>從空白流程開始建立新的 Agentic SDK 工作流。</p>
+          </div>
+          <form method="post" action="{{ url_for('entry.start_new_agent') }}">
+            <button class="button button-primary entry-submit" type="submit">開始新建</button>
+          </form>
+        </section>
       </div>
-      {% else %}
-      <p class="agent-empty-state">目前沒有可載入的既有 Agent。</p>
-      {% endif %}
-    </section>
-
-    <div class="entry-choice-grid" aria-label="建立新的 Agent">
-      <form class="entry-choice-card quiet" method="post" action="{{ url_for('entry.start_new_agent') }}">
-        <h2>或建立新的Agent</h2>
-        <button class="button button-secondary" type="submit">開始新建</button>
-      </form>
     </div>
   </section>
 </main>

@@ -31,7 +31,6 @@
             <input id="password" name="password" type="password" autocomplete="current-password" placeholder="・・・・・・・・・・" required>
           </div>
           <button class="button button-primary entry-submit" type="submit" data-login-submit>登入</button>
-          <p class="inline-status" role="status" aria-live="polite" data-login-status></p>
         </form>
 
         <form class="entry-auth-form" id="entry-panel-anonymous" method="post" action="{{ url_for('entry.start_anonymous') }}" data-entry-panel="anonymous" role="tabpanel" aria-labelledby="entry-tab-anonymous" hidden>

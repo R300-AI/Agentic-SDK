@@ -4,7 +4,6 @@ getModeContext();
 
 const loginForm = document.querySelector("[data-login-form]");
 const loginButton = document.querySelector("[data-login-submit]");
-const loginStatus = document.querySelector("[data-login-status]");
 const entryTabs = document.querySelectorAll("[data-entry-tab]");
 const entryPanels = document.querySelectorAll("[data-entry-panel]");
 
@@ -31,8 +30,5 @@ loginForm?.addEventListener("submit", () => {
 	});
 	if (loginButton) {
 		loginButton.textContent = "正在登入...";
-	}
-	if (loginStatus) {
-		loginStatus.textContent = "正在驗證 AI Hub 帳戶。";
 	}
 });
