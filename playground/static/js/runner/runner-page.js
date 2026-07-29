@@ -53,6 +53,30 @@ let workflowDescriptionRequest = null;
 const workflowDescriptionPlaceholder = workflowDescriptionDisplay?.dataset.placeholder || "";
 let lastSaveTrigger = null;
 let runnerInitialized = !initializationOverlay;
+const initialSaveStatusText = saveStatus?.textContent?.trim() || "";
+let savedWorkflowName = initialSaveStatusText === "尚未儲存" ? null : workflowName;
+let savedWorkflowDescription = initialSaveStatusText === "尚未儲存" ? null : workflowDescription;
+let lastStableSaveStatusText = initialSaveStatusText && initialSaveStatusText !== "儲存中..." ? initialSaveStatusText : "已儲存";
+
+function hasWorkflowMetadataChanges() {
+	return savedWorkflowName === null
+		|| savedWorkflowDescription === null
+		|| workflowName !== savedWorkflowName
+		|| workflowDescription !== savedWorkflowDescription;
+}
+
+function refreshSaveStatus() {
+	if (!saveStatus) {
+		return;
+	}
+	saveStatus.textContent = hasWorkflowMetadataChanges() ? "尚未儲存" : lastStableSaveStatusText;
+}
+
+function recordSavedWorkflowMetadata(statusText = "已儲存") {
+	savedWorkflowName = workflowName;
+	savedWorkflowDescription = workflowDescription;
+	lastStableSaveStatusText = statusText;
+}
 
 function setRunnerChatEnabled(enabled) {
 	if (submitButton) {
@@ -305,9 +329,7 @@ async function commitWorkflowName() {
 		}
 		renderWorkflowName(result.workflow_summary?.name || nextName);
 		closeSideWorkflowTitleEditor();
-		if (saveStatus) {
-			saveStatus.textContent = "尚未儲存";
-		}
+		refreshSaveStatus();
 		async function commitWorkflowDescription() {
 			if (!workflowDescriptionInput || workflowDescriptionRequest) {
 				return workflowDescriptionRequest;
@@ -340,9 +362,7 @@ async function commitWorkflowName() {
 				}
 				renderWorkflowDescription(result.description || nextDescription);
 				closeWorkflowDescriptionEditor();
-				if (saveStatus) {
-					saveStatus.textContent = "尚未儲存";
-				}
+				refreshSaveStatus();
 				if (runStatus) {
 					runStatus.textContent = "workflow description 已更新。";
 				}
@@ -392,9 +412,7 @@ async function commitWorkflowDescription() {
 		}
 		renderWorkflowDescription(result.description ?? nextDescription);
 		closeWorkflowDescriptionEditor();
-		if (saveStatus) {
-			saveStatus.textContent = "尚未儲存";
-		}
+		refreshSaveStatus();
 		if (runStatus) {
 			runStatus.textContent = "workflow description 已更新。";
 		}
@@ -772,7 +790,11 @@ saveButton?.addEventListener("click", async () => {
 		runStatus.textContent = message;
 	}
 	if (saveStatus) {
-		saveStatus.textContent = result.saved ? "已儲存" : (result.config_saved ? "設定已儲存，知識庫未儲存" : "儲存失敗");
+		const statusText = result.saved ? "已儲存" : (result.config_saved ? "設定已儲存，知識庫未儲存" : "儲存失敗");
+		if (result.saved || result.config_saved) {
+			recordSavedWorkflowMetadata(statusText);
+		}
+		saveStatus.textContent = statusText;
 	}
 	showSavePanel(savePanel, message);
 	if (saveButton) {

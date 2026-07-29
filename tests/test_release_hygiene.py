@@ -49,3 +49,13 @@ def test_runtime_defaults_do_not_embed_case_specific_content() -> None:
                 offenders.append(f"{path.relative_to(PROJECT_ROOT)}: {term}")
 
     assert not offenders, "Case-specific content leaked into runtime defaults:\n" + "\n".join(offenders)
+
+
+def test_runner_save_status_uses_saved_metadata_snapshot() -> None:
+    runner_js = (PROJECT_ROOT / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert "let savedWorkflowName" in runner_js
+    assert "function hasWorkflowMetadataChanges()" in runner_js
+    assert "function refreshSaveStatus()" in runner_js
+    assert "recordSavedWorkflowMetadata(statusText);" in runner_js
+    assert runner_js.count('saveStatus.textContent = "尚未儲存";') == 1
