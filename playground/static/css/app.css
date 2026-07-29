@@ -1915,7 +1915,7 @@ pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0; color: #
 
 .code-block-with-controls {
   position: relative;
-  padding-top: 2.7rem;
+  padding-right: 3.4rem;
 }
 
 .code-copy-button {

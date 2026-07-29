@@ -8,6 +8,21 @@ const PYTHON_BUILTINS = new Set([
   "dict", "float", "int", "list", "print", "set", "str", "tuple", "Workflow", "Gates",
 ]);
 
+const FOLDABLE_PYTHON_KEYWORDS = new Set([
+  "description",
+  "fallback",
+  "image_instruction",
+  "prefix",
+  "retrieve_description",
+  "system_prompt",
+  "welcome_message",
+]);
+
+const FOLDABLE_PYTHON_ASSIGNMENTS = new Set([
+  "instruction",
+  "summary",
+]);
+
 export function highlightCodeBlocks(root = document) {
   root.querySelectorAll("code.language-python, code.language-bash").forEach((code) => {
     const language = code.classList.contains("language-python") ? "python" : "bash";
@@ -196,7 +211,14 @@ function shouldFoldPythonString(source, token) {
   if (isPlaceholderString(inner) || isStringInListLikeContext(source, token.start)) {
     return false;
   }
-  return stringDisplayLength(inner) > 72 || inner.includes("\n") || isImageDataString(inner);
+  if (inner.includes("\n") || isImageDataString(inner)) {
+    return true;
+  }
+  const displayLength = stringDisplayLength(inner);
+  if (isFoldablePythonTextArgument(source, token.start)) {
+    return displayLength > 28;
+  }
+  return displayLength > 72;
 }
 
 function stringDisplayLength(value) {
@@ -220,6 +242,17 @@ function isPlaceholderString(value) {
 
 function isImageDataString(value) {
   return /^data:image\/[a-z0-9.+-]+;base64,/i.test(String(value).trim());
+}
+
+function isFoldablePythonTextArgument(source, start) {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const before = source.slice(lineStart, start);
+  const keywordMatch = before.match(/([A-Za-z_][A-Za-z0-9_]*)\s*=\s*$/);
+  if (keywordMatch && FOLDABLE_PYTHON_KEYWORDS.has(keywordMatch[1])) {
+    return true;
+  }
+  const assignmentMatch = before.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=.*(?:\bor\s+)?$/);
+  return Boolean(assignmentMatch && FOLDABLE_PYTHON_ASSIGNMENTS.has(assignmentMatch[1]));
 }
 
 function isStringInListLikeContext(source, start) {
