@@ -1913,6 +1913,43 @@ a { color: inherit; text-decoration: none; }
 
 pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0; color: #f4f3ee; background: #111111; }
 
+.code-block-with-controls {
+  position: relative;
+  padding-top: 2.7rem;
+}
+
+.code-copy-button {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  display: inline-grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #334155;
+  background: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  font-family: "Cascadia Code", "Consolas", monospace;
+  font-size: 0.95rem;
+  line-height: 1;
+}
+
+.code-copy-button:hover,
+.code-copy-button:focus-visible {
+  border-color: #94a3b8;
+  color: #0f172a;
+  background: #ffffff;
+  outline: 2px solid rgba(14, 116, 144, 0.18);
+}
+
+.code-copy-button[data-copied="true"] {
+  border-color: #86efac;
+  color: #166534;
+  background: #f0fdf4;
+}
+
 .source-preview-page {
   display: grid;
   gap: 1.25rem;
@@ -1977,6 +2014,26 @@ pre { overflow: auto; max-width: 100%; padding: 1rem; border-radius: 0; color: #
 .code-token-operator { color: #b54708; }
 .code-token-punctuation { color: #475467; }
 .code-token-comment { color: #667085; font-style: italic; }
+
+.code-fold-string {
+  display: inline;
+  max-width: 100%;
+  padding: 0 0.25rem;
+  border: 1px solid #bbf7d0;
+  border-radius: 4px;
+  color: #067647;
+  background: #f0fdf4;
+  cursor: pointer;
+  font: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.code-fold-string:hover,
+.code-fold-string:focus-visible {
+  background: #dcfce7;
+  outline: 2px solid rgba(22, 163, 74, 0.18);
+}
 
 .code-highlight-bash .code-token-command { color: #075985; font-weight: 700; }
 .code-highlight-bash .code-token-option { color: #8a4b0f; }

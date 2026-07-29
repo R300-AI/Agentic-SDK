@@ -15,11 +15,12 @@ export function highlightCodeBlocks(root = document) {
   });
 }
 
-export function setHighlightedCode(code, source, language) {
+export function setHighlightedCode(code, source, language, options = {}) {
   code.replaceChildren();
   code.classList.add("code-highlight", `code-highlight-${language}`);
   const tokens = language === "python" ? tokenizePython(source) : tokenizeShell(source);
-  tokens.forEach((token) => appendToken(code, token));
+  const foldState = { imageIndex: 0 };
+  tokens.forEach((token) => appendToken(code, token, source, language, options, foldState));
 }
 
 function tokenizePython(source) {
@@ -30,20 +31,20 @@ function tokenizePython(source) {
     if (character === "#") {
       const end = source.indexOf("\n", index);
       const nextIndex = end === -1 ? source.length : end;
-      tokens.push({ type: "comment", value: source.slice(index, nextIndex) });
+      tokens.push({ type: "comment", value: source.slice(index, nextIndex), start: index, end: nextIndex });
       index = nextIndex;
       continue;
     }
     if (character === '"' || character === "'") {
       const token = readString(source, index);
-      tokens.push({ type: "string", value: token.value });
+      tokens.push({ type: "string", value: token.value, start: index, end: token.nextIndex });
       index = token.nextIndex;
       continue;
     }
     if (/\d/.test(character)) {
       const match = source.slice(index).match(/^\d+(?:\.\d+)?/);
       if (match) {
-        tokens.push({ type: "number", value: match[0] });
+        tokens.push({ type: "number", value: match[0], start: index, end: index + match[0].length });
         index += match[0].length;
         continue;
       }
@@ -52,17 +53,17 @@ function tokenizePython(source) {
       const match = source.slice(index).match(/^[A-Za-z_][A-Za-z0-9_]*/);
       if (match) {
         const value = match[0];
-        tokens.push({ type: pythonIdentifierType(source, index, value), value });
+        tokens.push({ type: pythonIdentifierType(source, index, value), value, start: index, end: index + value.length });
         index += value.length;
         continue;
       }
     }
     if (/[=+\-*/%<>!|&:,.()[\]{}]/.test(character)) {
-      tokens.push({ type: /[()[\]{},.:]/.test(character) ? "punctuation" : "operator", value: character });
+      tokens.push({ type: /[()[\]{},.:]/.test(character) ? "punctuation" : "operator", value: character, start: index, end: index + 1 });
       index += 1;
       continue;
     }
-    tokens.push({ type: "plain", value: character });
+    tokens.push({ type: "plain", value: character, start: index, end: index + 1 });
     index += 1;
   }
   return tokens;
@@ -75,34 +76,34 @@ function tokenizeShell(source) {
   while (index < source.length) {
     const character = source[index];
     if (character === "\n") {
-      tokens.push({ type: "plain", value: character });
+      tokens.push({ type: "plain", value: character, start: index, end: index + 1 });
       index += 1;
       expectsCommand = true;
       continue;
     }
     if (/\s/.test(character)) {
       const match = source.slice(index).match(/^\s+/);
-      tokens.push({ type: "plain", value: match[0] });
+      tokens.push({ type: "plain", value: match[0], start: index, end: index + match[0].length });
       index += match[0].length;
       continue;
     }
     if (character === "#") {
       const end = source.indexOf("\n", index);
       const nextIndex = end === -1 ? source.length : end;
-      tokens.push({ type: "comment", value: source.slice(index, nextIndex) });
+      tokens.push({ type: "comment", value: source.slice(index, nextIndex), start: index, end: nextIndex });
       index = nextIndex;
       continue;
     }
     if (character === '"' || character === "'") {
       const token = readShellString(source, index);
-      tokens.push({ type: "string", value: token.value });
+      tokens.push({ type: "string", value: token.value, start: index, end: token.nextIndex });
       index = token.nextIndex;
       expectsCommand = false;
       continue;
     }
     const match = source.slice(index).match(/^\S+/);
     const value = match[0];
-    tokens.push({ type: shellTokenType(value, expectsCommand), value });
+    tokens.push({ type: shellTokenType(value, expectsCommand), value, start: index, end: index + value.length });
     index += value.length;
     expectsCommand = /^(?:&&|\|\||[;|])$/.test(value);
   }
@@ -175,13 +176,98 @@ function pythonIdentifierType(source, startIndex, value) {
   return "plain";
 }
 
-function appendToken(parent, token) {
+function appendToken(parent, token, source, language, options, foldState) {
   if (token.type === "plain") {
     parent.append(document.createTextNode(token.value));
+    return;
+  }
+  if (language === "python" && token.type === "string" && options.foldLongStrings && shouldFoldPythonString(source, token)) {
+    parent.append(createFoldedStringToken(token.value, foldState));
     return;
   }
   const span = document.createElement("span");
   span.className = `code-token code-token-${token.type}`;
   span.textContent = token.value;
   parent.append(span);
+}
+
+function shouldFoldPythonString(source, token) {
+  const inner = pythonStringInnerValue(token.value);
+  if (isPlaceholderString(inner) || isStringInListLikeContext(source, token.start)) {
+    return false;
+  }
+  return inner.length > 72 || inner.includes("\n") || isImageDataString(inner);
+}
+
+function pythonStringInnerValue(value) {
+  const match = String(value).match(/^[rubfRUBF]*(["']{1,3})([\s\S]*)(\1)$/);
+  return match ? match[2] : String(value);
+}
+
+function isPlaceholderString(value) {
+  return /^<[^>\n]{1,120}>$/.test(String(value).trim());
+}
+
+function isImageDataString(value) {
+  return /^data:image\/[a-z0-9.+-]+;base64,/i.test(String(value).trim());
+}
+
+function isStringInListLikeContext(source, start) {
+  const stack = [];
+  for (let index = 0; index < start; index += 1) {
+    const character = source[index];
+    if (character === '"' || character === "'") {
+      index = readString(source, index).nextIndex - 1;
+      continue;
+    }
+    if (character === "#") {
+      const lineEnd = source.indexOf("\n", index);
+      if (lineEnd === -1 || lineEnd >= start) {
+        return stack.at(-1) === "[";
+      }
+      index = lineEnd;
+      continue;
+    }
+    if ("[{".includes(character)) {
+      stack.push({ bracket: character, listLike: true });
+      continue;
+    }
+    if (character === "(") {
+      stack.push({ bracket: character, listLike: isTupleLiteralOpen(source, index) });
+      continue;
+    }
+    if ("])}".includes(character)) {
+      stack.pop();
+    }
+  }
+  return Boolean(stack.at(-1)?.listLike);
+}
+
+function isTupleLiteralOpen(source, openIndex) {
+  let index = openIndex - 1;
+  while (index >= 0 && /\s/.test(source[index])) {
+    index -= 1;
+  }
+  return index < 0 || "=,([{:".includes(source[index]);
+}
+
+function createFoldedStringToken(value, foldState) {
+  const inner = pythonStringInnerValue(value);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "code-fold-string code-token code-token-string";
+  button.dataset.fullText = value;
+  button.dataset.collapsedLabel = isImageDataString(inner) ? `[圖片${++foldState.imageIndex}]` : "...";
+  button.dataset.expanded = "false";
+  button.textContent = button.dataset.collapsedLabel;
+  button.setAttribute("aria-label", "展開長文字內容");
+  button.title = "展開長文字內容";
+  button.addEventListener("click", () => {
+    const expanded = button.dataset.expanded === "true";
+    button.dataset.expanded = expanded ? "false" : "true";
+    button.textContent = expanded ? button.dataset.collapsedLabel : value;
+    button.setAttribute("aria-label", expanded ? "展開長文字內容" : "收合長文字內容");
+    button.title = expanded ? "展開長文字內容" : "收合長文字內容";
+  });
+  return button;
 }

@@ -1,3 +1,3 @@
-import { highlightCodeBlocks } from "./shared/code-highlight.js";
+import { enhanceCodeBlocks } from "./shared/code-block-controls.js";
 
-highlightCodeBlocks(document);
+enhanceCodeBlocks(document);

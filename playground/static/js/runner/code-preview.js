@@ -1,4 +1,5 @@
 import { setHighlightedCode } from "../shared/code-highlight.js";
+import { enhanceCodeBlocks } from "../shared/code-block-controls.js";
 
 export function bindCodePreview(toggles, modal) {
   if (!modal || !toggles.length) {
@@ -24,6 +25,7 @@ export function bindCodePreview(toggles, modal) {
       }
       if (code) {
         renderPreviewMarkdown(code, await response.text());
+        enhanceCodeBlocks(code);
       }
     } catch (error) {
       if (code) {
@@ -107,6 +109,7 @@ function createCodeBlock(source, language) {
   if (language) {
     code.className = `language-${language}`;
   }
+  code.dataset.source = source;
   setHighlightedCode(code, source, language);
   block.append(code);
   return block;
