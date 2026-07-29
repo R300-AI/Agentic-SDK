@@ -15,7 +15,7 @@ def has_builder_bridge_query(args: Mapping[str, object]) -> bool:
 
 def has_runner_bridge_query(args: Mapping[str, object]) -> bool:
     mode = _arg(args, "mode").lower()
-    return mode in {"edit", "read"} or bool(_agent_id_arg(args) or _arg(args, "runtimeMode") or _arg(args, "apiBase") or _arg(args, "token") or _arg(args, "owner"))
+    return mode in {"edit", "read"} or bool(_arg(args, "runtimeMode") or _arg(args, "apiBase") or _arg(args, "token") or _arg(args, "owner"))
 
 
 def start_builder_bridge_session(args: Mapping[str, object]) -> None:
@@ -92,6 +92,11 @@ def _clear_selected_agent_state() -> None:
     session.pop("agent_id", None)
     session.pop("agent_name", None)
     session.pop("last_aihub_save", None)
+    session.pop("last_aihub_bundle_load", None)
+    session.pop("agent_owner", None)
+    session.pop("builder_form_state", None)
+    session.pop("builder_has_user_config", None)
+    session.pop("runner_endpoint_selections", None)
     session.pop("builder_upload_id", None)
 
 
@@ -102,6 +107,7 @@ def _store_loaded_agent(result: dict[str, object]) -> None:
 
 
 def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials, *, origin: str | None = None) -> dict[str, object]:
+    _clear_bundle_runtime_state()
     bundle_result = restore_runtime_bundle(agent_id=agent_id, credentials=credentials, origin=origin)
     if bundle_result.get("bundle_restored"):
         if bundle_result.get("builder_upload_id"):
@@ -110,6 +116,11 @@ def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials,
     else:
         session.pop("last_aihub_bundle_load", None)
     return bundle_result
+
+
+def _clear_bundle_runtime_state() -> None:
+    session.pop("builder_upload_id", None)
+    session.pop("last_aihub_bundle_load", None)
 
 
 def _semantic_bundle_required_for_result(result: dict[str, object]) -> bool:

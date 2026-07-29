@@ -704,6 +704,58 @@ def test_bridge_runner_edit_loads_agent_with_token(monkeypatch):
     assert seen_load[0]["credentials"].api_base_url == "https://aihub.example"
 
 
+def test_bridge_runner_edit_keeps_latest_config_source_when_bundle_has_stale_recipe(monkeypatch):
+    latest_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="Bridge Fresh Name",
+    task_goal="Bridge fresh summary.",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+    stale_bundle_source = latest_source.replace("Bridge Fresh Name", "Bridge Old Name").replace("Bridge fresh summary.", "Bridge old summary.")
+
+    monkeypatch.setattr(
+        aihub_bridge,
+        "load_config",
+        lambda agent_id, *, credentials=None, origin=None: {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "Bridge Fresh Name",
+            "python_source": latest_source,
+        },
+    )
+    monkeypatch.setattr(
+        aihub_bridge,
+        "restore_runtime_bundle",
+        lambda *, agent_id=None, credentials=None, origin=None: {
+            "bundle_restored": True,
+            "builder_upload_id": "bridge-upload",
+            "python_source": stale_bundle_source,
+        },
+    )
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.get(
+            "/runner/?mode=edit&runtimeMode=managed&apiBase=https%3A%2F%2Faihub.example&token=bridge-token&agentId=agent-1",
+            base_url="https://playground.example",
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            session_source = session["python_source"]
+            builder_upload_id = session["builder_upload_id"]
+
+    assert response.status_code == 302
+    assert "Bridge Fresh Name" in session_source
+    assert "Bridge fresh summary." in session_source
+    assert "Bridge Old Name" not in session_source
+    assert builder_upload_id == "bridge-upload"
+
+
 def test_playground_runner_edit_accepts_bridge_query(monkeypatch):
     seen_load = []
 
@@ -758,6 +810,34 @@ def test_bridge_runner_read_loads_public_agent(monkeypatch):
     assert response.status_code == 302
     assert response.headers["Location"].endswith("/playground/run")
     assert seen_load == [{"agent_id": "agent-1", "origin": "https://playground.example/"}]
+
+
+def test_legacy_aihub_deep_link_does_not_reuse_stale_source_for_different_agent():
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        with client.session_transaction(base_url="https://playground.example") as session:
+            session["mode"] = "aihub_editable"
+            session["account_context_present"] = True
+            session["agent_id"] = "agent-old"
+            session["agent_name"] = "Old Agent"
+            session["python_source"] = "print('old agent source')"
+            session["builder_upload_id"] = "old-upload"
+            session["last_aihub_bundle_load"] = {"bundle_restored": True, "builder_upload_id": "old-upload"}
+        response = client.get("/playground/run?mode=aihub_editable&agent_id=agent-new", base_url="https://playground.example")
+        with client.session_transaction(base_url="https://playground.example") as session:
+            agent_id = session["agent_id"]
+            has_python_source = "python_source" in session
+            has_builder_upload_id = "builder_upload_id" in session
+            has_bundle_load = "last_aihub_bundle_load" in session
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/playground/builder")
+    assert agent_id == "agent-new"
+    assert has_python_source is False
+    assert has_builder_upload_id is False
+    assert has_bundle_load is False
 
 
 def test_playground_runner_read_accepts_bridge_query(monkeypatch):
@@ -1075,6 +1155,31 @@ def test_agent_picker_selects_and_reloads_existing_agent(monkeypatch):
     assert session_source == "print('reloaded')"
 
 
+def test_agent_picker_select_clears_previous_bundle_runtime_for_plain_agent(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    monkeypatch.setattr(entry_routes, "list_agents", lambda *, credentials=None, origin=None: {"loaded": True, "items": [{"agent_id": "agent-plain", "agent_name": "Plain Agent"}]})
+    monkeypatch.setattr(entry_routes, "load_config", lambda agent_id, *, credentials=None, origin=None: {"loaded": True, "agent_id": agent_id, "agent_name": "Plain Agent", "python_source": "print('plain')"})
+    monkeypatch.setattr(entry_routes, "restore_runtime_bundle", lambda **kwargs: {"bundle_restored": False, "bundle_error": "No bundle for this agent."})
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", data={"username": "creator", "password": "secret"})
+        with client.session_transaction() as session:
+            session["builder_upload_id"] = "old-upload"
+            session["last_aihub_bundle_load"] = {"bundle_restored": True, "builder_upload_id": "old-upload"}
+        response = client.post("/playground/agents/select", data={"agent_id": "agent-plain"})
+        with client.session_transaction() as session:
+            session_source = session["python_source"]
+            has_builder_upload_id = "builder_upload_id" in session
+            has_bundle_load = "last_aihub_bundle_load" in session
+
+    assert response.status_code == 302
+    assert session_source == "print('plain')"
+    assert has_builder_upload_id is False
+    assert has_bundle_load is False
+
+
 def test_agent_picker_blocks_semantic_agent_when_bundle_restore_fails(monkeypatch):
     semantic_source = """
 from agentic_sdk import Workflow
@@ -1124,12 +1229,19 @@ workflow = Workflow(
         client.post("/playground/auth/login", data={"username": "creator", "password": "secret"})
         with client.session_transaction() as session:
             session["agent_id"] = "agent-1"
+            session["builder_upload_id"] = "old-upload"
+            session["last_aihub_bundle_load"] = {"bundle_restored": True, "builder_upload_id": "old-upload"}
         response = client.post("/playground/aihub/config/reload")
+        with client.session_transaction() as session:
+            has_builder_upload_id = "builder_upload_id" in session
+            has_bundle_load = "last_aihub_bundle_load" in session
 
     assert response.status_code == 502
     assert response.json["loaded"] is False
     assert response.json["error"] == "Bundle object was not found."
     assert response.json["error_code"] == "semantic_bundle_not_restored"
+    assert has_builder_upload_id is False
+    assert has_bundle_load is False
 
 
 def test_agent_picker_new_resets_selected_agent_and_enters_builder(monkeypatch):

@@ -245,10 +245,16 @@ def _clear_selected_agent_state() -> None:
     session.pop("agent_id", None)
     session.pop("agent_name", None)
     session.pop("last_aihub_save", None)
+    session.pop("last_aihub_bundle_load", None)
+    session.pop("agent_owner", None)
+    session.pop("builder_form_state", None)
+    session.pop("builder_has_user_config", None)
+    session.pop("runner_endpoint_selections", None)
     session.pop("builder_upload_id", None)
 
 
 def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials) -> dict[str, object]:
+    _clear_bundle_runtime_state()
     bundle_result = restore_runtime_bundle(agent_id=agent_id, credentials=credentials, origin=request.host_url)
     if bundle_result.get("bundle_restored"):
         if bundle_result.get("builder_upload_id"):
@@ -257,6 +263,11 @@ def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials)
     else:
         session.pop("last_aihub_bundle_load", None)
     return bundle_result
+
+
+def _clear_bundle_runtime_state() -> None:
+    session.pop("builder_upload_id", None)
+    session.pop("last_aihub_bundle_load", None)
 
 
 def _semantic_bundle_required_for_result(result: dict[str, object]) -> bool:

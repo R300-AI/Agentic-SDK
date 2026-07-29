@@ -165,10 +165,17 @@ def login_aihub_session():
 
 
 def _restore_bundle_for_session(agent_id: str, credentials) -> dict[str, object]:
+    _clear_bundle_runtime_state()
     bundle_result = restore_runtime_bundle(agent_id=agent_id, credentials=credentials, origin=request.host_url)
     if bundle_result.get("bundle_restored") and bundle_result.get("builder_upload_id"):
         session["builder_upload_id"] = bundle_result["builder_upload_id"]
+        session["last_aihub_bundle_load"] = bundle_result
     return bundle_result
+
+
+def _clear_bundle_runtime_state() -> None:
+    session.pop("builder_upload_id", None)
+    session.pop("last_aihub_bundle_load", None)
 
 
 def _semantic_bundle_required(workflow_config) -> bool:
