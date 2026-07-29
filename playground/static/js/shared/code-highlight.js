@@ -196,7 +196,17 @@ function shouldFoldPythonString(source, token) {
   if (isPlaceholderString(inner) || isStringInListLikeContext(source, token.start)) {
     return false;
   }
-  return inner.length > 72 || inner.includes("\n") || isImageDataString(inner);
+  return stringDisplayLength(inner) > 72 || inner.includes("\n") || isImageDataString(inner);
+}
+
+function stringDisplayLength(value) {
+  return Array.from(String(value)).reduce((length, character) => {
+    return length + (isWideCharacter(character) ? 2 : 1);
+  }, 0);
+}
+
+function isWideCharacter(character) {
+  return /[\u1100-\u115F\u2E80-\uA4CF\uAC00-\uD7A3\uF900-\uFAFF\uFE10-\uFE19\uFE30-\uFE6F\uFF00-\uFF60\uFFE0-\uFFE6]/u.test(character);
 }
 
 function pythonStringInnerValue(value) {
