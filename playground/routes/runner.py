@@ -6,6 +6,7 @@ from dataclasses import asdict, is_dataclass
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, stream_with_context, url_for
 
 from playground.services.aihub_bridge import has_runner_bridge_query, start_runner_bridge_session
+from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, verify_handoff_token, verify_identity
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import normalize_endpoint_selections
@@ -232,7 +233,35 @@ def _store_builder_name(name: str) -> None:
 
 
 def _runner_greeting() -> str:
+    _refresh_ai_hub_identity()
     username = str(session.get("ai_hub_username") or "").strip()
     display_name = str(session.get("ai_hub_display_name") or "").strip()
     account_label = display_name or username
     return f"Hi! {account_label}" if account_label else "Hi! 訪客"
+
+
+def _refresh_ai_hub_identity() -> None:
+    ticket = session.get("ai_hub_credential_ticket")
+    credentials = credentials_for_ticket(ticket)
+    if not credentials:
+        return
+
+    identity = None
+    if credentials.password:
+        identity = verify_identity(credentials.username, credentials.password, origin=request.host_url)
+    elif credentials.token:
+        identity = verify_handoff_token(credentials.token, api_base_url=credentials.api_base_url, origin=request.host_url)
+    if not identity:
+        return
+
+    username = str(identity.get("username") or credentials.username).strip()
+    display_name = str(identity.get("display_name") or "").strip()
+    session["ai_hub_username"] = username
+    session["ai_hub_display_name"] = display_name
+    session["ai_hub_credential_ticket"] = issue_credential_ticket(
+        username,
+        credentials.password,
+        token=credentials.token,
+        api_base_url=credentials.api_base_url,
+        display_name=display_name,
+    )

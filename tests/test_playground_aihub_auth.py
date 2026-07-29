@@ -123,6 +123,36 @@ def test_runner_greeting_falls_back_to_username_when_display_name_blank():
         assert runner_routes._runner_greeting() == "Hi! creator"
 
 
+def test_runner_greeting_refreshes_display_name_from_credential_ticket(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    ticket = aihub_client.issue_credential_ticket("admin", "secret")
+    issued = []
+
+    monkeypatch.setattr(
+        runner_routes,
+        "verify_identity",
+        lambda username, password, *, origin=None: {"username": username, "display_name": "R300-AI"},
+    )
+    monkeypatch.setattr(
+        runner_routes,
+        "issue_credential_ticket",
+        lambda username, password, **kwargs: issued.append((username, password, kwargs)) or "refreshed-ticket",
+    )
+
+    with app.test_request_context("/playground/run", base_url="https://playground.example"):
+        from flask import session
+        session["ai_hub_username"] = "admin"
+        session["ai_hub_credential_ticket"] = ticket
+
+        assert runner_routes._runner_greeting() == "Hi! R300-AI"
+        assert session["ai_hub_display_name"] == "R300-AI"
+        assert session["ai_hub_credential_ticket"] == "refreshed-ticket"
+
+    assert issued == [("admin", "secret", {"token": "", "api_base_url": "", "display_name": "R300-AI"})]
+
+
 def test_save_config_calls_ai_hub_save_api(monkeypatch):
     calls = []
 
