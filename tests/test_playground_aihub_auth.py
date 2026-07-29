@@ -551,6 +551,62 @@ workflow = Workflow(
     assert semantic_saved_path.endswith("semantic-runtime/restored-upload")
 
 
+def test_aihub_navigation_runner_keeps_latest_config_source_when_bundle_has_stale_recipe(monkeypatch):
+    latest_source = """
+from agentic_sdk import Workflow
+from agentic_sdk.modules import SemanticRetrieve, DirectAnswerAction
+
+workflow = Workflow(
+    workflow_name="New Gallery Name",
+    task_goal="New summary from AI Hub config.",
+    retrieve=SemanticRetrieve(sources=["./policy.md"]),
+    action=DirectAnswerAction(),
+)
+"""
+    stale_bundle_source = latest_source.replace("New Gallery Name", "Old Bundle Name").replace("New summary from AI Hub config.", "Old bundle summary.")
+
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda username, password, *, origin=None: True)
+    monkeypatch.setattr(
+        entry_routes,
+        "load_config",
+        lambda agent_id, *, credentials=None, origin=None: {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "New Gallery Name",
+            "python_source": latest_source,
+        },
+    )
+    monkeypatch.setattr(
+        entry_routes,
+        "restore_runtime_bundle",
+        lambda *, agent_id=None, credentials=None, origin=None: {
+            "bundle_restored": True,
+            "builder_upload_id": "restored-upload",
+            "python_source": stale_bundle_source,
+            "bundle_source_file_count": 1,
+            "bundle_vectorstore_file_count": 2,
+        },
+    )
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/aihub/navigation/runner",
+            base_url="https://playground.example",
+            json={"username": "creator", "password": "secret", "agent_id": "agent-1"},
+        )
+        with client.session_transaction(base_url="https://playground.example") as session:
+            session_source = session["python_source"]
+            builder_upload_id = session["builder_upload_id"]
+
+    assert response.status_code == 302
+    assert "New Gallery Name" in session_source
+    assert "New summary from AI Hub config." in session_source
+    assert "Old Bundle Name" not in session_source
+    assert builder_upload_id == "restored-upload"
+
+
 def test_aihub_navigation_runner_accepts_json_payload(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda username, password, *, origin=None: username == "creator" and password == "secret")
     monkeypatch.setattr(

@@ -42,9 +42,6 @@ def load_aihub_config():
     bundle_result = _restore_bundle_for_session(str(loaded["agent_id"]), credentials)
     if _semantic_bundle_required_for_source(loaded.get("python_source")) and not bundle_result.get("bundle_restored"):
         return jsonify({**loaded, **bundle_result, "loaded": False, "error": _semantic_bundle_restore_error(bundle_result), "error_code": bundle_result.get("bundle_error_code") or "semantic_bundle_not_restored"}), 502
-    if bundle_result.get("bundle_restored") and bundle_result.get("python_source"):
-        session["python_source"] = bundle_result["python_source"]
-        loaded["python_source"] = bundle_result["python_source"]
     session["source_origin"] = "aihub_loaded" if editable else "aihub_shared_readonly"
     return jsonify({**loaded, **bundle_result, "mode": session["mode"]})
 
@@ -82,9 +79,6 @@ def reload_aihub_config():
     bundle_result = _restore_bundle_for_session(str(result["agent_id"]), credentials)
     if _semantic_bundle_required_for_source(result.get("python_source")) and not bundle_result.get("bundle_restored"):
         return jsonify({**result, **bundle_result, "loaded": False, "error": _semantic_bundle_restore_error(bundle_result), "error_code": bundle_result.get("bundle_error_code") or "semantic_bundle_not_restored"}), 502
-    if bundle_result.get("bundle_restored") and bundle_result.get("python_source"):
-        session["python_source"] = bundle_result["python_source"]
-        result["python_source"] = bundle_result["python_source"]
     session["source_origin"] = "aihub_loaded"
     session.pop("last_aihub_save", None)
     return jsonify({**result, **bundle_result})

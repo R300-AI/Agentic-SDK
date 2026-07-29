@@ -253,8 +253,6 @@ def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials)
     if bundle_result.get("bundle_restored"):
         if bundle_result.get("builder_upload_id"):
             session["builder_upload_id"] = bundle_result["builder_upload_id"]
-        if bundle_result.get("python_source"):
-            session["python_source"] = bundle_result["python_source"]
         session["last_aihub_bundle_load"] = bundle_result
     else:
         session.pop("last_aihub_bundle_load", None)
