@@ -401,6 +401,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     perceive_module = _first_call_name(source, {"PassThroughPerceive", "TextPerceive", "TextImagePerceive"}) or "PassThroughPerceive"
 
     retrieve_module = _first_call_name(source, {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}) or "KeywordRetrieve"
+    retrieve_description = _extract_keyword_value(source, {"NextStepPlan"}, "retrieve_description")
     workflow_description = _normalize_workflow_description(
         _extract_keyword_value(source, {"Workflow"}, "description")
     )
@@ -418,12 +419,12 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         perceive_importance=_extract_float_value(source, {"TextPerceive", "TextImagePerceive"}, "importance", 1.0),
         perceive_image_instruction=_extract_keyword_value(source, {"TextImagePerceive"}, "image_instruction"),
         retrieve_module=retrieve_module,
-        retrieve_description=_extract_keyword_value(source, {"NextStepPlan"}, "retrieve_description"),
+        retrieve_description=retrieve_description,
         retrieve_items=tuple(_extract_keyword_items(source)),
         retrieve_fallback=_extract_keyword_value(source, {"KeywordRetrieve"}, "fallback") or "沒有命中任何條目。",
         retrieve_top_k=_extract_int_value(source, {"SemanticRetrieve"}, "top_k", 3),
         semantic_support_files=tuple(_semantic_support_files_from_sources(semantic_sources)),
-        semantic_search_goal=None,
+        semantic_search_goal=_semantic_search_goal_from_retrieve_description(retrieve_module, retrieve_description),
         action_module=action_module,
         action_prompt=action_prompt,
         action_tools=action_tools,
@@ -480,6 +481,7 @@ def get_builder_form_state(python_source: str, *, include_generated_defaults: bo
 
     _add_form_value(values, "perceive", "input_label", _configured_text(config.perceive_input_label, None, include_generated_defaults))
     _add_form_value(values, "perceive", "welcome_message", _configured_text(config.perceive_welcome_message, _ADVISOR_WELCOME_MESSAGE, include_generated_defaults))
+    _add_form_value(values, "perceive", "image_instruction", _configured_text(config.perceive_image_instruction, None, include_generated_defaults))
     intent_pairs = _pairs_text_from_options(config.perceive_options)
     if include_generated_defaults or intent_pairs != _ADVISOR_REQUIRED_FIELDS_TEXT:
         _add_form_value(values, "perceive", "intent_pairs", intent_pairs)
@@ -1405,6 +1407,17 @@ def _retrieve_description(config: BuilderSourceConfig) -> str:
         if content:
             return content[:120]
     return _DEFAULT_RETRIEVE_DESCRIPTION
+
+
+def _semantic_search_goal_from_retrieve_description(retrieve_module: str, retrieve_description: str | None) -> str | None:
+    if retrieve_module != "SemanticRetrieve" or not retrieve_description:
+        return None
+    prefix = "優先從這批參考文件查找："
+    if retrieve_description.startswith(prefix):
+        return retrieve_description.removeprefix(prefix).strip() or None
+    if retrieve_description != _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION:
+        return retrieve_description.strip() or None
+    return None
 
 
 def _semantic_source_paths(config: BuilderSourceConfig) -> list[str]:

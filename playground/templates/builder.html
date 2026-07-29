@@ -184,6 +184,10 @@
               ) }}
             </div>
           </form>
+          <form class="module-param-form" data-param-form data-step-key="perceive" data-visible-choices="text_image">
+            <label for="v3-perceive-image-instruction">圖片判讀補充說明</label>
+            <textarea id="v3-perceive-image-instruction" name="image_instruction" rows="3" placeholder="例如：請特別判讀圖片中的欄位、標示、限制或異常。"></textarea>
+          </form>
         </details>
         {% endif %}
         {% if step.key == "retrieve_policy" %}

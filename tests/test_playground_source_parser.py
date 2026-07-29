@@ -1,4 +1,4 @@
-from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, get_workflow_summary
+from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, get_builder_form_state, get_workflow_summary
 from playground.services.source_parser import parse_supported_source
 from playground.services.runner_service import execute_python_source
 
@@ -97,3 +97,40 @@ def test_keyword_retrieve_builder_emits_only_keyword_items_without_retrieve_fall
     assert "KeywordRetrieve(" in source
     assert '"保固"' in source
     assert "fallback=" not in retrieve_block
+
+
+def test_builder_form_state_roundtrips_generated_text_parameters():
+    source = build_python_source_from_builder_choice("memory_type", {"starter_questions": "如何上架？"}, None)
+    source = build_python_source_from_builder_choice("input_type", "text_image", source)
+    source = build_python_source_from_builder_choice(
+        "perceive",
+        {
+            "welcome_message": "請先辨識使用者要上架的模型與限制。",
+            "image_instruction": "請特別判讀圖片中的欄位、流程、限制與警示訊息。",
+            "intent_pairs": "目標 = 使用者想完成的上架結果",
+        },
+        source,
+    )
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", source)
+    source = build_python_source_from_builder_choice(
+        "retrieve",
+        {
+            "semantic_support_files": "AI Hub 上架教學.pptx",
+            "semantic_search_goal": "查找 AI Hub 上架流程、限制與部署步驟",
+        },
+        source,
+    )
+    source = build_python_source_from_builder_choice("output_format", "free_text", source)
+    source = build_python_source_from_builder_choice("action", {"response_instruction": "請用 FAE 口吻分步說明。"}, source)
+
+    state = get_builder_form_state(source)
+
+    assert state["choices"]["input_type"] == "text_image"
+    assert state["choices"]["retrieve_policy"] == "semantic"
+    assert state["values"]["memory_type"]["starter_questions"] == "如何上架？"
+    assert state["values"]["perceive"]["welcome_message"] == "請先辨識使用者要上架的模型與限制。"
+    assert state["values"]["perceive"]["image_instruction"] == "請特別判讀圖片中的欄位、流程、限制與警示訊息。"
+    assert state["values"]["perceive"]["intent_pairs"] == "目標 = 使用者想完成的上架結果"
+    assert state["values"]["retrieve"]["semantic_support_files"] == "AI Hub 上架教學.pptx"
+    assert state["values"]["retrieve"]["semantic_search_goal"] == "查找 AI Hub 上架流程、限制與部署步驟"
+    assert state["values"]["action"]["response_instruction"] == "請用 FAE 口吻分步說明。"
