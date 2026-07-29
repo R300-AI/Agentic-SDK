@@ -26,6 +26,9 @@ FAE 或 AI Hub 網站開發團隊可以先看 AI Hub 維運文件確認平台責
 | 匿名使用已分享 Agent | 帶 `agent_id` 進入公開 Runner | `GET` / `POST /playground/aihub/navigation/shared-runner` | 可公開載入的 `agent_id` | 唯讀 Runner |
 | 已登入使用者要建立新 Agent | 送出 AI Hub 帳密 | `POST /playground/aihub/navigation/builder` | `username`、`password` | Builder |
 | 已登入使用者要打開既有 Agent | 送出 AI Hub 帳密與 `agent_id` | `POST /playground/aihub/navigation/runner` | `username`、`password`、`agent_id` | Runner |
+| AI Hub MVP 以 bridge token 建立新 Agent | 直接導到 Builder | `GET /playground/builder?runtimeMode=managed&apiBase=...&token=...` | AI Hub API base URL 與 bridge token | Builder |
+| AI Hub MVP 以 bridge token 編輯既有 Agent | 直接導到 Runner | `GET /playground/run?mode=edit&runtimeMode=managed&apiBase=...&token=...&agentId=...` | AI Hub API base URL、bridge token、`agentId` | 可編輯 Runner |
+| AI Hub MVP 公開讀取既有 Agent | 直接導到 Runner | `GET /playground/run?mode=read&owner=...&agentId=...` | `agentId`，可選 `owner` | 唯讀 Runner |
 
 ## Playground 頁面階段與入口方式
 
@@ -37,6 +40,9 @@ AI Hub 設計導覽時，請先分清楚「頁面階段」與「handoff API」�
 | Create Agent Handoff | `POST /playground/aihub/navigation/builder` | AI Hub 已登入使用者建立新的 Agent / workflow | `/playground/builder` | 可編輯；後續可保存到 AI Hub |
 | Existing Agent Handoff | `POST /playground/aihub/navigation/runner` | AI Hub 已登入使用者載入自己擁有或有權編輯的既有 Agent | `/playground/run` | 可編輯；`mode=aihub_editable`，可 reload/save |
 | Public / Anonymous Runner | `GET` / `POST /playground/aihub/navigation/shared-runner` | 匿名、未登入、或沒有編輯權限但允許公開使用的既有 Agent | `/playground/run` | 可使用、不可編輯；`mode=aihub_readonly` |
+| Bridge Builder GET | `GET /playground/builder?runtimeMode=managed&apiBase=...&token=...` | AI Hub WebUI 目前以 bridge token 直接送使用者建立 Agent | `/playground/builder` | 可編輯；後續 save/reload 使用 bridge token 呼叫 AI Hub API |
+| Bridge Runner Edit GET | `GET /playground/run?mode=edit&runtimeMode=managed&apiBase=...&token=...&agentId=...` | AI Hub WebUI 目前以 bridge token 直接送使用者編輯既有 Agent | `/playground/run` | 可編輯；`mode=aihub_editable` |
+| Bridge Runner Read GET | `GET /playground/run?mode=read&owner=...&agentId=...` | AI Hub WebUI 目前以公開連結直接送使用者讀取既有 Agent | `/playground/run` | 可使用、不可編輯；`mode=aihub_readonly` |
 | Runner 頁面 | `GET /playground/run` | 已由首頁、builder、runner handoff 或 shared-runner 建立 Playground session 後進入 | `/playground/run` | 依 session 決定可編輯或唯讀；它本身不是載入既有 Agent 的 handoff API |
 
 導覽規則：
@@ -45,21 +51,20 @@ AI Hub 設計導覽時，請先分清楚「頁面階段」與「handoff API」�
 2. 已登入且要新建 Agent，使用 `POST /playground/aihub/navigation/builder`。
 3. 已登入且要開啟自己擁有或有權編輯的既有 Agent，使用 `POST /playground/aihub/navigation/runner`。
 4. 匿名、未登入、或沒有編輯權限但允許公開使用的既有 Agent，使用 `GET` / `POST /playground/aihub/navigation/shared-runner`，進入可使用但不可編輯的 Runner。
+5. AI Hub WebUI MVP 若已經使用 bridge token direct GET，Playground 也支援 `/playground/builder` 與 `/playground/run` query string 入口。
 
-`/playground` 不建立 AI Hub handoff session；AI Hub 已登入使用者若要帶入帳號、Agent id 與編輯權限，應使用 builder 或 runner handoff。Runner 頁面需要明確標示權限狀態：擁有者或有權限者是可編輯，匿名或公開使用者是可使用但不可編輯。
+`/playground` 不建立 AI Hub handoff session；AI Hub 已登入使用者若要帶入帳號、Agent id 與編輯權限，請使用 handoff API 或 bridge GET。Runner 頁面需要明確標示權限狀態：擁有者或有權限者是可編輯，匿名或公開使用者是可使用但不可編輯。
 
-目前 AI Hub WebUI 維運文件描述的是 API-based integration：Playground 作為外部自訂遊樂場服務，呼叫 AI Hub 的 auth、config、bundle API 完成登入、載入、保存與讀回。若要改成 AI Hub 以 bridge token query string 直接導入頁面，需另行定義相容入口；那不是目前三份維運文件中的既有契約。
+目前 Playground 支援兩種 AI Hub 入口：API-based handoff 與 MVP bridge GET。API-based handoff 由 AI Hub 對 `/playground/aihub/navigation/*` 送出帳密或公開 `agent_id`；bridge GET 則由 AI Hub WebUI 將瀏覽器直接導到 `/playground/builder` 或 `/playground/run`，用 query string 帶 `runtimeMode`、`apiBase`、`token`、`agentId`、`owner` 與 `mode=edit/read`。
 
-目前正式 handoff 入口不是下列直接頁面 URL：
+舊版 helper 曾使用不含 `/playground` 前綴的 `{PLAYGROUND_ORIGIN}/builder/` 與 `{PLAYGROUND_ORIGIN}/runner/`，Playground 仍保留 alias 並 redirect 到正式頁面；AI Hub 新連結請優先使用 `/playground/builder` 與 `/playground/run`。
 
-```text
-{PLAYGROUND_ORIGIN}/builder/
-{PLAYGROUND_ORIGIN}/runner/
-{PLAYGROUND_ORIGIN}/runner/?mode=edit
-{PLAYGROUND_ORIGIN}/runner/?mode=read
-```
+對 AI Hub 目前盤點問題的正式回覆：
 
-如果 AI Hub 只要產生一般頁面 URL，路徑保留 `/playground` 前綴：`/playground/`、`/playground/builder`、`/playground/run`。如果 AI Hub 要帶入帳號、`agent_id` 或公開 Agent 狀態，請使用本頁定義的 handoff API。`runtimeMode`、`token`、`owner` 或 `mode=edit/read` query string 可作為 bridge-token 相容模式的設計項目，但需要與目前 API-based 契約分開定義與測試。
+1. `GET /playground/` 是公開入口頁，支援未登入使用者先進 Playground 自行選擇下一步。
+2. AI Hub 已登入使用者要建立 Agent 時，可用 `POST /playground/aihub/navigation/builder`，也可用 `GET /playground/builder?runtimeMode=managed&apiBase=...&token=...`。
+3. AI Hub 已登入使用者要以可編輯狀態開啟既有 Agent 時，可用 `POST /playground/aihub/navigation/runner`，也可用 `GET /playground/run?mode=edit&runtimeMode=managed&apiBase=...&token=...&agentId=...`。成功後 Playground 設定 `mode=aihub_editable`。
+4. 匿名、未登入、或公開使用既有 Agent 的 read-only Runner 可用 `GET` / `POST /playground/aihub/navigation/shared-runner`，也可用 `GET /playground/run?mode=read&owner=...&agentId=...`。成功後 Playground 設定 `mode=aihub_readonly`。
 
 AI Hub 端需要提供三類能力：
 
