@@ -45,7 +45,7 @@ nav:
     - 讓 Agent 接得住前後文: tutorials/multi-turn-conversation.md
     - 讓 Agent 先查資料再回答: tutorials/search-documents-and-answer.md
     - 讓 Agent 判斷什麼時候要叫工具: tutorials/call-tools-from-a-workflow.md
-    - 把遊樂場做好的 Agent 帶回程式碼: tutorials/from-playground-to-code.md
+    - 看懂五大模組的共同規範: tutorials/from-playground-to-code.md
   - Use Case 實施例:
     - use-cases/index.md
     - LaNew 售鞋顧問: use-cases/lanew-footwear-advisor.md

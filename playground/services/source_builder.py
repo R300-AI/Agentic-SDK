@@ -1064,6 +1064,13 @@ def _custom_action_return_parts(python_source: str) -> list[object]:
 
     fallback_parts: list[object] = []
     for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "content" for target in node.targets):
+            parts = _flatten_string_addition(node.value)
+            if "summary" not in parts:
+                continue
+            if "\n\n" in parts:
+                return parts
+            fallback_parts = parts
         if isinstance(node, ast.Return):
             parts = _flatten_string_addition(node.value)
             if "summary" not in parts:
@@ -1272,12 +1279,26 @@ def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: 
     workflow_metadata_lines.append("    memory_type=memory,")
     workflow_metadata_lines.extend(_stage_label_lines(config))
     workflow_block = f"""class {custom_action_class}:
-    def __call__(self, memory):
-        summary = memory.lookup({memory_key_literal}) or {fallback_literal}
+    name = "action"
+
+    def __call__(self, state: WorkflowState) -> ModuleOutput:
+        summary = state.lookup({memory_key_literal}) or {fallback_literal}
         instruction = {rule_instruction_literal}
         if instruction:
-            return {prefix_literal} + summary + "\\n\\n" + {rule_title_literal} + "：" + instruction
-        return {prefix_literal} + summary
+            content = {prefix_literal} + summary + "\\n\\n" + {rule_title_literal} + "：" + instruction
+        else:
+            content = {prefix_literal} + summary
+        return ModuleOutput(
+            next_module=None,
+            payload={{"latest_final_message": content}},
+            context_updates=[
+                ContextEntry(
+                    type=ContextEntryType.ACTION_RESULT,
+                    content=content,
+                    metadata={{"source": {json.dumps(custom_action_class, ensure_ascii=False)}}},
+                )
+            ],
+        )
 
 
 memory = InContextMemory()
@@ -1288,7 +1309,8 @@ workflow = Workflow(
 )
 """
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
-    sections = [_core_import_line(endpoint_bindings)]
+    sections = ["# Playground profile hint: Custom Action", _core_import_line(endpoint_bindings)]
+    sections.append("from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState")
     if import_block:
         sections.append(import_block)
     runner_config_block = _runner_config_block(config)

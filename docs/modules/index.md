@@ -12,6 +12,8 @@
 
 目前這份定義處理多輪對話流程。節點之間以 JSON 物件交換結構化資料；需要模型的模組共用 `MemoryStore` 這個記憶抽象，實際型別可以是 `InContextMemory` 或 `PersistentMemory`。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。使用者介面對接 `Perceive` 的輸入與 `Action` 的輸出；`Plan`、`Retrieve`、`Reflect` 共用 `WorkflowState` 裡的 `Entities` 與 `ContextEntry`。先看下面這張表，可以快速掌握五個家族各自的模組與主要工作。
 
+五大模組共用同一個執行規範。模組物件需要有 `name`，並提供 `__call__(state)` 作為 workflow 的執行入口；執行時讀取 `WorkflowState`，完成處理後回傳 `ModuleOutput`。`ModuleOutput.next_module` 決定下一站，`payload` 寫回 `state.entities`，`context_updates` 留下可追蹤紀錄。五個家族的差異不是五套不同 API，而是每個階段要讀什麼、寫什麼，以及下一站要交給誰。
+
 | 家族 | 標準模組列表 | 主要工作 |
 | --- | --- | --- |
 | Perceive | PassThroughPerceive、TextPerceive、TextImagePerceive | 把原始輸入整理成查詢、標籤與摘要。 |

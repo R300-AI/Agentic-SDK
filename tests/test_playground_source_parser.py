@@ -148,6 +148,36 @@ def test_retrieve_builder_ignores_legacy_semantic_weight_fields():
     assert "importance_weight" not in source
 
 
+def test_custom_action_builder_emits_module_standard_action():
+    source = _sample_workflow_source("固定格式 Agent", "Custom Action")
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "class_name": "SupportRule",
+            "memory_key": "latest_retrieved_content",
+            "fallback": "沒有可用資料。",
+            "prefix": "處理結果：",
+            "rule_title": "規則",
+            "rule_instruction": "只回覆已知資料。",
+        },
+        source,
+    )
+
+    assert "from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState" in source
+    assert "class SupportRule:" in source
+    assert 'name = "action"' in source
+    assert "def __call__(self, state: WorkflowState) -> ModuleOutput:" in source
+    assert "state.lookup(\"latest_retrieved_content\")" in source
+    assert 'payload={"latest_final_message": content}' in source
+    assert "ContextEntry(" in source
+
+    result = execute_python_source(source, message="請處理", process_observer=lambda _event: None)
+
+    assert result["status"] == "completed"
+    assert result["final_message"].startswith("處理結果：")
+    assert result["result"]["message"] == result["final_message"]
+
+
 def test_keyword_retrieve_builder_emits_only_keyword_items_without_retrieve_fallback():
     source = build_python_source_from_builder_choice(
         "retrieve",

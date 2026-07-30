@@ -1,6 +1,6 @@
 # Notebook 教材
 
-這一區放的是 Agentic SDK 的流程方法教材。模組細節請回到「模組家族」查，這裡只保留 MVP 需要的學習順序：先做出一條能跑的工作流程，再看懂執行過程、接住前後文、查資料、叫工具，最後把遊樂場做好的 Agent 帶回程式碼。
+這一區放的是 Agentic SDK 的流程方法教材。模組細節請回到「模組家族」查，這裡只保留 MVP 需要的學習順序：先做出一條能跑的工作流程，再看懂執行過程、接住前後文、查資料、叫工具，最後看懂五大模組共同遵守的執行規範。
 
 ## 建議學習順序
 
@@ -11,7 +11,7 @@
 | 3 | [讓 Agent 接得住前後文](multi-turn-conversation.md) | `03-multi-turn-conversation.ipynb` |
 | 4 | [讓 Agent 先查資料再回答](search-documents-and-answer.md) | `04-search-documents-and-answer.ipynb` |
 | 5 | [讓 Agent 判斷什麼時候要叫工具](call-tools-from-a-workflow.md) | `05-call-tools-from-a-workflow.ipynb` |
-| 6 | [把遊樂場做好的 Agent 帶回程式碼](from-playground-to-code.md) | `06-from-playground-to-code.ipynb` |
+| 6 | [看懂五大模組的共同規範](from-playground-to-code.md) | `06-from-playground-to-code.ipynb` |
 
 ## 什麼內容不放這裡
 
