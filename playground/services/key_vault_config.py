@@ -52,8 +52,6 @@ def configured_key_vault_env_names() -> tuple[str, ...]:
 
 
 def _key_vault_name() -> str:
-    if os.environ.get("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "").strip().lower() in {"1", "true", "yes"}:
-        return ""
     configured_name = (
         os.environ.get("PLAYGROUND_KEY_VAULT_NAME")
         or os.environ.get("AZURE_KEY_VAULT_NAME")
@@ -62,8 +60,6 @@ def _key_vault_name() -> str:
     ).strip()
     if configured_name:
         return configured_name
-    if os.environ.get("CI", "").strip().lower() == "true":
-        return ""
     return DEFAULT_KEY_VAULT_NAME
 
 

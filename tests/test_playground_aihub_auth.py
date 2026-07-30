@@ -32,6 +32,24 @@ def test_create_app_loads_ai_hub_url_from_key_vault(monkeypatch):
     assert os.environ["AI_HUB_PLAYGROUND_ORIGIN"] == "https://playground.example"
 
 
+def test_key_vault_name_does_not_skip_for_local_or_ci_flags(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "true")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.delenv("PLAYGROUND_KEY_VAULT_NAME", raising=False)
+    monkeypatch.delenv("AZURE_KEY_VAULT_NAME", raising=False)
+    monkeypatch.delenv("KEY_VAULT_NAME", raising=False)
+
+    assert key_vault_config._key_vault_name() == key_vault_config.DEFAULT_KEY_VAULT_NAME
+
+
+def test_configured_key_vault_name_wins_over_default(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "true")
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("KEY_VAULT_NAME", "release-vault")
+
+    assert key_vault_config._key_vault_name() == "release-vault"
+
+
 def test_verify_credentials_calls_ai_hub_auth_api(monkeypatch):
     calls = []
 
