@@ -60,6 +60,8 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 `ToolCallAction` 使用 OpenAI SDK 標準的 `tools`、`tool_choice` 與 `message.tool_calls` 介面。當 workflow 需要讓模型根據完整對話與目前檢索內容決定是否呼叫外部 API、後端函式或應用程式工具時，這個模組會把 tool schema 交給模型，並把模型回傳的 tool calls 保存到 workflow 結果中。
 
+若 `tool_choice="none"`，SDK 會把該輪請求視為文字優先模式，不把 `tools` 傳給模型。這可避免部分 OpenAI-compatible 端點在收到 tools 後仍提前產生 tool call；應用層仍可保留同一份 schema 作為 UI 表單或確認面板的呈現合約。
+
 此模組只產生 OpenAI 標準 tool call，不會在 SDK 內直接執行外部工具。應用層可以讀取 `latest_tool_calls`，再依照自己的權限控管、驗證與錯誤處理流程執行實際 API 或函式。
 
 ### 初始化參數
@@ -72,7 +74,7 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | `temperature` | `number|null` | 否 | `null` | 生成溫度；`null` 時不傳此參數。 |
 | `system_prompt` | `string|null` | 否 | `null` | 覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。 |
 | `tools` | `array<object>` | 否 | `[]` | OpenAI Chat Completions tools schema；目前主要使用 `type="function"` 的 function tool。 |
-| `tool_choice` | `string|object|null` | 否 | `"auto"` | 傳給 OpenAI SDK 的 tool choice 設定，例如 `"auto"`、`"none"` 或指定 function。 |
+| `tool_choice` | `string|object|null` | 否 | `"auto"` | Tool choice 設定，例如 `"auto"`、`"none"` 或指定 function；其中 `"none"` 會讓 SDK 不送出 `tools`，改為只產生文字回覆。 |
 
 ### 標準輸出參數
 
