@@ -16,7 +16,7 @@ Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以�
 
 最小 workflow 只需要 `Workflow` 加上你需要的模組。所有模組都可以用一般 Python 物件替換，因此適合從小型 PoC 擴充到正式應用。
 
-`Workflow.run(...)` 仍支援最簡單的單輪呼叫。`Workflow` 預設會以 `InContextMemory` 承接同一個 `session_id` 的完整對話歷史；若你之後需要替換記憶實作，再於建立 workflow 時明確指定其他 memory 類型即可。`WorkflowState` 則保留執行中的中繼結果、payload 與觀測資料。
+`Workflow.run(...)` 仍支援最簡單的單輪呼叫。`Workflow` 預設會以 `InContextMemory` 承接同一個 `session_id` 的完整對話歷史；若你之後需要替換記憶實作，可以在建立 workflow 時傳入 memory 物件，例如 `memory = InContextMemory()` 搭配 `Workflow(memory_type=memory)`。`memory_type` 也接受 `"in_context"`、`"persistent"` 或既有的 memory class 形式。`WorkflowState` 則保留執行中的中繼結果、payload 與觀測資料。
 
 ## 安裝
 

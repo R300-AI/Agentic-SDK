@@ -1232,8 +1232,11 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
     workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
     if config.task_goal:
         workflow_metadata_lines.append(f"    description={json.dumps(config.task_goal, ensure_ascii=False)},")
+    workflow_metadata_lines.append("    memory_type=memory,")
     workflow_metadata_lines.extend(_stage_label_lines(config))
-    workflow_block = f"""workflow = Workflow(
+    workflow_block = f"""memory = InContextMemory()
+
+workflow = Workflow(
 {chr(10).join(workflow_metadata_lines)}
 {workflow_arguments}
 )"""
@@ -1266,6 +1269,7 @@ def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: 
     workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
     if config.task_goal:
         workflow_metadata_lines.append(f"    description={json.dumps(config.task_goal, ensure_ascii=False)},")
+    workflow_metadata_lines.append("    memory_type=memory,")
     workflow_metadata_lines.extend(_stage_label_lines(config))
     workflow_block = f"""class {custom_action_class}:
     def __call__(self, memory):
@@ -1275,6 +1279,8 @@ def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: 
             return {prefix_literal} + summary + "\\n\\n" + {rule_title_literal} + "：" + instruction
         return {prefix_literal} + summary
 
+
+memory = InContextMemory()
 
 workflow = Workflow(
 {chr(10).join(workflow_metadata_lines)}
@@ -1293,7 +1299,7 @@ workflow = Workflow(
 
 
 def _core_import_line(endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
-    return "from agentic_sdk import Workflow"
+    return "from agentic_sdk import InContextMemory, Workflow"
 
 
 def _stage_label_lines(config: BuilderSourceConfig) -> list[str]:

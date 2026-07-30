@@ -9,6 +9,7 @@ from agentic_sdk.core.entities import ContextEntry, ContextEntryType
 from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
+from agentic_sdk.memory.in_memory import InMemoryStore
 from agentic_sdk.memory.protocol import PersistentMemory
 
 
@@ -28,7 +29,7 @@ class Workflow:
     retrieve: Module | None = None
     action: Module | None = None
     reflect: Module | None = None
-    memory_type: type[MemoryStore] = InContextMemory
+    memory_type: str | type[MemoryStore] | MemoryStore = "in_context"
     memory_store: PersistentMemory | None = None
     gates: Gates | None = None
     workflow_name: str = "default"
@@ -37,7 +38,9 @@ class Workflow:
     stage_labels: dict[str, str] = field(default_factory=dict)
 
     modules: dict[str, Module] = field(init=False)
+    memory: MemoryStore | None = field(init=False, default=None)
     _session_memories: dict[str, MemoryStore] = field(init=False, repr=False, default_factory=dict)
+    _memory_factory: type[MemoryStore] = field(init=False, repr=False, default=InContextMemory)
 
     def __post_init__(self) -> None:
         from agentic_sdk.modules.action import DirectAnswerAction
@@ -45,6 +48,9 @@ class Workflow:
         from agentic_sdk.modules.retrieve import KeywordRetrieve
 
         self.gates = self.gates or Gates()
+        self._memory_factory = _memory_factory_from(self.memory_type)
+        if _is_memory_store(self.memory_type):
+            self.memory = self.memory_type
         self.modules = {
             "perceive": self.perceive or PassThroughPerceive(),
             "retrieve": self.retrieve or KeywordRetrieve(),
@@ -74,6 +80,7 @@ class Workflow:
             session_id=resolved_session_id,
             memory=memory,
             memory_type=self.memory_type,
+            memory_factory=self._memory_factory,
             session_memories=self._session_memories,
         )
         if user_message is not None:
@@ -164,7 +171,11 @@ class Workflow:
             if latest_assistant is None or latest_assistant.content != final_message:
                 state.memory.append_message("assistant", final_message, metadata={"source": "workflow.run"})
         if state.memory is not None:
-            self._session_memories[resolved_session_id] = state.memory.copy_for_run()
+            self.memory = state.memory
+            if memory is not None or _is_memory_store(self.memory_type):
+                self._session_memories[resolved_session_id] = state.memory
+            else:
+                self._session_memories[resolved_session_id] = state.memory.copy_for_run()
 
         return WorkflowResult(
             workflow_id=state.workflow_id,
@@ -212,19 +223,51 @@ def _resolve_memory(
     workflow_id: str,
     session_id: str,
     memory: MemoryStore | None,
-    memory_type: type[MemoryStore],
+    memory_type: str | type[MemoryStore] | MemoryStore,
+    memory_factory: type[MemoryStore],
     session_memories: dict[str, MemoryStore],
 ) -> MemoryStore:
     if memory is not None:
-        resolved = memory.copy_for_run()
+        resolved = memory
+    elif _is_memory_store(memory_type):
+        resolved = memory_type
     elif session_id in session_memories:
         resolved = session_memories[session_id].copy_for_run()
     else:
-        resolved = _new_memory(memory_type, workflow_name=workflow_name, workflow_id=workflow_id, session_id=session_id)
+        resolved = _new_memory(memory_factory, workflow_name=workflow_name, workflow_id=workflow_id, session_id=session_id)
     resolved.workflow_name = workflow_name
     resolved.workflow_id = workflow_id
     resolved.session_id = session_id
     return resolved
+
+
+def _memory_factory_from(memory_type: str | type[MemoryStore] | MemoryStore) -> type[MemoryStore]:
+    if isinstance(memory_type, str):
+        key = memory_type.strip().lower().replace("-", "_")
+        if key in {"in_context", "context"}:
+            return InContextMemory
+        if key in {"persistent", "persistant", "in_memory"}:
+            return InMemoryStore
+        raise ValueError(f"unknown memory_type {memory_type!r}; use 'in_context', 'persistent', or a MemoryStore instance")
+    if isinstance(memory_type, type):
+        return memory_type
+    if _is_memory_store(memory_type):
+        return type(memory_type)
+    raise TypeError("memory_type must be a string, MemoryStore class, or MemoryStore instance")
+
+
+def _is_memory_store(value: object) -> bool:
+    return all(
+        hasattr(value, attribute)
+        for attribute in (
+            "turns",
+            "append_message",
+            "latest_user_turn",
+            "latest_assistant_turn",
+            "as_text_transcript",
+            "copy_for_run",
+        )
+    )
 
 
 def _new_memory(memory_type: type[MemoryStore], *, workflow_name: str, workflow_id: str, session_id: str) -> MemoryStore:

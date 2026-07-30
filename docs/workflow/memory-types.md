@@ -16,7 +16,7 @@
 
 - 本次與前次 turn 共同組成的對話工作記憶
 - 所有需要模型的模組共用的對話輸入
-- 可由 `Workflow(memory_type=InContextMemory)` 直接承接的對話紀錄
+- 可建立成 `memory = InContextMemory()`，再由 `Workflow(memory_type=memory)` 直接使用的對話紀錄
 
 `InContextMemory` 的責任是保存完整對話順序；`WorkflowState` 與 `Entities` 則處理單次 `run()` 期間的中繼資料。
 
@@ -43,7 +43,7 @@
 
 | 引擎位置 | 目前程式對應 | 角色 |
 | --- | --- | --- |
-| workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 類型承接同一個 `session_id` 的對話歷史 |
+| workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 策略或 memory 物件承接對話歷史；可用 `"in_context"`、`"persistent"`、memory class 或 memory 物件 |
 | module-facing memory abstraction | `MemoryStore` | 模組讀取完整對話與 turn 歷史時依賴的共同抽象 |
 | conversation-oriented memory | `InContextMemory` | 偏重 session 內完整對話承接的 `MemoryStore` 實作 |
 | durable memory | `PersistentMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
@@ -53,8 +53,8 @@
 ## 什麼時候看這一頁
 
 - 當你要理解 workflow 內哪一層保存完整對話
-- 當你要判斷是否只用單輪 `run()`，還是要用 `memory_type=InContextMemory` 承接多輪對話
-- 當你要替 workflow 指定特定 `MemoryStore` 類型，例如 `InContextMemory` 或 `PersistentMemory`
+- 當你要判斷是否只用單輪 `run()`，還是要建立 `memory = InContextMemory()` 並交給 `Workflow(memory_type=memory)` 承接多輪對話
+- 當你要替 workflow 指定特定 `MemoryStore` 類型或物件，例如 `"in_context"`、`"persistent"`、`InContextMemory` 或自訂 memory instance
 - 當你要分清楚「workflow 節點規格」與「workflow 執行引擎」是兩個不同層次
 
 ## 與模組頁的分工

@@ -292,6 +292,34 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual(["user", "assistant", "user", "assistant"], [turn.role for turn in result.memory.turns])
         self.assertEqual(["system", "user", "assistant", "user"], [message["role"] for message in client.last_create_kwargs["messages"]])
 
+    def test_workflow_memory_type_accepts_memory_instance(self) -> None:
+        client = FoundryOpenAILikeClient(action_text="第一輪回答")
+        memory = InContextMemory()
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            workflow = Workflow(
+                perceive=PassThroughPerceive(),
+                retrieve=PassThroughRetrieve(),
+                action=GenerativeAction(**_llm_params()),
+                memory_type=memory,
+            )
+
+        workflow.run("第一輪問題", session_id="session-42")
+        client._action_text = "第二輪回答"
+        workflow.run("第二輪追問", session_id="session-42")
+
+        self.assertIs(workflow.memory, memory)
+        self.assertEqual(
+            ["user", "assistant", "user", "assistant"],
+            [turn.role for turn in memory.turns],
+        )
+
+    def test_workflow_memory_type_accepts_named_memory_strategy(self) -> None:
+        in_context_workflow = Workflow(memory_type="in_context")
+        persistent_workflow = Workflow(memory_type="persistent")
+
+        self.assertIsInstance(in_context_workflow._memory_factory(), InContextMemory)
+        self.assertIsInstance(persistent_workflow._memory_factory(), InMemoryStore)
+
 
 if __name__ == "__main__":
     unittest.main()

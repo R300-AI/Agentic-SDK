@@ -17,12 +17,16 @@ def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None)
 def test_parse_supported_default_source_name():
     parsed = parse_supported_source(build_default_python_source())
     config = config_from_source(build_default_python_source())
+    source = build_default_python_source()
 
     assert parsed.workflow_name == "default"
     assert parsed.supported_subset is True
-    assert "WorkflowSettings" not in build_default_python_source()
+    assert "WorkflowSettings" not in source
+    assert "from agentic_sdk import InContextMemory, Workflow" in source
+    assert "memory = InContextMemory()" in source
+    assert "memory_type=memory" in source
     assert config.stage_labels["retrieve"] == "正在查找參考資料"
-    assert "stage_labels={" in build_default_python_source()
+    assert "stage_labels={" in source
 
 
 def test_stage_labels_roundtrip_from_workflow_source():

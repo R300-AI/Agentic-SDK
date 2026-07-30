@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from agentic_sdk import Workflow
+from agentic_sdk import InContextMemory, Workflow
 from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, WorkflowResult, WorkflowState
 from agentic_sdk.modules import (
     DirectAnswerAction,
@@ -831,9 +831,11 @@ def _workflow_from_source(
 ) -> Workflow:
     config = config_from_source(python_source)
     reachable_roles = reachable_workflow_roles(config)
+    memory = InContextMemory()
     return Workflow(
         workflow_name=workflow_name,
         description=config.task_goal or None,
+        memory_type=memory,
         stage_labels=config.stage_labels or {},
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
