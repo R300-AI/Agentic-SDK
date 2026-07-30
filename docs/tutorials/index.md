@@ -7,7 +7,7 @@
 | 順序 | 教材 | Notebook |
 | --- | --- | --- |
 | 1 | [做出一條可以跑的工作流程](build-and-run-a-workflow.md) | `01-build-and-run-a-workflow.ipynb` |
-| 2 | [看懂 Agent 每一步怎麼跑](watch-a-workflow-run.md) | `02-watch-a-workflow-run.ipynb` |
+| 2 | [讓畫面知道 Agent 跑到哪一步](watch-a-workflow-run.md) | `02-watch-a-workflow-run.ipynb` |
 | 3 | [讓 Agent 接得住前後文](multi-turn-conversation.md) | `03-multi-turn-conversation.ipynb` |
 | 4 | [讓 Agent 先查資料再回答](search-documents-and-answer.md) | `04-search-documents-and-answer.ipynb` |
 | 5 | [讓 Agent 判斷什麼時候要叫工具](call-tools-from-a-workflow.md) | `05-call-tools-from-a-workflow.ipynb` |

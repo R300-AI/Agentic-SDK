@@ -41,7 +41,7 @@ nav:
   - Notebook 教材:
     - 教材總覽: tutorials/index.md
     - 做出一條可以跑的工作流程: tutorials/build-and-run-a-workflow.md
-    - 看懂 Agent 每一步怎麼跑: tutorials/watch-a-workflow-run.md
+    - 讓畫面知道 Agent 跑到哪一步: tutorials/watch-a-workflow-run.md
     - 讓 Agent 接得住前後文: tutorials/multi-turn-conversation.md
     - 讓 Agent 先查資料再回答: tutorials/search-documents-and-answer.md
     - 讓 Agent 判斷什麼時候要叫工具: tutorials/call-tools-from-a-workflow.md

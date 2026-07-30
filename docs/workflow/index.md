@@ -86,7 +86,7 @@ result = workflow.run("請介紹 SDK", event_callback=on_event)
 }
 ```
 
-這不是完整 tracing 規格；它是給 MVP Chat WebUI 使用的輕量階段提示。若要做除錯、成本分析或跨服務追蹤，可以在這個 callback 之上另外接 OpenTelemetry、LangSmith 或自訂 exporter。
+這不是完整 tracing 規格；它是給 MVP Chat WebUI 使用的輕量階段提示。前端應顯示 SDK 事件提供的 `label`，不要另外硬編模組名稱與畫面文字；若要做除錯、成本分析或跨服務追蹤，可以在這個 callback 之上另外接 OpenTelemetry、LangSmith 或自訂 exporter。
 
 ## README 流程對應
 
