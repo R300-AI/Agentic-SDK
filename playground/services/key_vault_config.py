@@ -53,12 +53,17 @@ def configured_key_vault_env_names() -> tuple[str, ...]:
 
 
 def _key_vault_name() -> str:
-    return (
+    configured_name = (
         os.environ.get("PLAYGROUND_KEY_VAULT_NAME")
         or os.environ.get("AZURE_KEY_VAULT_NAME")
         or os.environ.get("KEY_VAULT_NAME")
-        or DEFAULT_KEY_VAULT_NAME
+        or ""
     ).strip()
+    if configured_name:
+        return configured_name
+    if os.environ.get("CI", "").strip().lower() == "true":
+        return ""
+    return DEFAULT_KEY_VAULT_NAME
 
 
 @lru_cache(maxsize=4)

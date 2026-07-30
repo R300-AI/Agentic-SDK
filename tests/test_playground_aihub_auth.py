@@ -16,6 +16,7 @@ def test_create_app_loads_ai_hub_url_from_key_vault(monkeypatch):
     monkeypatch.delenv("AI_HUB_BASE_URL", raising=False)
     monkeypatch.delenv("AIHUB_BASE_URL", raising=False)
     monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
+    monkeypatch.setenv("KEY_VAULT_NAME", "test-vault")
     monkeypatch.setattr(
         key_vault_config,
         "_key_vault_values",
@@ -1156,6 +1157,7 @@ workflow = Workflow(
             "bundle_error_code": "missing_bundle_api",
         },
     )
+    monkeypatch.setattr(aihub_routes, "prepare_semantic_runtime", lambda *args, **kwargs: {"prepared": True})
     app = create_app()
     app.config.update(TESTING=True, SECRET_KEY="test-secret")
 
