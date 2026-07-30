@@ -834,6 +834,7 @@ def _workflow_from_source(
     return Workflow(
         workflow_name=workflow_name,
         description=config.task_goal or None,
+        stage_labels=config.stage_labels or {},
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
         retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_sources, semantic_saved_path, semantic_index_path),

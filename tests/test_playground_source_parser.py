@@ -61,6 +61,25 @@ def test_runner_process_event_uses_workflow_stage_label():
     }
 
 
+def test_execute_python_source_streams_configured_stage_label():
+    source = """from agentic_sdk import Workflow
+from agentic_sdk.modules import DirectAnswerAction, KeywordRetrieve, PassThroughPerceive
+
+workflow = Workflow(
+    workflow_name="Stage Agent",
+    stage_labels={"retrieve": "正在查詢產品資料"},
+    perceive=PassThroughPerceive(),
+    retrieve=KeywordRetrieve(items=[{"keywords": ["sdk"], "content": "SDK 支援階段提示。"}]),
+    action=DirectAnswerAction(),
+)
+"""
+    events = []
+
+    execute_python_source(source, message="sdk", process_observer=events.append)
+
+    assert any(event["role"] == "retrieve" and event["title"] == "正在查詢產品資料" for event in events)
+
+
 def test_parse_generated_profile_hint_for_summary():
     python_source = _sample_workflow_source("default", "Summary")
     parsed = parse_supported_source(python_source)
