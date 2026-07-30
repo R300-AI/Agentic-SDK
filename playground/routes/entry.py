@@ -22,6 +22,8 @@ def index():
 @entry_bp.get("/playground/")
 def entry():
     if apply_aihub_deep_link(request.args.get("mode"), request.args.get("agent_id")):
+        if request.args.get("agent_id") and not session.get("python_source"):
+            return redirect(url_for("entry.navigate_from_shared_agent_to_runner", agent_id=request.args.get("agent_id")))
         return redirect(url_for("runner.runner"))
 
     mode_context = ModeContext()

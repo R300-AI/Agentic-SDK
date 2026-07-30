@@ -1,0 +1,379 @@
+from __future__ import annotations
+
+from io import BytesIO
+
+from agentic_sdk.core import WorkflowResult
+from playground.app import create_app
+from playground.routes import runner as runner_routes
+from playground.services import runner_service
+from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
+from playground.services.workflow_reachability import reachable_workflow_roles
+
+
+def test_builder_choices_map_to_runtime_modules():
+    source = build_default_python_source()
+
+    for choice, expected_module in {
+        "pass_through": "PassThroughPerceive",
+        "text": "TextPerceive",
+        "text_image": "TextImagePerceive",
+    }.items():
+        config = config_from_source(build_python_source_from_builder_choice("input_type", choice, source))
+        assert config.perceive_module == expected_module
+        assert "perceive" in reachable_workflow_roles(config)
+
+    for choice, expected_module in {
+        "none": "PassThroughRetrieve",
+        "keyword": "KeywordRetrieve",
+        "semantic": "SemanticRetrieve",
+    }.items():
+        config = config_from_source(build_python_source_from_builder_choice("retrieve_policy", choice, source))
+        assert config.retrieve_module == expected_module
+        assert "retrieve" in reachable_workflow_roles(config)
+
+    free_text = config_from_source(build_python_source_from_builder_choice("output_format", "free_text", source))
+    interactive = config_from_source(build_python_source_from_builder_choice("output_format", "interactive", source))
+
+    assert free_text.action_module == "GenerativeAction"
+    assert interactive.action_module == "ToolCallAction"
+    assert "action" in reachable_workflow_roles(free_text)
+    assert "action" in reachable_workflow_roles(interactive)
+
+
+def test_interactive_action_contract_roundtrips_to_boolean_tool_schema():
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "response_instruction": "先說明建議，再詢問是否提交。",
+            "api_contracts": "",
+            "interaction_trigger": "使用者需要確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/submit",
+            "component_fields": "是否提交 = 使用者是否確認提交（資料類型：是/否)",
+        },
+        source,
+    )
+
+    config = config_from_source(source)
+    field = config.action_tools[0]["function"]["parameters"]["properties"]["是否提交"]
+
+    assert config.action_module == "ToolCallAction"
+    assert field["type"] == "boolean"
+    assert config.action_tools[0]["function"]["parameters"]["required"] == ["是否提交"]
+
+
+def test_runner_execute_routes_forward_attachment_payloads(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+    captured = {}
+
+    def fake_execute_python_source(_python_source, **kwargs):
+        captured.update(kwargs)
+        return {
+            "status": "completed",
+            "final_message": "ok",
+            "tool_calls": [],
+            "tool_call_panels": [],
+            "debug_messages": [],
+            "process_events": [],
+            "result": {"message": "ok"},
+            "scene_profile": {},
+        }
+
+    monkeypatch.setattr(runner_routes, "execute_python_source", fake_execute_python_source)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["python_source"] = build_default_python_source()
+        response = client.post(
+            "/playground/run/execute",
+            json={
+                "message": "請判讀圖片",
+                "attachments": [
+                    {
+                        "kind": "image",
+                        "name": "report.png",
+                        "media_type": "image/png",
+                        "content": "data:image/png;base64,abc",
+                    }
+                ],
+            },
+        )
+
+    assert response.status_code == 200
+    assert captured["attachments"] == [
+        {
+            "kind": "image",
+            "name": "report.png",
+            "media_type": "image/png",
+            "content": "data:image/png;base64,abc",
+        }
+    ]
+
+
+def test_semantic_builder_upload_unblocks_review_and_reaches_runner(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+    captured = {}
+
+    def fake_execute_python_source(_python_source, **kwargs):
+        captured.update(kwargs)
+        return {
+            "status": "completed",
+            "final_message": "ok",
+            "tool_calls": [],
+            "tool_call_panels": [],
+            "debug_messages": [],
+            "process_events": [],
+            "result": {"message": "ok"},
+            "scene_profile": {},
+        }
+
+    monkeypatch.setattr(runner_routes, "execute_python_source", fake_execute_python_source)
+
+    with app.test_client() as client:
+        semantic_response = client.post("/playground/builder/state", json={"step": "retrieve_policy", "choice": "semantic"})
+        semantic_payload = semantic_response.get_json()
+        retrieve_review = next(item for item in semantic_payload["builder_review_state"] if item["step_key"] == "retrieve_policy")
+
+        upload_response = client.post(
+            "/playground/builder/uploads",
+            data={"files": (BytesIO(b"product information"), "products.md")},
+            content_type="multipart/form-data",
+        )
+        upload_payload = upload_response.get_json()
+        uploaded_review = next(item for item in upload_payload["builder_review_state"] if item["step_key"] == "retrieve_policy")
+
+        run_response = client.post("/playground/run/execute", json={"message": "查詢產品"})
+
+    assert semantic_response.status_code == 200
+    assert retrieve_review["completed"] is False
+    assert "參考文件" in retrieve_review["detail"]
+    assert upload_response.status_code == 200
+    assert upload_payload["semantic_support_files"] == ["products.md"]
+    assert uploaded_review["completed"] is True
+    assert run_response.status_code == 200
+    assert captured["semantic_sources"] and captured["semantic_sources"][0].endswith("source-files")
+    assert captured["semantic_saved_path"]
+
+
+def test_runner_edit_settings_navigation_preserves_current_draft():
+    app = create_app()
+    app.config.update(TESTING=True)
+    source = build_python_source_from_builder_choice("input_type", "text_image", build_default_python_source())
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["python_source"] = source
+            session["builder_has_user_config"] = True
+
+        runner_response = client.get("/playground/run")
+        builder_response = client.get("/playground/builder")
+
+        with client.session_transaction() as session:
+            preserved_config = config_from_source(session["python_source"])
+
+    assert runner_response.status_code == 200
+    assert builder_response.status_code == 200
+    assert preserved_config.perceive_module == "TextImagePerceive"
+
+
+def test_aihub_readonly_deep_link_without_loaded_source_does_not_dead_end(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    def fake_load_public_config(agent_id, **_kwargs):
+        return {
+            "loaded": True,
+            "agent_id": agent_id,
+            "agent_name": "Shared Agent",
+            "python_source": build_python_source_from_builder_choice("input_type", "text", build_default_python_source()),
+        }
+
+    monkeypatch.setattr("playground.routes.entry.load_public_config", fake_load_public_config)
+
+    with app.test_client() as client:
+        response = client.get("/playground?mode=aihub_readonly&agent_id=agent-1", follow_redirects=True)
+        with client.session_transaction() as session:
+            loaded_config = config_from_source(session["python_source"])
+
+    assert response.status_code == 200
+    assert loaded_config.perceive_module == "TextPerceive"
+    assert b"\xe8\xa9\xa6\xe8\xb7\x91 Agent" in response.data
+
+
+def test_anonymous_start_clears_prior_loaded_agent_state():
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["mode"] = "aihub_editable"
+            session["agent_id"] = "old-agent"
+            session["python_source"] = build_python_source_from_builder_choice("input_type", "text_image", build_default_python_source())
+            session["builder_upload_id"] = "old-upload"
+
+        response = client.post("/playground/start/anonymous")
+        with client.session_transaction() as session:
+            config = config_from_source(session["python_source"])
+            session_snapshot = dict(session)
+
+    assert response.status_code == 302
+    assert response.location.endswith("/playground/builder")
+    assert session_snapshot["mode"] == "anonymous"
+    assert session_snapshot["source_origin"] == "manual_new"
+    assert "agent_id" not in session_snapshot
+    assert "builder_upload_id" not in session_snapshot
+    assert config.perceive_module == "PassThroughPerceive"
+
+
+def test_runner_without_source_redirects_to_builder_without_dead_end():
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.test_client() as client:
+        response = client.get("/playground/run")
+        follow_response = client.get(response.location)
+
+    assert response.status_code == 302
+    assert response.location.endswith("/playground/builder")
+    assert follow_response.status_code == 200
+
+
+def test_source_preview_roundtrip_preserves_current_draft():
+    app = create_app()
+    app.config.update(TESTING=True)
+    source = build_python_source_from_builder_choice("input_type", "text", build_default_python_source())
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["python_source"] = source
+            session["builder_has_user_config"] = True
+
+        source_response = client.get("/playground/source")
+        runner_response = client.get("/playground/run")
+        with client.session_transaction() as session:
+            preserved_config = config_from_source(session["python_source"])
+
+    assert source_response.status_code == 200
+    assert runner_response.status_code == 200
+    assert preserved_config.perceive_module == "TextPerceive"
+
+
+def test_streaming_execute_route_forwards_attachment_payloads(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+    captured = {}
+
+    def fake_stream_python_source_execution(_python_source, **kwargs):
+        captured.update(kwargs)
+        yield {
+            "type": "final",
+            "execution": {
+                "status": "completed",
+                "final_message": "ok",
+                "tool_calls": [],
+                "tool_call_panels": [],
+                "debug_messages": [],
+                "process_events": [],
+                "result": {"message": "ok"},
+                "scene_profile": {},
+            },
+        }
+
+    monkeypatch.setattr(runner_routes, "stream_python_source_execution", fake_stream_python_source_execution)
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["python_source"] = build_default_python_source()
+        response = client.post(
+            "/playground/run/execute/stream",
+            json={
+                "message": "請判讀圖片",
+                "attachments": [
+                    {
+                        "kind": "image",
+                        "name": "report.png",
+                        "media_type": "image/png",
+                        "content": "data:image/png;base64,abc",
+                    }
+                ],
+            },
+        )
+        response.get_data(as_text=True)
+
+    assert response.status_code == 200
+    assert captured["attachments"][0]["content"] == "data:image/png;base64,abc"
+
+
+def test_tool_call_panel_does_not_fallback_to_configured_schema_when_model_returns_text(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(workflow_id="workflow-1", final_message="請確認是否繼續", entities={})
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="我要確認")
+
+    assert result["status"] == "completed"
+    assert result["tool_calls"] == []
+    assert result["tool_call_panels"] == []
+
+
+def test_tool_call_panel_uses_model_message_as_user_facing_question(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="我建議先採用支撐型鞋墊。是否要購買這項推薦？",
+                entities={
+                    "latest_tool_calls": [
+                        {
+                            "id": "call-1",
+                            "type": "function",
+                            "function": {"name": "submit_api_1", "arguments": '{"是否確認": true}'},
+                        }
+                    ]
+                },
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請推薦鞋墊")
+
+    assert result["status"] == "completed"
+    assert result["tool_call_panels"][0]["title"] == "我建議先採用支撐型鞋墊。是否要購買這項推薦？"
+    assert "https://example.com/confirm" not in result["tool_call_panels"][0]["description"]
+    assert result["tool_call_panels"][0]["fields"][0]["type"] == "boolean"
+    assert result["tool_call_panels"][0]["fields"][0]["label"] == "你的選擇"
+    assert result["tool_call_panels"][0]["fields"][0]["description"] == "請根據上方問題選擇是否繼續。"
+    assert result["tool_call_panels"][0]["fields"][0]["choices"] == [
+        {"value": True, "label": "是", "description": "我同意進行這個下一步。"},
+        {"value": False, "label": "否", "description": "我暫時不進行這個下一步。"},
+    ]
+    assert result["tool_call_panels"][0]["api"] == {"method": "POST", "url": "https://example.com/confirm"}

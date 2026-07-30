@@ -182,9 +182,7 @@ def execute_python_source(
     if final_message == "No matching entries.":
         final_message = _source_fallback_text(python_source) or "目前沒有找到符合的參考資料。"
     tool_calls = workflow_result.entities.get("latest_tool_calls", [])
-    tool_call_panels = _tool_call_panels_from(config.action_tools, tool_calls)
-    if not tool_call_panels and config.action_module == "ToolCallAction" and config.action_tools:
-        tool_call_panels = _tool_call_panels_from_schemas(config.action_tools)
+    tool_call_panels = _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
     result = {
         "title": "回覆結果",
         "message": final_message,
@@ -972,7 +970,7 @@ def _source_fallback_text(python_source: str) -> str | None:
     return None
 
 
-def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_calls: object) -> list[dict[str, object]]:
+def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_calls: object, *, final_message: str = "") -> list[dict[str, object]]:
     if not isinstance(tool_calls, list):
         return []
     schemas = _function_schemas_by_name(action_tools)
@@ -987,18 +985,31 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
         schema = schemas.get(function_name, {})
         arguments_text = str(function.get("arguments") or "{}")
         arguments = _safe_json_object(arguments_text)
+        schema_description = str(schema.get("description") or "")
         panels.append(
             {
                 "id": str(tool_call.get("id") or f"tool_call_{index}"),
                 "function_name": function_name,
-                "title": str(schema.get("description") or function_name),
-                "description": str(schema.get("description") or ""),
+                "title": _tool_call_panel_title(final_message, schema_description, function_name),
+                "description": _user_facing_tool_description(schema_description),
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": arguments_text,
                 "fields": _tool_call_fields_from(schema, arguments),
             }
         )
     return panels
+
+
+def _tool_call_panel_title(final_message: str, schema_description: str, function_name: str) -> str:
+    cleaned_message = str(final_message or "").strip()
+    if cleaned_message and cleaned_message != "已產生工具呼叫。":
+        return cleaned_message
+    return _user_facing_tool_description(schema_description) or function_name
+
+
+def _user_facing_tool_description(description: str) -> str:
+    text = str(description or "").strip()
+    return re.sub(r"\s*API：\s*[A-Z]+\s+\S+", "", text).strip()
 
 
 def _tool_call_panels_from_schemas(action_tools: tuple[dict[str, object], ...]) -> list[dict[str, object]]:
@@ -1069,15 +1080,37 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
         fields.append(
             {
                 "name": str(name),
-                "label": str(name),
+                "label": _tool_call_field_label(str(name), field_type),
                 "type": field_type,
                 "panel_type": f"tool-call-panel-{field_type}",
-                "description": str(field_schema.get("description") or ""),
+                "description": _tool_call_field_description(field_schema, field_type),
                 "required": str(name) in required_names,
                 "value": value if value is not None else "",
+                "choices": _tool_call_field_choices(field_type),
             }
         )
     return fields
+
+
+def _tool_call_field_label(name: str, field_type: str) -> str:
+    if field_type == "boolean":
+        return "你的選擇"
+    return name
+
+
+def _tool_call_field_description(field_schema: dict[str, object], field_type: str) -> str:
+    if field_type == "boolean":
+        return "請根據上方問題選擇是否繼續。"
+    return str(field_schema.get("description") or "")
+
+
+def _tool_call_field_choices(field_type: str) -> list[dict[str, object]]:
+    if field_type != "boolean":
+        return []
+    return [
+        {"value": True, "label": "是", "description": "我同意進行這個下一步。"},
+        {"value": False, "label": "否", "description": "我暫時不進行這個下一步。"},
+    ]
 
 
 def _tool_call_field_type(schema_type: object, value: object) -> str:

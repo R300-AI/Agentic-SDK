@@ -227,3 +227,29 @@ def test_builder_form_state_roundtrips_generated_text_parameters():
     assert state["values"]["retrieve"]["semantic_support_files"] == "AI Hub 上架教學.pptx"
     assert state["values"]["retrieve"]["semantic_search_goal"] == "查找 AI Hub 上架流程、限制與部署步驟"
     assert state["values"]["action"]["response_instruction"] == "請用 FAE 口吻分步說明。"
+
+
+def test_interactive_action_adds_generic_intent_gate_without_polluting_form_state():
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "response_instruction": "請依使用者情境回覆，必要時才請使用者確認下一步。",
+            "api_contracts": "",
+            "interaction_trigger": "使用者需要確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認下一步（資料類型：是/否)",
+        },
+        source,
+    )
+
+    assert "請先判斷使用者這一輪的意圖類型" in source
+    assert "當使用者只是詢問資訊、要求分析、要求解釋" in source
+    assert "使用者設定的回覆規範" in source
+
+    config = config_from_source(source)
+    state = get_builder_form_state(source)
+
+    assert config.action_prompt == "請依使用者情境回覆，必要時才請使用者確認下一步。"
+    assert state["values"]["action"]["response_instruction"] == "請依使用者情境回覆，必要時才請使用者確認下一步。"

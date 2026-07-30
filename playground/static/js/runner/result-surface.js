@@ -219,8 +219,22 @@ function normalizeToolCallFields(fields) {
       description: String(field?.description || ""),
       required: Boolean(field?.required),
       value: field?.value,
+      choices: normalizeToolCallChoices(field?.choices),
     };
   });
+}
+
+function normalizeToolCallChoices(choices) {
+  if (!Array.isArray(choices)) {
+    return [];
+  }
+  return choices
+    .map((choice) => ({
+      value: choice?.value,
+      label: String(choice?.label || "").trim(),
+      description: String(choice?.description || "").trim(),
+    }))
+    .filter((choice) => choice.label);
 }
 
 function normalizeToolCallFieldType(rawType) {
@@ -316,7 +330,14 @@ function createToolCallControl(field) {
     const wrapper = document.createElement("div");
     wrapper.className = "tool-call-choice-list";
     const booleanValue = field.value === true || String(field.value).toLowerCase() === "true";
-    wrapper.append(createBooleanChoice(field, true, "是", booleanValue), createBooleanChoice(field, false, "否", !booleanValue));
+    const choices = field.choices.length ? field.choices : [
+      { value: true, label: "是", description: "" },
+      { value: false, label: "否", description: "" },
+    ];
+    choices.forEach((choice) => {
+      const value = choice.value === true || String(choice.value).toLowerCase() === "true";
+      wrapper.append(createBooleanChoice(field, value, choice.label, value ? booleanValue : !booleanValue, choice.description));
+    });
     return wrapper;
   }
   const input = document.createElement("input");
@@ -327,7 +348,7 @@ function createToolCallControl(field) {
   return input;
 }
 
-function createBooleanChoice(field, value, labelText, checked) {
+function createBooleanChoice(field, value, labelText, checked, descriptionText = "") {
   const label = document.createElement("label");
   label.className = "tool-call-choice";
   const input = document.createElement("input");
@@ -339,6 +360,11 @@ function createBooleanChoice(field, value, labelText, checked) {
   const text = document.createElement("span");
   text.textContent = labelText;
   label.append(input, text);
+  if (descriptionText) {
+    const description = document.createElement("small");
+    description.textContent = descriptionText;
+    label.append(description);
+  }
   return label;
 }
 

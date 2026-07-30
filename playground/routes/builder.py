@@ -287,7 +287,11 @@ def _normalize_builder_endpoint_selections(python_source: str) -> dict[str, str]
 
 
 def _should_reset_transient_builder_state() -> bool:
-    return session.get("source_origin") not in _PERSISTENT_SOURCE_ORIGINS
+    if session.get("source_origin") in _PERSISTENT_SOURCE_ORIGINS:
+        return False
+    if session.get("builder_has_user_config") or session.get("python_source"):
+        return False
+    return True
 
 
 def _reset_transient_builder_state() -> None:

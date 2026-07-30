@@ -39,6 +39,12 @@ _OUTPUT_FORMAT_PROMPTS = {
     "json": "請輸出 JSON；欄位固定、值簡潔，不要加入 JSON 以外的文字。",
     "custom_schema": "請依指定格式輸出；欄位缺資料時使用空字串或明確標註未知。",
 }
+_INTERACTIVE_TOOL_POLICY = """互動元件使用原則：
+請先判斷使用者這一輪的意圖類型，而不是因為已配置工具就呼叫工具。
+當使用者只是詢問資訊、要求分析、要求解釋、比較原因、了解現況或追問依據時，只用自然語言回答，不要呼叫工具。
+只有當使用者明確進入決策、確認、提交、申請、送出表單、安排後續流程或選擇下一步，且該需求符合工具描述時，才呼叫最合適的工具。
+呼叫工具前，請先用自然語言重整你要問使用者的問題、建議理由與下一步，讓前端可直接把這段文字作為互動視窗問題。
+不要把 API URL、component schema、欄位 JSON 或內部工具設定當成使用者可見文字輸出。"""
 _FREE_TEXT_OUTPUT_CHOICES = {"free_text", "natural", "bullets"}
 _INTERACTIVE_OUTPUT_CHOICES = {"interactive", "table", "json", "custom_schema"}
 _TOOL_CALL_OUTPUT_CHOICES = {"interactive"}
@@ -845,9 +851,9 @@ def _field_description_and_json_type(raw_value: str) -> tuple[str, str]:
     value = str(raw_value).strip()
     json_type = "string"
     marker = "（資料類型："
-    if marker in value and value.endswith("）"):
+    if marker in value and value.endswith(("）", ")")):
         value, raw_type = value.rsplit(marker, 1)
-        normalized_type = raw_type.removesuffix("）").strip().lower()
+        normalized_type = raw_type.removesuffix("）").removesuffix(")").strip().lower()
         if "number" in normalized_type or "數字" in normalized_type:
             json_type = "number"
         elif "boolean" in normalized_type or "是/否" in normalized_type:
@@ -1370,11 +1376,20 @@ def _action_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str,
         ]
         return f"DirectAnswerAction({', '.join(arguments)})"
     arguments = _llm_arguments("ACTION", binding_role="action", endpoint_bindings=endpoint_bindings)
-    if config.action_prompt:
-        arguments.append(f"system_prompt={json.dumps(config.action_prompt, ensure_ascii=False)}")
+    action_prompt = _action_system_prompt_for_config(config, action_class)
+    if action_prompt:
+        arguments.append(f"system_prompt={json.dumps(action_prompt, ensure_ascii=False)}")
     if action_class == "ToolCallAction" and config.action_tools:
         arguments.append(f"tools={_format_python_literal(list(config.action_tools), 8)}")
     return f"{action_class}({', '.join(arguments)})"
+
+
+def _action_system_prompt_for_config(config: BuilderSourceConfig, action_class: str) -> str | None:
+    if action_class != "ToolCallAction":
+        return config.action_prompt
+    if config.action_prompt:
+        return f"{_INTERACTIVE_TOOL_POLICY}\n\n使用者設定的回覆規範：\n{config.action_prompt}"
+    return _INTERACTIVE_TOOL_POLICY
 
 
 def _perceive_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
@@ -1528,6 +1543,10 @@ def _user_authored_action_prompt(prompt: str | None) -> str | None:
     cleaned = _clean_prompt(str(prompt or ""))
     if not cleaned:
         return None
+    if cleaned == _INTERACTIVE_TOOL_POLICY:
+        return None
+    if cleaned.startswith(f"{_INTERACTIVE_TOOL_POLICY}\n\n使用者設定的回覆規範：\n"):
+        cleaned = cleaned.split("使用者設定的回覆規範：\n", 1)[1].strip()
     if cleaned in _OUTPUT_FORMAT_PROMPTS.values():
         return None
     return cleaned
@@ -1599,6 +1618,19 @@ def _interactive_api_contracts(payload: dict[str, Any]) -> list[dict[str, str | 
     raw_contracts = str(payload.get("api_contracts", "") or "").strip()
     contracts: list[dict[str, str | None]] = []
     if not raw_contracts:
+        direct_fields = _rule_instruction_from_pairs(str(payload.get("component_fields", "")))
+        direct_trigger = _clean_prompt(str(payload.get("interaction_trigger", "")))
+        direct_api_method = _clean_short_text(str(payload.get("api_method", "POST")), "POST").upper()
+        direct_api_url = _clean_prompt(str(payload.get("api_url", "")))
+        if direct_trigger or direct_api_url or direct_fields:
+            return [
+                {
+                    "interaction_trigger": direct_trigger,
+                    "api_method": direct_api_method,
+                    "api_url": direct_api_url,
+                    "component_fields": direct_fields,
+                }
+            ]
         return []
     try:
         decoded_contracts = json.loads(raw_contracts)
