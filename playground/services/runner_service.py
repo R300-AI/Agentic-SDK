@@ -183,6 +183,8 @@ def execute_python_source(
         final_message = _source_fallback_text(python_source) or "目前沒有找到符合的參考資料。"
     tool_calls = workflow_result.entities.get("latest_tool_calls", [])
     tool_call_panels = _tool_call_panels_from(config.action_tools, tool_calls)
+    if not tool_call_panels and config.action_module == "ToolCallAction" and config.action_tools:
+        tool_call_panels = _tool_call_panels_from_schemas(config.action_tools)
     result = {
         "title": "回覆結果",
         "message": final_message,
@@ -994,6 +996,27 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": arguments_text,
                 "fields": _tool_call_fields_from(schema, arguments),
+            }
+        )
+    return panels
+
+
+def _tool_call_panels_from_schemas(action_tools: tuple[dict[str, object], ...]) -> list[dict[str, object]]:
+    panels: list[dict[str, object]] = []
+    for index, schema in enumerate(_function_schemas_by_name(action_tools).values(), start=1):
+        function_name = str(schema.get("name") or f"tool_call_{index}")
+        fields = _tool_call_fields_from(schema, {})
+        if not fields:
+            continue
+        panels.append(
+            {
+                "id": f"configured_tool_{index}",
+                "function_name": function_name,
+                "title": str(schema.get("description") or function_name),
+                "description": str(schema.get("description") or ""),
+                "api": _tool_api_from_schema(schema),
+                "raw_arguments": "{}",
+                "fields": fields,
             }
         )
     return panels

@@ -625,6 +625,9 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	const submittedToolCall = payload?.tool_call_submission || null;
 	const requestMessage = prompt || (submittedToolCall ? toolSubmissionDisplay(submittedToolCall) : "");
 	const requestPayload = { message: requestMessage };
+	if (Array.isArray(payload?.attachments) && payload.attachments.length) {
+		requestPayload.attachments = payload.attachments;
+	}
 	if (submittedToolCall) {
 		requestPayload.tool_call_submission = submittedToolCall;
 	}
