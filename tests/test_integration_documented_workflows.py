@@ -4,7 +4,7 @@ import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
-from agentic_sdk import InContextMemory, InMemoryStore, Workflow
+from agentic_sdk import InContextMemory, InMemoryStore, ModuleSpec, Workflow, WorkflowConfig, build_workflow
 from agentic_sdk.core import Attachment
 from agentic_sdk.modules import (
     DirectAnswerAction,
@@ -94,6 +94,49 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
 
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
         self.assertEqual({"perceive": 1, "retrieve": 1, "action": 1}, result.visit_counts)
+
+    def test_workflow_stage_events_include_labels_for_web_ui(self) -> None:
+        workflow = Workflow(
+            workflow_name="階段提示 Agent",
+            perceive=PassThroughPerceive(),
+            retrieve=KeywordRetrieve(items=[{"keywords": ["sdk"], "content": "Agentic SDK 可以顯示工作流階段。"}]),
+            action=DirectAnswerAction(),
+            stage_labels={"retrieve": "正在查 SDK 資料"},
+        )
+        events = []
+
+        workflow.run("請介紹 SDK", session_id="demo-session", event_callback=events.append)
+
+        start_events = {event["stage"]: event for event in events if event["phase"] == "start"}
+        self.assertEqual("stage", start_events["perceive"]["type"])
+        self.assertEqual("running", start_events["perceive"]["status"])
+        self.assertEqual("正在理解你的問題", start_events["perceive"]["label"])
+        self.assertEqual("正在查 SDK 資料", start_events["retrieve"]["label"])
+        self.assertEqual("KeywordRetrieve", start_events["retrieve"]["module_class"])
+        self.assertEqual("retrieve", start_events["retrieve"]["module"])
+        self.assertEqual("demo-session", start_events["retrieve"]["session_id"])
+        finish_events = [event for event in events if event["phase"] == "finish"]
+        self.assertEqual(["done", "done", "done"], [event["status"] for event in finish_events])
+
+    def test_workflow_config_passes_stage_labels_to_workflow(self) -> None:
+        workflow = build_workflow(
+            WorkflowConfig(
+                name="階段設定 Agent",
+                stage_labels={"retrieve": "正在查詢設定資料"},
+                modules={
+                    "retrieve": ModuleSpec(
+                        kind="keyword",
+                        params={"items": [{"keywords": ["sdk"], "content": "Agentic SDK 支援階段提示。"}]},
+                    )
+                },
+            )
+        )
+        events = []
+
+        workflow.run("sdk", event_callback=events.append)
+
+        retrieve_start = next(event for event in events if event["phase"] == "start" and event["stage"] == "retrieve")
+        self.assertEqual("正在查詢設定資料", retrieve_start["label"])
 
     def test_plan_and_reflect_slots_are_reachable_without_action_wrapper(self) -> None:
         plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])

@@ -1,6 +1,6 @@
-from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, get_builder_form_state, get_workflow_summary
+from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source, get_builder_form_state, get_workflow_summary
 from playground.services.source_parser import parse_supported_source
-from playground.services.runner_service import execute_python_source
+from playground.services.runner_service import _process_event_for_workflow_event, execute_python_source
 
 
 def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None) -> str:
@@ -16,10 +16,49 @@ def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None)
 
 def test_parse_supported_default_source_name():
     parsed = parse_supported_source(build_default_python_source())
+    config = config_from_source(build_default_python_source())
 
     assert parsed.workflow_name == "default"
     assert parsed.supported_subset is True
     assert "WorkflowSettings" not in build_default_python_source()
+    assert config.stage_labels["retrieve"] == "正在查找參考資料"
+    assert "stage_labels={" in build_default_python_source()
+
+
+def test_stage_labels_roundtrip_from_workflow_source():
+    source = """from agentic_sdk import Workflow
+
+workflow = Workflow(
+    workflow_name="Stage Agent",
+    stage_labels={"retrieve": "正在查詢產品資料"},
+)
+"""
+
+    config = config_from_source(source)
+
+    assert config.stage_labels == {"retrieve": "正在查詢產品資料"}
+
+
+def test_runner_process_event_uses_workflow_stage_label():
+    config = config_from_source(build_default_python_source())
+
+    event = _process_event_for_workflow_event(
+        config,
+        {
+            "type": "stage",
+            "phase": "start",
+            "status": "running",
+            "stage": "retrieve",
+            "module": "retrieve",
+            "label": "正在查詢產品資料",
+        },
+    )
+
+    assert event == {
+        "role": "retrieve",
+        "title": "正在查詢產品資料",
+        "description": "正在整理這一步可用的參考內容。",
+    }
 
 
 def test_parse_generated_profile_hint_for_summary():

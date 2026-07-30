@@ -50,6 +50,13 @@ _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的參考文件查找與問�
 _DEFAULT_SEMANTIC_SAVED_PATH = SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 _DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
 _DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
+_DEFAULT_STAGE_LABELS = {
+    "perceive": "正在理解你的問題",
+    "retrieve": "正在查找參考資料",
+    "plan": "正在規劃處理方式",
+    "action": "正在準備回覆",
+    "reflect": "正在檢查回覆內容",
+}
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
     "TextPerceive",
@@ -103,6 +110,7 @@ class BuilderSourceConfig:
     reflect_module: str | None = None
     reflect_on_failure: str | None = None
     entry_module: str = "perceive"
+    stage_labels: dict[str, str] | None = None
     max_node_hops: int = 50
     max_revisit: int = 5
     timeout_sec: float = 300.0
@@ -374,6 +382,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "reflect_module": config.reflect_module,
         "reflect_on_failure": config.reflect_on_failure,
         "entry_module": config.entry_module,
+        "stage_labels": config.stage_labels,
         "max_node_hops": config.max_node_hops,
         "max_revisit": config.max_revisit,
         "timeout_sec": config.timeout_sec,
@@ -442,6 +451,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         reflect_module=_first_call_name(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}),
         reflect_on_failure=_extract_keyword_value(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}, "on_failure"),
         entry_module=_clean_allowed_value(_extract_keyword_value(source, {"Workflow"}, "entry_module") or "perceive", _ALLOWED_ENTRY_MODULES, "perceive"),
+        stage_labels=_stage_labels_from_source(source),
         max_node_hops=_extract_gates_value(source, "max_node_hops", 50),
         max_revisit=_extract_gates_value(source, "max_revisit", 5),
         timeout_sec=float(_extract_gates_value(source, "timeout_sec", 300.0)),
@@ -955,6 +965,17 @@ def _extract_keyword_literal(python_source: str, call_names: set[str], keyword_n
     return fallback
 
 
+def _stage_labels_from_source(python_source: str) -> dict[str, str] | None:
+    raw_labels = _extract_keyword_literal(python_source, {"Workflow"}, "stage_labels", None)
+    if not isinstance(raw_labels, dict):
+        return None
+    labels: dict[str, str] = {}
+    for key, value in raw_labels.items():
+        if isinstance(key, str) and isinstance(value, str) and key in _DEFAULT_STAGE_LABELS:
+            labels[key] = value
+    return labels or None
+
+
 def _extract_assignment_value(python_source: str, assignment_name: str, fallback: str) -> str:
     try:
         tree = ast.parse(python_source)
@@ -1211,6 +1232,7 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
     workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
     if config.task_goal:
         workflow_metadata_lines.append(f"    description={json.dumps(config.task_goal, ensure_ascii=False)},")
+    workflow_metadata_lines.extend(_stage_label_lines(config))
     workflow_block = f"""workflow = Workflow(
 {chr(10).join(workflow_metadata_lines)}
 {workflow_arguments}
@@ -1244,6 +1266,7 @@ def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: 
     workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
     if config.task_goal:
         workflow_metadata_lines.append(f"    description={json.dumps(config.task_goal, ensure_ascii=False)},")
+    workflow_metadata_lines.extend(_stage_label_lines(config))
     workflow_block = f"""class {custom_action_class}:
     def __call__(self, memory):
         summary = memory.lookup({memory_key_literal}) or {fallback_literal}
@@ -1271,6 +1294,12 @@ workflow = Workflow(
 
 def _core_import_line(endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     return "from agentic_sdk import Workflow"
+
+
+def _stage_label_lines(config: BuilderSourceConfig) -> list[str]:
+    labels = dict(_DEFAULT_STAGE_LABELS)
+    labels.update(config.stage_labels or {})
+    return [f"    stage_labels={_format_python_literal(labels, 4)},"]
 
 
 def _workflow_argument_lines(

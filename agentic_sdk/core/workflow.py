@@ -12,6 +12,15 @@ from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
 from agentic_sdk.memory.protocol import PersistentMemory
 
 
+DEFAULT_STAGE_LABELS: dict[str, str] = {
+    "perceive": "正在理解你的問題",
+    "retrieve": "正在查找參考資料",
+    "plan": "正在規劃處理方式",
+    "action": "正在準備回覆",
+    "reflect": "正在檢查回覆內容",
+}
+
+
 @dataclass
 class Workflow:
     perceive: Module | None = None
@@ -25,6 +34,7 @@ class Workflow:
     workflow_name: str = "default"
     description: str | None = None
     entry_module: str = "perceive"
+    stage_labels: dict[str, str] = field(default_factory=dict)
 
     modules: dict[str, Module] = field(init=False)
     _session_memories: dict[str, MemoryStore] = field(init=False, repr=False, default_factory=dict)
@@ -106,28 +116,47 @@ class Workflow:
                     raise WorkflowAborted(f"unknown module '{current}'")
 
                 if event_callback is not None:
-                    event_callback({"phase": "start", "module": current, "state": state, "visit_count": state.visit_counts.get(current, 1)})
+                    event_callback(
+                        self._stage_event(
+                            phase="start",
+                            status="running",
+                            module_name=current,
+                            module=module,
+                            state=state,
+                            visit_count=state.visit_counts.get(current, 1),
+                        )
+                    )
                 raw_output = module(state)
                 output = _normalize_output(current, raw_output, state)
                 state.apply(output)
                 next_module = _next_module_after(current, output, self.modules)
                 if event_callback is not None:
-                    event_callback(
-                        {
-                            "phase": "finish",
-                            "module": current,
-                            "state": state,
-                            "output": output,
-                            "next_module": next_module,
-                            "visit_count": state.visit_counts.get(current, 1),
-                        }
+                    finish_event = self._stage_event(
+                        phase="finish",
+                        status="done",
+                        module_name=current,
+                        module=module,
+                        state=state,
+                        visit_count=state.visit_counts.get(current, 1),
                     )
+                    finish_event.update({"output": output, "next_module": next_module})
+                    event_callback(finish_event)
                 current = next_module
         except WorkflowAborted as exc:
             aborted = True
             abort_reason = exc.reason
             if event_callback is not None and current is not None:
-                event_callback({"phase": "abort", "module": current, "state": state, "reason": abort_reason})
+                module = self.modules.get(current)
+                abort_event = self._stage_event(
+                    phase="abort",
+                    status="error",
+                    module_name=current,
+                    module=module,
+                    state=state,
+                    visit_count=state.visit_counts.get(current, 0),
+                )
+                abort_event["reason"] = abort_reason
+                event_callback(abort_event)
 
         final_message = _final_message_from(state)
         if final_message and state.memory is not None:
@@ -149,6 +178,32 @@ class Workflow:
             entities=state.entities.as_dict(),
             memory=state.memory.copy_for_run() if state.memory is not None else None,
         )
+
+    def _stage_event(
+        self,
+        *,
+        phase: str,
+        status: str,
+        module_name: str,
+        module: Module | None,
+        state: WorkflowState,
+        visit_count: int,
+    ) -> dict[str, Any]:
+        label = self.stage_labels.get(module_name) or DEFAULT_STAGE_LABELS.get(module_name) or f"正在執行 {module_name}"
+        return {
+            "type": "stage",
+            "phase": phase,
+            "status": status,
+            "stage": module_name,
+            "label": label,
+            "module": module_name,
+            "module_class": module.__class__.__name__ if module is not None else None,
+            "workflow_name": self.workflow_name,
+            "workflow_id": state.workflow_id,
+            "session_id": state.session_id,
+            "state": state,
+            "visit_count": visit_count,
+        }
 
 
 def _resolve_memory(

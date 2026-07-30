@@ -659,6 +659,9 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	try {
 		result = await executeRunnerStream(requestPayload, runId, (event) => {
 			liveProcessShown = true;
+			if (runStatus && event?.title) {
+				runStatus.textContent = event.title;
+			}
 			showLiveProcessEvent(assistant.processTrace, event, { onUpdate: scrollResultThread });
 		});
 	} catch (error) {

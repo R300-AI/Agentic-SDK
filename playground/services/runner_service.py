@@ -623,7 +623,7 @@ def _process_event_for_workflow_event(config: BuilderSourceConfig, workflow_even
     phase = str(workflow_event.get("phase") or "")
     state = workflow_event.get("state")
     if phase == "start":
-        return _module_start_process_event(config, module)
+        return _module_start_process_event(config, module, label=str(workflow_event.get("label") or ""))
     if phase == "finish" and isinstance(state, WorkflowState):
         return _module_finish_process_event(config, module, state)
     if phase == "abort":
@@ -631,18 +631,18 @@ def _process_event_for_workflow_event(config: BuilderSourceConfig, workflow_even
     return None
 
 
-def _module_start_process_event(config: BuilderSourceConfig, module: str) -> dict[str, str] | None:
+def _module_start_process_event(config: BuilderSourceConfig, module: str, *, label: str = "") -> dict[str, str] | None:
     if module == "perceive":
-        return _process_event("perceive", "理解輸入", "正在讀取使用者輸入，整理成後續步驟可使用的內容。")
+        return _process_event("perceive", label or "理解輸入", "正在讀取使用者輸入，整理成後續步驟可使用的內容。")
     if module == "plan":
-        return _process_event("plan", "判斷工具順序", "正在判斷這次需要先整理來源，或可以直接準備回覆。")
+        return _process_event("plan", label or "判斷工具順序", "正在判斷這次需要先整理來源，或可以直接準備回覆。")
     if module == "retrieve":
-        title = _retrieve_process_title(config)
+        title = label or _retrieve_process_title(config)
         return _process_event("retrieve", title, "正在整理這一步可用的參考內容。")
     if module == "action":
-        return _process_event("action", "準備輸出回覆", f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。")
+        return _process_event("action", label or "準備輸出回覆", f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。")
     if module == "reflect":
-        return _process_event("reflect", "檢查回覆", "正在檢查回覆是否可交付，必要時會回到前一步調整。")
+        return _process_event("reflect", label or "檢查回覆", "正在檢查回覆是否可交付，必要時會回到前一步調整。")
     return None
 
 

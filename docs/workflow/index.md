@@ -13,6 +13,11 @@
 Workflow(
     workflow_name="...",
     description="...",
+    stage_labels={
+        "perceive": "正在理解你的問題",
+        "retrieve": "正在查找參考資料",
+        "action": "正在準備回覆",
+    },
     perceive=...,
     plan=...,
     retrieve=...,
@@ -21,7 +26,7 @@ Workflow(
 )
 ```
 
-`workflow_name` 用來標示這條流程的公開名稱；未顯式指定時，SDK 與 Playground 都使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState` 上，供應用層或自訂模組使用。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；本次執行會走到哪些節點，取決於前一節點回傳的 `next_module`。
+`workflow_name` 用來標示這條流程的公開名稱；未顯式指定時，SDK 與 Playground 都使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState` 上，供應用層或自訂模組使用。`stage_labels` 是工作流階段提示文字，供 Chat WebUI、Playground Runner 或其他前端在最終文字輸出前顯示「目前正在哪個模組執行」。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；本次執行會走到哪些節點，取決於前一節點回傳的 `next_module`。
 
 執行期間有四層資料分工：
 
@@ -50,6 +55,38 @@ Workflow(
 一條 workflow 啟動後，會從起始節點開始執行。每個節點都會讀取目前的 `WorkflowState`，完成自己的處理，再回傳包含 `next_module` 的 `ModuleOutput`。`Workflow` 會根據這個結果決定下一個要執行的節點，直到某個節點回傳結束條件為止。
 
 這種設計讓節點在執行期間決定下一步要交給誰。同一個 `Workflow` 物件因此可以支援不同長度、不同分支的執行路徑。
+
+## 階段事件
+
+如果呼叫 `run()` 時傳入 `event_callback`，`Workflow` 會在每個模組開始、完成或中止時送出事件。MVP UI 最常用的是開始事件：
+
+```python
+def on_event(event):
+    if event.get("type") == "stage" and event.get("status") == "running":
+        show_status(event["label"])
+
+result = workflow.run("請介紹 SDK", event_callback=on_event)
+```
+
+事件保留既有的 `phase`、`module`、`state`、`visit_count` 等欄位，也會額外提供前端更容易使用的欄位：
+
+```python
+{
+    "type": "stage",
+    "phase": "start",
+    "status": "running",
+    "stage": "retrieve",
+    "label": "正在查找參考資料",
+    "module": "retrieve",
+    "module_class": "KeywordRetrieve",
+    "workflow_name": "WebUI 階段提示 Agent",
+    "workflow_id": "...",
+    "session_id": "...",
+    "visit_count": 1,
+}
+```
+
+這不是完整 tracing 規格；它是給 MVP Chat WebUI 使用的輕量階段提示。若要做除錯、成本分析或跨服務追蹤，可以在這個 callback 之上另外接 OpenTelemetry、LangSmith 或自訂 exporter。
 
 ## README 流程對應
 

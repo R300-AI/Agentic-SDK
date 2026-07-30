@@ -24,6 +24,7 @@ class WorkflowConfig:
     name: str = "default"
     description: str | None = None
     entry: str = "perceive"
+    stage_labels: dict[str, str] = field(default_factory=dict)
     gates: GateConfig = field(default_factory=GateConfig)
     modules: dict[str, ModuleSpec] = field(default_factory=dict)
 
@@ -94,6 +95,7 @@ def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module
         workflow_name=config.name,
         description=config.description,
         entry_module=config.entry,
+        stage_labels=config.stage_labels,
     )
 
 
