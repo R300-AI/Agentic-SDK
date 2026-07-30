@@ -2067,8 +2067,8 @@ pre.code-block-with-controls {
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 0.75rem;
   width: min(96rem, calc(100vw - 0.5rem));
-  height: min(86rem, calc(100vh - 0.5rem));
-  max-height: calc(100vh - 1rem);
+  height: min(57rem, calc(67vh - 0.5rem));
+  max-height: calc(67vh - 1rem);
   padding: clamp(0.8rem, 1.4vw, 1.1rem);
   border: 1px solid var(--line);
   background: var(--surface);
