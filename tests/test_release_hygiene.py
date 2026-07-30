@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+import sys
 from pathlib import Path
 
 
@@ -59,3 +61,24 @@ def test_runner_save_status_uses_saved_metadata_snapshot() -> None:
     assert "function refreshSaveStatus()" in runner_js
     assert "recordSavedWorkflowMetadata(statusText);" in runner_js
     assert runner_js.count('saveStatus.textContent = "尚未儲存";') == 1
+
+
+def test_core_import_does_not_eager_load_semantic_retrieve() -> None:
+    script = """
+import sys
+import agentic_sdk.core
+assert 'agentic_sdk.modules.retrieve.semantic' not in sys.modules
+assert 'faiss' not in sys.modules
+"""
+
+    subprocess.run([sys.executable, "-c", script], cwd=PROJECT_ROOT, check=True)
+
+
+def test_playground_runner_import_does_not_eager_load_faiss() -> None:
+    script = """
+import sys
+import playground.services.runner_service
+assert 'faiss' not in sys.modules
+"""
+
+    subprocess.run([sys.executable, "-c", script], cwd=PROJECT_ROOT, check=True)
