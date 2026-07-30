@@ -212,6 +212,7 @@ jobs:
       - name: Verify FastAPI Playground package
         env:
           PYTHONPATH: .python_packages/lib/site-packages:.
+          PLAYGROUND_SKIP_KEY_VAULT_LOAD: "true"
         run: |
           python - <<'PY'
           from fastapi.testclient import TestClient
