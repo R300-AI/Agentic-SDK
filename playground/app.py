@@ -17,6 +17,10 @@ def create_app() -> Flask:
     app = Flask(__name__)
     app.config.update(SECRET_KEY=os.environ.get("PLAYGROUND_SECRET_KEY", "agentic-sdk-playground-dev"))
 
+    @app.get("/healthz")
+    def healthz() -> dict[str, str]:
+        return {"status": "ok"}
+
     app.register_blueprint(entry_bp)
     app.register_blueprint(builder_bp)
     app.register_blueprint(runner_bp)
