@@ -6,7 +6,6 @@ on:
     paths:
       - "agentic_sdk/**"
       - "playground/**"
-      - ".env"
       - "requirements.txt"
       - ".github/workflows/deploy-playground.yml"
   workflow_dispatch:
@@ -176,20 +175,7 @@ jobs:
               --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
               --query "[?name=='KEY_VAULT_NAME'].value | [0]" \
               -o tsv)
-            CURRENT_AI_HUB_BASE_URL=$(az webapp config appsettings list \
-              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --query "[?name=='AI_HUB_BASE_URL'].value | [0]" \
-              -o tsv)
-            CURRENT_AI_HUB_PLAYGROUND_ORIGIN=$(az webapp config appsettings list \
-              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
-              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
-              --query "[?name=='AI_HUB_PLAYGROUND_ORIGIN'].value | [0]" \
-              -o tsv)
-
             DESIRED_PYTHONPATH=/home/site/wwwroot/.python_packages/lib/site-packages:/home/site/wwwroot
-            DESIRED_AI_HUB_BASE_URL=$(sed -n 's/^AI_HUB_BASE_URL=//p' .env | tail -n 1 | tr -d '"' | tr -d "'")
-            DESIRED_AI_HUB_PLAYGROUND_ORIGIN="https://${{ vars.AZURE_WEBAPP_NAME }}.azurewebsites.net"
             SHOULD_UPDATE_SETTINGS=false
 
             if [ "$CURRENT_PORT" != "8000" ] || \
@@ -197,11 +183,7 @@ jobs:
                [ "$CURRENT_SCM_BUILD" != "false" ] || \
                [ "$CURRENT_ORYX_BUILD" != "false" ] || \
                [ "$CURRENT_PYTHONPATH" != "$DESIRED_PYTHONPATH" ] || \
-               [ "$CURRENT_KEY_VAULT" != "${{ vars.KEY_VAULT_NAME }}" ] || \
-               [ "$CURRENT_AI_HUB_PLAYGROUND_ORIGIN" != "$DESIRED_AI_HUB_PLAYGROUND_ORIGIN" ]; then
-              SHOULD_UPDATE_SETTINGS=true
-            fi
-            if [ -n "$DESIRED_AI_HUB_BASE_URL" ] && [ "$CURRENT_AI_HUB_BASE_URL" != "$DESIRED_AI_HUB_BASE_URL" ]; then
+               [ "$CURRENT_KEY_VAULT" != "${{ vars.KEY_VAULT_NAME }}" ]; then
               SHOULD_UPDATE_SETTINGS=true
             fi
 
@@ -213,12 +195,8 @@ jobs:
                 "ENABLE_ORYX_BUILD=false"
                 "PYTHONPATH=$DESIRED_PYTHONPATH"
                 "KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}"
-                "AI_HUB_PLAYGROUND_ORIGIN=$DESIRED_AI_HUB_PLAYGROUND_ORIGIN"
                 "PLAYGROUND_SECRET_KEY=$CURRENT_SECRET"
               )
-              if [ -n "$DESIRED_AI_HUB_BASE_URL" ]; then
-                APP_SETTINGS+=("AI_HUB_BASE_URL=$DESIRED_AI_HUB_BASE_URL")
-              fi
               az webapp config appsettings set \
                 --name "${{ vars.AZURE_WEBAPP_NAME }}" \
                 --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
@@ -261,7 +239,6 @@ jobs:
             agentic_sdk/ \
             playground/ \
             .python_packages/ \
-            .env \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*" -x "playground/visual-audit/*"
 

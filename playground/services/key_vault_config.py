@@ -56,6 +56,7 @@ def _key_vault_name() -> str:
     return (
         os.environ.get("PLAYGROUND_KEY_VAULT_NAME")
         or os.environ.get("AZURE_KEY_VAULT_NAME")
+        or os.environ.get("KEY_VAULT_NAME")
         or DEFAULT_KEY_VAULT_NAME
     ).strip()
 
