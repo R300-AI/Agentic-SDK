@@ -333,6 +333,92 @@ def test_tool_call_panel_does_not_fallback_for_information_intent(monkeypatch):
     assert result["tool_call_panels"] == []
 
 
+def test_tool_call_panel_does_not_fallback_for_optional_followup_question(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="目前足測結果屬正常足弓。若你願意，我可以整理成門市話術版。",
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="這份報告代表我的腳有什麼問題嗎？")
+
+    assert result["tool_call_panels"] == []
+
+
+def test_tool_call_panel_falls_back_for_reservation_confirmation(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="商品名稱：科技鞋墊 通用型\n商品編號：291090970\n請問我要先為您登記保留這款推薦嗎？",
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="好，那就幫我保留你推薦的那款。")
+
+    assert len(result["tool_call_panels"]) == 1
+    assert result["tool_call_panels"][0]["title"] == "請問我要先為您登記保留這款推薦嗎？"
+
+
+def test_tool_call_panel_allows_data_limitations_after_recommendation(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="商品名稱：科技鞋墊 通用型\n商品編號：291090970\n資料限制：目前庫存資料不足，需由門市確認。\n您要我先幫您保留或購買這款推薦嗎？",
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請直接幫我推薦一款合適的鞋墊。")
+
+    assert len(result["tool_call_panels"]) == 1
+    assert result["tool_call_panels"][0]["title"] == "您要我先幫您保留或購買這款推薦嗎？"
+
+
 def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(monkeypatch):
     source = build_python_source_from_builder_choice("output_format", "interactive", None)
     source = build_python_source_from_builder_choice(

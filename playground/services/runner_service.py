@@ -1027,14 +1027,13 @@ def _should_offer_configured_tool_panel(config: BuilderSourceConfig, user_messag
         return False
     user_text = str(user_message or "").lower()
     final_text = str(final_message or "").lower()
-    tool_text = _configured_tool_text(config).lower()
     if _has_information_intent(user_text):
         return False
     if _asks_for_missing_input(final_text):
         return False
-    if _asks_for_confirmation(final_text) and _has_decision_context(user_text, final_text, tool_text):
-        return True
-    return _has_decision_context(user_text, final_text, tool_text) and _has_actionable_response(final_text)
+    if not _has_decision_context(user_text):
+        return False
+    return _has_actionable_response(final_text) and _asks_for_business_confirmation(final_text)
 
 
 def _configured_tool_text(config: BuilderSourceConfig) -> str:
@@ -1045,7 +1044,7 @@ def _configured_tool_text(config: BuilderSourceConfig) -> str:
 
 
 def _has_information_intent(text: str) -> bool:
-    return any(term in text for term in ("分析", "解釋", "說明", "結果", "原因", "現況", "為什麼", "how", "why", "explain", "analysis", "result"))
+    return any(term in text for term in ("分析", "解釋", "說明", "結果", "原因", "現況", "為什麼", "問題", "算不算", "怎麼說", "話術", "差在哪", "差異", "治好", "診斷", "how", "why", "explain", "analysis", "result"))
 
 
 def _has_decision_context(*texts: str) -> bool:
@@ -1057,12 +1056,32 @@ def _asks_for_confirmation(text: str) -> bool:
     return any(term in text for term in ("?", "？", "是否", "要不要", "需不需要", "要進行", "要繼續", "確認"))
 
 
+def _asks_for_business_confirmation(text: str) -> bool:
+    if not _asks_for_confirmation(text):
+        return False
+    return any(term in text for term in ("購買", "保留", "送出", "登記", "進入下一步", "進行下一步", "購買建議", "提交", "confirm", "submit", "next step"))
+
+
 def _asks_for_missing_input(text: str) -> bool:
-    return any(term in text for term in ("請提供", "請上傳", "需要更多", "資訊不足", "資料不足", "無法判斷", "provide", "upload", "need more", "insufficient"))
+    return any(
+        term in text
+        for term in (
+            "請提供更多",
+            "請上傳",
+            "需要更多",
+            "無法推薦",
+            "無法判斷",
+            "才能推薦",
+            "provide more",
+            "upload",
+            "need more",
+            "insufficient to recommend",
+        )
+    )
 
 
 def _has_actionable_response(text: str) -> bool:
-    return any(term in text for term in ("建議", "推薦", "下一步", "可選", "方案", "recommend", "suggest", "option", "next step"))
+    return any(term in text for term in ("商品名稱", "商品編號", "售價", "建議", "推薦", "下一步", "可選", "方案", "recommend", "suggest", "option", "next step"))
 
 
 def _tool_call_panels_from_schemas(action_tools: tuple[dict[str, object], ...], *, final_message: str = "") -> list[dict[str, object]]:
