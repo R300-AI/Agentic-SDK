@@ -1,9 +1,13 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "agentic-sdk"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10,<3.13"
 dependencies = [
     "annotated-doc==0.0.4",
     "annotated-types==0.7.0",
@@ -40,3 +44,9 @@ dependencies = [
     "watchfiles==1.2.0",
     "websockets==16.0",
 ]
+
+[tool.setuptools.packages.find]
+include = ["agentic_sdk*"]
+
+[tool.setuptools.dynamic]
+version = {attr = "agentic_sdk.__version__"}

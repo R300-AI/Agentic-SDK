@@ -59,37 +59,24 @@ def _source_preview_markdown(python_source: str) -> str:
     python_imports, python_workflow = _split_python_source_blocks(python_source)
     placeholder_notice = "並把 `api_key`、`base_url`、`model` 或 `embedding_model` 的 `<...>` 換成你的部署設定。"
     if python_imports:
-        source_steps = f"""3. 複製 Python import 區塊。
+        source_steps = f"""1. 複製 Python import 區塊。
 
 ```python
 {python_imports}
 ```
 
-4. 複製 Python Workflow 區塊，{placeholder_notice}
+2. 複製 Python Workflow 區塊，{placeholder_notice}
 
 ```python
 {python_workflow}
 ```"""
     else:
-        source_steps = f"""3. 複製下方 Python Workflow 程式碼，{placeholder_notice}
+        source_steps = f"""1. 複製下方 Python Workflow 程式碼，{placeholder_notice}
 
 ```python
 {python_workflow}
 ```"""
-    return f"""1. 在終端機複製專案並切到資料夾。
-
-```bash
-git clone https://github.com/R300-AI/Agentic-SDK.git
-cd Agentic-SDK
-```
-
-2. 在終端機安裝 SDK 依賴。
-
-```bash
-python -m pip install -r requirements.txt
-```
-
-{source_steps}
+    return f"""{source_steps}
 """
 
 

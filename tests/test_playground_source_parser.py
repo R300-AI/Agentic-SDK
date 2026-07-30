@@ -22,11 +22,12 @@ def test_parse_supported_default_source_name():
     assert parsed.workflow_name == "default"
     assert parsed.supported_subset is True
     assert "WorkflowSettings" not in source
-    assert "from agentic_sdk import InContextMemory, Workflow" in source
-    assert "memory = InContextMemory()" in source
-    assert "memory_type=memory" in source
-    assert config.stage_labels["retrieve"] == "正在查找參考資料"
-    assert "stage_labels={" in source
+    assert "from agentic_sdk import Workflow" in source
+    assert "InContextMemory" not in source
+    assert "memory = InContextMemory()" not in source
+    assert "memory_type=memory" not in source
+    assert config.stage_labels is None
+    assert "stage_labels={" not in source
 
 
 def test_stage_labels_roundtrip_from_workflow_source():

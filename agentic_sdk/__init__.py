@@ -1,5 +1,7 @@
 ﻿"""Clean core package for Agentic SDK v2."""
 
+__version__ = "0.1.0"
+
 from agentic_sdk.config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
 from agentic_sdk.defaults import (
     DEFAULT_NO_MATCHING_ENTRIES_MESSAGE,
@@ -42,8 +44,6 @@ from agentic_sdk.modules import (
     TextPerceive,
     ToolCallAction,
 )
-
-__version__ = "0.0.0-v2"
 
 __all__ = [
     "Attachment",

@@ -20,15 +20,14 @@ Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以�
 
 ## 安裝
 
-需要 Python 3.12。
+需要 Python 3.10 以上、3.13 以下；本 repo 的開發環境建議使用 Python 3.12。
 
 ```bash
-git clone https://github.com/R300-AI/Agentic-SDK.git
-cd Agentic-SDK
-uv init -p 3.12
-uv add -r requirements.txt
-uv run python -c "import agentic_sdk; print('Agentic SDK import ok')"
+python -m pip install "git+https://github.com/R300-AI/Agentic-SDK.git"
+python -c "import agentic_sdk; print('Agentic SDK import ok')"
 ```
+
+`pip install https://github.com/R300-AI/Agentic-SDK.git` 不是 pip 的 Git repository 語法；pip 會把它當成一般下載檔。請使用上面的 `git+https://...` VCS URL，或命名形式：`python -m pip install "agentic-sdk @ git+https://github.com/R300-AI/Agentic-SDK.git"`。
 
 ## 快速開始
 
