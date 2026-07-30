@@ -4,6 +4,7 @@ from io import BytesIO
 
 from agentic_sdk.core import WorkflowResult
 from playground.app import create_app
+from playground.routes import builder as builder_routes
 from playground.routes import runner as runner_routes
 from playground.services import runner_service
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
@@ -116,6 +117,12 @@ def test_semantic_builder_upload_unblocks_review_and_reaches_runner(monkeypatch)
     app = create_app()
     app.config.update(TESTING=True)
     captured = {}
+
+    monkeypatch.setattr(
+        builder_routes,
+        "endpoint_state",
+        lambda _python_source, _endpoint_selections: {"requirements": [], "configured_roles": {}},
+    )
 
     def fake_execute_python_source(_python_source, **kwargs):
         captured.update(kwargs)
