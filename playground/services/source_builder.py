@@ -163,7 +163,7 @@ def get_builder_steps() -> list[BuilderStep]:
             "",
             (
                 BuilderChoice("free_text", "純文字回覆", "設定 Agent 的角色、語氣、回答順序與限制。"),
-                BuilderChoice("interactive", "可互動元件", "沿用同一組回覆風格與規範，再追加抽取欄位與 API 提交合約。"),
+                BuilderChoice("interactive", "可互動元件", "沿用同一組回覆風格與規範，再追加抽取欄位與 API 提交規格。"),
             ),
         ),
         BuilderStep(
@@ -1569,29 +1569,29 @@ def get_workflow_summary(python_source: str) -> WorkflowSummary:
     name = parsed.workflow_name
     if parsed.profile_hint == "Recommendation":
         template = "建議卡"
-        output_contract = "輸出：建議卡"
+        output_contract = "輸出規格：建議卡"
     elif parsed.profile_hint == "Summary":
         template = "摘要審閱"
-        output_contract = "輸出：摘要卡"
+        output_contract = "輸出規格：摘要卡"
     elif parsed.profile_hint == "Structured Form":
         template = "表單收件"
-        output_contract = "輸出：摘要卡"
+        output_contract = "輸出規格：摘要卡"
     elif parsed.profile_hint == "Structured Result":
         template = "結構化結果"
-        output_contract = "輸出：結果卡"
+        output_contract = "輸出規格：結果卡"
     elif parsed.profile_hint == "OpenAI Client":
         template = "模型回覆"
-        output_contract = "輸出：答案卡"
+        output_contract = "輸出規格：答案卡"
     elif parsed.profile_hint == "Custom Action":
         template = "自訂處理"
-        output_contract = "輸出：自訂結果"
+        output_contract = "輸出規格：自訂結果"
     else:
         template = "回覆助理"
-        output_contract = "輸出：回覆內容"
+        output_contract = "輸出規格：回覆內容"
 
     return WorkflowSummary(
         name=name,
-        input_contract="輸入：使用者內容",
+        input_contract="輸入規格：使用者內容",
         output_contract=output_contract,
         template=template,
         readiness="可開始使用" if parsed.supported_subset else "可預覽",
