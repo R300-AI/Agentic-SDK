@@ -16,9 +16,15 @@ class EvidenceCheckReflect:
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         err = state.last_action_error
-        verdict = "fail" if err else "pass"
-        reason = str(err.get("message", "unknown action error")) if err else "action_result ok"
-        next_module = _ON_FAILURE_TO_NEXT[self._on_failure] if err else None
+        evidence_error = _evidence_error(state)
+        verdict = "fail" if err or evidence_error else "pass"
+        if err:
+            reason = str(err.get("message", "unknown action error"))
+        elif evidence_error:
+            reason = evidence_error
+        else:
+            reason = "action_result ok"
+        next_module = _ON_FAILURE_TO_NEXT[self._on_failure] if verdict == "fail" else None
         return ModuleOutput(
             next_module=next_module,
             payload={"reflect_verdict": verdict},
@@ -30,3 +36,17 @@ class EvidenceCheckReflect:
                 )
             ],
         )
+
+
+def _evidence_error(state: WorkflowState) -> str | None:
+    retrieved = state.latest_of(ContextEntryType.RETRIEVED)
+    if retrieved is None:
+        return None
+    hit_counts = [
+        value
+        for key, value in retrieved.metadata.items()
+        if key == "hit_count"
+    ]
+    if hit_counts and all(int(value or 0) == 0 for value in hit_counts):
+        return "no retrieved evidence"
+    return None

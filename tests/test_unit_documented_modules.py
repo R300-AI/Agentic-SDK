@@ -515,6 +515,22 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertIsNone(evidence_output["next_module"])
         self.assertEqual("pass", evidence_output["payload"]["reflect_verdict"])
 
+    def test_evidence_check_reflect_fails_when_retrieve_reports_no_hits(self) -> None:
+        state = WorkflowState(user_message="未知問題")
+        state.last_action_result = {"content": "目前沒有找到相關參考資料。"}
+        state.append(
+            ContextEntry(
+                type=ContextEntryType.RETRIEVED,
+                content="目前沒有找到相關參考資料。",
+                metadata={"hit_count": 0},
+            )
+        )
+
+        output = EvidenceCheckReflect(on_failure="end")(state)
+
+        self.assertIsNone(output["next_module"])
+        self.assertEqual("fail", output["payload"]["reflect_verdict"])
+
     def test_text_perceive_writes_memory_when_memory_store_exists(self) -> None:
         store = InMemoryStore()
         state = WorkflowState(user_message="幫我找鞋")
