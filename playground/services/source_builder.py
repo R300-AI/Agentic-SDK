@@ -1244,9 +1244,10 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
 {workflow_arguments}
 )"""
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
-    sections = [_core_import_line(endpoint_bindings)]
+    import_lines = [_core_import_line(endpoint_bindings)]
     if import_block:
-        sections.append(import_block)
+        import_lines.append(import_block)
+    sections = ["\n".join(import_lines)]
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
@@ -1300,10 +1301,13 @@ workflow = Workflow(
 )
 """
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
-    sections = ["# Playground profile hint: Custom Action", _core_import_line(endpoint_bindings)]
-    sections.append("from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState")
+    import_lines = [
+        _core_import_line(endpoint_bindings),
+        "from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState",
+    ]
     if import_block:
-        sections.append(import_block)
+        import_lines.append(import_block)
+    sections = ["# Playground profile hint: Custom Action", "\n".join(import_lines)]
     runner_config_block = _runner_config_block(config)
     if runner_config_block:
         sections.append(runner_config_block)
