@@ -27,8 +27,8 @@ site/
 .idea/
 
 # Environment
-# The project .env is tracked for non-secret shared endpoints. Put local-only
-# overrides or secrets in .env.local / .env.*.local.
+.env
+.env-old
 .env.local
 .env.*.local
 

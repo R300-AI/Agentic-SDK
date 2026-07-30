@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
-from dotenv import load_dotenv
 from flask import Flask
 
 from playground.routes.aihub import aihub_bp
@@ -11,13 +8,11 @@ from playground.routes.builder import builder_bp
 from playground.routes.entry import entry_bp
 from playground.routes.runner import runner_bp
 from playground.routes.source import source_bp
-
-
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from playground.services.key_vault_config import load_key_vault_secrets
 
 
 def create_app() -> Flask:
-    load_dotenv(_REPO_ROOT / ".env", override=False)
+    load_key_vault_secrets(override=False)
 
     app = Flask(__name__)
     app.config.update(SECRET_KEY=os.environ.get("PLAYGROUND_SECRET_KEY", "agentic-sdk-playground-dev"))
