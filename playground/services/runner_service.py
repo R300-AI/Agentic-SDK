@@ -14,20 +14,6 @@ import httpx
 
 from agentic_sdk import InContextMemory, Workflow
 from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, WorkflowResult, WorkflowState
-from agentic_sdk.modules import (
-    DirectAnswerAction,
-    EvidenceCheckReflect,
-    GenerativeAction,
-    KeywordRetrieve,
-    NextStepPlan,
-    PassThroughRetrieve,
-    PassThroughPerceive,
-    ResponseCheckReflect,
-    SemanticRetrieve,
-    TextImagePerceive,
-    TextPerceive,
-    ToolCallAction,
-)
 
 from playground.models import RunnerSceneProfile
 from playground.services.model_endpoints import MissingEndpointCredentials, endpoint_params_for_role
@@ -870,6 +856,8 @@ def _initialization_steps(
 
 
 def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
+    from agentic_sdk.modules.perceive import PassThroughPerceive, TextImagePerceive, TextPerceive
+
     if "perceive" not in reachable_roles:
         return None
     if config.perceive_module == "TextPerceive":
@@ -891,6 +879,8 @@ def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict
 
 
 def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
+    from agentic_sdk.modules.plan import NextStepPlan
+
     if "plan" not in reachable_roles or not config.plan_strategy:
         return None
     endpoint_role = "action" if "action" in reachable_roles else "perceive"
@@ -909,6 +899,8 @@ def _retrieve_from_config(
     semantic_saved_path: str | None = None,
     semantic_index_path: str | None = None,
 ):
+    from agentic_sdk.modules.retrieve import KeywordRetrieve, PassThroughRetrieve, SemanticRetrieve
+
     if "retrieve" not in reachable_roles:
         return None
     if config.retrieve_module == "SemanticRetrieve":
@@ -933,6 +925,8 @@ def _warm_semantic_retrieve(module) -> None:
 
 
 def _action_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
+    from agentic_sdk.modules.action import DirectAnswerAction, GenerativeAction, ToolCallAction
+
     if "action" not in reachable_roles:
         return None
     if config.action_module == "GenerativeAction":
@@ -945,6 +939,8 @@ def _action_from_config(config: BuilderSourceConfig, endpoint_selections: dict[s
 
 
 def _reflect_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
+    from agentic_sdk.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
+
     if "reflect" not in reachable_roles:
         return None
     if config.reflect_module == "ResponseCheckReflect":
