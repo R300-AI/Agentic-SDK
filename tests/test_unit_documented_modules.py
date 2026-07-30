@@ -398,6 +398,22 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("第一輪回答", messages[2]["content"])
         self.assertEqual("第二輪追問", messages[3]["content"])
 
+    def test_action_prompt_includes_perceived_context_with_retrieved_context(self) -> None:
+        state = WorkflowState(user_message="請推薦鞋墊")
+        state.payload["perceived_summary"] = "足測報告顯示足弓指數高，足底局部壓力集中。"
+        state.payload["perceived_details"] = {"足弓指數": "高", "壓力分布": "前足集中"}
+        state.payload["latest_retrieved_content"] = "科技鞋墊 加強型適合足弓指數高。"
+        client = FoundryOpenAILikeClient(action_text="建議科技鞋墊 加強型。")
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = GenerativeAction(**_llm_params())
+
+        module(state)
+
+        system_message = client.last_create_kwargs["messages"][0]["content"]
+        self.assertIn("perceived_context", system_message)
+        self.assertIn("足測報告顯示足弓指數高", system_message)
+        self.assertIn("科技鞋墊 加強型適合足弓指數高", system_message)
+
     def test_tool_call_action_uses_openai_tools_standard(self) -> None:
         state = WorkflowState(user_message="我要預約明天下午三點。")
         tools = [
@@ -432,6 +448,20 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("auto", client.last_create_kwargs["tool_choice"])
         self.assertEqual(tool_calls, output["payload"]["latest_tool_calls"])
         self.assertEqual(tool_calls, state.last_action_result["tool_calls"])
+
+    def test_tool_call_action_omits_tools_when_tool_choice_is_none(self) -> None:
+        state = WorkflowState(user_message="請先用文字說明推薦。")
+        tools = [{"type": "function", "function": {"name": "submit_api_1", "parameters": {"type": "object"}}}]
+        client = FoundryOpenAILikeClient(action_text="建議先採用第一個方案。是否要進入下一步？")
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            module = ToolCallAction(tools=tools, tool_choice="none", **_llm_params())
+
+        output = module(state)
+
+        self.assertNotIn("tools", client.last_create_kwargs)
+        self.assertNotIn("tool_choice", client.last_create_kwargs)
+        self.assertEqual([], output["payload"]["latest_tool_calls"])
+        self.assertEqual("建議先採用第一個方案。是否要進入下一步？", output["payload"]["latest_final_message"])
 
     def test_tool_call_action_keeps_final_message_when_model_returns_only_tool_calls(self) -> None:
         state = WorkflowState(user_message="我要送出資料。")

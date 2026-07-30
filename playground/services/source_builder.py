@@ -40,10 +40,10 @@ _OUTPUT_FORMAT_PROMPTS = {
     "custom_schema": "請依指定格式輸出；欄位缺資料時使用空字串或明確標註未知。",
 }
 _INTERACTIVE_TOOL_POLICY = """互動元件使用原則：
-請先判斷使用者這一輪的意圖類型，而不是因為已配置工具就呼叫工具。
-當使用者只是詢問資訊、要求分析、要求解釋、比較原因、了解現況或追問依據時，只用自然語言回答，不要呼叫工具。
-只有當使用者明確進入決策、確認、提交、申請、送出表單、安排後續流程或選擇下一步，且該需求符合工具描述時，才呼叫最合適的工具。
-呼叫工具前，請先用自然語言重整你要問使用者的問題、建議理由與下一步，讓前端可直接把這段文字作為互動視窗問題。
+請先判斷使用者這一輪的意圖類型，而不是因為已配置互動元件就要求使用者選擇。
+當使用者只是詢問資訊、要求分析、要求解釋、比較原因、了解現況或追問依據時，只用自然語言回答，不要提出確認問題。
+只有當使用者明確進入決策、確認、提交、申請、送出表單、安排後續流程或選擇下一步，且該需求符合工具描述時，才提出互動確認。
+需要互動確認時，請先完整輸出你的建議、依據、限制與下一步，最後用自然語言提出清楚的確認問題；Playground 會依配置顯示互動元件並收集使用者選擇。
 不要把 API URL、component schema、欄位 JSON 或內部工具設定當成使用者可見文字輸出。"""
 _FREE_TEXT_OUTPUT_CHOICES = {"free_text", "natural", "bullets"}
 _INTERACTIVE_OUTPUT_CHOICES = {"interactive", "table", "json", "custom_schema"}
@@ -102,6 +102,7 @@ class BuilderSourceConfig:
     action_module: str = "DirectAnswerAction"
     action_prompt: str | None = None
     action_tools: tuple[dict[str, object], ...] = ()
+    action_tool_choice: str | dict[str, object] | None = None
     direct_answer_memory_key: str = "latest_retrieved_content"
     direct_answer_fallback: str = "沒有命中任何條目。"
     direct_answer_prefix: str = ""
@@ -264,6 +265,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                     action_module=action_module,
                     action_prompt=_user_authored_action_prompt(config.action_prompt),
                     action_tools=(),
+                    action_tool_choice=None,
                     profile_hint=profile_hint,
                     workflow_name=workflow_name,
                 )
@@ -323,6 +325,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             payload_tools = _tools_from_action_payload(choice_label) if _payload_has_interactive_contract(choice_label) else ()
             action_module = "ToolCallAction" if payload_tools else config.action_module
             action_tools = payload_tools or (config.action_tools if action_module == "ToolCallAction" else ())
+            action_tool_choice = "none" if payload_tools else (config.action_tool_choice if action_module == "ToolCallAction" else None)
             if action_module == "GenerativeAction" and config.profile_hint == "Structured Result":
                 action_prompt = _fixed_format_action_prompt_from_payload(choice_label, action_prompt)
             updated = _replace_config(
@@ -330,6 +333,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
                 action_module=action_module,
                 action_prompt=action_prompt,
                 action_tools=action_tools,
+                action_tool_choice=action_tool_choice,
                 direct_answer_memory_key=_clean_allowed_value(str(choice_label.get("direct_memory_key", config.direct_answer_memory_key)), _ALLOWED_DIRECT_RESULT_KEYS, config.direct_answer_memory_key) if "direct_memory_key" in choice_label else config.direct_answer_memory_key,
                 direct_answer_fallback=_clean_short_text(str(choice_label.get("direct_fallback", config.direct_answer_fallback)), "沒有命中任何條目。") if "direct_fallback" in choice_label else config.direct_answer_fallback,
                 direct_answer_prefix=_clean_short_text(str(choice_label.get("direct_prefix", config.direct_answer_prefix)), "") if "direct_prefix" in choice_label else config.direct_answer_prefix,
@@ -374,6 +378,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "action_module": config.action_module,
         "action_prompt": config.action_prompt,
         "action_tools": config.action_tools,
+        "action_tool_choice": config.action_tool_choice,
         "direct_answer_memory_key": config.direct_answer_memory_key,
         "direct_answer_fallback": config.direct_answer_fallback,
         "direct_answer_prefix": config.direct_answer_prefix,
@@ -411,6 +416,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     semantic_sources = _extract_semantic_sources(source)
     raw_action_prompt = _extract_keyword_value(source, {"GenerativeAction", "ToolCallAction"}, "system_prompt")
     action_tools = tuple(_normalize_tool_items(_extract_keyword_literal(source, {"ToolCallAction"}, "tools", [])))
+    action_tool_choice = _extract_keyword_literal(source, {"ToolCallAction"}, "tool_choice", None)
     action_prompt = _user_authored_action_prompt(raw_action_prompt)
     action_module = "CustomAction" if is_custom_action else action_call_name or "DirectAnswerAction"
     perceive_module = _first_call_name(source, {"PassThroughPerceive", "TextPerceive", "TextImagePerceive"}) or "PassThroughPerceive"
@@ -443,6 +449,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         action_module=action_module,
         action_prompt=action_prompt,
         action_tools=action_tools,
+        action_tool_choice=action_tool_choice if action_module == "ToolCallAction" else None,
         direct_answer_memory_key=_clean_allowed_value(_extract_keyword_value(source, {"DirectAnswerAction"}, "memory_key") or "latest_retrieved_content", _ALLOWED_DIRECT_RESULT_KEYS, "latest_retrieved_content"),
         direct_answer_fallback=_extract_keyword_value(source, {"DirectAnswerAction"}, "fallback") or "沒有命中任何條目。",
         direct_answer_prefix=_extract_keyword_value(source, {"DirectAnswerAction"}, "prefix") or "",
@@ -808,7 +815,7 @@ def _tools_from_action_payload(payload: dict[str, Any]) -> tuple[dict[str, objec
         api_method = str(contract.get("api_method") or "POST")
         api_url = str(contract.get("api_url") or "")
         trigger = str(contract.get("interaction_trigger") or "")
-        description_parts = [trigger]
+        description_parts = ["顯示互動元件並收集使用者選擇。", trigger]
         if api_url:
             description_parts.append(f"API：{api_method} {api_url}")
         description = " ".join(part for part in description_parts if part).strip() or "提交 API 所需資料。"
@@ -842,6 +849,8 @@ def _tool_parameters_from_pairs(raw_pairs: str) -> dict[str, object]:
         description, json_type = _field_description_and_json_type(raw_value)
         if not key or key in properties:
             continue
+        if json_type == "boolean" and "暫定" not in description:
+            description = f"{description or key}。若使用者尚未回答，請先用 false 作為暫定值來顯示確認面板。"
         properties[key] = {"type": json_type, "description": description or key}
         required.append(key)
     return {"properties": properties, "required": required}
@@ -1381,6 +1390,8 @@ def _action_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str,
         arguments.append(f"system_prompt={json.dumps(action_prompt, ensure_ascii=False)}")
     if action_class == "ToolCallAction" and config.action_tools:
         arguments.append(f"tools={_format_python_literal(list(config.action_tools), 8)}")
+        if config.action_tool_choice is not None:
+            arguments.append(f"tool_choice={_format_python_literal(config.action_tool_choice, 8)}")
     return f"{action_class}({', '.join(arguments)})"
 
 

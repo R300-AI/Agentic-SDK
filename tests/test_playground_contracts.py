@@ -307,7 +307,7 @@ def test_streaming_execute_route_forwards_attachment_payloads(monkeypatch):
     assert captured["attachments"][0]["content"] == "data:image/png;base64,abc"
 
 
-def test_tool_call_panel_does_not_fallback_to_configured_schema_when_model_returns_text(monkeypatch):
+def test_tool_call_panel_does_not_fallback_for_information_intent(monkeypatch):
     source = build_python_source_from_builder_choice("output_format", "interactive", None)
     source = build_python_source_from_builder_choice(
         "action",
@@ -322,11 +322,93 @@ def test_tool_call_panel_does_not_fallback_to_configured_schema_when_model_retur
 
     class FakeWorkflow:
         def run(self, *_args, **_kwargs):
-            return WorkflowResult(workflow_id="workflow-1", final_message="請確認是否繼續", entities={})
+            return WorkflowResult(workflow_id="workflow-1", final_message="目前結果顯示資料仍需補充。", entities={})
 
     monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
 
-    result = runner_service.execute_python_source(source, message="我要確認")
+    result = runner_service.execute_python_source(source, message="請分析目前結果")
+
+    assert result["status"] == "completed"
+    assert result["tool_calls"] == []
+    assert result["tool_call_panels"] == []
+
+
+def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(workflow_id="workflow-1", final_message="我建議採用第一個方案。是否要進入下一步？", entities={})
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請推薦下一步")
+
+    assert result["status"] == "completed"
+    assert result["tool_calls"] == []
+    assert len(result["tool_call_panels"]) == 1
+    assert result["tool_call_panels"][0]["title"] == "我建議採用第一個方案。是否要進入下一步？"
+    assert result["tool_call_panels"][0]["fields"][0]["label"] == "你的選擇"
+
+
+def test_tool_call_panel_uses_final_confirmation_line_for_long_recommendation(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="推薦結果\n我建議採用第一個方案。\n\n**要幫你保留這項推薦嗎？**",
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請推薦下一步")
+
+    assert result["tool_call_panels"][0]["title"] == "要幫你保留這項推薦嗎？"
+
+
+def test_tool_call_panel_does_not_fallback_when_recommendation_needs_more_input(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(workflow_id="workflow-1", final_message="請提供更多資料後，我才能推薦合適方案。", entities={})
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請推薦下一步")
 
     assert result["status"] == "completed"
     assert result["tool_calls"] == []

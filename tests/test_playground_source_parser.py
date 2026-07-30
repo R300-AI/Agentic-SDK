@@ -246,10 +246,15 @@ def test_interactive_action_adds_generic_intent_gate_without_polluting_form_stat
 
     assert "請先判斷使用者這一輪的意圖類型" in source
     assert "當使用者只是詢問資訊、要求分析、要求解釋" in source
+    assert "Playground 會依配置顯示互動元件並收集使用者選擇" in source
+    assert "顯示互動元件並收集使用者選擇" in source
+    assert "若使用者尚未回答，請先用 false 作為暫定值來顯示確認面板" in source
+    assert "tool_choice=\"none\"" in source
     assert "使用者設定的回覆規範" in source
 
     config = config_from_source(source)
     state = get_builder_form_state(source)
 
     assert config.action_prompt == "請依使用者情境回覆，必要時才請使用者確認下一步。"
+    assert config.action_tool_choice == "none"
     assert state["values"]["action"]["response_instruction"] == "請依使用者情境回覆，必要時才請使用者確認下一步。"

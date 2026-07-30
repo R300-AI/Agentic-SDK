@@ -39,7 +39,7 @@ class ToolCallAction:
             kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
             if self._temperature is not None:
                 kwargs["temperature"] = self._temperature
-            if self._tools:
+            if self._tools and self._tool_choice != "none":
                 kwargs["tools"] = self._tools
                 if self._tool_choice is not None:
                     kwargs["tool_choice"] = self._tool_choice
