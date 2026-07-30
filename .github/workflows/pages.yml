@@ -7,6 +7,7 @@ on:
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - '.github/workflows/pages.yml'
+      - '.github/workflows/docs-pages.yml'
       - 'README.md'
   push:
     branches:
@@ -16,6 +17,7 @@ on:
       - 'mkdocs.yml'
       - 'requirements-docs.txt'
       - '.github/workflows/pages.yml'
+      - '.github/workflows/docs-pages.yml'
       - 'README.md'
   workflow_dispatch:
 
