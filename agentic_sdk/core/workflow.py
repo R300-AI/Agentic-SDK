@@ -38,9 +38,15 @@ class WorkflowStream(Iterator[str]):
     handle their own errors retain the normal ``Workflow.run`` result semantics.
     """
 
-    def __init__(self, workflow: "Workflow", run_kwargs: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        workflow: "Workflow",
+        run_kwargs: dict[str, Any],
+        event_callback: Callable[[dict[str, Any]], None] | None = None,
+    ) -> None:
         self._workflow = workflow
         self._run_kwargs = run_kwargs
+        self._event_callback = event_callback
         self._deltas: Queue[str | object] = Queue()
         self._thread: Thread | None = None
         self._result: WorkflowResult | None = None
@@ -97,6 +103,8 @@ class WorkflowStream(Iterator[str]):
             self._deltas.put(_STREAM_COMPLETED)
 
     def _on_event(self, event: dict[str, Any]) -> None:
+        if self._event_callback is not None:
+            self._event_callback(event)
         if event.get("type") != "token_delta" or event.get("module") != "action":
             return
         metadata = event.get("metadata")
@@ -296,15 +304,17 @@ class Workflow:
         memory: MemoryStore | None = None,
         attachments: list[Any] | None = None,
         memory_store: PersistentMemory | None = None,
+        event_callback: Callable[[dict[str, Any]], None] | None = None,
     ) -> WorkflowStream:
         """Create an iterator of user-visible action text.
 
         This method accepts the same workflow input, session, memory, and
-        attachment arguments as :meth:`run`, but does not expose stage or
-        structured-module events. Streaming actions yield their token deltas;
-        non-streaming actions yield their final message once. Consume the
-        iterator fully before reading ``stream.result`` for the final
-        :class:`WorkflowResult`.
+        attachment arguments as :meth:`run`. ``event_callback`` receives the
+        same stage and token events as :meth:`run`, while the iterator yields
+        only user-visible Action token deltas. Streaming actions yield their
+        token deltas; non-streaming actions yield their final message once.
+        Consume the iterator fully before reading ``stream.result`` for the
+        final :class:`WorkflowResult`.
         """
         return WorkflowStream(
             self,
@@ -316,6 +326,7 @@ class Workflow:
                 "attachments": attachments,
                 "memory_store": memory_store,
             },
+            event_callback,
         )
 
     def _stage_event(

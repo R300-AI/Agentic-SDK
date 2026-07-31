@@ -100,7 +100,12 @@ print(result.final_message)
 `Workflow.stream(...)` 會直接迭代使用者可見的 Action text，不會輸出 Perceive、Plan 或 Reflect 的結構化 JSON。可串流的 Action 會即時產生 token；非串流 Action 會在完成時產生一次最終文字。完整迭代後可從 `stream.result` 取得 `WorkflowResult`：
 
 ```python
-stream = workflow.stream("TSiP 是什麼？")
+def on_event(event):
+    if event["type"] == "stage" and event["phase"] == "start":
+        print(f"\n【{event['module']}】{event['label']}")
+
+
+stream = workflow.stream("TSiP 是什麼？", event_callback=on_event)
 for delta in stream:
     print(delta, end="", flush=True)
 

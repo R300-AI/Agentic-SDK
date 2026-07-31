@@ -90,10 +90,15 @@ result = workflow.run("請介紹 SDK", event_callback=on_event)
 
 ## 直接串流 Action 回覆
 
-`Workflow.stream(...) -> WorkflowStream` 提供只含使用者可見 Action text 的 iterator；它不會產生 Perceive、Plan 或 Reflect 的結構化 JSON，也不需要提供 `event_callback`。可串流的 Action 會即時產生 token，非串流 Action 則會在完成時產生一次最終文字。其參數與 `run()` 的 `user_message`、`workflow_id`、`session_id`、`memory`、`attachments` 和 `memory_store` 相同。
+`Workflow.stream(...) -> WorkflowStream` 提供只含使用者可見 Action text 的 iterator；它不會將 Perceive、Plan 或 Reflect 的結構化 JSON yield 給 iterator。可串流的 Action 會即時產生 token，非串流 Action 則會在完成時產生一次最終文字。其參數與 `run()` 相同，包含可選的 `event_callback`；該 callback 仍會收到所有 stage 與 token events。
 
 ```python
-stream = workflow.stream("請介紹 SDK")
+def on_event(event):
+    if event["type"] == "stage" and event["phase"] == "start":
+        print(f"\n【{event['module']}】{event['label']}")
+
+
+stream = workflow.stream("請介紹 SDK", event_callback=on_event)
 for delta in stream:
     print(delta, end="", flush=True)
 
