@@ -75,6 +75,10 @@ from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, PassThroughPe
 workflow = Workflow(
     workflow_name="Foundry 回覆 Agent",
     description="用 OpenAI-compatible 模型整理檢索結果並生成自然語句回覆。",
+    stage_labels={
+        "retrieve": "正在查找參考資料",
+        "action": "正在準備回覆",
+    },
     perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(
         items=[

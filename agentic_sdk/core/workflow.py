@@ -15,14 +15,6 @@ from agentic_sdk.memory.in_memory import InMemoryStore
 from agentic_sdk.memory.protocol import PersistentMemory
 
 
-DEFAULT_STAGE_LABELS: dict[str, str] = {
-    "perceive": "正在理解你的問題",
-    "retrieve": "正在查找參考資料",
-    "plan": "正在規劃處理方式",
-    "action": "正在準備回覆",
-    "reflect": "正在檢查回覆內容",
-}
-
 _STREAM_COMPLETED = object()
 
 
@@ -230,7 +222,7 @@ class Workflow:
                 if module is None:
                     raise WorkflowAborted(f"unknown module '{current}'")
 
-                if event_callback is not None:
+                if self._should_emit_stage_event(current, event_callback):
                     event_callback(
                         self._stage_event(
                             phase="start",
@@ -245,7 +237,7 @@ class Workflow:
                 output = _normalize_output(current, raw_output, state)
                 state.apply(output)
                 next_module = _next_module_after(current, output, self.modules)
-                if event_callback is not None:
+                if self._should_emit_stage_event(current, event_callback):
                     finish_event = self._stage_event(
                         phase="finish",
                         status="done",
@@ -260,7 +252,7 @@ class Workflow:
         except WorkflowAborted as exc:
             aborted = True
             abort_reason = exc.reason
-            if event_callback is not None and current is not None:
+            if current is not None and self._should_emit_stage_event(current, event_callback):
                 module = self.modules.get(current)
                 abort_event = self._stage_event(
                     phase="abort",
@@ -348,13 +340,12 @@ class Workflow:
         state: WorkflowState,
         visit_count: int,
     ) -> dict[str, Any]:
-        label = self.stage_labels.get(module_name) or DEFAULT_STAGE_LABELS.get(module_name) or f"正在執行 {module_name}"
         return {
             "type": "stage",
             "phase": phase,
             "status": status,
             "stage": module_name,
-            "label": label,
+            "label": self.stage_labels[module_name],
             "module": module_name,
             "module_class": module.__class__.__name__ if module is not None else None,
             "workflow_name": self.workflow_name,
@@ -363,6 +354,13 @@ class Workflow:
             "state": state,
             "visit_count": visit_count,
         }
+
+    def _should_emit_stage_event(
+        self,
+        module_name: str,
+        event_callback: Callable[[dict[str, Any]], None] | None,
+    ) -> bool:
+        return event_callback is not None and module_name in self.stage_labels
 
     def token_delta_event(
         self,

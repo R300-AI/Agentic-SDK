@@ -26,7 +26,7 @@ Workflow(
 )
 ```
 
-`workflow_name` 用來標示這條流程的公開名稱；未顯式指定時，SDK 與 Playground 都使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState` 上，供應用層或自訂模組使用。`stage_labels` 是工作流階段提示文字，供 Chat WebUI、Playground Runner 或其他前端在最終文字輸出前顯示「目前正在哪個模組執行」。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；本次執行會走到哪些節點，取決於前一節點回傳的 `next_module`。
+`workflow_name` 用來標示這條流程的公開名稱；未顯式指定時，SDK 與 Playground 都使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState` 上，供應用層或自訂模組使用。`stage_labels` 是工作流階段提示文字，供 Chat WebUI、Playground Runner 或其他前端在最終文字輸出前顯示「目前正在哪個模組執行」；只有明確列出的 stage 才會送出 stage event，未列出的 stage 不會有預設 UI label。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；本次執行會走到哪些節點，取決於前一節點回傳的 `next_module`。
 
 執行期間有四層資料分工：
 
@@ -58,7 +58,7 @@ Workflow(
 
 ## 階段事件
 
-如果呼叫 `run()` 時傳入 `event_callback`，`Workflow` 會在每個模組開始、完成或中止時送出事件。MVP UI 最常用的是開始事件：
+如果呼叫 `run()` 時傳入 `event_callback`，`Workflow` 會對 `stage_labels` 明確列出的模組，在開始、完成或中止時送出事件。MVP UI 最常用的是開始事件：
 
 ```python
 def on_event(event):

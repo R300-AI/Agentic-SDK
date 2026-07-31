@@ -85,6 +85,7 @@ def test_workflow_stream_forwards_events_while_yielding_only_action_text() -> No
             plan=NextStepPlan(**LLM_PARAMS),
             retrieve=PassThroughRetrieve(),
             action=GenerativeAction(**LLM_PARAMS),
+            stage_labels={"perceive": "perceive", "plan": "plan", "retrieve": "retrieve", "action": "action"},
         )
 
     events: list[dict[str, object]] = []
