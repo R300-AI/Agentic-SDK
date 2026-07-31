@@ -50,7 +50,16 @@ class NextStepPlan:
             },
             latest_user_message=state.latest_user_message(),
         )
-        response = chat_stream_json(self._client, model=self._model, messages=messages)
+        response = chat_stream_json(
+            self._client,
+            model=self._model,
+            messages=messages,
+            on_delta=lambda content: state.emit_token_delta(
+                self.name,
+                content,
+                metadata={"model": self._model, "structured": True},
+            ),
+        )
         parsed = response.as_json()
         thought = str(parsed.get("thought", ""))
         next_module = parsed.get("next_module")

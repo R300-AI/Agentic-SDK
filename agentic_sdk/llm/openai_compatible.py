@@ -17,6 +17,7 @@ class OpenAIChatResponse:
     model: str | None
     input_tokens: int | None = None
     output_tokens: int | None = None
+    tool_calls: list[dict[str, Any]] | None = None
 
     def as_json(self) -> dict[str, Any]:
         try:
@@ -94,6 +95,33 @@ def chat_stream_json(
     on_delta: DeltaCallback | None = None,
     idle_timeout_sec: float = 30.0,
 ) -> OpenAIChatResponse:
+    return chat_stream(
+        client,
+        model=model,
+        system=system,
+        user=user,
+        messages=messages,
+        temperature=temperature,
+        response_format={"type": "json_object"},
+        on_delta=on_delta,
+        idle_timeout_sec=idle_timeout_sec,
+    )
+
+
+def chat_stream(
+    client,
+    *,
+    model: str,
+    system: str | None = None,
+    user: str | None = None,
+    messages: list[dict[str, Any]] | None = None,
+    temperature: float | None = None,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: str | dict[str, Any] | None = None,
+    response_format: dict[str, Any] | None = None,
+    on_delta: DeltaCallback | None = None,
+    idle_timeout_sec: float = 30.0,
+) -> OpenAIChatResponse:
     resolved_messages = messages or [
         {"role": "system", "content": system or ""},
         {"role": "user", "content": user or ""},
@@ -102,28 +130,97 @@ def chat_stream_json(
         "model": model,
         "messages": resolved_messages,
         "stream": True,
-        "response_format": {"type": "json_object"},
     }
     if temperature is not None:
         kwargs["temperature"] = temperature
+    if response_format is not None:
+        kwargs["response_format"] = response_format
+    if tools:
+        kwargs["tools"] = tools
+        if tool_choice is not None:
+            kwargs["tool_choice"] = tool_choice
     stream = client.chat.completions.create(**kwargs)
     chunks: list[str] = []
     resolved_model = model
     last_token_at = time.monotonic()
-    for chunk in stream:
-        resolved_model = getattr(chunk, "model", None) or resolved_model
-        choices = getattr(chunk, "choices", None) or []
-        if not choices:
-            continue
-        delta = getattr(choices[0].delta, "content", None)
-        if not delta:
-            continue
-        now = time.monotonic()
-        idle_gap = now - last_token_at
-        if idle_gap > idle_timeout_sec:
-            raise TimeoutError(f"openai stream idle {idle_gap:.1f}s > {idle_timeout_sec}s")
-        last_token_at = now
-        chunks.append(delta)
-        if on_delta is not None:
-            on_delta(delta)
-    return OpenAIChatResponse(content="".join(chunks), model=resolved_model)
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    tool_calls: dict[int, dict[str, Any]] = {}
+    try:
+        for chunk in stream:
+            resolved_model = _value(chunk, "model") or resolved_model
+            usage = _value(chunk, "usage")
+            if usage is not None:
+                input_tokens = _value(usage, "prompt_tokens") or input_tokens
+                output_tokens = _value(usage, "completion_tokens") or output_tokens
+            choices = _value(chunk, "choices") or []
+            if not choices:
+                continue
+            delta = _value(choices[0], "delta")
+            content = _value(delta, "content")
+            has_tool_delta = _accumulate_tool_call_deltas(tool_calls, _value(delta, "tool_calls"))
+            if not content and not has_tool_delta:
+                continue
+            now = time.monotonic()
+            idle_gap = now - last_token_at
+            if idle_gap > idle_timeout_sec:
+                raise TimeoutError(f"openai stream idle {idle_gap:.1f}s > {idle_timeout_sec}s")
+            last_token_at = now
+            if not content:
+                continue
+            text = str(content)
+            if not text:
+                continue
+            chunks.append(text)
+            if on_delta is not None:
+                on_delta(text)
+    finally:
+        close = getattr(stream, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
+    return OpenAIChatResponse(
+        content="".join(chunks),
+        model=resolved_model,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        tool_calls=[tool_calls[index] for index in sorted(tool_calls)],
+    )
+
+
+def _accumulate_tool_call_deltas(
+    accumulated: dict[int, dict[str, Any]],
+    raw_tool_calls: object,
+) -> bool:
+    if not raw_tool_calls:
+        return False
+    calls = [raw_tool_calls] if isinstance(raw_tool_calls, dict) else raw_tool_calls
+    for position, raw_call in enumerate(calls):
+        raw_index = _value(raw_call, "index")
+        index = int(raw_index) if isinstance(raw_index, int) or str(raw_index).isdigit() else position
+        call = accumulated.setdefault(
+            index,
+            {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+        )
+        identifier = _value(raw_call, "id")
+        if identifier:
+            call["id"] = str(identifier)
+        call_type = _value(raw_call, "type")
+        if call_type:
+            call["type"] = str(call_type)
+        function = _value(raw_call, "function")
+        function_name = _value(function, "name")
+        if function_name:
+            call["function"]["name"] = str(function_name)
+        arguments = _value(function, "arguments")
+        if arguments:
+            call["function"]["arguments"] += str(arguments)
+    return True
+
+
+def _value(source: object, key: str) -> object:
+    if isinstance(source, dict):
+        return source.get(key)
+    return getattr(source, key, None)

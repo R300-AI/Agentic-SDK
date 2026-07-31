@@ -102,6 +102,17 @@ class Workflow:
             memory=state_memory,
             memory_store=resolved_memory_store,
         )
+        if event_callback is not None:
+            state.set_token_delta_callback(
+                lambda module_name, content, metadata: event_callback(
+                    self.token_delta_event(
+                        module_name=module_name,
+                        content=content,
+                        metadata=metadata,
+                        state=state,
+                    )
+                )
+            )
         if workflow_id:
             state.workflow_id = workflow_id
         state.attachments = list(latest_user_turn.attachments)
@@ -214,6 +225,29 @@ class Workflow:
             "session_id": state.session_id,
             "state": state,
             "visit_count": visit_count,
+        }
+
+    def token_delta_event(
+        self,
+        *,
+        module_name: str,
+        content: str,
+        metadata: dict[str, Any] | None,
+        state: WorkflowState,
+    ) -> dict[str, Any]:
+        module = self.modules.get(module_name)
+        return {
+            "type": "token_delta",
+            "phase": "delta",
+            "status": "streaming",
+            "module": module_name,
+            "module_class": module.__class__.__name__ if module is not None else None,
+            "content": content,
+            "metadata": dict(metadata or {}),
+            "workflow_name": self.workflow_name,
+            "workflow_id": state.workflow_id,
+            "session_id": state.session_id,
+            "visit_count": state.visit_counts.get(module_name, 0),
         }
 
 

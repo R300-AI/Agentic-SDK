@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
-from agentic_sdk.llm import require_model, resolve_openai_client
+from agentic_sdk.llm import chat_stream, require_model, resolve_openai_client
 from agentic_sdk.modules.action.generative import DEFAULT_SYSTEM_PROMPT, _build_messages, _format_openai_error
 
 
@@ -36,14 +36,19 @@ class ToolCallAction:
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         messages = _build_messages(state, self._system_prompt)
         try:
-            kwargs: dict[str, Any] = {"model": self._model, "messages": messages}
-            if self._temperature is not None:
-                kwargs["temperature"] = self._temperature
-            if self._tools and self._tool_choice != "none":
-                kwargs["tools"] = self._tools
-                if self._tool_choice is not None:
-                    kwargs["tool_choice"] = self._tool_choice
-            completion = self._client.chat.completions.create(**kwargs)
+            response = chat_stream(
+                self._client,
+                model=self._model,
+                messages=messages,
+                temperature=self._temperature,
+                tools=self._tools if self._tool_choice != "none" else None,
+                tool_choice=self._tool_choice,
+                on_delta=lambda content: state.emit_token_delta(
+                    self.name,
+                    content,
+                    metadata={"model": self._model, "structured": False},
+                ),
+            )
         except Exception as exc:
             detail = _format_openai_error(exc)
             state.last_action_error = {"type": type(exc).__name__, "message": detail}
@@ -59,11 +64,9 @@ class ToolCallAction:
                 ],
             )
 
-        message = completion.choices[0].message
-        tool_calls = _normalize_tool_calls(getattr(message, "tool_calls", None))
-        content = getattr(message, "content", None) or ("已產生工具呼叫。" if tool_calls else "")
-        usage = getattr(completion, "usage", None)
-        response_model = getattr(completion, "model", self._model)
+        tool_calls = _normalize_tool_calls(response.tool_calls)
+        content = response.content or ("已產生工具呼叫。" if tool_calls else "")
+        response_model = response.model or self._model
         state.last_action_error = None
         state.last_action_result = {"content": content, "model": response_model, "tool_calls": tool_calls}
         return ModuleOutput(
@@ -73,8 +76,8 @@ class ToolCallAction:
                 "latest_tool_calls": tool_calls,
                 "_llm_usage": {
                     "model": response_model,
-                    "input_tokens": getattr(usage, "prompt_tokens", None) if usage else None,
-                    "output_tokens": getattr(usage, "completion_tokens", None) if usage else None,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
                 },
             },
             context_updates=[

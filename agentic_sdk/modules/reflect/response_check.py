@@ -1,7 +1,7 @@
 ﻿from __future__ import annotations
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
-from agentic_sdk.llm import chat_json, require_model, resolve_openai_client
+from agentic_sdk.llm import chat_stream_json, require_model, resolve_openai_client
 from agentic_sdk.memory.in_context import build_module_messages
 
 
@@ -47,7 +47,16 @@ class ResponseCheckReflect:
             latest_user_message=state.latest_user_message(),
         )
         try:
-            response = chat_json(self._client, model=self._model, messages=messages)
+            response = chat_stream_json(
+                self._client,
+                model=self._model,
+                messages=messages,
+                on_delta=lambda content: state.emit_token_delta(
+                    self.name,
+                    content,
+                    metadata={"model": self._model, "structured": True},
+                ),
+            )
             parsed = response.as_json()
             verdict = str(parsed.get("verdict", "fail" if err else "pass"))
             reason = str(parsed.get("reason", ""))

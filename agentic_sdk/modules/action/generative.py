@@ -3,7 +3,7 @@
 import json
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
-from agentic_sdk.llm import require_model, resolve_openai_client
+from agentic_sdk.llm import chat_stream, require_model, resolve_openai_client
 from agentic_sdk.memory.in_context import build_module_messages
 
 
@@ -39,10 +39,17 @@ class GenerativeAction:
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         messages = _build_messages(state, self._system_prompt)
         try:
-            kwargs: dict = {"model": self._model, "messages": messages}
-            if self._temperature is not None:
-                kwargs["temperature"] = self._temperature
-            completion = self._client.chat.completions.create(**kwargs)
+            response = chat_stream(
+                self._client,
+                model=self._model,
+                messages=messages,
+                temperature=self._temperature,
+                on_delta=lambda content: state.emit_token_delta(
+                    self.name,
+                    content,
+                    metadata={"model": self._model, "structured": False},
+                ),
+            )
         except Exception as exc:
             detail = _format_openai_error(exc)
             state.last_action_error = {"type": type(exc).__name__, "message": detail}
@@ -58,9 +65,8 @@ class GenerativeAction:
                 ],
             )
 
-        content = completion.choices[0].message.content or ""
-        usage = getattr(completion, "usage", None)
-        response_model = getattr(completion, "model", self._model)
+        content = response.content
+        response_model = response.model or self._model
         state.last_action_error = None
         state.last_action_result = {"content": content, "model": response_model}
         return ModuleOutput(
@@ -69,8 +75,8 @@ class GenerativeAction:
                 "latest_final_message": content,
                 "_llm_usage": {
                     "model": response_model,
-                    "input_tokens": getattr(usage, "prompt_tokens", None) if usage else None,
-                    "output_tokens": getattr(usage, "completion_tokens", None) if usage else None,
+                    "input_tokens": response.input_tokens,
+                    "output_tokens": response.output_tokens,
                 },
             },
             context_updates=[

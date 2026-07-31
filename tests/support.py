@@ -88,13 +88,39 @@ class _FoundryCompletionsNamespace:
         model = kwargs.get("model", self._owner._model_id)
 
         if kwargs.get("stream"):
-            return [
+            chunks = [
                 SimpleNamespace(
                     model=model,
                     choices=[SimpleNamespace(delta=SimpleNamespace(content=char))],
                 )
                 for char in response.content
             ]
+            for index, tool_call in enumerate(self._owner._tool_calls):
+                function = tool_call.get("function") or {}
+                chunks.append(
+                    SimpleNamespace(
+                        model=model,
+                        choices=[
+                            SimpleNamespace(
+                                delta=SimpleNamespace(
+                                    content=None,
+                                    tool_calls=[
+                                        SimpleNamespace(
+                                            index=index,
+                                            id=tool_call.get("id"),
+                                            type=tool_call.get("type"),
+                                            function=SimpleNamespace(
+                                                name=function.get("name"),
+                                                arguments=function.get("arguments"),
+                                            ),
+                                        )
+                                    ],
+                                )
+                            )
+                        ],
+                    )
+                )
+            return chunks
 
         return SimpleNamespace(
             choices=[SimpleNamespace(message=SimpleNamespace(content=response.content, tool_calls=self._owner._tool_calls))],

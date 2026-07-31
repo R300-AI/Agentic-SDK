@@ -3,7 +3,7 @@
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Any, Protocol, TypedDict, runtime_checkable
+from typing import Any, Callable, Protocol, TypedDict, runtime_checkable
 
 from agentic_sdk.core.entities import Attachment, ContextEntry, ContextEntryType, Entities
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
@@ -39,6 +39,11 @@ class WorkflowState:
     last_action_result: dict[str, Any] | None = None
     last_action_error: dict[str, Any] | None = None
     attachments: list[Attachment] = field(default_factory=list)
+    _token_delta_callback: Callable[[str, str, dict[str, Any]], None] | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         if self.memory is None and self.memory_store is not None:
@@ -97,6 +102,26 @@ class WorkflowState:
         if isinstance(self.memory, PersistentMemory):
             return self.memory
         return None
+
+    def set_token_delta_callback(
+        self,
+        callback: Callable[[str, str, dict[str, Any]], None] | None,
+    ) -> None:
+        self._token_delta_callback = callback
+
+    def emit_token_delta(
+        self,
+        module: str,
+        content: object,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        if self._token_delta_callback is None or content is None:
+            return
+        resolved_content = str(content)
+        if not resolved_content:
+            return
+        self._token_delta_callback(str(module), resolved_content, dict(metadata or {}))
 
 
 @dataclass
