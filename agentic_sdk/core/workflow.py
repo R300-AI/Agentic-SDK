@@ -43,10 +43,12 @@ class WorkflowStream(Iterator[str]):
         workflow: "Workflow",
         run_kwargs: dict[str, Any],
         event_callback: Callable[[dict[str, Any]], None] | None = None,
+        yield_action_deltas: bool = True,
     ) -> None:
         self._workflow = workflow
         self._run_kwargs = run_kwargs
         self._event_callback = event_callback
+        self._yield_action_deltas = yield_action_deltas
         self._deltas: Queue[str | object] = Queue()
         self._thread: Thread | None = None
         self._result: WorkflowResult | None = None
@@ -113,7 +115,8 @@ class WorkflowStream(Iterator[str]):
         content = event.get("content")
         if content:
             self._emitted_action_text = True
-            self._deltas.put(str(content))
+            if self._yield_action_deltas:
+                self._deltas.put(str(content))
 
 
 @dataclass
@@ -305,17 +308,22 @@ class Workflow:
         attachments: list[Any] | None = None,
         memory_store: PersistentMemory | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
+        yield_action_deltas: bool | None = None,
     ) -> WorkflowStream:
         """Create an iterator of user-visible action text.
 
         This method accepts the same workflow input, session, memory, and
         attachment arguments as :meth:`run`. ``event_callback`` receives the
-        same stage and token events as :meth:`run`, while the iterator yields
-        only user-visible Action token deltas. Streaming actions yield their
-        token deltas; non-streaming actions yield their final message once.
-        Consume the iterator fully before reading ``stream.result`` for the
-        final :class:`WorkflowResult`.
+        same stage and token events as :meth:`run`. By default, the iterator
+        yields user-visible Action token deltas only when no callback is
+        supplied. This prevents double output when a callback itself renders
+        ``token_delta`` events. Set ``yield_action_deltas=True`` to receive
+        both event callbacks and iterator deltas, or ``False`` to use the
+        iterator only for completion and ``stream.result``.
         """
+        resolved_yield_action_deltas = (
+            event_callback is None if yield_action_deltas is None else yield_action_deltas
+        )
         return WorkflowStream(
             self,
             {
@@ -327,6 +335,7 @@ class Workflow:
                 "memory_store": memory_store,
             },
             event_callback,
+            resolved_yield_action_deltas,
         )
 
     def _stage_event(

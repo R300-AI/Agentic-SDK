@@ -89,7 +89,7 @@ def test_workflow_stream_forwards_events_while_yielding_only_action_text() -> No
 
     events: list[dict[str, object]] = []
     stream = workflow.stream("測試完整事件", event_callback=events.append)
-    assert "".join(stream) == "串流 Action 回覆。"
+    assert "".join(stream) == ""
     assert stream.result.final_message == "串流 Action 回覆。"
     assert {event["module"] for event in events if event["type"] == "token_delta"} == {"perceive", "plan", "action"}
     assert [event["phase"] for event in events if event["type"] == "stage"] == [
@@ -102,6 +102,35 @@ def test_workflow_stream_forwards_events_while_yielding_only_action_text() -> No
         "start",
         "finish",
     ]
+
+
+def test_workflow_stream_can_explicitly_yield_action_deltas_with_event_callback() -> None:
+    clients = [
+        FoundryOpenAILikeClient(),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(action_text="雙通道回覆。"),
+    ]
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=clients):
+        workflow = Workflow(
+            perceive=TextPerceive(**LLM_PARAMS),
+            plan=NextStepPlan(**LLM_PARAMS),
+            retrieve=PassThroughRetrieve(),
+            action=GenerativeAction(**LLM_PARAMS),
+        )
+
+    events: list[dict[str, object]] = []
+    stream = workflow.stream(
+        "測試雙通道",
+        event_callback=events.append,
+        yield_action_deltas=True,
+    )
+    assert "".join(stream) == "雙通道回覆。"
+    assert stream.result.final_message == "雙通道回覆。"
+    assert "".join(
+        event["content"]
+        for event in events
+        if event["type"] == "token_delta" and event["module"] == "action"
+    ) == "雙通道回覆。"
 
 
 def test_workflow_stream_yields_only_action_text_and_exposes_final_result() -> None:

@@ -112,7 +112,7 @@ for delta in stream:
 result = stream.result
 ```
 
-`stream()` 接受與 `run()` 相同的輸入、session、memory 與 attachment 參數（不包含 `event_callback`）。若 workflow 發生未由模組處理的例外，迭代器會在已產生的 token 輸出後重新拋出該例外；Action 自行處理的錯誤則保留 `run()` 的 `WorkflowResult` 行為。
+`stream()` 接受與 `run()` 相同的輸入、session、memory 與 attachment 參數，包含 `event_callback`。若 callback 自己輸出 `token_delta`，預設 iterator 不會再 yield Action token，避免重複輸出；此時只要迭代 stream 以等待完成即可。若確實需要兩條通道，設定 `yield_action_deltas=True`。若 workflow 發生未由模組處理的例外，迭代器會在已產生的 token 輸出後重新拋出該例外；Action 自行處理的錯誤則保留 `run()` 的 `WorkflowResult` 行為。
 
 ### 4. 使用 ToolCallAction 產生 OpenAI 標準工具呼叫
 
