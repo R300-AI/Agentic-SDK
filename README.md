@@ -95,7 +95,21 @@ result = workflow.run("TSiP 是什麼？")
 print(result.final_message)
 ```
 
-### 3. 使用 ToolCallAction 產生 OpenAI 標準工具呼叫
+### 3. 直接串流 Action 回覆
+
+`Workflow.stream(...)` 會直接迭代使用者可見的 Action text，不會輸出 Perceive、Plan 或 Reflect 的結構化 JSON。可串流的 Action 會即時產生 token；非串流 Action 會在完成時產生一次最終文字。完整迭代後可從 `stream.result` 取得 `WorkflowResult`：
+
+```python
+stream = workflow.stream("TSiP 是什麼？")
+for delta in stream:
+    print(delta, end="", flush=True)
+
+result = stream.result
+```
+
+`stream()` 接受與 `run()` 相同的輸入、session、memory 與 attachment 參數（不包含 `event_callback`）。若 workflow 發生未由模組處理的例外，迭代器會在已產生的 token 輸出後重新拋出該例外；Action 自行處理的錯誤則保留 `run()` 的 `WorkflowResult` 行為。
+
+### 4. 使用 ToolCallAction 產生 OpenAI 標準工具呼叫
 
 `ToolCallAction` 使用 OpenAI SDK 的 `tools` / `tool_choice` 標準格式，並把模型回傳的 `message.tool_calls` 正規化到 `result.entities["latest_tool_calls"]`。
 
@@ -155,7 +169,7 @@ print(result.entities["latest_tool_calls"])
 
 SDK 只負責產生與保存標準 tool call 結果；真正呼叫外部 API、呈現確認面板或提交表單，可以由應用層或 Playground Runner 承接。
 
-### 4. 自訂 Action
+### 5. 自訂 Action
 
 Action 也可以是一般 Python class。自訂 Action 會收到 `WorkflowState`，可以透過 `state.lookup(...)` 讀取前面模組產生的資料。
 

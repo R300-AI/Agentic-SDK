@@ -88,6 +88,20 @@ result = workflow.run("請介紹 SDK", event_callback=on_event)
 
 這不是完整 tracing 規格；它是給 MVP Chat WebUI 使用的輕量階段提示。前端應顯示 SDK 事件提供的 `label`，不要另外硬編模組名稱與畫面文字；若要做除錯、成本分析或跨服務追蹤，可以在這個 callback 之上另外接 OpenTelemetry、LangSmith 或自訂 exporter。
 
+## 直接串流 Action 回覆
+
+`Workflow.stream(...) -> WorkflowStream` 提供只含使用者可見 Action text 的 iterator；它不會產生 Perceive、Plan 或 Reflect 的結構化 JSON，也不需要提供 `event_callback`。可串流的 Action 會即時產生 token，非串流 Action 則會在完成時產生一次最終文字。其參數與 `run()` 的 `user_message`、`workflow_id`、`session_id`、`memory`、`attachments` 和 `memory_store` 相同。
+
+```python
+stream = workflow.stream("請介紹 SDK")
+for delta in stream:
+    print(delta, end="", flush=True)
+
+result = stream.result
+```
+
+`WorkflowStream.result` 只會在 iterator 耗盡後提供 `WorkflowResult`。未由 workflow 或模組處理的例外會在已排入的 token 都輸出後由 iterator 重新拋出；Action 模組自行轉換成結果的錯誤，則與 `run()` 一樣保存在最終結果中。
+
 ## README 流程對應
 
 README 裡的幾個範例，實際上都是在示範同一個公開組裝模型可以如何替換節點組合：你可以保留預設實作，也可以只替換其中一個節點，或另外注入自訂節點物件。對 `Workflow` 來說，這些差異都會回到同一套執行規則，也就是讀取 `WorkflowState`、必要時補進最新 user turn、執行目前節點、根據 `next_module` 推進下一步，最後把 assistant turn 追加回當前的 `MemoryStore` 實作。

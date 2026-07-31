@@ -28,6 +28,7 @@ from agentic_sdk.core import (
     WorkflowAborted,
     WorkflowResult,
     WorkflowState,
+    WorkflowStream,
 )
 from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore, PersistentMemory
 
@@ -101,6 +102,7 @@ __all__ = [
     "WorkflowConfig",
     "WorkflowResult",
     "WorkflowState",
+    "WorkflowStream",
     "build_workflow",
     "__version__",
 ]

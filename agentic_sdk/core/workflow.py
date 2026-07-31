@@ -1,7 +1,9 @@
 ﻿from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
+from queue import Queue
+from threading import Thread
 from typing import Any
 import uuid
 
@@ -20,6 +22,90 @@ DEFAULT_STAGE_LABELS: dict[str, str] = {
     "action": "正在準備回覆",
     "reflect": "正在檢查回覆內容",
 }
+
+_STREAM_COMPLETED = object()
+
+
+class WorkflowStream(Iterator[str]):
+    """Iterator for user-visible action text from one workflow run.
+
+    Iteration starts the workflow on a background thread so action deltas can be
+    consumed as they arrive. An action that does not emit deltas contributes
+    its final message once after it completes. After iteration is exhausted,
+    :attr:`result` contains the same ``WorkflowResult`` that
+    :meth:`Workflow.run` returns. Unexpected workflow exceptions are re-raised
+    by the iterator after any already-emitted deltas; action modules that
+    handle their own errors retain the normal ``Workflow.run`` result semantics.
+    """
+
+    def __init__(self, workflow: "Workflow", run_kwargs: dict[str, Any]) -> None:
+        self._workflow = workflow
+        self._run_kwargs = run_kwargs
+        self._deltas: Queue[str | object] = Queue()
+        self._thread: Thread | None = None
+        self._result: WorkflowResult | None = None
+        self._error: BaseException | None = None
+        self._exhausted = False
+        self._emitted_action_text = False
+
+    @property
+    def result(self) -> WorkflowResult:
+        """Return the completed workflow result.
+
+        Raises:
+            RuntimeError: If the stream has not been exhausted or the workflow
+                ended with an unexpected exception.
+        """
+        if not self._exhausted:
+            raise RuntimeError("WorkflowStream.result is available after the stream is exhausted.")
+        if self._error is not None:
+            raise RuntimeError("WorkflowStream did not produce a result.") from self._error
+        if self._result is None:
+            raise RuntimeError("WorkflowStream completed without a result.")
+        return self._result
+
+    def __iter__(self) -> "WorkflowStream":
+        self._start()
+        return self
+
+    def __next__(self) -> str:
+        self._start()
+        if self._exhausted:
+            raise StopIteration
+        delta = self._deltas.get()
+        if delta is _STREAM_COMPLETED:
+            self._exhausted = True
+            if self._error is not None:
+                raise self._error
+            raise StopIteration
+        return str(delta)
+
+    def _start(self) -> None:
+        if self._thread is not None:
+            return
+        self._thread = Thread(target=self._run, name="agentic-sdk-workflow-stream", daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        try:
+            self._result = self._workflow.run(event_callback=self._on_event, **self._run_kwargs)
+            if self._result.final_message and not self._emitted_action_text:
+                self._deltas.put(self._result.final_message)
+        except BaseException as exc:
+            self._error = exc
+        finally:
+            self._deltas.put(_STREAM_COMPLETED)
+
+    def _on_event(self, event: dict[str, Any]) -> None:
+        if event.get("type") != "token_delta" or event.get("module") != "action":
+            return
+        metadata = event.get("metadata")
+        if isinstance(metadata, dict) and metadata.get("structured") is True:
+            return
+        content = event.get("content")
+        if content:
+            self._emitted_action_text = True
+            self._deltas.put(str(content))
 
 
 @dataclass
@@ -199,6 +285,37 @@ class Workflow:
             usage=state.payload.get("_llm_usage"),
             entities=state.entities.as_dict(),
             memory=state.memory.copy_for_run() if state.memory is not None else None,
+        )
+
+    def stream(
+        self,
+        user_message: str | None = None,
+        *,
+        workflow_id: str | None = None,
+        session_id: str | None = None,
+        memory: MemoryStore | None = None,
+        attachments: list[Any] | None = None,
+        memory_store: PersistentMemory | None = None,
+    ) -> WorkflowStream:
+        """Create an iterator of user-visible action text.
+
+        This method accepts the same workflow input, session, memory, and
+        attachment arguments as :meth:`run`, but does not expose stage or
+        structured-module events. Streaming actions yield their token deltas;
+        non-streaming actions yield their final message once. Consume the
+        iterator fully before reading ``stream.result`` for the final
+        :class:`WorkflowResult`.
+        """
+        return WorkflowStream(
+            self,
+            {
+                "user_message": user_message,
+                "workflow_id": workflow_id,
+                "session_id": session_id,
+                "memory": memory,
+                "attachments": attachments,
+                "memory_store": memory_store,
+            },
         )
 
     def _stage_event(
