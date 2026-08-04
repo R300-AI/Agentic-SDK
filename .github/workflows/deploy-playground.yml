@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - "agentic_sdk/**"
+      - "assets/**"
       - "playground/**"
       - "requirements.txt"
       - ".github/workflows/deploy-playground.yml"
@@ -232,12 +233,16 @@ jobs:
           assert '回覆風格與規範' in builder.text
           assert '可互動元件 API' in builder.text
           assert '互動面板進階配置' not in builder.text
+
+          background = client.get('/assets/playground_background.png')
+          assert background.status_code == 200, background.text[:500]
           PY
 
       - name: Create deployment package
         run: |
           zip -r deploy.zip \
             agentic_sdk/ \
+            assets/ \
             playground/ \
             .python_packages/ \
             requirements.txt \
