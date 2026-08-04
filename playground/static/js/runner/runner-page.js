@@ -387,47 +387,6 @@ async function commitWorkflowName() {
 		renderWorkflowName(result.workflow_summary?.name || nextName);
 		closeSideWorkflowTitleEditor();
 		refreshSaveStatus();
-		async function commitWorkflowDescription() {
-			if (!workflowDescriptionInput || workflowDescriptionRequest) {
-				return workflowDescriptionRequest;
-			}
-			const nextDescription = workflowDescriptionInput.value.trim();
-			if (!nextDescription || nextDescription === workflowDescription) {
-				closeWorkflowDescriptionEditor();
-				return null;
-			}
-			workflowDescriptionRequest = (async () => {
-				workflowDescriptionInput.disabled = true;
-				if (runStatus) {
-					runStatus.textContent = "正在更新 workflow description...";
-				}
-				let result;
-				try {
-					result = await postJson("/playground/run/description", { description: nextDescription });
-				} catch (error) {
-					result = { updated: false, error: error.message || "更新 workflow description 失敗。" };
-				}
-				workflowDescriptionInput.disabled = false;
-				if (!result.updated) {
-					workflowDescriptionInput.focus();
-					workflowDescriptionInput.select();
-					if (runStatus) {
-						runStatus.textContent = result.error || "更新 workflow description 失敗。";
-					}
-					showSavePanel(savePanel, result.error || "更新 workflow description 失敗。");
-					return;
-				}
-				renderWorkflowDescription(result.description || nextDescription);
-				closeWorkflowDescriptionEditor();
-				refreshSaveStatus();
-				if (runStatus) {
-					runStatus.textContent = "workflow description 已更新。";
-				}
-			})().finally(() => {
-				workflowDescriptionRequest = null;
-			});
-			return workflowDescriptionRequest;
-		}
 		if (runStatus) {
 			runStatus.textContent = "Agent 名稱已更新。";
 		}

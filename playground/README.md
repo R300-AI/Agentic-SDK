@@ -32,7 +32,7 @@ AI Hub navigation also enters the same pages through these handoff routes:
 - Task-page Runner shell
 - Lightweight page-specific JavaScript modules
 - Shared visual language across the three pages
-- Python source preview/export as the canonical artifact
+- v2 workflow contract as canonical state, with Python source compiled for preview/export
 - AI Hub login or handoff-token verification, including account `display_name` for Runner identity labels
 - Agent listing, config load/reload, public readonly config load, and Runner save-back through the AI Hub API
 - Public readonly Runner mode for shared AI Hub Agents, with save/reload owner-only controls hidden outside editable sessions

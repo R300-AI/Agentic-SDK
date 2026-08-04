@@ -7,6 +7,7 @@ from flask import Blueprint, Response, abort, render_template, session
 from playground.services.model_endpoints import endpoint_env_bindings_for_source
 from playground.services.mode_context import get_mode_context
 from playground.services.source_builder import build_default_python_source, normalize_python_source, render_python_source
+from playground.services.workflow_spec import compile_python_source
 
 
 source_bp = Blueprint("source", __name__, url_prefix="/playground/source")
@@ -49,6 +50,14 @@ def export_source():
 
 
 def _current_python_source() -> str:
+    spec = session.get("workflow_spec")
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        python_source = compile_python_source(spec)
+        endpoint_bindings = endpoint_env_bindings_for_source(python_source, session.get("endpoint_bindings") or {})
+        python_source = compile_python_source(spec, endpoint_bindings=endpoint_bindings)
+        session["python_source"] = python_source
+        return python_source
+
     canonical_source = normalize_python_source(session.get("python_source") or build_default_python_source())
     session["python_source"] = canonical_source
     endpoint_bindings = endpoint_env_bindings_for_source(canonical_source, session.get("endpoint_bindings") or {})

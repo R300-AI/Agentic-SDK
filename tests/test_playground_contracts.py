@@ -13,6 +13,7 @@ from playground.services import key_vault_config
 from playground.services import model_endpoints
 from playground.services import runner_service
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
+from playground.services.workflow_spec import apply_builder_step, default_spec
 from playground.services.workflow_reachability import reachable_workflow_roles
 
 
@@ -306,6 +307,25 @@ def test_source_preview_roundtrip_preserves_current_draft():
     assert source_response.status_code == 200
     assert runner_response.status_code == 200
     assert preserved_config.perceive_module == "TextPerceive"
+
+
+def test_v2_source_preview_preserves_renamed_workflow():
+    app = create_app()
+    app.config.update(TESTING=True)
+    spec = apply_builder_step(default_spec(), "name", "Contract verification")
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["workflow_spec"] = spec
+            session["python_source"] = build_default_python_source()
+
+        response = client.get("/playground/source/preview")
+        with client.session_transaction() as session:
+            compiled_source = session["python_source"]
+
+    assert response.status_code == 200
+    assert 'workflow_name="Contract verification"' in compiled_source
+    assert 'workflow_name="Contract verification"' in response.get_data(as_text=True)
 
 
 def test_runner_starter_questions_use_session_metadata_not_python_source():
