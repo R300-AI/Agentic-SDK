@@ -1743,10 +1743,56 @@ a { color: inherit; text-decoration: none; }
 
 .starter-question-button {
   min-height: 2.5rem;
-  padding: 0.6rem 0.95rem;
-  border: 1px solid #d9dee8;
-  color: var(--ink);
-  background: #ffffff;
+  max-width: min(100%, 28rem);
+  padding: 0.58rem 1rem;
+  border: 1px solid rgba(154, 160, 166, 0.62);
+  border-radius: 999px;
+  clip-path: none;
+  color: #9aa0a6;
+  background: transparent;
+  box-shadow: none;
+  font-size: 0.95rem;
+  font-weight: 500;
+  line-height: 1.45;
+  text-align: left;
+  transition: border-color 150ms ease, color 150ms ease, background 150ms ease, box-shadow 150ms ease;
+}
+
+.starter-question-button:hover {
+  border-color: #f8f9fa;
+  color: #f8f9fa;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.starter-question-button:focus-visible {
+  border-color: #f8f9fa;
+  color: #f8f9fa;
+  box-shadow: 0 0 0 3px rgba(138, 180, 248, 0.56);
+  outline: 0;
+}
+
+.starter-question-button:active {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+@media (max-width: 640px) {
+  .starter-question-panel { width: min(100%, 34rem); }
+
+  .starter-question-list {
+    width: 100%;
+    gap: 0.6rem;
+  }
+
+  .starter-question-button {
+    width: min(100%, 31rem);
+    max-width: none;
+    padding: 0.62rem 1rem;
+    text-align: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .starter-question-button { transition: none; }
 }
 
 .chat-message {
