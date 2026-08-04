@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, redirect, render_template, request, session, url_for
 
 from playground.models import ModeContext
-from playground.services.aihub_bridge import start_builder_bridge_session, start_runner_bridge_session
+from playground.services.aihub_bridge import start_builder_bridge_session, start_runner_bridge_session, store_loaded_agent
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
 from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, exchange_handoff_token, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials, verify_identity
 from playground.services.deep_link import apply_aihub_deep_link
@@ -93,10 +93,7 @@ def navigate_from_aihub_to_runner():
 
     _start_authenticated_session(credentials)
     session["mode"] = "aihub_editable"
-    session["agent_id"] = result["agent_id"]
-    session["agent_name"] = result.get("agent_name") or ""
-    session["python_source"] = result["python_source"]
-    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
+    store_loaded_agent(result)
     bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
         return _navigation_login_error(_semantic_bundle_restore_error(bundle_result)), 502
@@ -118,10 +115,7 @@ def navigate_from_shared_agent_to_runner():
     session.clear()
     session["mode"] = "aihub_readonly"
     session["account_context_present"] = False
-    session["agent_id"] = result["agent_id"]
-    session["agent_name"] = result.get("agent_name") or ""
-    session["python_source"] = result["python_source"]
-    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
+    store_loaded_agent(result)
     session["source_origin"] = "aihub_shared_readonly"
     return redirect(url_for("runner.runner"))
 
@@ -184,10 +178,7 @@ def select_agent():
 
     session["mode"] = "aihub_editable"
     session["account_context_present"] = True
-    session["agent_id"] = result["agent_id"]
-    session["agent_name"] = result.get("agent_name") or ""
-    session["python_source"] = result["python_source"]
-    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
+    store_loaded_agent(result)
     bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
         agents_result = list_agents(credentials=credentials, origin=request.host_url)
@@ -258,6 +249,9 @@ def _clear_selected_agent_state() -> None:
     session.pop("agent_id", None)
     session.pop("agent_name", None)
     session.pop("last_aihub_save", None)
+    session.pop("workflow_spec", None)
+    session.pop("runner_presentation", None)
+    session.pop("builder_form_state", None)
     session.pop("last_aihub_bundle_load", None)
     session.pop("agent_owner", None)
     session.pop("builder_form_state", None)

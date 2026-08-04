@@ -12,9 +12,7 @@ from playground.services.model_endpoints import endpoint_state, normalize_endpoi
 from playground.services.semantic_runtime import new_upload_id, runtime_root, source_files_dir
 from playground.services.source_builder import (
     build_default_python_source,
-    build_python_source_from_builder_choice,
     get_builder_steps,
-    get_builder_form_state,
     get_workflow_summary,
 )
 from playground.services.workflow_spec import (
@@ -187,12 +185,6 @@ def upload_builder_files():
             stored_names.append(filename)
         new_names.append(filename)
 
-    python_source = build_python_source_from_builder_choice(
-        "retrieve",
-        {"semantic_support_files": "\n".join(stored_names)},
-        session.get("python_source"),
-    )
-    # Update spec support_files
     spec = _current_spec()
     spec = apply_builder_step(spec, "retrieve", {"semantic_support_files": "\n".join(stored_names)})
     _store_spec(spec)
@@ -332,44 +324,6 @@ def _builder_form_state_from_spec(spec: dict) -> dict:
     return spec_to_form_state(spec, pres)
 
 
-def _builder_form_state_for_source(python_source: str) -> dict[str, object]:
-    stored_state = session.get("builder_form_state")
-    if isinstance(stored_state, dict):
-        return stored_state
-    if session.get("builder_has_user_config") or session.get("source_origin") in _PERSISTENT_SOURCE_ORIGINS:
-        return get_builder_form_state(python_source)
-    return {"choices": {}, "values": {}}
-
-
-def _updated_builder_form_state(python_source: str, payload: dict[str, object]) -> dict[str, object]:
-    state = _builder_form_state_for_source(python_source)
-    choice_overrides: dict[str, str] = {}
-    values = {
-        str(step_key): dict(step_values)
-        for step_key, step_values in (state.get("values") if isinstance(state.get("values"), dict) else {}).items()
-        if isinstance(step_values, dict)
-    }
-
-    step_key = str(payload.get("step", ""))
-    if "choice" in payload:
-        choice_overrides[step_key] = str(payload.get("choice") or "")
-    if "value" in payload:
-        value = payload.get("value")
-        if isinstance(value, dict):
-            step_values = dict(values.get(step_key, {}))
-            step_values.update({str(key): item for key, item in value.items()})
-            values[step_key] = step_values
-        elif step_key == "name":
-            values.setdefault("name", {})["agent_name"] = str(value or "")
-
-    parsed_state = get_builder_form_state(python_source)
-    parsed_choices = parsed_state.get("choices") if isinstance(parsed_state.get("choices"), dict) else {}
-    return {
-        "choices": {**parsed_choices, **choice_overrides},
-        "values": values,
-    }
-
-
 def _is_locked_builder_choice(step_key: str, choice_label: object) -> bool:
     if step_key != "memory_type":
         return False
@@ -391,23 +345,9 @@ def _builder_upload_dir() -> Path:
 
 
 def _existing_semantic_support_files() -> list[str]:
-    spec = session.get("workflow_spec")
-    if isinstance(spec, dict):
-        support_files = (spec.get("retrieve") or {}).get("params", {}).get("support_files") or []
-        if support_files:
-            return list(support_files)
-    # Legacy fallback from builder_form_state
-    state = session.get("builder_form_state")
-    if not isinstance(state, dict):
-        return []
-    values = state.get("values")
-    if not isinstance(values, dict):
-        return []
-    retrieve_values = values.get("retrieve")
-    if not isinstance(retrieve_values, dict):
-        return []
-    raw = str(retrieve_values.get("semantic_support_files", ""))
-    return [line.strip() for line in raw.splitlines() if line.strip()]
+    spec = _current_spec()
+    support_files = (spec.get("retrieve") or {}).get("params", {}).get("support_files") or []
+    return [str(filename) for filename in support_files if str(filename).strip()]
 
 
 def _normalize_builder_endpoint_selections(python_source: str) -> dict[str, str]:

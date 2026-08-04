@@ -7,6 +7,7 @@ from flask import session
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
 from playground.services.aihub_client import AiHubCredentials, bridge_credentials, exchange_handoff_token, issue_credential_ticket, load_config, load_public_config
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
+from playground.services.workflow_spec import default_runner_presentation
 
 
 def has_builder_bridge_query(args: Mapping[str, object]) -> bool:
@@ -51,7 +52,7 @@ def start_runner_bridge_session(args: Mapping[str, object], *, origin: str | Non
         _start_authenticated_session(credentials)
         _store_bridge_context(args, credentials)
         session["mode"] = "aihub_editable"
-        _store_loaded_agent(result)
+        store_loaded_agent(result)
         bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials, origin=origin)
         if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
             return {"started": False, "error": _semantic_bundle_restore_error(bundle_result), "status_code": 502}
@@ -64,7 +65,7 @@ def start_runner_bridge_session(args: Mapping[str, object], *, origin: str | Non
     session.clear()
     session["mode"] = "aihub_readonly"
     session["account_context_present"] = False
-    _store_loaded_agent(result)
+    store_loaded_agent(result)
     session["agent_owner"] = _arg(args, "owner")
     session["source_origin"] = "aihub_shared_readonly"
     return {"started": True, "mode": "read"}
@@ -111,13 +112,24 @@ def _clear_selected_agent_state() -> None:
     session.pop("builder_has_user_config", None)
     session.pop("endpoint_bindings", None)
     session.pop("builder_upload_id", None)
+    session.pop("workflow_spec", None)
+    session.pop("runner_presentation", None)
 
 
-def _store_loaded_agent(result: dict[str, object]) -> None:
+def store_loaded_agent(result: dict[str, object]) -> None:
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
     session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
+    spec = result.get("workflow_spec")
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        session["workflow_spec"] = spec
+        presentation = result.get("runner_presentation")
+        session["runner_presentation"] = presentation if isinstance(presentation, dict) else default_runner_presentation()
+    else:
+        session.pop("workflow_spec", None)
+        session.pop("runner_presentation", None)
+    session.pop("builder_form_state", None)
 
 
 def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials, *, origin: str | None = None) -> dict[str, object]:

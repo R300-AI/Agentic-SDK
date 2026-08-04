@@ -272,7 +272,17 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
 
     def fake_post(url, *, json, headers, timeout):
         calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
-        return httpx.Response(200, json={"agent_id": "agent 1", "agent_name": "Shared Agent", "python_source": "print('shared')", "endpoint_bindings": {"perceive": "chat-fast"}})
+        return httpx.Response(200, json={
+            "agent_id": "agent 1",
+            "agent_name": "Shared Agent",
+            "python_source": "print('shared')",
+            "endpoint_bindings": {"perceive": "chat-fast"},
+            "contract_version": "2",
+            "workflow_spec": {"version": "2", "workflow_name": "Shared Agent"},
+            "runner_presentation": {"version": "1", "starter_questions": ["e2e-question-001"]},
+            "generated_source": "print('generated')",
+            "contract_hash": "e2e-contract-hash",
+        })
 
     monkeypatch.setenv("AI_HUB_BASE_URL", "https://aihub.example/")
     monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
@@ -285,6 +295,10 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
     assert loaded["agent_name"] == "Shared Agent"
     assert loaded["python_source"] == "print('shared')"
     assert loaded["endpoint_bindings"] == {"perceive": "chat-fast"}
+    assert loaded["workflow_spec"] == {"version": "2", "workflow_name": "Shared Agent"}
+    assert loaded["runner_presentation"] == {"version": "1", "starter_questions": ["e2e-question-001"]}
+    assert loaded["generated_source"] == "print('generated')"
+    assert loaded["contract_hash"] == "e2e-contract-hash"
     assert loaded["access_mode"] == "public_readonly"
     assert calls == [
         {

@@ -13,6 +13,7 @@ from playground.services.model_endpoints import normalize_endpoint_selections
 from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution, stream_python_source_initialization
 from playground.services.semantic_runtime import runtime_root, source_files_dir
 from playground.services.source_builder import _DEFAULT_RUNNER_DESCRIPTION, build_python_source_from_builder_choice, config_from_source, get_workflow_summary
+from playground.services.workflow_spec import apply_builder_step, compile_python_source
 
 
 runner_bp = Blueprint("runner", __name__, url_prefix="/playground/run")
@@ -36,7 +37,9 @@ def runner():
     demo_result = get_runner_demo_result(scene_profile)
     workflow_summary = get_workflow_summary(python_source)
     config = config_from_source(python_source)
-    starter_questions = _starter_questions_from_runner_state(config)
+    spec = session.get("workflow_spec")
+    runner_presentation = session.get("runner_presentation")
+    starter_questions = _starter_questions_from_runner_state(config, runner_presentation)
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["endpoint_bindings"] = endpoint_selections
     auto_save_after_login = bool(session.pop("pending_runner_auto_save", False)) and mode_context.can_save
@@ -47,7 +50,7 @@ def runner():
         scene_profile=scene_profile,
         demo_result=demo_result,
         workflow_summary=workflow_summary,
-        workflow_description=config.task_goal or "",
+        workflow_description=(str(spec.get("description") or "") if isinstance(spec, dict) else config.task_goal or ""),
         workflow_description_placeholder=_DEFAULT_RUNNER_DESCRIPTION,
         runner_greeting=_runner_greeting(),
         starter_questions=starter_questions,
@@ -57,7 +60,11 @@ def runner():
     )
 
 
-def _starter_questions_from_runner_state(config) -> list[str]:
+def _starter_questions_from_runner_state(config, runner_presentation: object = None) -> list[str]:
+    if isinstance(runner_presentation, dict):
+        questions = runner_presentation.get("starter_questions")
+        if isinstance(questions, list):
+            return [str(question).strip() for question in questions if str(question).strip()]
     state = session.get("builder_form_state")
     if isinstance(state, dict):
         values = state.get("values")
@@ -160,7 +167,13 @@ def update_runner_name():
         return jsonify({"updated": False, "error": "This runner is read-only."}), 403
 
     payload = request.get_json(silent=True) or {}
-    python_source = build_python_source_from_builder_choice("name", str(payload.get("name", "")), python_source)
+    spec = session.get("workflow_spec")
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        spec = apply_builder_step(spec, "name", str(payload.get("name", "")))
+        session["workflow_spec"] = spec
+        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+    else:
+        python_source = build_python_source_from_builder_choice("name", str(payload.get("name", "")), python_source)
     session["python_source"] = python_source
     session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
@@ -189,14 +202,20 @@ def update_runner_description():
         return jsonify({"updated": False, "error": "This runner is read-only."}), 403
 
     payload = request.get_json(silent=True) or {}
-    python_source = build_python_source_from_builder_choice("description", str(payload.get("description", "")), python_source)
+    spec = session.get("workflow_spec")
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        spec = apply_builder_step(spec, "description", str(payload.get("description", "")))
+        session["workflow_spec"] = spec
+        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+    else:
+        python_source = build_python_source_from_builder_choice("description", str(payload.get("description", "")), python_source)
     session["python_source"] = python_source
     session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
     return jsonify(
         {
             "updated": True,
-            "description": config_from_source(python_source).task_goal or "",
+            "description": (str(spec.get("description") or "") if isinstance(spec, dict) and spec.get("version") == "2" else config_from_source(python_source).task_goal or ""),
         }
     )
 
