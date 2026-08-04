@@ -1762,6 +1762,7 @@ a { color: inherit; text-decoration: none; }
   border-color: #f8f9fa;
   color: #f8f9fa;
   background: rgba(255, 255, 255, 0.08);
+  transform: none;
 }
 
 .starter-question-button:focus-visible {
@@ -1773,6 +1774,7 @@ a { color: inherit; text-decoration: none; }
 
 .starter-question-button:active {
   background: rgba(255, 255, 255, 0.14);
+  transform: none;
 }
 
 @media (max-width: 640px) {
