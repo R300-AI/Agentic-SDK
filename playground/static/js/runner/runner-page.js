@@ -24,6 +24,9 @@ const workflowInfoOpen = document.querySelector("[data-workflow-info-open]");
 const workflowInfoModal = document.querySelector("[data-workflow-info-modal]");
 const workflowInfoCloseButtons = workflowInfoModal?.querySelectorAll("[data-workflow-info-close]") || [];
 const workflowInfoForm = document.querySelector("[data-workflow-info-form]");
+const workflowInfoNameInput = document.querySelector("[data-workflow-info-name-input]");
+const workflowInfoDescriptionInput = document.querySelector("[data-workflow-info-description-input]");
+const workflowInfoSubmit = document.querySelector("[data-workflow-info-submit]");
 const runnerPage = document.querySelector("[data-page='runner']");
 const runnerSidebar = document.querySelector("[data-runner-sidebar]");
 const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
@@ -580,16 +583,16 @@ function openWorkflowInfoModal() {
 		return;
 	}
 	lastSaveTrigger = workflowInfoOpen;
-	if (sideWorkflowTitleInput) {
-		sideWorkflowTitleInput.value = workflowName;
+	if (workflowInfoNameInput) {
+		workflowInfoNameInput.value = workflowName;
 	}
-	if (workflowDescriptionInput) {
-		workflowDescriptionInput.value = workflowDescription;
+	if (workflowInfoDescriptionInput) {
+		workflowInfoDescriptionInput.value = workflowDescription;
 	}
 	workflowInfoModal.hidden = false;
 	workflowInfoModal.classList.add("open");
 	workflowInfoModal.dataset.open = "true";
-	queueMicrotask(() => sideWorkflowTitleInput?.focus());
+	queueMicrotask(() => workflowInfoNameInput?.focus());
 }
 
 function closeWorkflowInfoModal() {
@@ -603,21 +606,33 @@ function closeWorkflowInfoModal() {
 }
 
 async function applyWorkflowInfo() {
-	const nextName = sideWorkflowTitleInput?.value.trim() || workflowName;
-	const nextDescription = workflowDescriptionInput?.value.trim() || "";
+	const nextName = workflowInfoNameInput?.value.trim() || workflowName;
+	const nextDescription = workflowInfoDescriptionInput?.value.trim() || "";
+	[workflowInfoNameInput, workflowInfoDescriptionInput, workflowInfoSubmit].forEach((element) => {
+		if (element) {
+			element.disabled = true;
+		}
+	});
 	let result;
 	try {
 		result = await postJson("/playground/run/metadata", { name: nextName, description: nextDescription });
 	} catch (error) {
 		result = { updated: false, error: error.message || "更新 Agent 基本資料失敗。" };
+	} finally {
+		[workflowInfoNameInput, workflowInfoDescriptionInput, workflowInfoSubmit].forEach((element) => {
+			if (element) {
+				element.disabled = false;
+			}
+		});
 	}
 	if (!result.updated) {
 		showSavePanel(savePanel, result.error || "更新 Agent 基本資料失敗。");
-		return;
+		return false;
 	}
 	renderWorkflowName(result.workflow_summary?.name || nextName);
 	renderWorkflowDescription(result.description ?? nextDescription);
 	refreshSaveStatus();
+	return true;
 }
 
 async function saveCurrentWorkflow() {
@@ -686,8 +701,9 @@ workflowInfoOpen?.addEventListener("click", openWorkflowInfoModal);
 workflowInfoCloseButtons.forEach((button) => button.addEventListener("click", closeWorkflowInfoModal));
 workflowInfoForm?.addEventListener("submit", async (event) => {
 	event.preventDefault();
-	await applyWorkflowInfo();
-	closeWorkflowInfoModal();
+	if (await applyWorkflowInfo()) {
+		closeWorkflowInfoModal();
+	}
 });
 sideWorkflowTitleDisplay?.addEventListener("click", () => {
 	openSideWorkflowTitleEditor();

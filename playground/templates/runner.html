@@ -135,10 +135,10 @@
         </div>
       </header>
       <form class="workflow-info-form" data-workflow-info-form>
-        <label for="runner-side-workflow-name">名稱</label>
-        <input id="runner-side-workflow-name" class="workflow-side-title-input" name="name" type="text" value="{{ workflow_summary.name }}" maxlength="64" autocomplete="off" data-side-workflow-title-input>
+        <label for="runner-workflow-info-name">名稱</label>
+        <input id="runner-workflow-info-name" class="workflow-side-title-input" name="name" type="text" value="{{ workflow_summary.name }}" maxlength="64" autocomplete="off" data-workflow-info-name-input>
         <label for="runner-workflow-description">簡介</label>
-        <textarea id="runner-workflow-description" class="workflow-description-input" name="description" rows="5" maxlength="500" placeholder="{{ workflow_description_placeholder }}" data-workflow-description-input>{{ workflow_description }}</textarea>
+        <textarea id="runner-workflow-description" class="workflow-description-input" name="description" rows="5" maxlength="500" placeholder="{{ workflow_description_placeholder }}" data-workflow-info-description-input>{{ workflow_description }}</textarea>
         <div class="context-actions">
           <button class="button button-ghost" type="button" data-workflow-info-close>取消</button>
           <button class="button button-primary" type="submit" data-workflow-info-submit>套用</button>
