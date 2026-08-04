@@ -261,6 +261,18 @@ def test_runner_semantic_upload_persists_knowledge_files(monkeypatch):
     assert runner_routes.source_files_dir(upload_id).joinpath("knowledge.md").read_bytes() == b"persistent semantic knowledge"
 
 
+def test_semantic_runner_keeps_chat_attachments_separate_from_knowledge_uploads():
+    template = (Path(__file__).parents[1] / "playground" / "templates" / "runner.html").read_text(encoding="utf-8")
+    runner_script = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert 'data-attachment-input' in template
+    assert 'data-knowledge-input' in template
+    assert 'for="runner-attachments" aria-label="上傳本次試跑附件"' in template
+    assert 'for="runner-knowledge-files" aria-label="新增知識庫檔案"' in template
+    assert 'knowledgeInput?.addEventListener("change"' in runner_script
+    assert 'attachmentInput?.addEventListener("change", async () =>' not in runner_script
+
+
 def test_runner_edit_settings_navigation_preserves_current_draft():
     app = create_app()
     app.config.update(TESTING=True)

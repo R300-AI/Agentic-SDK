@@ -15,6 +15,7 @@ const starterQuestions = document.querySelector("[data-starter-questions]");
 const saveButton = document.querySelector("[data-save-action]");
 const saveStatus = document.querySelector("[data-save-status]");
 const attachmentInput = document.querySelector("[data-attachment-input]");
+const knowledgeInput = document.querySelector("[data-knowledge-input]");
 const artifactList = document.querySelector("[data-artifact-list]");
 const attachmentStatus = document.querySelector("[data-attachment-status]");
 const savePanel = document.querySelector("[data-save-panel]");
@@ -882,14 +883,14 @@ bindInputComposer(form, async (payload) => {
 	await runWorkflow(payload);
 });
 
-attachmentInput?.addEventListener("change", async () => {
-	if (!usesSemanticRetrieve || !attachmentInput.files?.length) {
+knowledgeInput?.addEventListener("change", async () => {
+	if (!usesSemanticRetrieve || !knowledgeInput.files?.length) {
 		return;
 	}
 	const body = new FormData();
-	Array.from(attachmentInput.files).forEach((file) => body.append("files", file));
+	Array.from(knowledgeInput.files).forEach((file) => body.append("files", file));
 	knowledgeUploadInFlight = true;
-	attachmentInput.disabled = true;
+	knowledgeInput.disabled = true;
 	if (attachmentStatus) {
 		attachmentStatus.textContent = "正在加入知識庫...";
 	}
@@ -908,7 +909,7 @@ attachmentInput?.addEventListener("change", async () => {
 		}
 	} finally {
 		knowledgeUploadInFlight = false;
-		attachmentInput.disabled = false;
+		knowledgeInput.disabled = false;
 	}
 });
 
