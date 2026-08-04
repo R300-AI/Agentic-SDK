@@ -8,10 +8,22 @@ from agentic_sdk.core.events import default_events_schema
 from playground.app import create_app
 from playground.routes import builder as builder_routes
 from playground.routes import runner as runner_routes
+from playground.services import key_vault_config
 from playground.services import model_endpoints
 from playground.services import runner_service
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
 from playground.services.workflow_reachability import reachable_workflow_roles
+
+
+def test_local_fae_can_skip_key_vault_loading(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "true")
+    monkeypatch.setattr(
+        key_vault_config,
+        "_access_token",
+        lambda: (_ for _ in ()).throw(AssertionError("Key Vault access should be skipped")),
+    )
+
+    assert key_vault_config.load_key_vault_secrets() == {}
 
 
 def test_builder_choices_map_to_runtime_modules():

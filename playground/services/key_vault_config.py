@@ -13,6 +13,8 @@ DEFAULT_KEY_VAULT_NAME = "agentic-sdk-models"
 
 
 def load_key_vault_secrets(*, override: bool = False) -> dict[str, str]:
+    if os.environ.get("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "").strip().lower() in {"1", "true", "yes"}:
+        return {}
     vault_name = _key_vault_name()
     if not vault_name:
         return {}

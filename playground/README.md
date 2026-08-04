@@ -5,14 +5,19 @@ This package contains the Flask-based Playground Entry, Builder, and Runner expe
 ## Run Locally
 
 ```powershell
+$env:PLAYGROUND_SKIP_KEY_VAULT_LOAD = "true"
 uv run python -m flask --app playground.app run --debug --port 5050
 ```
+
+`PLAYGROUND_SKIP_KEY_VAULT_LOAD=true` is for local Browser FAE only. It avoids Azure Key Vault startup access; configure the required model and embedding endpoints in the local process environment before validating Runner execution.
 
 Then open:
 
 - `http://127.0.0.1:5050/playground`
 - `http://127.0.0.1:5050/playground/builder`
 - `http://127.0.0.1:5050/playground/run`
+
+Before release, run the [Browser FAE checklist](../docs/browser-fae.md) through the VS Code Browser.
 
 AI Hub navigation also enters the same pages through these handoff routes:
 

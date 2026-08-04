@@ -10,6 +10,7 @@ from playground.routes.builder import builder_bp
 from playground.routes.entry import entry_bp
 from playground.routes.runner import runner_bp
 from playground.routes.source import source_bp
+from playground.routes.test_support import test_support_bp
 from playground.services.key_vault_config import load_key_vault_secrets
 
 
@@ -33,6 +34,7 @@ def create_app() -> Flask:
     app.register_blueprint(runner_bp)
     app.register_blueprint(aihub_bp)
     app.register_blueprint(source_bp)
+    app.register_blueprint(test_support_bp)
 
     return app
 
