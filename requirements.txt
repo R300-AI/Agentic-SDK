@@ -31,6 +31,10 @@ fastapi==0.136.3
     # via agentic-sdk (pyproject.toml)
 flask==3.1.1
     # via playground
+flask-session==0.8.0
+    # via playground server-side workflow sessions
+cachelib==0.15.0
+    # via flask-session
 gunicorn==23.0.0
     # via playground azure app service
 h11==0.16.0
@@ -53,6 +57,8 @@ jiter==0.15.0
     # via openai
 markitdown[all]; python_version < "3.13"
     # via semantic retrieve document ingestion on the supported Python runtime
+msgspec==0.21.1
+    # via flask-session
 openai==2.41.1
     # via agentic-sdk (pyproject.toml)
 pydantic==2.13.4

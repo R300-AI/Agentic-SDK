@@ -117,6 +117,9 @@ def save_aihub_config():
         python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
         spec_hash = hash_spec(spec)
         pres = session.get("runner_presentation")
+        semantic_ready = _prepare_semantic_runtime_for_save(python_source) if semantic_bundle_required(spec, builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None) else {"prepared": False}
+        if semantic_ready.get("error"):
+            return jsonify({"saved": False, "bundle_saved": False, "error": semantic_ready["error"], "error_code": "semantic_bundle_not_prepared"}), 409
         result = save_contract_v2(
             agent_id,
             spec,
@@ -136,16 +139,6 @@ def save_aihub_config():
                 session["agent_name"] = result["workflow_name"]
             session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
             session["source_origin"] = "aihub_loaded"
-            semantic_ready = _prepare_semantic_runtime_for_save(python_source) if semantic_bundle_required(spec, builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None) else {"prepared": False}
-            if semantic_ready.get("error"):
-                result["config_saved"] = True
-                result["saved"] = False
-                result["bundle_saved"] = False
-                result["bundle_error"] = semantic_ready["error"]
-                result["error"] = semantic_ready["error"]
-                result["error_code"] = "semantic_bundle_not_prepared"
-                session["last_aihub_save"] = result
-                return jsonify(result), 502
             workflow_name = str(spec.get("workflow_name") or "")
             description = str(spec.get("description") or "")
             bundle_result = save_runtime_bundle(
@@ -176,6 +169,9 @@ def save_aihub_config():
     workflow_config = config_from_source(python_source)
     workflow_name = workflow_summary.name
     description = workflow_config.task_goal or ""
+    semantic_ready = _prepare_semantic_runtime_for_save(python_source) if _semantic_bundle_required_legacy(workflow_config) else {"prepared": False}
+    if semantic_ready.get("error"):
+        return jsonify({"saved": False, "bundle_saved": False, "error": semantic_ready["error"], "error_code": "semantic_bundle_not_prepared"}), 409
     result = save_config(
         agent_id,
         python_source,
@@ -192,16 +188,6 @@ def save_aihub_config():
             session["agent_name"] = result["workflow_name"]
         session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
         session["source_origin"] = "aihub_loaded"
-        semantic_ready = _prepare_semantic_runtime_for_save(python_source) if _semantic_bundle_required_legacy(workflow_config) else {"prepared": False}
-        if semantic_ready.get("error"):
-            result["config_saved"] = True
-            result["saved"] = False
-            result["bundle_saved"] = False
-            result["bundle_error"] = semantic_ready["error"]
-            result["error"] = semantic_ready["error"]
-            result["error_code"] = "semantic_bundle_not_prepared"
-            session["last_aihub_save"] = result
-            return jsonify(result), 502
         bundle_result = save_runtime_bundle(
             agent_id=str(result.get("agent_id") or agent_id or ""),
             credentials=credentials,

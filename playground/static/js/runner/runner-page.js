@@ -28,6 +28,7 @@ const workflowInfoNameInput = document.querySelector("[data-workflow-info-name-i
 const workflowInfoDescriptionInput = document.querySelector("[data-workflow-info-description-input]");
 const workflowInfoSubmit = document.querySelector("[data-workflow-info-submit]");
 const runnerPage = document.querySelector("[data-page='runner']");
+const usesSemanticRetrieve = runnerPage?.dataset.semanticRetrieve === "true";
 const runnerSidebar = document.querySelector("[data-runner-sidebar]");
 const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
 const saveRequiresLogin = runnerPage?.dataset.saveRequiresLogin === "true";
@@ -880,6 +881,34 @@ bindInputComposer(form, async (payload) => {
 	await runWorkflow(payload);
 });
 
+attachmentInput?.addEventListener("change", async () => {
+	if (!usesSemanticRetrieve || !attachmentInput.files?.length) {
+		return;
+	}
+	const body = new FormData();
+	Array.from(attachmentInput.files).forEach((file) => body.append("files", file));
+	attachmentInput.disabled = true;
+	if (attachmentStatus) {
+		attachmentStatus.textContent = "正在加入知識庫...";
+	}
+	try {
+		const response = await fetch("/playground/run/knowledge/uploads", { method: "POST", body });
+		const result = await response.json();
+		if (!response.ok || !result.updated) {
+			throw new Error(result.error || "知識庫檔案上傳失敗。");
+		}
+		if (attachmentStatus) {
+			attachmentStatus.textContent = `已加入知識庫 ${result.uploaded_files.length} 個檔案；儲存 Agent 後會一併保存。`;
+		}
+	} catch (error) {
+		if (attachmentStatus) {
+			attachmentStatus.textContent = error.message || "知識庫檔案上傳失敗。";
+		}
+	} finally {
+		attachmentInput.disabled = false;
+	}
+});
+
 starterQuestions?.addEventListener("click", (event) => {
 	const button = event.target.closest?.("[data-starter-question-button]");
 	if (!button || !messageInput) {
@@ -937,8 +966,8 @@ saveButton?.addEventListener("click", async () => {
 		runStatus.textContent = message;
 	}
 	if (saveStatus) {
-		const statusText = result.saved ? "已儲存" : (result.config_saved ? "設定已儲存，知識庫未儲存" : "儲存失敗");
-		if (result.saved || result.config_saved) {
+		const statusText = result.saved ? "已儲存" : "儲存失敗";
+		if (result.saved) {
 			recordSavedWorkflowMetadata(statusText);
 		}
 		saveStatus.textContent = statusText;

@@ -16,7 +16,7 @@ from playground.services import model_endpoints
 from playground.services import runner_service
 from playground.services.aihub_bridge import store_loaded_agent
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
-from playground.services.workflow_spec import apply_builder_step, default_spec
+from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 from playground.services.workflow_reachability import reachable_workflow_roles
 
 
@@ -233,6 +233,32 @@ def test_semantic_builder_upload_unblocks_review_and_reaches_runner(monkeypatch)
     assert run_response.status_code == 200
     assert captured["semantic_sources"] and captured["semantic_sources"][0].endswith("source-files")
     assert captured["semantic_saved_path"]
+
+
+def test_runner_semantic_upload_persists_knowledge_files(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+    semantic_spec = apply_builder_step(default_spec(), "retrieve_policy", "semantic")
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["mode"] = "aihub_editable"
+            current_session["workflow_spec"] = semantic_spec
+            current_session["python_source"] = compile_python_source(semantic_spec)
+
+        response = client.post(
+            "/playground/run/knowledge/uploads",
+            data={"files": (BytesIO(b"persistent semantic knowledge"), "knowledge.md")},
+            content_type="multipart/form-data",
+        )
+        with client.session_transaction() as current_session:
+            upload_id = current_session["builder_upload_id"]
+            support_files = current_session["workflow_spec"]["retrieve"]["params"]["support_files"]
+
+    assert response.status_code == 200
+    assert response.get_json()["uploaded_files"] == ["knowledge.md"]
+    assert support_files == ["knowledge.md"]
+    assert runner_routes.source_files_dir(upload_id).joinpath("knowledge.md").read_bytes() == b"persistent semantic knowledge"
 
 
 def test_runner_edit_settings_navigation_preserves_current_draft():

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import tempfile
 from pathlib import Path
 
+from cachelib import FileSystemCache
 from flask import Flask, send_from_directory
+from flask_session import Session
 
 from playground.routes.aihub import aihub_bp
 from playground.routes.builder import builder_bp
@@ -18,7 +21,15 @@ def create_app() -> Flask:
     load_key_vault_secrets(override=False)
 
     app = Flask(__name__)
-    app.config.update(SECRET_KEY=os.environ.get("PLAYGROUND_SECRET_KEY", "agentic-sdk-playground-dev"))
+    session_dir = Path(os.environ.get("PLAYGROUND_SESSION_FILE_DIR", Path(tempfile.gettempdir()) / "agentic-sdk-playground-sessions"))
+    session_dir.mkdir(parents=True, exist_ok=True)
+    app.config.update(
+        SECRET_KEY=os.environ.get("PLAYGROUND_SECRET_KEY", "agentic-sdk-playground-dev"),
+        SESSION_TYPE="cachelib",
+        SESSION_CACHELIB=FileSystemCache(str(session_dir), threshold=500),
+        SESSION_PERMANENT=False,
+    )
+    Session(app)
     asset_dir = Path(__file__).resolve().parents[1] / "assets"
 
     @app.get("/healthz")

@@ -3,7 +3,7 @@
 {% block title %}試跑 Agent - AI Hub Agent 建立工具{% endblock %}
 
 {% block body %}
-<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}" data-save-requires-login="{{ 'true' if not mode_context.can_save and mode_context.can_edit else 'false' }}" data-auto-save-after-login="{{ 'true' if auto_save_after_login else 'false' }}">
+<main class="runner-page layout-{{ scene_profile.layout_variant }}" data-page="runner" data-archetype="{{ scene_profile.task_archetype }}" data-layout-variant="{{ scene_profile.layout_variant }}" data-save-requires-login="{{ 'true' if not mode_context.can_save and mode_context.can_edit else 'false' }}" data-auto-save-after-login="{{ 'true' if auto_save_after_login else 'false' }}" data-semantic-retrieve="{{ 'true' if uses_semantic_retrieve else 'false' }}">
   <section class="runner-initialization-overlay" role="status" aria-live="polite" aria-label="準備對話環境" data-initialization-overlay>
     <div class="runner-initialization-card">
       <div class="runner-initialization-status-row">
@@ -106,7 +106,7 @@
         <div class="composer-attachment-preview" data-artifact-list aria-label="已選擇的參考資料"></div>
         <div class="composer-main-row">
           <div class="attachment-picker" data-artifact-panel>
-            <label class="attachment-trigger" for="runner-attachments" aria-label="上傳參考檔案">
+            <label class="attachment-trigger" for="runner-attachments" aria-label="{{ '新增知識庫檔案' if uses_semantic_retrieve else '上傳本次試跑附件' }}">
               <span aria-hidden="true">+</span>
             </label>
             <input class="visually-hidden" id="runner-attachments" name="attachments" type="file" multiple data-attachment-input>

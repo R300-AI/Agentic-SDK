@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import httpx
+from flask import jsonify, session
 
 from playground import create_app
 from playground.routes import aihub as aihub_routes
@@ -10,6 +11,7 @@ from playground.routes import runner as runner_routes
 from playground.services import aihub_client
 from playground.services import aihub_bridge
 from playground.services import key_vault_config
+from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 
 
 def test_create_app_loads_ai_hub_url_from_key_vault(monkeypatch):
@@ -30,6 +32,37 @@ def test_create_app_loads_ai_hub_url_from_key_vault(monkeypatch):
 
     assert os.environ["AI_HUB_BASE_URL"] == "https://aihub.example"
     assert os.environ["AI_HUB_PLAYGROUND_ORIGIN"] == "https://playground.example"
+
+
+def test_large_v2_workflow_session_survives_reload_without_large_cookie(monkeypatch, tmp_path):
+    monkeypatch.setenv("PLAYGROUND_SESSION_FILE_DIR", str(tmp_path / "sessions"))
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    @app.get("/_test/session-state")
+    def session_state():
+        spec = session.get("workflow_spec") or {}
+        return jsonify({"name": spec.get("workflow_name"), "description": spec.get("description"), "payload": spec.get("payload")})
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["workflow_spec"] = {
+                "version": "2",
+                "workflow_name": "Persisted workflow",
+                "description": "Large workflow state remains available after reload.",
+                "payload": "x" * 20_000,
+            }
+
+        reloaded = client.get("/_test/session-state")
+        session_cookie = client.get_cookie(app.config["SESSION_COOKIE_NAME"])
+
+    assert reloaded.get_json() == {
+        "name": "Persisted workflow",
+        "description": "Large workflow state remains available after reload.",
+        "payload": "x" * 20_000,
+    }
+    assert session_cookie is not None
+    assert len(session_cookie.value) < 512
 
 
 def test_key_vault_name_does_not_skip_for_local_or_ci_flags(monkeypatch):
@@ -1232,6 +1265,31 @@ workflow = Workflow(
     assert response.json["saved"] is False
     assert response.json["bundle_saved"] is False
     assert response.json["error_code"] == "missing_bundle_api"
+
+
+def test_aihub_save_rejects_semantic_workflow_before_writing_config_without_knowledge(monkeypatch):
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    saved_contracts = []
+    semantic_spec = apply_builder_step(default_spec(), "retrieve_policy", "semantic")
+    semantic_spec = apply_builder_step(semantic_spec, "retrieve", {"semantic_support_files": "missing-knowledge.md"})
+    monkeypatch.setattr(aihub_routes, "save_contract_v2", lambda *args, **kwargs: saved_contracts.append((args, kwargs)) or {"saved": True})
+
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", base_url="https://playground.example", data={"username": "creator", "password": "secret"})
+        with client.session_transaction(base_url="https://playground.example") as current_session:
+            current_session["mode"] = "manual_auth"
+            current_session["workflow_spec"] = semantic_spec
+            current_session["python_source"] = compile_python_source(semantic_spec)
+        response = client.post("/playground/aihub/config/save", base_url="https://playground.example")
+
+    assert response.status_code == 409
+    assert response.json["saved"] is False
+    assert response.json["bundle_saved"] is False
+    assert "knowledge files" in response.json["error"]
+    assert saved_contracts == []
 
 
 def test_aihub_save_route_prepares_semantic_saved_path_before_bundle_upload(monkeypatch):

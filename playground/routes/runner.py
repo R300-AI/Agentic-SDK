@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, is_dataclass
+from pathlib import Path
 
 from flask import Blueprint, Response, jsonify, redirect, render_template, request, session, stream_with_context, url_for
 
@@ -54,6 +55,7 @@ def runner():
         workflow_description_placeholder=_DEFAULT_RUNNER_DESCRIPTION,
         runner_greeting=_runner_greeting(),
         starter_questions=starter_questions,
+        uses_semantic_retrieve=config.retrieve_module == "SemanticRetrieve",
         last_aihub_save=session.get("last_aihub_save"),
         has_ai_hub_agent=bool(session.get("agent_id")),
         auto_save_after_login=auto_save_after_login,
@@ -339,3 +341,56 @@ def _refresh_ai_hub_identity() -> None:
         api_base_url=credentials.api_base_url,
         display_name=display_name,
     )
+
+
+@runner_bp.post("/knowledge/uploads")
+def upload_runner_knowledge_files():
+    python_source = session.get("python_source")
+    if not python_source:
+        return jsonify({"updated": False, "error": "No Python source is available for knowledge uploads."}), 400
+    if not get_mode_context().can_edit:
+        return jsonify({"updated": False, "error": "This runner is read-only."}), 403
+
+    config = config_from_source(python_source)
+    if config.retrieve_module != "SemanticRetrieve":
+        return jsonify({"updated": False, "error": "This workflow does not use SemanticRetrieve."}), 409
+
+    uploaded_files = [file for file in request.files.getlist("files") if getattr(file, "filename", "")]
+    if not uploaded_files:
+        return jsonify({"updated": False, "error": "沒有可上傳的知識庫檔案。"}), 400
+
+    upload_id = session.get("builder_upload_id")
+    if not isinstance(upload_id, str) or not upload_id.strip():
+        from playground.services.semantic_runtime import new_upload_id
+
+        upload_id = new_upload_id()
+        session["builder_upload_id"] = upload_id
+    upload_dir = source_files_dir(upload_id)
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    spec = session.get("workflow_spec")
+    existing_names = []
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        existing_names = [str(name) for name in (spec.get("retrieve") or {}).get("params", {}).get("support_files") or [] if str(name).strip()]
+
+    uploaded_names = []
+    for upload in uploaded_files:
+        filename = Path(str(upload.filename or "")).name.strip()
+        if not filename:
+            continue
+        upload.save(upload_dir / filename)
+        if filename not in existing_names:
+            existing_names.append(filename)
+        uploaded_names.append(filename)
+
+    if not uploaded_names:
+        return jsonify({"updated": False, "error": "沒有有效的知識庫檔案。"}), 400
+
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        spec = apply_builder_step(spec, "retrieve", {"semantic_support_files": "\n".join(existing_names)})
+        session["workflow_spec"] = spec
+        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+        session["python_source"] = python_source
+    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    session["builder_has_user_config"] = True
+    return jsonify({"updated": True, "uploaded_files": uploaded_names, "semantic_support_files": existing_names})
