@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from playground.services.aihub_client import AiHubCredentials, request_bundle_download_url, request_bundle_upload_url
@@ -20,25 +21,35 @@ def save_runtime_bundle(
     if not resolved_agent_id:
         return {"bundle_saved": False, "bundle_error": "Missing AI Hub agent id."}
 
-    upload_payload = request_bundle_upload_url(resolved_agent_id, credentials=credentials, origin=origin)
-    if not upload_payload.get("ok"):
-        return {"bundle_saved": False, "bundle_error": upload_payload.get("error") or "Could not obtain bundle upload URL.", "bundle_error_code": upload_payload.get("error_code")}
-
     bundle = create_agent_bundle_zip(
         python_source=python_source,
         workflow_name=workflow_name,
         description=description,
         builder_upload_id=builder_upload_id,
     )
-    upload_result = upload_bundle_zip(upload_payload, bundle.zip_path)
-    if not upload_result.get("uploaded"):
-        return {"bundle_saved": False, "bundle_error": upload_result.get("error") or "Bundle upload failed."}
+    attempts = _bundle_upload_attempts()
+    upload_result: dict[str, object] = {}
+    for attempt in range(attempts):
+        upload_payload = request_bundle_upload_url(resolved_agent_id, credentials=credentials, origin=origin)
+        if not upload_payload.get("ok"):
+            return {"bundle_saved": False, "bundle_error": upload_payload.get("error") or "Could not obtain bundle upload URL.", "bundle_error_code": upload_payload.get("error_code")}
+        upload_result = upload_bundle_zip(upload_payload, bundle.zip_path)
+        if upload_result.get("uploaded"):
+            return {
+                "bundle_saved": True,
+                "bundle_path": upload_result.get("bundle_path"),
+                "bundle_source_file_count": bundle.source_file_count,
+                "bundle_vectorstore_file_count": bundle.vectorstore_file_count,
+                "bundle_upload_attempts": attempt + 1,
+            }
+        if not upload_result.get("retryable"):
+            break
 
     return {
-        "bundle_saved": True,
-        "bundle_path": upload_result.get("bundle_path"),
-        "bundle_source_file_count": bundle.source_file_count,
-        "bundle_vectorstore_file_count": bundle.vectorstore_file_count,
+        "bundle_saved": False,
+        "bundle_error": upload_result.get("error") or "Bundle upload failed.",
+        "bundle_error_code": "bundle_transfer_failed",
+        "bundle_upload_attempts": attempt + 1,
     }
 
 
@@ -69,3 +80,13 @@ def restore_runtime_bundle(
         "bundle_vectorstore_file_count": restored.vectorstore_file_count,
         "bundle_path": download_result.get("bundle_path"),
     }
+
+
+def _bundle_upload_attempts() -> int:
+    raw_attempts = os.environ.get("AI_HUB_BUNDLE_UPLOAD_ATTEMPTS", "")
+    if not raw_attempts:
+        return 2
+    try:
+        return max(1, min(int(raw_attempts), 4))
+    except ValueError:
+        return 2

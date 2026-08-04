@@ -1,9 +1,12 @@
 from pathlib import Path
+from types import SimpleNamespace
 import zipfile
 
+import httpx
 import pytest
 
 from agentic_sdk.modules import SemanticRetrieve
+from playground.services import aihub_bundle_flow
 from playground.services import bundle_store
 
 
@@ -137,3 +140,71 @@ def test_bundle_upload_and_download_use_signed_urls(tmp_path, monkeypatch):
     assert download_result["downloaded"] is True
     assert Path(download_result["zip_path"]).read_bytes() == b"zip-bytes"
     assert uploaded["download_url"] == "https://storage.example/download"
+
+
+def test_bundle_upload_timeout_is_retryable_and_uses_configured_timeout(tmp_path, monkeypatch):
+    zip_path = tmp_path / "agentic_playground_bundle.zip"
+    zip_path.write_bytes(b"zip-bytes")
+    observed_timeouts = []
+
+    def timed_out_put(*args, **kwargs):
+        observed_timeouts.append(kwargs["timeout"])
+        raise httpx.ReadTimeout("The read operation timed out")
+
+    monkeypatch.setenv("AI_HUB_BUNDLE_TRANSFER_TIMEOUT_SECONDS", "420")
+    monkeypatch.setattr(bundle_store.httpx, "put", timed_out_put)
+
+    result = bundle_store.upload_bundle_zip(
+        {"upload_url": "https://storage.example/upload", "upload_method": "PUT"},
+        zip_path,
+    )
+
+    assert result["uploaded"] is False
+    assert result["retryable"] is True
+    assert "timed out" in result["error"]
+    assert observed_timeouts == [420.0]
+
+
+def test_runtime_bundle_retries_timeout_with_a_fresh_signed_url(tmp_path, monkeypatch):
+    zip_path = tmp_path / "agentic_playground_bundle.zip"
+    zip_path.write_bytes(b"zip-bytes")
+    requested_urls = []
+    uploaded_urls = []
+
+    monkeypatch.setattr(
+        aihub_bundle_flow,
+        "create_agent_bundle_zip",
+        lambda **kwargs: SimpleNamespace(zip_path=zip_path, source_file_count=1, vectorstore_file_count=2),
+    )
+
+    def request_url(*args, **kwargs):
+        requested_urls.append(len(requested_urls) + 1)
+        return {
+            "ok": True,
+            "upload_url": f"https://storage.example/upload/{len(requested_urls)}",
+            "upload_method": "PUT",
+        }
+
+    def upload(upload_payload, saved_zip_path):
+        uploaded_urls.append(str(upload_payload["upload_url"]))
+        if len(uploaded_urls) == 1:
+            return {"uploaded": False, "retryable": True, "error": "The read operation timed out"}
+        return {"uploaded": True, "bundle_path": "bundles/agent.zip"}
+
+    monkeypatch.setattr(aihub_bundle_flow, "request_bundle_upload_url", request_url)
+    monkeypatch.setattr(aihub_bundle_flow, "upload_bundle_zip", upload)
+
+    result = aihub_bundle_flow.save_runtime_bundle(
+        agent_id="agent-1",
+        credentials=None,
+        origin="https://playground.example",
+        python_source="print('ok')",
+        workflow_name="Semantic Agent",
+        description="",
+        builder_upload_id="upload-1",
+    )
+
+    assert result["bundle_saved"] is True
+    assert result["bundle_upload_attempts"] == 2
+    assert requested_urls == [1, 2]
+    assert uploaded_urls == ["https://storage.example/upload/1", "https://storage.example/upload/2"]

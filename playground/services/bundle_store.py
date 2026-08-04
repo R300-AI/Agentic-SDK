@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import json
 import shutil
+import os
 import tempfile
 import uuid
 import zipfile
@@ -139,7 +140,11 @@ def upload_bundle_zip(upload_payload: dict[str, object], zip_path: Path) -> dict
         response = httpx.put(upload_url, content=bundle_bytes, headers=upload_headers, timeout=_bundle_transfer_timeout_seconds())
         response.raise_for_status()
     except (OSError, httpx.HTTPError) as error:
-        return {"uploaded": False, "error": str(error) or "Bundle upload failed."}
+        return {
+            "uploaded": False,
+            "error": str(error) or "Bundle upload failed.",
+            "retryable": isinstance(error, (OSError, httpx.TimeoutException, httpx.NetworkError)),
+        }
 
     return {"uploaded": True, "bundle_path": upload_payload.get("bundle_path"), "upload_url_expires_at": upload_payload.get("upload_url_expires_at")}
 
@@ -220,4 +225,10 @@ def _unsafe_zip_path(path: PurePosixPath) -> bool:
 
 
 def _bundle_transfer_timeout_seconds() -> float:
-    return 60.0
+    raw_timeout = os.environ.get("AI_HUB_BUNDLE_TRANSFER_TIMEOUT_SECONDS", "")
+    if not raw_timeout:
+        return 300.0
+    try:
+        return max(30.0, min(float(raw_timeout), 1800.0))
+    except ValueError:
+        return 300.0
