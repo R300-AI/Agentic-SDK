@@ -298,6 +298,17 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("action", output["next_module"])
         self.assertEqual("route to action", output["payload"]["plan_thought"])
 
+    def test_next_step_plan_forces_configured_retrieve_without_model_request(self) -> None:
+        state = WorkflowState(user_message="TSiP 是什麼？")
+        client = FoundryOpenAILikeClient(plan_sequence=["action"])
+
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+            output = NextStepPlan(force_retrieve=True, **_llm_params())(state)
+
+        self.assertEqual("retrieve", output["next_module"])
+        self.assertEqual("retrieve configured by workflow", output["payload"]["plan_thought"])
+        self.assertIsNone(client.last_create_kwargs)
+
     def test_keyword_retrieve_hits_expected_items(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         state.payload["query"] = "tsip"

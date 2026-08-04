@@ -1430,6 +1430,8 @@ def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str], endpoint_
     ]
     if description:
         arguments.append(f"retrieve_description={json.dumps(description, ensure_ascii=False)}")
+    if config.retrieve_module != "PassThroughRetrieve":
+        arguments.append("force_retrieve=True")
     return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
 
 
