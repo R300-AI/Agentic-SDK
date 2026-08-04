@@ -909,7 +909,6 @@ def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str
     return NextStepPlan(
         system_prompt=config.plan_system_prompt,
         retrieve_description=config.retrieve_description,
-        force_retrieve=config.retrieve_module != "PassThroughRetrieve",
         **endpoint_params_for_role(endpoint_role, endpoint_selections),
     )
 

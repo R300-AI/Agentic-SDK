@@ -24,11 +24,9 @@ class NextStepPlan:
         model: str | None = None,
         system_prompt: str | None = None,
         retrieve_description: str | None = None,
-        force_retrieve: bool = False,
     ) -> None:
         self._model = require_model(model, self.__class__.__name__)
         self._client = resolve_openai_client(self.__class__.__name__, api_key=api_key, base_url=base_url)
-        self._force_retrieve = force_retrieve
         retrieve_hint = ""
         if retrieve_description:
             retrieve_hint = f"\nAvailable retrieve source: {retrieve_description}."
@@ -39,18 +37,6 @@ class NextStepPlan:
         return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        if self._force_retrieve:
-            return ModuleOutput(
-                next_module="retrieve",
-                payload={"plan_thought": "retrieve configured by workflow"},
-                context_updates=[
-                    ContextEntry(
-                        type=ContextEntryType.PLAN_DECISION,
-                        content="thought=retrieve configured by workflow next=retrieve",
-                        metadata={"thought": "retrieve configured by workflow", "next_module": "retrieve", "fallback": False},
-                    )
-                ],
-            )
         perceived = state.latest_of(ContextEntryType.PERCEIVED)
         retrieved = state.latest_of(ContextEntryType.RETRIEVED)
         intent = perceived.metadata.get("intent") if perceived else "general"
