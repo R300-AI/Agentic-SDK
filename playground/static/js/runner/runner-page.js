@@ -910,10 +910,14 @@ starterQuestions?.addEventListener("click", (event) => {
 
 resultThread?.addEventListener("runner:tool-call-submit", async (event) => {
 	const submission = event.detail || {};
-	await runWorkflow(
-		{ message: "", tool_call_submission: submission },
-		{ displayMessage: toolSubmissionDisplay(submission), showUserMessage: false },
-	);
+	try {
+		await runWorkflow(
+			{ message: "", tool_call_submission: submission },
+			{ displayMessage: toolSubmissionDisplay(submission), showUserMessage: false },
+		);
+	} finally {
+		event.target?.dispatchEvent(new CustomEvent("runner:tool-call-complete"));
+	}
 });
 
 saveButton?.addEventListener("click", async () => {

@@ -320,6 +320,7 @@ function createToolCallPanel(panel) {
     const argumentsPayload = collectToolCallPayload(form);
     form.dataset.toolCallPayload = JSON.stringify(argumentsPayload);
     status.textContent = "正在送出選擇...";
+    confirmButton.disabled = true;
     form.dispatchEvent(new CustomEvent("runner:tool-call-submit", {
       bubbles: true,
       detail: {
@@ -329,6 +330,10 @@ function createToolCallPanel(panel) {
         api: panel.api,
       },
     }));
+  });
+  form.addEventListener("runner:tool-call-complete", () => {
+    status.textContent = "已送出選擇。";
+    confirmButton.disabled = false;
   });
   return form;
 }

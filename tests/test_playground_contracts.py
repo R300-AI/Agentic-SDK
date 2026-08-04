@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from io import BytesIO
+from pathlib import Path
 
 from agentic_sdk.core import WorkflowResult, WorkflowState
 from agentic_sdk.core.events import default_events_schema
@@ -90,6 +91,17 @@ def test_interactive_action_contract_roundtrips_to_boolean_tool_schema():
     assert config.action_module == "ToolCallAction"
     assert field["type"] == "boolean"
     assert config.action_tools[0]["function"]["parameters"]["required"] == ["是否提交"]
+
+
+def test_interactive_panel_submission_releases_pending_state():
+    runner_directory = Path(__file__).parents[1] / "playground" / "static" / "js" / "runner"
+    surface_source = (runner_directory / "result-surface.js").read_text(encoding="utf-8")
+    runner_source = (runner_directory / "runner-page.js").read_text(encoding="utf-8")
+
+    assert 'confirmButton.disabled = true;' in surface_source
+    assert 'form.addEventListener("runner:tool-call-complete"' in surface_source
+    assert 'status.textContent = "已送出選擇。";' in surface_source
+    assert 'event.target?.dispatchEvent(new CustomEvent("runner:tool-call-complete"));' in runner_source
 
 
 def test_runner_execute_routes_forward_attachment_payloads(monkeypatch):
