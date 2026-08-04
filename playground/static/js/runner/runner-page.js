@@ -694,7 +694,22 @@ async function loginAiHubSession(username, password) {
 
 function saveNeedsLogin(result) {
 	const error = String(result?.error || "");
-	return error === "Current mode cannot save to AI Hub." || error === "AI Hub login is required before saving.";
+	return result?.reauthentication_required === true || error === "Current mode cannot save to AI Hub." || error === "AI Hub login is required before saving.";
+}
+
+async function refreshAiHubSession() {
+	if (!saveLoginModal || saveRequiresLogin) {
+		return;
+	}
+	let result;
+	try {
+		result = await postJson("/playground/aihub/session/refresh");
+	} catch (error) {
+		return;
+	}
+	if (result?.reauthentication_required) {
+		openSaveLoginModal();
+	}
 }
 
 bindAttachmentPicker(attachmentInput, artifactList, attachmentStatus);
@@ -1009,6 +1024,10 @@ if (autoSaveAfterLogin && saveButton && !saveRequiresLogin) {
 	queueMicrotask(() => {
 		saveButton.click();
 	});
+}
+
+if (saveLoginModal && !saveRequiresLogin) {
+	window.setInterval(refreshAiHubSession, 5 * 60 * 1000);
 }
 
 initializeRunner();

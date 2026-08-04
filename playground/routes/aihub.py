@@ -3,7 +3,7 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request, session
 
 from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
-from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, save_config, verify_credentials, verify_identity
+from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, refresh_playground_session, save_config, verify_credentials, verify_identity
 from playground.services.model_endpoints import normalize_endpoint_selections
 from playground.services.runner_service import prepare_semantic_runtime
 from playground.services.security import is_allowed_origin
@@ -97,7 +97,7 @@ def save_aihub_config():
 
     credentials = credentials_for_ticket(session.get("ai_hub_credential_ticket"))
     if not credentials:
-        return jsonify({"saved": False, "error": "AI Hub login is required before saving."}), 401
+        return jsonify({"saved": False, "error": "AI Hub login is required before saving.", "reauthentication_required": True}), 401
 
     python_source = payload.get("python_source") or session.get("python_source")
     if not python_source:
@@ -175,6 +175,30 @@ def login_aihub_session():
     session["ai_hub_credential_ticket"] = issue_credential_ticket(identity["username"], password, display_name=identity.get("display_name", ""))
     session["pending_runner_auto_save"] = True
     return jsonify({"authenticated": True, "username": identity["username"], "display_name": identity.get("display_name", ""), "redirect_url": "/playground/run"})
+
+
+@aihub_bp.post("/session/refresh")
+def refresh_aihub_session():
+    if not is_allowed_origin(request):
+        return jsonify({"refreshed": False, "error": "Origin is not allowed for AI Hub config access."}), 403
+
+    credentials = credentials_for_ticket(session.get("ai_hub_credential_ticket"))
+    if not credentials or not credentials.token:
+        return jsonify({"refreshed": False, "reauthentication_required": True}), 401
+    refreshed = refresh_playground_session(credentials, origin=request.host_url)
+    if not refreshed:
+        return jsonify({"refreshed": False, "reauthentication_required": True}), 401
+    session["ai_hub_username"] = refreshed.username
+    session["ai_hub_display_name"] = refreshed.display_name
+    session["ai_hub_credential_ticket"] = issue_credential_ticket(
+        refreshed.username,
+        refreshed.password,
+        token=refreshed.token,
+        api_base_url=refreshed.api_base_url,
+        display_name=refreshed.display_name,
+        expires_at=refreshed.expires_at,
+    )
+    return jsonify({"refreshed": True, "expires_at": refreshed.expires_at})
 
 
 def _verified_identity(username: str, password: str) -> dict[str, str] | None:

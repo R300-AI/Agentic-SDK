@@ -168,7 +168,7 @@
     </div>
   </section>
   {% endif %}
-  {% if mode_context.can_edit and not mode_context.can_save %}
+  {% if mode_context.can_edit %}
   <section class="code-preview-modal" role="dialog" aria-modal="true" aria-labelledby="save-login-title" data-save-login-modal hidden>
     <button class="code-preview-backdrop" type="button" aria-label="關閉登入視窗" data-save-login-close></button>
     <div class="code-preview-window save-login-window">

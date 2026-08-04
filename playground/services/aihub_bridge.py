@@ -5,7 +5,7 @@ from collections.abc import Mapping
 from flask import session
 
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
-from playground.services.aihub_client import AiHubCredentials, bridge_credentials, issue_credential_ticket, load_config, load_public_config, verify_handoff_token
+from playground.services.aihub_client import AiHubCredentials, bridge_credentials, exchange_handoff_token, issue_credential_ticket, load_config, load_public_config
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
 
@@ -20,6 +20,8 @@ def has_runner_bridge_query(args: Mapping[str, object]) -> bool:
 
 def start_builder_bridge_session(args: Mapping[str, object], *, origin: str | None = None) -> None:
     credentials = _bridge_credentials(args, origin=origin)
+    if _arg(args, "token") and not credentials:
+        raise ValueError("Playground handoff could not establish a session.")
     session.clear()
     if credentials:
         _start_authenticated_session(credentials)
@@ -79,6 +81,7 @@ def _start_authenticated_session(credentials: AiHubCredentials) -> None:
         token=credentials.token,
         api_base_url=credentials.api_base_url,
         display_name=credentials.display_name,
+        expires_at=credentials.expires_at,
     )
     session["python_source"] = build_default_python_source()
     session["source_origin"] = "manual_new"
@@ -89,16 +92,7 @@ def _bridge_credentials(args: Mapping[str, object], *, origin: str | None = None
     credentials = bridge_credentials(token, api_base_url=_arg(args, "apiBase"))
     if not credentials:
         return None
-    verified = verify_handoff_token(token, api_base_url=credentials.api_base_url, origin=origin)
-    if not verified:
-        return credentials
-    return AiHubCredentials(
-        username=verified["username"],
-        password="",
-        token=credentials.token,
-        api_base_url=credentials.api_base_url,
-        display_name=verified.get("display_name", ""),
-    )
+    return exchange_handoff_token(token, api_base_url=credentials.api_base_url, origin=origin)
 
 
 def _store_bridge_context(args: Mapping[str, object], credentials: AiHubCredentials) -> None:
