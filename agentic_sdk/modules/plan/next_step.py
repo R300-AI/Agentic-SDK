@@ -59,6 +59,13 @@ class NextStepPlan:
                 content,
                 metadata={"model": self._model, "structured": True},
             ),
+            structured_fields=state.structured_fields_for(self.name),
+            on_field=lambda field, value: state.emit_structured_field(
+                self.name,
+                field,
+                value,
+                metadata={"model": self._model, "structured": True},
+            ),
         )
         parsed = response.as_json()
         thought = str(parsed.get("thought", ""))

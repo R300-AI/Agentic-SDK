@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from flask import Flask
+from pathlib import Path
+
+from flask import Flask, send_from_directory
 
 from playground.routes.aihub import aihub_bp
 from playground.routes.builder import builder_bp
@@ -16,10 +18,15 @@ def create_app() -> Flask:
 
     app = Flask(__name__)
     app.config.update(SECRET_KEY=os.environ.get("PLAYGROUND_SECRET_KEY", "agentic-sdk-playground-dev"))
+    asset_dir = Path(__file__).resolve().parents[1] / "assets"
 
     @app.get("/healthz")
     def healthz() -> dict[str, str]:
         return {"status": "ok"}
+
+    @app.get("/assets/<path:filename>")
+    def assets(filename: str):
+        return send_from_directory(asset_dir, filename)
 
     app.register_blueprint(entry_bp)
     app.register_blueprint(builder_bp)

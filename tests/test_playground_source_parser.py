@@ -1,3 +1,6 @@
+import pytest
+
+from agentic_sdk.core.events import default_events_schema
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source, get_builder_form_state, get_workflow_summary
 from playground.services.source_parser import parse_supported_source
 from playground.services.runner_service import _process_event_for_workflow_event, execute_python_source
@@ -26,26 +29,46 @@ def test_parse_supported_default_source_name():
     assert "InContextMemory" not in source
     assert "memory = InContextMemory()" not in source
     assert "memory_type=memory" not in source
-    assert config.stage_labels is None
-    assert "stage_labels={" not in source
+    assert config.events_schema is None
+    assert "events_schema=" not in source
 
 
-def test_stage_labels_roundtrip_from_workflow_source():
+def test_events_schema_roundtrips_from_workflow_source():
     source = """from agentic_sdk import Workflow
 
 workflow = Workflow(
     workflow_name="Stage Agent",
-    stage_labels={"retrieve": "正在查詢產品資料"},
+    events_schema={"retrieve": {"label": "正在查詢產品資料"}},
 )
 """
 
     config = config_from_source(source)
 
-    assert config.stage_labels == {"retrieve": "正在查詢產品資料"}
+    assert config.events_schema == {
+        "retrieve": {
+            "label": "正在查詢產品資料",
+            "fields": [],
+            "metadata": {},
+        }
+    }
+
+
+def test_events_schema_source_raises_for_invalid_module_key():
+    source = """from agentic_sdk import Workflow
+
+workflow = Workflow(
+    workflow_name="Stage Agent",
+    events_schema={"stage_labels": {"label": "Legacy"}},
+)
+"""
+
+    with pytest.raises(ValueError, match="events_schema module key"):
+        config_from_source(source)
 
 
 def test_runner_process_event_uses_workflow_stage_label():
     config = config_from_source(build_default_python_source())
+    schema = default_events_schema()["retrieve"]
 
     event = _process_event_for_workflow_event(
         config,
@@ -53,9 +76,9 @@ def test_runner_process_event_uses_workflow_stage_label():
             "type": "stage",
             "phase": "start",
             "status": "running",
-            "stage": "retrieve",
             "module": "retrieve",
             "label": "正在查詢產品資料",
+            "schema": {**schema, "label": "正在查詢產品資料"},
         },
     )
 
@@ -72,7 +95,7 @@ from agentic_sdk.modules import DirectAnswerAction, KeywordRetrieve, PassThrough
 
 workflow = Workflow(
     workflow_name="Stage Agent",
-    stage_labels={"retrieve": "正在查詢產品資料"},
+    events_schema={"retrieve": {"label": "正在查詢產品資料"}},
     perceive=PassThroughPerceive(),
     retrieve=KeywordRetrieve(items=[{"keywords": ["sdk"], "content": "SDK 支援階段提示。"}]),
     action=DirectAnswerAction(),
@@ -149,6 +172,78 @@ def test_retrieve_builder_ignores_legacy_semantic_weight_fields():
     assert "importance_weight" not in source
 
 
+def test_starter_questions_do_not_emit_runner_config_in_python_source():
+    source = build_python_source_from_builder_choice("memory_type", {"starter_questions": "如何上架？"}, None)
+
+    assert "RUNNER_CONFIG" not in source
+    assert "starter_questions" not in source
+    assert "workflow = Workflow(" in source
+
+
+def test_generated_model_placeholders_are_role_neutral():
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
+    source = build_python_source_from_builder_choice("output_format", "free_text", source)
+
+    assert 'api_key="<API_KEY>"' in source
+    assert 'base_url="<BASE_URL>"' in source
+    assert 'model="<MODEL>"' in source
+    assert 'embedding_model="<MODEL>"' in source
+    assert "<ACTION_" not in source
+    assert "<REFLECT_" not in source
+    assert "<RETRIEVE_" not in source
+    assert "<PERCEIVE_" not in source
+
+
+def test_generated_text_image_source_omits_unselected_importance_preset():
+    source = build_python_source_from_builder_choice("input_type", "text_image", None)
+
+    assert "TextImagePerceive(" in source
+    assert "importance=" not in source
+    assert config_from_source(source).perceive_importance == 1.5
+
+
+def test_generated_retrieve_source_omits_empty_default_parameters():
+    keyword_source = build_python_source_from_builder_choice("retrieve_policy", "keyword", None)
+    semantic_source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
+
+    assert "KeywordRetrieve()" in keyword_source
+    assert "items=[]" not in keyword_source
+    assert "SemanticRetrieve(" in semantic_source
+    assert "sources=[]" not in semantic_source
+    assert "retrieve_description=" not in semantic_source
+
+
+def test_generated_reflect_source_omits_default_retry_policy_but_roundtrips():
+    source = build_python_source_from_builder_choice("failure_policy", "retry", None)
+
+    assert "ResponseCheckReflect(" in source
+    assert 'on_failure="retry_plan"' not in source
+    assert config_from_source(source).reflect_on_failure == "retry_plan"
+
+
+def test_generated_plan_source_keeps_user_configured_retrieve_description():
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
+    source = build_python_source_from_builder_choice("retrieve", {"semantic_search_goal": "查找產品規格與限制"}, source)
+
+    assert "retrieve_description=" in source
+    assert "查找產品規格與限制" in source
+
+
+def test_legacy_runner_config_still_parses_for_existing_sources():
+    source = """from agentic_sdk import Workflow
+
+RUNNER_CONFIG = {"starter_questions": ["如何上架？"]}
+
+workflow = Workflow(
+    workflow_name="Legacy Agent",
+)
+"""
+
+    config = config_from_source(source)
+
+    assert config.starter_questions == ("如何上架？",)
+
+
 def test_custom_action_builder_emits_module_standard_action():
     source = _sample_workflow_source("固定格式 Agent", "Custom Action")
     source = build_python_source_from_builder_choice(
@@ -220,7 +315,6 @@ def test_builder_form_state_roundtrips_generated_text_parameters():
 
     assert state["choices"]["input_type"] == "text_image"
     assert state["choices"]["retrieve_policy"] == "semantic"
-    assert state["values"]["memory_type"]["starter_questions"] == "如何上架？"
     assert state["values"]["perceive"]["welcome_message"] == "請先辨識使用者要上架的模型與限制。"
     assert state["values"]["perceive"]["image_instruction"] == "請特別判讀圖片中的欄位、流程、限制與警示訊息。"
     assert state["values"]["perceive"]["intent_pairs"] == "目標 = 使用者想完成的上架結果"

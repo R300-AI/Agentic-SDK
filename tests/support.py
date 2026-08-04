@@ -14,18 +14,22 @@ class FoundryOpenAILikeClient:
         *,
         perceive_intent: str = "test_intent",
         perceive_summary: str = "測試用感知摘要。",
+        perceive_details: dict | None = None,
         plan_sequence: list[str] | None = None,
         reflect_verdict: str = "pass",
         reflect_reason: str = "test reflect ok",
+        reflect_suggestion: str = "",
         action_text: str = "mock action response",
         tool_calls: list[dict] | None = None,
         model_id: str = "foundry-openai-like",
     ) -> None:
         self._perceive_intent = perceive_intent
         self._perceive_summary = perceive_summary
+        self._perceive_details = perceive_details
         self._plan_sequence = list(plan_sequence or ["retrieve", "action"])
         self._reflect_verdict = reflect_verdict
         self._reflect_reason = reflect_reason
+        self._reflect_suggestion = reflect_suggestion
         self._action_text = action_text
         self._tool_calls = list(tool_calls or [])
         self._plan_index = 0
@@ -40,6 +44,8 @@ class FoundryOpenAILikeClient:
                 "intent": self._perceive_intent,
                 "summary": self._perceive_summary,
             }
+            if self._perceive_details is not None:
+                payload["details"] = self._perceive_details
         elif system.startswith("PLAN"):
             next_module = self._plan_sequence[min(self._plan_index, len(self._plan_sequence) - 1)]
             self._plan_index += 1
@@ -51,7 +57,7 @@ class FoundryOpenAILikeClient:
             payload = {
                 "verdict": self._reflect_verdict,
                 "reason": self._reflect_reason,
-                "suggestion": "",
+                "suggestion": self._reflect_suggestion,
             }
         else:
             return OpenAIChatResponse(

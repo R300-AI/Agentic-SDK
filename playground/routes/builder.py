@@ -199,6 +199,7 @@ def update_builder_endpoints():
     payload = request.get_json(silent=True) or {}
     selections = normalize_endpoint_selections(python_source, payload.get("selections") or {})
     session["runner_endpoint_selections"] = selections
+    session["builder_endpoint_selections_confirmed"] = True
     builder_endpoint_state = endpoint_state(python_source, selections)
     builder_review = _builder_review_payload(get_builder_steps(), _builder_form_state_for_source(python_source), builder_endpoint_state)
     return jsonify({
@@ -281,7 +282,8 @@ def _existing_semantic_support_files() -> list[str]:
 
 
 def _normalize_builder_endpoint_selections(python_source: str) -> dict[str, str]:
-    selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    stored_selections = session.get("runner_endpoint_selections") if session.get("builder_endpoint_selections_confirmed") else {}
+    selections = normalize_endpoint_selections(python_source, stored_selections or {})
     session["runner_endpoint_selections"] = selections
     return selections
 
@@ -300,6 +302,7 @@ def _reset_transient_builder_state() -> None:
         shutil.rmtree(runtime_dir, ignore_errors=True)
     session.pop("builder_form_state", None)
     session.pop("builder_has_user_config", None)
+    session.pop("builder_endpoint_selections_confirmed", None)
     session.pop("runner_endpoint_selections", None)
     session.pop("builder_upload_id", None)
     session["python_source"] = build_default_python_source()

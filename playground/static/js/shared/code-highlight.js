@@ -23,6 +23,10 @@ const FOLDABLE_PYTHON_ASSIGNMENTS = new Set([
   "summary",
 ]);
 
+const FOLDABLE_PYTHON_DICT_KEYS = new Set([
+  "description",
+]);
+
 export function highlightCodeBlocks(root = document) {
   root.querySelectorAll("code.language-python, code.language-bash").forEach((code) => {
     const language = code.classList.contains("language-python") ? "python" : "bash";
@@ -208,7 +212,7 @@ function appendToken(parent, token, source, language, options, foldState) {
 
 function shouldFoldPythonString(source, token) {
   const inner = pythonStringInnerValue(token.value);
-  if (isPlaceholderString(inner) || isStringInListLikeContext(source, token.start)) {
+  if (isPlaceholderString(inner)) {
     return false;
   }
   if (inner.includes("\n") || isImageDataString(inner)) {
@@ -217,6 +221,12 @@ function shouldFoldPythonString(source, token) {
   const displayLength = stringDisplayLength(inner);
   if (isFoldablePythonTextArgument(source, token.start)) {
     return displayLength > 28;
+  }
+  if (isFoldablePythonDictValue(source, token.start)) {
+    return displayLength > 28;
+  }
+  if (isStringInListLikeContext(source, token.start)) {
+    return false;
   }
   return displayLength > 72;
 }
@@ -253,6 +263,13 @@ function isFoldablePythonTextArgument(source, start) {
   }
   const assignmentMatch = before.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=.*(?:\bor\s+)?$/);
   return Boolean(assignmentMatch && FOLDABLE_PYTHON_ASSIGNMENTS.has(assignmentMatch[1]));
+}
+
+function isFoldablePythonDictValue(source, start) {
+  const lineStart = source.lastIndexOf("\n", start - 1) + 1;
+  const before = source.slice(lineStart, start);
+  const keyMatch = before.match(/["']([A-Za-z_][A-Za-z0-9_]*)["']\s*:\s*$/);
+  return Boolean(keyMatch && FOLDABLE_PYTHON_DICT_KEYS.has(keyMatch[1]));
 }
 
 function isStringInListLikeContext(source, start) {

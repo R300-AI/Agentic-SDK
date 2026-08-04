@@ -7,7 +7,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from agentic_sdk.defaults import SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
+from agentic_sdk.core.events import normalize_events_schema
+from agentic_sdk.defaults import DEFAULT_NO_MATCHING_ENTRIES_MESSAGE, DEFAULT_RETRIEVED_CONTENT_KEY, SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 from playground.models import BuilderChoice, BuilderStep, WorkflowSummary
 from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
@@ -56,13 +57,6 @@ _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的參考文件查找與問�
 _DEFAULT_SEMANTIC_SAVED_PATH = SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 _DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
 _DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
-_DEFAULT_STAGE_LABELS = {
-    "perceive": "正在理解你的問題",
-    "retrieve": "正在查找參考資料",
-    "plan": "正在規劃處理方式",
-    "action": "正在準備回覆",
-    "reflect": "正在檢查回覆內容",
-}
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
     "TextPerceive",
@@ -117,7 +111,7 @@ class BuilderSourceConfig:
     reflect_module: str | None = None
     reflect_on_failure: str | None = None
     entry_module: str = "perceive"
-    stage_labels: dict[str, str] | None = None
+    events_schema: dict[str, dict[str, object]] | None = None
     max_node_hops: int = 50
     max_revisit: int = 5
     timeout_sec: float = 300.0
@@ -393,7 +387,7 @@ def _replace_config(config: BuilderSourceConfig, **overrides: object) -> Builder
         "reflect_module": config.reflect_module,
         "reflect_on_failure": config.reflect_on_failure,
         "entry_module": config.entry_module,
-        "stage_labels": config.stage_labels,
+        "events_schema": config.events_schema,
         "max_node_hops": config.max_node_hops,
         "max_revisit": config.max_revisit,
         "timeout_sec": config.timeout_sec,
@@ -426,6 +420,10 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
     workflow_description = _normalize_workflow_description(
         _extract_keyword_value(source, {"Workflow"}, "description")
     )
+    reflect_module = _first_call_name(source, {"ResponseCheckReflect", "EvidenceCheckReflect"})
+    reflect_on_failure = _extract_keyword_value(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}, "on_failure")
+    if reflect_module and reflect_on_failure is None:
+        reflect_on_failure = "retry_plan"
 
     return BuilderSourceConfig(
         workflow_name=workflow_name,
@@ -437,7 +435,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         perceive_input_label=_extract_keyword_value(source, {"PassThroughPerceive"}, "input_label"),
         perceive_welcome_message=_extract_keyword_value(source, {"TextPerceive", "TextImagePerceive"}, "welcome_message"),
         perceive_options=tuple(_normalize_option_items(_extract_keyword_literal(source, {"TextPerceive", "TextImagePerceive"}, "options", []))),
-        perceive_importance=_extract_float_value(source, {"TextPerceive", "TextImagePerceive"}, "importance", 1.0),
+        perceive_importance=_extract_float_value(source, {"TextPerceive", "TextImagePerceive"}, "importance", _default_perceive_importance(perceive_module)),
         perceive_image_instruction=_extract_keyword_value(source, {"TextImagePerceive"}, "image_instruction"),
         retrieve_module=retrieve_module,
         retrieve_description=retrieve_description,
@@ -450,7 +448,7 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         action_prompt=action_prompt,
         action_tools=action_tools,
         action_tool_choice=action_tool_choice if action_module == "ToolCallAction" else None,
-        direct_answer_memory_key=_clean_allowed_value(_extract_keyword_value(source, {"DirectAnswerAction"}, "memory_key") or "latest_retrieved_content", _ALLOWED_DIRECT_RESULT_KEYS, "latest_retrieved_content"),
+        direct_answer_memory_key=_clean_allowed_value(_extract_keyword_value(source, {"DirectAnswerAction"}, "memory_key") or DEFAULT_RETRIEVED_CONTENT_KEY, _ALLOWED_DIRECT_RESULT_KEYS, DEFAULT_RETRIEVED_CONTENT_KEY),
         direct_answer_fallback=_extract_keyword_value(source, {"DirectAnswerAction"}, "fallback") or "沒有命中任何條目。",
         direct_answer_prefix=_extract_keyword_value(source, {"DirectAnswerAction"}, "prefix") or "",
         custom_action_class=action_call_name if is_custom_action else "BusinessRule",
@@ -461,10 +459,10 @@ def _config_from_source(existing_source: str | None) -> BuilderSourceConfig:
         custom_rule_instruction=_extract_custom_action_instruction(source, _extract_assignment_value(source, "BUSINESS_RULE_INSTRUCTION", "")) or None,
         plan_strategy="RouteBySupport" if "NextStepPlan(" in source else None,
         plan_system_prompt=_extract_keyword_value(source, {"NextStepPlan"}, "system_prompt") or None,
-        reflect_module=_first_call_name(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}),
-        reflect_on_failure=_extract_keyword_value(source, {"ResponseCheckReflect", "EvidenceCheckReflect"}, "on_failure"),
+        reflect_module=reflect_module,
+        reflect_on_failure=reflect_on_failure,
         entry_module=_clean_allowed_value(_extract_keyword_value(source, {"Workflow"}, "entry_module") or "perceive", _ALLOWED_ENTRY_MODULES, "perceive"),
-        stage_labels=_stage_labels_from_source(source),
+        events_schema=_events_schema_from_source(source),
         max_node_hops=_extract_gates_value(source, "max_node_hops", 50),
         max_revisit=_extract_gates_value(source, "max_revisit", 5),
         timeout_sec=float(_extract_gates_value(source, "timeout_sec", 300.0)),
@@ -980,15 +978,11 @@ def _extract_keyword_literal(python_source: str, call_names: set[str], keyword_n
     return fallback
 
 
-def _stage_labels_from_source(python_source: str) -> dict[str, str] | None:
-    raw_labels = _extract_keyword_literal(python_source, {"Workflow"}, "stage_labels", None)
-    if not isinstance(raw_labels, dict):
+def _events_schema_from_source(python_source: str) -> dict[str, dict[str, object]] | None:
+    raw_schema = _extract_keyword_literal(python_source, {"Workflow"}, "events_schema", None)
+    if raw_schema is None:
         return None
-    labels: dict[str, str] = {}
-    for key, value in raw_labels.items():
-        if isinstance(key, str) and isinstance(value, str) and key in _DEFAULT_STAGE_LABELS:
-            labels[key] = value
-    return labels or None
+    return normalize_events_schema(raw_schema)
 
 
 def _extract_assignment_value(python_source: str, assignment_name: str, fallback: str) -> str:
@@ -1228,6 +1222,10 @@ def _input_kind_from_source(python_source: str) -> str:
     return "Message"
 
 
+def _default_perceive_importance(perceive_module: str) -> float:
+    return 1.5 if perceive_module == "TextImagePerceive" else 1.0
+
+
 def _call_name(func: ast.expr) -> str:
     if isinstance(func, ast.Name):
         return func.id
@@ -1263,9 +1261,6 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
     if import_block:
         import_lines.append(import_block)
     sections = ["\n".join(import_lines)]
-    runner_config_block = _runner_config_block(config)
-    if runner_config_block:
-        sections.append(runner_config_block)
     sections.append(workflow_block)
     return "\n\n".join(sections) + "\n"
 
@@ -1323,21 +1318,12 @@ workflow = Workflow(
     if import_block:
         import_lines.append(import_block)
     sections = ["# Playground profile hint: Custom Action", "\n".join(import_lines)]
-    runner_config_block = _runner_config_block(config)
-    if runner_config_block:
-        sections.append(runner_config_block)
     sections.append(workflow_block)
     return "\n\n".join(sections) + "\n"
 
 
 def _core_import_line(endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     return "from agentic_sdk import Workflow"
-
-
-def _stage_label_lines(config: BuilderSourceConfig) -> list[str]:
-    labels = dict(_DEFAULT_STAGE_LABELS)
-    labels.update(config.stage_labels or {})
-    return [f"    stage_labels={_format_python_literal(labels, 4)},"]
 
 
 def _workflow_argument_lines(
@@ -1348,6 +1334,8 @@ def _workflow_argument_lines(
     endpoint_bindings: dict[str, dict[str, str]] | None = None,
 ) -> str:
     lines: list[str] = []
+    if config.events_schema is not None:
+        lines.append(f"    events_schema={_format_python_literal(config.events_schema, 4)},")
     if "perceive" in reachable_roles:
         lines.append(f"    perceive={_perceive_expression(config, endpoint_bindings=endpoint_bindings)},")
     if "plan" in reachable_roles and config.plan_strategy:
@@ -1378,12 +1366,14 @@ def _action_class_for_config(config: BuilderSourceConfig) -> str:
 def _action_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     action_class = _action_class_for_config(config)
     if action_class == "DirectAnswerAction":
-        arguments = [
-            f"memory_key={json.dumps(config.direct_answer_memory_key, ensure_ascii=False)}",
-            f"fallback={json.dumps(config.direct_answer_fallback, ensure_ascii=False)}",
-            f"prefix={json.dumps(config.direct_answer_prefix, ensure_ascii=False)}",
-        ]
-        return f"DirectAnswerAction({', '.join(arguments)})"
+        arguments = []
+        if config.direct_answer_memory_key != DEFAULT_RETRIEVED_CONTENT_KEY:
+            arguments.append(f"memory_key={json.dumps(config.direct_answer_memory_key, ensure_ascii=False)}")
+        if config.direct_answer_fallback != DEFAULT_NO_MATCHING_ENTRIES_MESSAGE:
+            arguments.append(f"fallback={json.dumps(config.direct_answer_fallback, ensure_ascii=False)}")
+        if config.direct_answer_prefix:
+            arguments.append(f"prefix={json.dumps(config.direct_answer_prefix, ensure_ascii=False)}")
+        return f"DirectAnswerAction({', '.join(arguments)})" if arguments else "DirectAnswerAction()"
     arguments = _llm_arguments("ACTION", binding_role="action", endpoint_bindings=endpoint_bindings)
     action_prompt = _action_system_prompt_for_config(config, action_class)
     if action_prompt:
@@ -1413,8 +1403,6 @@ def _perceive_expression(config: BuilderSourceConfig, endpoint_bindings: dict[st
         arguments.append(f"welcome_message={json.dumps(config.perceive_welcome_message, ensure_ascii=False)}")
     if config.perceive_options:
         arguments.append(f"options={_format_python_literal(list(config.perceive_options), 8)}")
-    if config.perceive_importance != 1.0:
-        arguments.append(f"importance={config.perceive_importance}")
     if config.perceive_module == "TextImagePerceive" and config.perceive_image_instruction:
         arguments.append(f"image_instruction={json.dumps(config.perceive_image_instruction, ensure_ascii=False)}")
     return f"{config.perceive_module}({', '.join(arguments)})"
@@ -1422,32 +1410,34 @@ def _perceive_expression(config: BuilderSourceConfig, endpoint_bindings: dict[st
 
 def _retrieve_expression_body(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     if config.retrieve_module == "KeywordRetrieve":
-        return f"        items={_format_python_literal(list(config.retrieve_items), 14)},"
+        if config.retrieve_items:
+            return f"        items={_format_python_literal(list(config.retrieve_items), 14)},"
+        return ""
     if config.retrieve_module == "PassThroughRetrieve":
         return ""
     arguments = [f"        {argument}," for argument in _llm_arguments("RETRIEVE", binding_role="retrieve", endpoint_bindings=endpoint_bindings)]
-    arguments.extend(
-        [
-            f"        sources={_format_python_literal(_semantic_source_paths(config), 16)},",
-        ]
-    )
+    source_paths = _semantic_source_paths(config)
+    if source_paths:
+        arguments.append(f"        sources={_format_python_literal(source_paths, 16)},")
     return "\n".join(arguments)
 
 
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str], endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
-    description = _retrieve_description(config)
+    description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
     arguments = [
         *_llm_arguments("PLAN", binding_role=plan_binding_role, endpoint_bindings=endpoint_bindings),
-        f"retrieve_description={json.dumps(description, ensure_ascii=False)}",
     ]
+    if description:
+        arguments.append(f"retrieve_description={json.dumps(description, ensure_ascii=False)}")
     return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
 
 
 def _reflect_line(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
     reflect_module = config.reflect_module or "ResponseCheckReflect"
     arguments = _llm_arguments("REFLECT", binding_role="reflect", endpoint_bindings=endpoint_bindings) if reflect_module == "ResponseCheckReflect" else []
-    arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
+    if config.reflect_on_failure and config.reflect_on_failure != "retry_plan":
+        arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
     return (
         f"    reflect={reflect_module}("
         f"{', '.join(arguments)}"
@@ -1461,13 +1451,11 @@ def _llm_arguments(
     binding_role: str | None = None,
     endpoint_bindings: dict[str, dict[str, str]] | None = None,
 ) -> list[str]:
-    constant_prefix = _endpoint_constant_prefix(binding_role or prefix)
     model_argument = "embedding_model" if binding_role == "retrieve" else "model"
-    model_placeholder_name = "EMBEDDING_MODEL" if binding_role == "retrieve" else "MODEL"
     return [
-        f'api_key="<{constant_prefix}_API_KEY>"',
-        f'base_url="<{constant_prefix}_API_BASE_URL>"',
-        f'{model_argument}="<{constant_prefix}_{model_placeholder_name}>"',
+        'api_key="<API_KEY>"',
+        'base_url="<BASE_URL>"',
+        f'{model_argument}="<MODEL>"',
     ]
 
 
@@ -1485,6 +1473,17 @@ def _retrieve_description(config: BuilderSourceConfig) -> str:
         if content:
             return content[:120]
     return _DEFAULT_RETRIEVE_DESCRIPTION
+
+
+def _explicit_retrieve_description(config: BuilderSourceConfig) -> str | None:
+    if config.semantic_search_goal:
+        return _retrieve_description(config)
+    if config.retrieve_description and config.retrieve_description not in {_DEFAULT_RETRIEVE_DESCRIPTION, _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION}:
+        return _retrieve_description(config)
+    if config.retrieve_items:
+        content = str(config.retrieve_items[0].get("content", "")).strip()
+        return content[:120] if content else None
+    return None
 
 
 def _semantic_search_goal_from_retrieve_description(retrieve_module: str, retrieve_description: str | None) -> str | None:
@@ -1561,13 +1560,6 @@ def _user_authored_action_prompt(prompt: str | None) -> str | None:
     if cleaned in _OUTPUT_FORMAT_PROMPTS.values():
         return None
     return cleaned
-
-
-def _runner_config_block(config: BuilderSourceConfig) -> str:
-    if not config.starter_questions:
-        return ""
-    runner_config = {"starter_questions": list(config.starter_questions)}
-    return f"RUNNER_CONFIG = {_format_python_literal(runner_config, 0)}"
 
 
 def _normalize_workflow_description(value: str | None) -> str | None:

@@ -13,6 +13,7 @@ from urllib.parse import urlparse
 import httpx
 
 from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, InContextMemory, Workflow, WorkflowResult, WorkflowState
+from agentic_sdk.core.events import WORKFLOW_MODULE_NAMES, default_event_label
 
 from playground.models import RunnerSceneProfile
 from playground.services.model_endpoints import MissingEndpointCredentials, endpoint_params_for_role
@@ -84,6 +85,13 @@ def execute_python_source(
     resolved_semantic_sources = _semantic_sources(semantic_sources, semantic_source_path)
     tool_submission_context = _tool_submission_context(config, tool_call_submission)
     user_message = _message_with_tool_submission(message.strip(), tool_submission_context)
+    streamed_process_events: list[dict[str, str]] = []
+
+    def emit_process_event(event: dict[str, str]) -> None:
+        streamed_process_events.append(event)
+        if process_observer is not None:
+            process_observer(event)
+
     try:
         parsed_attachments = [_to_attachment(item) for item in attachments or []]
     except (KeyError, TypeError, ValueError) as exc:
@@ -129,13 +137,16 @@ def execute_python_source(
                 user_message,
                 tool_submission_context,
                 attachments=parsed_attachments,
-                process_observer=process_observer,
+                process_observer=emit_process_event,
             )
         else:
             workflow_result = workflow.run(
                 user_message,
                 attachments=parsed_attachments,
-                event_callback=_workflow_event_observer(config, process_observer),
+                event_callback=_workflow_event_observer(
+                    config,
+                    emit_process_event,
+                ),
             )
     except MissingEndpointCredentials as exc:
         fallback = get_runner_demo_result(scene_profile)
@@ -188,7 +199,7 @@ def execute_python_source(
         "tool_calls": tool_calls,
         "tool_call_panels": tool_call_panels,
         "debug_messages": _debug_messages_for_execution(config, workflow_result, final_message),
-        "process_events": _process_events_for_execution(config, workflow_result),
+        "process_events": streamed_process_events,
         "result": result,
         "scene_profile": asdict(scene_profile),
         "workflow_id": workflow_result.workflow_id,
@@ -450,13 +461,13 @@ def _run_tool_submission_continuation(
     if action is None:
         raise WorkflowAborted("unknown module 'action'")
     if process_observer is not None:
-        process_observer(_process_event("action", "準備輸出回覆", f"已收到互動選項，直接交給{_action_process_name(config)}繼續產生回覆。"))
+        process_observer(_process_event("action", _default_label("action"), f"已收到互動選項，直接交給{_action_process_name(config)}繼續產生回覆。"))
     state.increment_visit("action")
     raw_output = _call_action_for_tool_continuation(action, state)
     output = raw_output if isinstance(raw_output, dict) else {"next_module": None, "payload": {"latest_final_message": str(raw_output or "")}}
     state.apply(output)
     if process_observer is not None:
-        process_observer(_process_event("action", "準備輸出回覆", f"{_action_process_name(config)}已依互動選項完成回覆。"))
+        process_observer(_process_event("action", _default_label("action"), f"{_action_process_name(config)}已依互動選項完成回覆。"))
     return WorkflowResult(
         workflow_id=state.workflow_id,
         final_message=_final_message_from_continuation(state),
@@ -544,60 +555,38 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
     return messages
 
 
-def _process_events_for_execution(config: BuilderSourceConfig, workflow_result: WorkflowResult) -> list[dict[str, str]]:
-    events: list[dict[str, str]] = []
-
-    perceived_entry = _latest_entry(workflow_result.entries, ContextEntryType.PERCEIVED)
-    if perceived_entry is not None:
-        summary = str(perceived_entry.metadata.get("summary") or perceived_entry.content).strip()
-        label = str(perceived_entry.metadata.get("input_label") or "使用者輸入").strip()
-        detail = f"已讀取{label}，整理成後續步驟可使用的內容。"
-        if summary:
-            detail += f" 目前理解為：{_preview_text(summary)}"
-        events.append(_process_event("perceive", "理解輸入", detail))
-
-    plan_entry = _latest_entry(workflow_result.entries, ContextEntryType.PLAN_DECISION)
-    if plan_entry is not None:
-        next_module = str(plan_entry.metadata.get("next_module") or "action")
-        next_label = "先整理相關來源" if next_module == "retrieve" else "直接準備回覆"
-        detail = f"已判斷這次要{next_label}。"
-        thought = str(plan_entry.metadata.get("thought") or "").strip()
-        if thought:
-            detail += f" 判斷依據：{_preview_text(thought)}"
-        if plan_entry.metadata.get("fallback"):
-            detail += " 原本的工具選擇不完整，因此改走可執行的回覆流程。"
-        events.append(_process_event("plan", "判斷工具順序", detail))
-
-    retrieve_entries = [entry for entry in workflow_result.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
-    if retrieve_entries:
-        title, detail = _retrieve_process_event(config, retrieve_entries, _retrieve_missed(retrieve_entries))
-        events.append(_process_event("retrieve", title, detail))
-    elif "retrieve" in workflow_result.visit_counts:
-        events.append(_process_event("retrieve", "整理相關來源", "已嘗試整理參考資料，但這次沒有留下可用內容。"))
-
-    action_entry = _latest_entry(workflow_result.entries, ContextEntryType.ACTION_RESULT)
-    if action_entry is not None:
-        if action_entry.metadata.get("ok") is False:
-            detail = "回覆器執行時遇到問題，因此沒有產生可顯示的主回覆。"
-        else:
-            source_label = "整理好的來源" if retrieve_entries else "目前輸入"
-            detail = f"已把{source_label}交給{_action_process_name(config)}，接著開始輸出最終回覆。"
-        events.append(_process_event("action", "準備輸出回覆", detail))
-
-    if workflow_result.aborted:
-        events.append(_process_event("gate", "流程中止", workflow_result.abort_reason or "流程已被安全限制中止。"))
-
-    return events
-
-
 def _workflow_event_observer(
     config: BuilderSourceConfig,
-    observer: Callable[[dict[str, str]], None] | None,
-) -> Callable[[dict[str, Any]], None] | None:
-    if observer is None:
-        return None
-
+    observer: Callable[[dict[str, str]], None],
+) -> Callable[[dict[str, Any]], None]:
     def emit(workflow_event: dict[str, Any]) -> None:
+        _validate_standard_workflow_event(workflow_event)
+        module = workflow_event["module"]
+        if workflow_event.get("type") == "structured_field":
+            process_event = _structured_field_process_event(
+                module,
+                workflow_event["field"],
+                workflow_event["value"],
+                label=workflow_event["label"],
+            )
+            if process_event is not None:
+                observer(process_event)
+            return
+        if (
+            workflow_event.get("type") == "stage"
+            and workflow_event.get("phase") == "finish"
+        ):
+            for item in workflow_event.get("fields", []):
+                process_event = _structured_field_process_event(
+                    module,
+                    _require_standard_field_name(item),
+                    _require_standard_field_value(item),
+                    label=workflow_event["label"],
+                )
+                if process_event is not None:
+                    observer(process_event)
+            if workflow_event.get("fields"):
+                return
         process_event = _process_event_for_workflow_event(config, workflow_event)
         if process_event is not None:
             observer(process_event)
@@ -605,85 +594,135 @@ def _workflow_event_observer(
     return emit
 
 
+def _validate_standard_workflow_event(workflow_event: dict[str, Any]) -> None:
+    event_type = workflow_event.get("type")
+    if event_type == "stage":
+        _require_standard_string(workflow_event, "phase")
+        _require_standard_string(workflow_event, "status")
+        _require_standard_module(workflow_event)
+        _require_standard_string(workflow_event, "label")
+        _require_standard_schema(workflow_event)
+        if workflow_event.get("phase") == "finish":
+            fields = workflow_event.get("fields", [])
+            if not isinstance(fields, list):
+                raise TypeError("stage finish event field 'fields' must be a list.")
+            for item in fields:
+                if not isinstance(item, dict):
+                    raise TypeError("stage finish event field entries must be mappings.")
+                _require_standard_field_name(item)
+                _require_standard_field_value(item)
+        return
+    if event_type == "structured_field":
+        _require_standard_string(workflow_event, "phase")
+        _require_standard_string(workflow_event, "status")
+        _require_standard_module(workflow_event)
+        _require_standard_string(workflow_event, "label")
+        _require_standard_schema(workflow_event)
+        _require_standard_field_name(workflow_event)
+        _require_standard_field_value(workflow_event)
+        return
+    if event_type == "token_delta":
+        return
+    raise ValueError(f"unsupported workflow event type {event_type!r}.")
+
+
+def _require_standard_module(workflow_event: dict[str, Any]) -> str:
+    module = _require_standard_string(workflow_event, "module")
+    if module not in WORKFLOW_MODULE_NAMES:
+        raise ValueError(f"workflow event field 'module' must be one of {sorted(WORKFLOW_MODULE_NAMES)}.")
+    return module
+
+
+def _require_standard_schema(workflow_event: dict[str, Any]) -> dict[str, Any]:
+    schema = workflow_event.get("schema")
+    if not isinstance(schema, dict):
+        raise TypeError("workflow event field 'schema' must be a mapping.")
+    label = schema.get("label")
+    if label != workflow_event.get("label"):
+        raise ValueError("workflow event field 'schema.label' must match event label.")
+    fields = schema.get("fields")
+    if not isinstance(fields, list):
+        raise TypeError("workflow event field 'schema.fields' must be a list.")
+    return schema
+
+
+def _require_standard_string(workflow_event: dict[str, Any], key: str) -> str:
+    value = workflow_event.get(key)
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"workflow event field {key!r} must be a non-empty string.")
+    return value
+
+
+def _require_standard_field_name(item: dict[str, Any]) -> str:
+    field = item.get("field")
+    if not isinstance(field, str) or not field.strip():
+        raise ValueError("structured event field 'field' must be a non-empty string.")
+    return field
+
+
+def _require_standard_field_value(item: dict[str, Any]) -> object:
+    if "value" not in item:
+        raise ValueError("structured event field 'value' is required.")
+    return item["value"]
+
+
 def _process_event_for_workflow_event(config: BuilderSourceConfig, workflow_event: dict[str, Any]) -> dict[str, str] | None:
-    module = str(workflow_event.get("module") or "")
-    phase = str(workflow_event.get("phase") or "")
-    state = workflow_event.get("state")
+    _validate_standard_workflow_event(workflow_event)
+    module = workflow_event["module"]
+    phase = workflow_event["phase"]
     if phase == "start":
-        return _module_start_process_event(config, module, label=str(workflow_event.get("label") or ""))
-    if phase == "finish" and isinstance(state, WorkflowState):
-        return _module_finish_process_event(config, module, state)
+        return _module_start_process_event(config, module, label=workflow_event["label"])
+    if phase == "finish":
+        return _process_event(module, workflow_event["label"], "已完成這個階段。")
     if phase == "abort":
         return _process_event("gate", "流程中止", str(workflow_event.get("reason") or "流程已被安全限制中止。"))
     return None
 
 
+def _structured_field_process_event(
+    module: str,
+    field: str,
+    value: object,
+    *,
+    label: str,
+) -> dict[str, str] | None:
+    value_text = _preview_text(_structured_field_value_text(value))
+    if not field or not value_text:
+        return None
+    title = label or _default_label(module, fallback="處理流程")
+    if module == "perceive" and field == "summary":
+        return _process_event("perceive", title, f"目前理解為：{value_text}")
+    if module == "perceive" and field == "details.next_step":
+        return _process_event("perceive", title, f"建議下一步：{value_text}")
+    if module == "plan" and field == "thought":
+        return _process_event("plan", title, f"判斷依據：{value_text}")
+    if module == "plan" and field == "next_module":
+        next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+        return _process_event("plan", title, f"目前決定：{next_label}。")
+    return _process_event(module or "workflow", title, f"{field}：{value_text}")
+
+
+def _structured_field_value_text(value: object) -> str:
+    if isinstance(value, str):
+        return value
+    try:
+        return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+    except (TypeError, ValueError):
+        return str(value)
+
+
 def _module_start_process_event(config: BuilderSourceConfig, module: str, *, label: str = "") -> dict[str, str] | None:
     if module == "perceive":
-        return _process_event("perceive", label or "理解輸入", "正在讀取使用者輸入，整理成後續步驟可使用的內容。")
+        return _process_event("perceive", label or _default_label("perceive"), "正在讀取使用者輸入，整理成後續步驟可使用的內容。")
     if module == "plan":
-        return _process_event("plan", label or "判斷工具順序", "正在判斷這次需要先整理來源，或可以直接準備回覆。")
+        return _process_event("plan", label or _default_label("plan"), "正在判斷這次需要先整理來源，或可以直接準備回覆。")
     if module == "retrieve":
         title = label or _retrieve_process_title(config)
         return _process_event("retrieve", title, "正在整理這一步可用的參考內容。")
     if module == "action":
-        return _process_event("action", label or "準備輸出回覆", f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。")
+        return _process_event("action", label or _default_label("action"), f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。")
     if module == "reflect":
-        return _process_event("reflect", label or "檢查回覆", "正在檢查回覆是否可交付，必要時會回到前一步調整。")
-    return None
-
-
-def _module_finish_process_event(config: BuilderSourceConfig, module: str, state: WorkflowState) -> dict[str, str] | None:
-    if module == "perceive":
-        perceived_entry = state.latest_of(ContextEntryType.PERCEIVED)
-        if perceived_entry is None:
-            return None
-        summary = str(perceived_entry.metadata.get("summary") or perceived_entry.content).strip()
-        label = str(perceived_entry.metadata.get("input_label") or "使用者輸入").strip()
-        detail = f"已讀取{label}，整理成後續步驟可使用的內容。"
-        if summary:
-            detail += f" 目前理解為：{_preview_text(summary)}"
-        return _process_event("perceive", "理解輸入", detail)
-    if module == "plan":
-        plan_entry = state.latest_of(ContextEntryType.PLAN_DECISION)
-        if plan_entry is None:
-            return None
-        next_module = str(plan_entry.metadata.get("next_module") or "action")
-        next_label = "先整理相關來源" if next_module == "retrieve" else "直接準備回覆"
-        detail = f"已判斷這次要{next_label}。"
-        thought = str(plan_entry.metadata.get("thought") or "").strip()
-        if thought:
-            detail += f" 判斷依據：{_preview_text(thought)}"
-        if plan_entry.metadata.get("fallback"):
-            detail += " 原本的工具選擇不完整，因此改走可執行的回覆流程。"
-        return _process_event("plan", "判斷工具順序", detail)
-    if module == "retrieve":
-        retrieve_entries = [entry for entry in state.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
-        if not retrieve_entries:
-            return _process_event("retrieve", _retrieve_process_title(config), "已嘗試整理參考資料，但這次沒有留下可用內容。")
-        title, detail = _retrieve_process_event(config, retrieve_entries, _retrieve_missed(retrieve_entries))
-        return _process_event("retrieve", title, detail)
-    if module == "action":
-        action_entry = state.latest_of(ContextEntryType.ACTION_RESULT)
-        if action_entry is None:
-            return None
-        if action_entry.metadata.get("ok") is False:
-            detail = "回覆器執行時遇到問題，因此沒有產生可顯示的主回覆。"
-        else:
-            source_label = "整理好的來源" if state.latest_of(ContextEntryType.RETRIEVED) is not None else "目前輸入"
-            detail = f"已把{source_label}交給{_action_process_name(config)}，接著開始輸出最終回覆。"
-        return _process_event("action", "準備輸出回覆", detail)
-    if module == "reflect":
-        reflect_entry = state.latest_of(ContextEntryType.REFLECTION)
-        if reflect_entry is None:
-            return None
-        verdict = str(reflect_entry.metadata.get("verdict") or "pass")
-        reason = str(reflect_entry.metadata.get("reason") or "").strip()
-        result = "通過" if verdict == "pass" else "需要調整"
-        detail = f"回覆檢查結果：{result}。"
-        if reason:
-            detail += f" 原因：{_preview_text(reason)}"
-        return _process_event("reflect", "檢查回覆", detail)
+        return _process_event("reflect", label or _default_label("reflect"), "正在檢查回覆是否可交付，必要時會回到前一步調整。")
     return None
 
 
@@ -699,24 +738,8 @@ def _process_event(role: str, title: str, description: str) -> dict[str, str]:
     return {"role": role, "title": title, "description": description}
 
 
-def _retrieve_process_event(config: BuilderSourceConfig, entries: list[ContextEntry], missed: bool) -> tuple[str, str]:
-    latest = entries[-1]
-    metadata = latest.metadata
-    source = str(metadata.get("source") or config.retrieve_module)
-    preview = _preview_text(latest.content)
-    if "hit_count" in metadata:
-        hit_count = int(metadata.get("hit_count") or 0)
-        if hit_count == 0:
-            return "比對參考資料", "已依關鍵字比對參考資料，沒有命中條目，會改用 fallback 內容。"
-        return "比對參考資料", f"已依關鍵字比對參考資料，命中 {hit_count} 筆。整理出的內容：{preview}"
-    if source == "semantic_retrieve":
-        hit_total = int(metadata.get("kb_hit_count") or 0) + int(metadata.get("memory_hit_count") or 0)
-        if missed:
-            return "整合相關來源", "已搜尋 memory 與 knowledge 來源，這次沒有命中可用條目。"
-        return "整合相關來源", f"已搜尋 memory 與 knowledge 來源，命中 {hit_total} 筆。整理出的內容：{preview}"
-    if source == "pass_through_retrieve":
-        return "沿用輸入內容", f"這次不用查外部資料，已把使用者輸入整理成可交給回覆器的內容：{preview}"
-    return "整理相關來源", f"已整理可用參考內容：{preview}"
+def _default_label(module: str, *, fallback: str = "") -> str:
+    return default_event_label(module) or fallback
 
 
 def _action_process_name(config: BuilderSourceConfig) -> str:
@@ -823,7 +846,7 @@ def _workflow_from_source(
         workflow_name=workflow_name,
         description=config.task_goal or None,
         memory_type=memory,
-        stage_labels=config.stage_labels or {},
+        events_schema=config.events_schema,
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles),
         plan=_plan_from_config(config, endpoint_selections, reachable_roles),
         retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_sources, semantic_saved_path, semantic_index_path),

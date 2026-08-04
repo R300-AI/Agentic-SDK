@@ -1,0 +1,125 @@
+{
+  "name": "lanew_footwear",
+  "description": "LA NEW 鞋墊／鞋款產品知識庫 MVP — 依足弓指數（鞋墊）與楦頭寬度／足型（鞋款）分類提供推薦依據。分級標準、決策邏輯與已知資料缺口請參照同目錄 lanew_footwear.md。商品名稱、售價、商品編號取自官網頁面內嵌 JSON-LD（擷取日期 2026-07-30），足弓指數／楦頭足型分類為業務方提供之官方分類，材質與機能細節因原始頁面以圖片呈現而未能擷取，上線前需人工補齊並覆核。",
+  "entries": [
+    {
+      "id": "lanew-insole-low",
+      "title": "LA NEW 科技鞋墊 多功能型（足弓指數低適用）",
+      "content": "LA NEW 科技鞋墊系列，運用足部生物力學與運動科學原理研發之 3D 足弓避震系統，加強足弓支撐與動態穩定平衡。本款「多功能型」為官方分類中對應足弓指數低使用者的建議款式。常見適用情境：足弓偏低平、長時間站立或行走後足弓區容易痠痛。建議售價 NT$2,380，商品編號 291100970。產品連結：https://www.lanew.com.tw/SalePage/Index/7037730",
+      "metadata": {
+        "category": "鞋墊",
+        "product_type": "科技鞋墊",
+        "arch_index_level": "低",
+        "suitable_foot_shape": ["足弓指數低", "低足弓／扁平傾向"],
+        "sku": "7037730",
+        "product_code": "291100970",
+        "price": 2380,
+        "url": "https://www.lanew.com.tw/SalePage/Index/7037730",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "材質、支撐硬度、避震結構等技術規格未於原始頁面文字中呈現（以圖片形式提供），需人工補齊"
+      }
+    },
+    {
+      "id": "lanew-insole-normal",
+      "title": "LA NEW 科技鞋墊 通用型（足弓指數正常適用）",
+      "content": "LA NEW 科技鞋墊系列，運用足部生物力學與運動科學原理研發之 3D 足弓避震系統，加強足弓支撐與動態穩定平衡。本款「通用型」為官方分類中對應足弓指數正常使用者的建議款式。常見適用情境：無特定足弓問題、日常穿著保養需求。建議售價 NT$2,680，商品編號 291090970。產品連結：https://www.lanew.com.tw/SalePage/Index/7037191",
+      "metadata": {
+        "category": "鞋墊",
+        "product_type": "科技鞋墊",
+        "arch_index_level": "正常",
+        "suitable_foot_shape": ["足弓指數正常"],
+        "sku": "7037191",
+        "product_code": "291090970",
+        "price": 2680,
+        "url": "https://www.lanew.com.tw/SalePage/Index/7037191",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "材質、支撐硬度、避震結構等技術規格未於原始頁面文字中呈現（以圖片形式提供），需人工補齊"
+      }
+    },
+    {
+      "id": "lanew-insole-high",
+      "title": "LA NEW 科技鞋墊 加強型（足弓指數高適用）",
+      "content": "LA NEW 科技鞋墊系列，運用足部生物力學與運動科學原理研發之 3D 足弓避震系統，加強足弓支撐與動態穩定平衡。本款「加強型」為官方分類中對應足弓指數高使用者的建議款式。常見適用情境：高足弓傾向、足底局部壓力集中。建議售價 NT$2,680，商品編號 291091070。產品連結：https://www.lanew.com.tw/SalePage/Index/7037439",
+      "metadata": {
+        "category": "鞋墊",
+        "product_type": "科技鞋墊",
+        "arch_index_level": "高",
+        "suitable_foot_shape": ["足弓指數高", "高弓足傾向"],
+        "sku": "7037439",
+        "product_code": "291091070",
+        "price": 2680,
+        "url": "https://www.lanew.com.tw/SalePage/Index/7037439",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "材質、支撐硬度、避震結構等技術規格未於原始頁面文字中呈現（以圖片形式提供），需人工補齊；「加強型」對應高足弓之設計機制未經頁面文字證實，建議業務方覆核"
+      }
+    },
+    {
+      "id": "lanew-shoe-wide-cushion",
+      "title": "LA NEW 避震大底 2代 運動鞋（寬楦避震型）",
+      "content": "避震大底 2代設計運動鞋，具防黴抑菌機能。官方楦頭／足型分類為「寬楦避震型」，適合腳掌偏寬、需要加強避震緩衝的使用者。常見適用情境：長時間站立行走、對足底衝擊較敏感者。建議售價 NT$3,680，商品編號 230619521。產品連結：https://www.lanew.com.tw/SalePage/Index/10480891",
+      "metadata": {
+        "category": "鞋款",
+        "product_type": "運動鞋",
+        "last_width_type": "寬楦避震型",
+        "suitable_foot_shape": ["寬楦", "腳掌偏寬", "避震需求高"],
+        "sku": "10480891",
+        "product_code": "230619521",
+        "price": 3680,
+        "url": "https://www.lanew.com.tw/SalePage/Index/10480891",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "楦頭實際寬度數據、中底材質、避震結構細節未於原始頁面文字中呈現（以圖片形式提供），需人工補齊"
+      }
+    },
+    {
+      "id": "lanew-shoe-normal-control",
+      "title": "LA NEW 神盾系列 ESG BIO DCS 2代 休閒鞋（正常楦控制型）",
+      "content": "神盾系列 ESG BIO DCS 2代休閒鞋，強調舒適動能與多密度防黴抑菌設計。官方楦頭／足型分類為「正常楦控制型」，適合標準楦寬、且需要較強中足動作控制（如足部內旋傾向較明顯）的使用者。常見適用情境：需要較強穩定引導的日常穿著。建議售價 NT$5,180，商品編號 230010600。產品連結：https://www.lanew.com.tw/SalePage/Index/10071400",
+      "metadata": {
+        "category": "鞋款",
+        "product_type": "休閒鞋",
+        "last_width_type": "正常楦控制型",
+        "suitable_foot_shape": ["正常楦", "內旋控制需求較高"],
+        "sku": "10071400",
+        "product_code": "230010600",
+        "price": 5180,
+        "url": "https://www.lanew.com.tw/SalePage/Index/10071400",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "多密度材質分佈、控制結構細節未於原始頁面文字中呈現（以圖片形式提供），需人工補齊"
+      }
+    },
+    {
+      "id": "lanew-shoe-normal-stability",
+      "title": "LA NEW ESG 生活防水休閒鞋（正常楦穩定型）",
+      "content": "ESG 生活防水休閒鞋，具安底防滑、防黴抑菌機能。官方楦頭／足型分類為「正常楦穩定型」，適合標準楦寬、需要中足穩定但控制需求低於控制型的使用者。常見適用情境：日常通勤、易潮濕或需防滑地面環境。建議售價 NT$5,680，商品編號 230015241。產品連結：https://www.lanew.com.tw/SalePage/Index/10479577",
+      "metadata": {
+        "category": "鞋款",
+        "product_type": "休閒鞋",
+        "last_width_type": "正常楦穩定型",
+        "suitable_foot_shape": ["正常楦", "中足穩定需求"],
+        "sku": "10479577",
+        "product_code": "230015241",
+        "price": 5680,
+        "url": "https://www.lanew.com.tw/SalePage/Index/10479577",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "防水材質規格、穩定結構細節未於原始頁面文字中呈現（以圖片形式提供），需人工補齊"
+      }
+    },
+    {
+      "id": "lanew-shoe-normal-narrow",
+      "title": "LA NEW 經典款樂福鞋（正常偏窄版型）",
+      "content": "經典款樂福鞋，官方楦頭／足型分類為「正常偏窄版型」，適合足型偏窄、腳背較低的使用者。常見適用情境：正式或半正式場合穿著。建議售價 NT$4,380，商品編號 229018500。產品連結：https://www.lanew.com.tw/SalePage/Index/9509428",
+      "metadata": {
+        "category": "鞋款",
+        "product_type": "樂福鞋",
+        "last_width_type": "正常偏窄版型",
+        "suitable_foot_shape": ["正常偏窄楦", "足型偏窄", "腳背較低"],
+        "sku": "9509428",
+        "product_code": "229018500",
+        "price": 4380,
+        "url": "https://www.lanew.com.tw/SalePage/Index/9509428",
+        "data_confirmed": ["title", "price", "sku"],
+        "data_gap": "鞋楦實際版型數據、皮革材質細節未於原始頁面文字中呈現（以圖片形式提供），需人工補齊"
+      }
+    }
+  ]
+}

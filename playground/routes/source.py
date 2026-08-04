@@ -57,21 +57,27 @@ def _current_python_source() -> str:
 
 def _source_preview_markdown(python_source: str) -> str:
     python_imports, python_workflow = _split_python_source_blocks(python_source)
-    placeholder_notice = "並把 `api_key`、`base_url`、`model` 或 `embedding_model` 的 `<...>` 換成你的部署設定。"
+    placeholder_notice = "貼上主要流程設定，並將 **api_key**、**base_url**、**model** 或 **embedding_model** 的 `<...>` 替換成你的部署值。"
     if python_imports:
-        source_steps = f"""1. 複製 Python import 區塊。
+        source_steps = f"""## 匯入 SDK 模組
+
+先複製 import 區塊，讓 Python 執行環境載入 **Workflow** 與必要模組。
 
 ```python
 {python_imports}
 ```
 
-2. 複製 Python Workflow 區塊，{placeholder_notice}
+## 建立 Workflow
+
+{placeholder_notice}
 
 ```python
 {python_workflow}
 ```"""
     else:
-        source_steps = f"""1. 複製下方 Python Workflow 程式碼，{placeholder_notice}
+        source_steps = f"""## 建立 Workflow
+
+複製下方 Python 程式碼，並將 **api_key**、**base_url**、**model** 或 **embedding_model** 的 `<...>` 替換成你的部署值。
 
 ```python
 {python_workflow}

@@ -8,6 +8,7 @@ from typing import Any
 import uuid
 
 from agentic_sdk.core.entities import ContextEntry, ContextEntryType
+from agentic_sdk.core.events import ALL_STRUCTURED_FIELDS, normalize_events_schema, resolve_events_schema
 from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
@@ -124,7 +125,7 @@ class Workflow:
     workflow_name: str = "default"
     description: str | None = None
     entry_module: str = "perceive"
-    stage_labels: dict[str, str] = field(default_factory=dict)
+    events_schema: dict[str, dict[str, Any]] | None = None
 
     modules: dict[str, Module] = field(init=False)
     memory: MemoryStore | None = field(init=False, default=None)
@@ -149,6 +150,7 @@ class Workflow:
             self.modules["plan"] = self.plan
         if self.reflect is not None:
             self.modules["reflect"] = self.reflect
+        self.events_schema = resolve_events_schema(self.events_schema)
 
     def run(
         self,
@@ -160,7 +162,13 @@ class Workflow:
         attachments: list[Any] | None = None,
         memory_store: PersistentMemory | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
+        events_schema: dict[str, dict[str, Any]] | None = None,
     ) -> WorkflowResult:
+        active_events_schema = (
+            self.events_schema
+            if events_schema is None
+            else normalize_events_schema(events_schema)
+        )
         resolved_workflow_id = workflow_id or uuid.uuid4().hex
         resolved_session_id = session_id or resolved_workflow_id
         state_memory = _resolve_memory(
@@ -199,8 +207,25 @@ class Workflow:
                         content=content,
                         metadata=metadata,
                         state=state,
+                        events_schema=active_events_schema,
                     )
                 )
+            )
+            state.set_structured_field_callback(
+                lambda module_name, field, value, metadata: event_callback(
+                    self.structured_field_event(
+                        module_name=module_name,
+                        field=field,
+                        value=value,
+                        metadata=metadata,
+                        state=state,
+                        events_schema=active_events_schema,
+                    )
+                ),
+                {
+                    module: tuple(str(field) for field in schema["fields"])
+                    for module, schema in active_events_schema.items()
+                },
             )
         if workflow_id:
             state.workflow_id = workflow_id
@@ -222,7 +247,7 @@ class Workflow:
                 if module is None:
                     raise WorkflowAborted(f"unknown module '{current}'")
 
-                if self._should_emit_stage_event(current, event_callback):
+                if self._should_emit_stage_event(current, event_callback, active_events_schema):
                     event_callback(
                         self._stage_event(
                             phase="start",
@@ -231,13 +256,14 @@ class Workflow:
                             module=module,
                             state=state,
                             visit_count=state.visit_counts.get(current, 1),
+                            events_schema=active_events_schema,
                         )
                     )
                 raw_output = module(state)
                 output = _normalize_output(current, raw_output, state)
                 state.apply(output)
                 next_module = _next_module_after(current, output, self.modules)
-                if self._should_emit_stage_event(current, event_callback):
+                if self._should_emit_stage_event(current, event_callback, active_events_schema):
                     finish_event = self._stage_event(
                         phase="finish",
                         status="done",
@@ -245,14 +271,24 @@ class Workflow:
                         module=module,
                         state=state,
                         visit_count=state.visit_counts.get(current, 1),
+                        events_schema=active_events_schema,
                     )
-                    finish_event.update({"output": output, "next_module": next_module})
+                    finish_event.update(
+                        {
+                            "fields": _completed_fields_for_stage(
+                                schema=active_events_schema[current],
+                                values=state.completed_structured_fields_for(current),
+                            ),
+                            "output": output,
+                            "next_module": next_module,
+                        }
+                    )
                     event_callback(finish_event)
                 current = next_module
         except WorkflowAborted as exc:
             aborted = True
             abort_reason = exc.reason
-            if current is not None and self._should_emit_stage_event(current, event_callback):
+            if current is not None and self._should_emit_stage_event(current, event_callback, active_events_schema):
                 module = self.modules.get(current)
                 abort_event = self._stage_event(
                     phase="abort",
@@ -261,6 +297,7 @@ class Workflow:
                     module=module,
                     state=state,
                     visit_count=state.visit_counts.get(current, 0),
+                    events_schema=active_events_schema,
                 )
                 abort_event["reason"] = abort_reason
                 event_callback(abort_event)
@@ -300,14 +337,15 @@ class Workflow:
         attachments: list[Any] | None = None,
         memory_store: PersistentMemory | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
+        events_schema: dict[str, dict[str, Any]] | None = None,
         yield_action_deltas: bool | None = None,
     ) -> WorkflowStream:
         """Create an iterator of user-visible action text.
 
         This method accepts the same workflow input, session, memory, and
         attachment arguments as :meth:`run`. ``event_callback`` receives the
-        same stage and token events as :meth:`run`. By default, the iterator
-        yields user-visible Action token deltas only when no callback is
+        same stage, token, and structured-field events as :meth:`run`. By
+        default, the iterator yields user-visible Action token deltas only when no callback is
         supplied. This prevents double output when a callback itself renders
         ``token_delta`` events. Set ``yield_action_deltas=True`` to receive
         both event callbacks and iterator deltas, or ``False`` to use the
@@ -325,6 +363,7 @@ class Workflow:
                 "memory": memory,
                 "attachments": attachments,
                 "memory_store": memory_store,
+                "events_schema": events_schema,
             },
             event_callback,
             resolved_yield_action_deltas,
@@ -339,13 +378,15 @@ class Workflow:
         module: Module | None,
         state: WorkflowState,
         visit_count: int,
+        events_schema: dict[str, dict[str, Any]],
     ) -> dict[str, Any]:
+        schema = events_schema[module_name]
         return {
             "type": "stage",
             "phase": phase,
             "status": status,
             "stage": module_name,
-            "label": self.stage_labels[module_name],
+            "label": schema["label"],
             "module": module_name,
             "module_class": module.__class__.__name__ if module is not None else None,
             "workflow_name": self.workflow_name,
@@ -353,14 +394,22 @@ class Workflow:
             "session_id": state.session_id,
             "state": state,
             "visit_count": visit_count,
+            "visit_id": _visit_id(state, module_name, visit_count),
+            "schema": _schema_snapshot(schema),
+            "metadata": {
+                "schema_label": schema["label"],
+                "schema_fields": list(schema["fields"]),
+                "schema_metadata": dict(schema["metadata"]),
+            },
         }
 
     def _should_emit_stage_event(
         self,
         module_name: str,
         event_callback: Callable[[dict[str, Any]], None] | None,
+        events_schema: dict[str, dict[str, Any]],
     ) -> bool:
-        return event_callback is not None and module_name in self.stage_labels
+        return event_callback is not None and module_name in events_schema
 
     def token_delta_event(
         self,
@@ -369,8 +418,10 @@ class Workflow:
         content: str,
         metadata: dict[str, Any] | None,
         state: WorkflowState,
+        events_schema: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         module = self.modules.get(module_name)
+        schema = (self.events_schema if events_schema is None else events_schema).get(module_name)
         return {
             "type": "token_delta",
             "phase": "delta",
@@ -378,11 +429,63 @@ class Workflow:
             "module": module_name,
             "module_class": module.__class__.__name__ if module is not None else None,
             "content": content,
-            "metadata": dict(metadata or {}),
+            "label": schema["label"] if schema is not None else None,
+            "schema": _schema_snapshot(schema) if schema is not None else None,
+            "metadata": {
+                **dict(metadata or {}),
+                **(
+                    {
+                        "schema_label": schema["label"],
+                        "schema_fields": list(schema["fields"]),
+                        "schema_metadata": dict(schema["metadata"]),
+                    }
+                    if schema is not None
+                    else {}
+                ),
+            },
             "workflow_name": self.workflow_name,
             "workflow_id": state.workflow_id,
             "session_id": state.session_id,
             "visit_count": state.visit_counts.get(module_name, 0),
+            "visit_id": _visit_id(state, module_name, state.visit_counts.get(module_name, 0)),
+        }
+
+    def structured_field_event(
+        self,
+        *,
+        module_name: str,
+        field: str,
+        value: Any,
+        metadata: dict[str, Any] | None,
+        state: WorkflowState,
+        events_schema: dict[str, dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        resolved_schema = (self.events_schema if events_schema is None else events_schema).get(module_name)
+        if resolved_schema is None:
+            raise ValueError(f"no events_schema is configured for module {module_name!r}")
+        module = self.modules.get(module_name)
+        visit_count = state.visit_counts.get(module_name, 0)
+        return {
+            "type": "structured_field",
+            "phase": "field",
+            "status": "completed",
+            "module": module_name,
+            "module_class": module.__class__.__name__ if module is not None else None,
+            "field": field,
+            "value": value,
+            "label": resolved_schema["label"],
+            "schema": _schema_snapshot(resolved_schema),
+            "metadata": {
+                **dict(metadata or {}),
+                "schema_label": resolved_schema["label"],
+                "schema_fields": list(resolved_schema["fields"]),
+                "schema_metadata": dict(resolved_schema["metadata"]),
+            },
+            "workflow_name": self.workflow_name,
+            "workflow_id": state.workflow_id,
+            "session_id": state.session_id,
+            "visit_count": visit_count,
+            "visit_id": _visit_id(state, module_name, visit_count),
         }
 
 
@@ -490,3 +593,29 @@ def _final_message_from(state: WorkflowState) -> str:
     if err:
         return f"[workflow ended with error] {err.get('message', '')}"
     return str(state.lookup("latest_final_message") or "")
+
+
+def _schema_snapshot(schema: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "label": schema["label"],
+        "fields": list(schema["fields"]),
+        "metadata": dict(schema["metadata"]),
+    }
+
+
+def _completed_fields_for_stage(
+    *,
+    schema: dict[str, Any],
+    values: dict[str, Any],
+) -> list[dict[str, Any]]:
+    configured_fields = list(schema["fields"])
+    ordered_fields = (
+        list(values)
+        if ALL_STRUCTURED_FIELDS in configured_fields
+        else [field for field in configured_fields if field in values]
+    )
+    return [{"field": field, "value": values[field]} for field in ordered_fields]
+
+
+def _visit_id(state: WorkflowState, module_name: str, visit_count: int) -> str:
+    return f"{state.workflow_id}:{module_name}:{visit_count}"

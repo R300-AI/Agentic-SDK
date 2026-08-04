@@ -44,6 +44,26 @@ class WorkflowState:
         init=False,
         repr=False,
     )
+    _structured_field_callback: Callable[[str, str, Any, dict[str, Any]], None] | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
+    _structured_fields_by_module: dict[str, tuple[str, ...]] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
+    _emitted_structured_fields: set[tuple[str, int, str]] = field(
+        default_factory=set,
+        init=False,
+        repr=False,
+    )
+    _completed_structured_fields: dict[tuple[str, int], dict[str, Any]] = field(
+        default_factory=dict,
+        init=False,
+        repr=False,
+    )
 
     def __post_init__(self) -> None:
         if self.memory is None and self.memory_store is not None:
@@ -122,6 +142,48 @@ class WorkflowState:
         if not resolved_content:
             return
         self._token_delta_callback(str(module), resolved_content, dict(metadata or {}))
+
+    def set_structured_field_callback(
+        self,
+        callback: Callable[[str, str, Any, dict[str, Any]], None] | None,
+        fields_by_module: dict[str, tuple[str, ...]] | None = None,
+    ) -> None:
+        self._structured_field_callback = callback
+        self._structured_fields_by_module = dict(fields_by_module or {})
+
+    def structured_fields_for(self, module: str) -> tuple[str, ...]:
+        return self._structured_fields_by_module.get(str(module), ())
+
+    def completed_structured_fields_for(self, module: str) -> dict[str, Any]:
+        """Return configured fields completed during the module's current visit."""
+        visit_count = self.visit_counts.get(str(module), 0)
+        return dict(self._completed_structured_fields.get((str(module), visit_count), {}))
+
+    def emit_structured_field(
+        self,
+        module: str,
+        field: str,
+        value: Any,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        module_name = str(module)
+        field_path = str(field)
+        visit_count = self.visit_counts.get(module_name, 0)
+        key = (module_name, visit_count, field_path)
+        if (
+            self._structured_field_callback is None
+            or not _includes_structured_field(self.structured_fields_for(module_name), field_path)
+            or key in self._emitted_structured_fields
+        ):
+            return
+        self._emitted_structured_fields.add(key)
+        self._completed_structured_fields.setdefault((module_name, visit_count), {})[field_path] = value
+        self._structured_field_callback(module_name, field_path, value, dict(metadata or {}))
+
+
+def _includes_structured_field(configured_fields: tuple[str, ...], field_path: str) -> bool:
+    return "*" in configured_fields or field_path in configured_fields
 
 
 @dataclass

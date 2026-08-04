@@ -1,8 +1,8 @@
 import { postJson, postJsonStream } from "../shared/api-client.js";
 import { bindAttachmentPicker } from "./artifact-panel.js";
-import { bindCodePreview } from "./code-preview.js";
+import { bindCodePreview } from "./code-preview.js?v=copy-redesign";
 import { bindInputComposer } from "./input-composer.js";
-import { clearProcessEvents, setProcessSummary, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamProcessEvents, streamResultMarkdown } from "./result-surface.js";
+import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js";
 import { showSavePanel } from "./save-panel.js";
 
 const form = document.querySelector("[data-input-composer]");
@@ -13,7 +13,6 @@ const userMessage = document.querySelector("[data-user-message]");
 const emptyMessage = document.querySelector("[data-empty-message]");
 const starterQuestions = document.querySelector("[data-starter-questions]");
 const saveButton = document.querySelector("[data-save-action]");
-const reloadButton = document.querySelector("[data-reload-action]");
 const saveStatus = document.querySelector("[data-save-status]");
 const attachmentInput = document.querySelector("[data-attachment-input]");
 const artifactList = document.querySelector("[data-artifact-list]");
@@ -21,7 +20,13 @@ const attachmentStatus = document.querySelector("[data-attachment-status]");
 const savePanel = document.querySelector("[data-save-panel]");
 const codePreviewToggles = document.querySelectorAll("[data-code-preview-open]");
 const codePreviewModal = document.querySelector("[data-code-preview-modal]");
+const workflowInfoOpen = document.querySelector("[data-workflow-info-open]");
+const workflowInfoModal = document.querySelector("[data-workflow-info-modal]");
+const workflowInfoCloseButtons = workflowInfoModal?.querySelectorAll("[data-workflow-info-close]") || [];
+const workflowInfoForm = document.querySelector("[data-workflow-info-form]");
 const runnerPage = document.querySelector("[data-page='runner']");
+const runnerSidebar = document.querySelector("[data-runner-sidebar]");
+const sidebarToggle = document.querySelector("[data-sidebar-toggle]");
 const saveRequiresLogin = runnerPage?.dataset.saveRequiresLogin === "true";
 const autoSaveAfterLogin = runnerPage?.dataset.autoSaveAfterLogin === "true";
 const saveLoginModal = document.querySelector("[data-save-login-modal]");
@@ -50,13 +55,44 @@ let workflowName = sideWorkflowTitleInput?.value.trim() || sideWorkflowTitleDisp
 let workflowDescription = workflowDescriptionInput?.value.trim() || workflowDescriptionDisplay?.textContent?.trim() || "";
 let workflowRenameRequest = null;
 let workflowDescriptionRequest = null;
-const workflowDescriptionPlaceholder = workflowDescriptionDisplay?.dataset.placeholder || "";
+const workflowDescriptionPlaceholder = workflowDescriptionInput?.getAttribute("placeholder") || workflowDescriptionDisplay?.dataset.placeholder || "";
 let lastSaveTrigger = null;
 let runnerInitialized = !initializationOverlay;
 const initialSaveStatusText = saveStatus?.textContent?.trim() || "";
 let savedWorkflowName = initialSaveStatusText === "尚未儲存" ? null : workflowName;
 let savedWorkflowDescription = initialSaveStatusText === "尚未儲存" ? null : workflowDescription;
 let lastStableSaveStatusText = initialSaveStatusText && initialSaveStatusText !== "儲存中..." ? initialSaveStatusText : "已儲存";
+
+function setSidebarCollapsed(collapsed) {
+	if (!runnerPage || !runnerSidebar || !sidebarToggle) {
+		return;
+	}
+	runnerPage.classList.toggle("sidebar-collapsed", collapsed);
+	runnerSidebar.classList.toggle("is-collapsed", collapsed);
+	sidebarToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+	sidebarToggle.setAttribute("aria-label", collapsed ? "展開側欄" : "收合側欄");
+	try {
+		window.localStorage.setItem("runnerSidebarCollapsed", collapsed ? "true" : "false");
+	} catch {
+		// Ignore storage failures in private or locked-down browsing contexts.
+	}
+}
+
+function initializeSidebar() {
+	if (!runnerPage || !runnerSidebar || !sidebarToggle) {
+		return;
+	}
+	let collapsed = false;
+	try {
+		collapsed = window.localStorage.getItem("runnerSidebarCollapsed") === "true";
+	} catch {
+		collapsed = false;
+	}
+	setSidebarCollapsed(collapsed);
+	sidebarToggle.addEventListener("click", () => {
+		setSidebarCollapsed(!runnerPage.classList.contains("sidebar-collapsed"));
+	});
+}
 
 function hasWorkflowMetadataChanges() {
 	return savedWorkflowName === null
@@ -98,7 +134,7 @@ function updateInitializationProgress(event) {
 	const total = Number(event?.total || 0);
 	const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
 	if (initializationMessage) {
-		initializationMessage.textContent = event?.message || "正在準備 Agent 初始化...";
+		initializationMessage.textContent = event?.message || "正在載入所需內容...";
 	}
 	if (initializationBar) {
 		initializationBar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
@@ -126,7 +162,7 @@ function failInitialization(message) {
 		initializationOverlay.classList.add("has-error");
 	}
 	if (initializationMessage) {
-		initializationMessage.textContent = message || "Agent 初始化失敗，請回到 Builder 檢查設定。";
+		initializationMessage.textContent = message || "準備對話時發生問題，請回到設定頁檢查。";
 	}
 }
 
@@ -147,7 +183,7 @@ async function initializeRunner() {
 			}
 		});
 	} catch (error) {
-		failInitialization(error.message || "Agent 初始化失敗，請稍後再試。")
+		failInitialization(error.message || "準備對話時發生問題，請稍後再試。")
 	}
 }
 
@@ -227,11 +263,32 @@ function scrollResultThread() {
 	}
 }
 
+function avatarTextFromWorkflowName(name) {
+	const value = String(name || "").trim();
+	if (!value) {
+		return "A";
+	}
+	const first = Array.from(value)[0] || "A";
+	if (/^[A-Za-z]$/.test(first)) {
+		const letters = Array.from(value.match(/[A-Za-z]/g) || []).slice(0, 2).join("");
+		return (letters || first).toUpperCase();
+	}
+	return first;
+}
+
+function renderAgentAvatars() {
+	const avatarText = avatarTextFromWorkflowName(workflowName);
+	document.querySelectorAll("[data-agent-avatar]").forEach((element) => {
+		element.textContent = avatarText;
+	});
+}
+
 function renderWorkflowName(nextName) {
 	workflowName = String(nextName || "").trim() || workflowName;
 	workflowNameTargets.forEach((element) => {
 		element.textContent = workflowName;
 	});
+	renderAgentAvatars();
 	if (sideWorkflowTitleInput) {
 		sideWorkflowTitleInput.value = workflowName;
 	}
@@ -422,10 +479,51 @@ async function commitWorkflowDescription() {
 	return workflowDescriptionRequest;
 }
 
-function hideStarterQuestions() {
-	if (starterQuestions) {
-		starterQuestions.hidden = true;
+function setStarterContentHidden(hidden) {
+	if (emptyMessage) {
+		emptyMessage.hidden = hidden;
 	}
+	if (starterQuestions) {
+		starterQuestions.hidden = hidden;
+	}
+}
+
+function animateComposerToChatPosition() {
+	if (!form || !runnerPage || window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+		setStarterContentHidden(true);
+		runnerPage?.classList.add("has-chat-started");
+		return;
+	}
+	const start = form.getBoundingClientRect();
+	setStarterContentHidden(true);
+	runnerPage.classList.add("has-chat-started");
+	const end = form.getBoundingClientRect();
+	const deltaX = start.left - end.left;
+	const deltaY = start.top - end.top;
+	if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) {
+		return;
+	}
+	form.style.transition = "none";
+	form.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+	form.style.willChange = "transform";
+	form.getBoundingClientRect();
+	window.requestAnimationFrame(() => {
+		form.style.transition = "transform 420ms cubic-bezier(0.2, 0, 0, 1)";
+		form.style.transform = "translate(0, 0)";
+		window.setTimeout(() => {
+			form.style.transition = "";
+			form.style.transform = "";
+			form.style.willChange = "";
+		}, 460);
+	});
+}
+
+function hideStarterQuestions() {
+	if (!runnerPage?.classList.contains("has-chat-started")) {
+		animateComposerToChatPosition();
+		return;
+	}
+	setStarterContentHidden(true);
 }
 
 async function executeRunnerStream(requestPayload, runId, onLiveProcess) {
@@ -518,6 +616,44 @@ function closeSaveLoginModal() {
 	lastSaveTrigger?.focus?.();
 }
 
+function openWorkflowInfoModal() {
+	if (!workflowInfoModal) {
+		return;
+	}
+	lastSaveTrigger = workflowInfoOpen;
+	if (sideWorkflowTitleInput) {
+		sideWorkflowTitleInput.value = workflowName;
+	}
+	if (workflowDescriptionInput) {
+		workflowDescriptionInput.value = workflowDescription;
+	}
+	workflowInfoModal.hidden = false;
+	workflowInfoModal.classList.add("open");
+	workflowInfoModal.dataset.open = "true";
+	queueMicrotask(() => sideWorkflowTitleInput?.focus());
+}
+
+function closeWorkflowInfoModal() {
+	if (!workflowInfoModal) {
+		return;
+	}
+	workflowInfoModal.hidden = true;
+	workflowInfoModal.classList.remove("open");
+	workflowInfoModal.dataset.open = "false";
+	lastSaveTrigger?.focus?.();
+}
+
+async function applyWorkflowInfo() {
+	await commitWorkflowName();
+	if (workflowRenameRequest) {
+		await workflowRenameRequest;
+	}
+	await commitWorkflowDescription();
+	if (workflowDescriptionRequest) {
+		await workflowDescriptionRequest;
+	}
+}
+
 async function saveCurrentWorkflow() {
 	let result;
 	try {
@@ -532,22 +668,18 @@ async function flushWorkflowMetadataEdits() {
 	if (workflowRenameRequest) {
 		await workflowRenameRequest;
 	}
-	if (sideWorkflowTitleForm && !sideWorkflowTitleForm.hidden) {
-		await commitWorkflowName();
-	}
+	await commitWorkflowName();
 	if (workflowRenameRequest) {
 		await workflowRenameRequest;
 	}
 	if (workflowDescriptionRequest) {
 		await workflowDescriptionRequest;
 	}
-	if (workflowDescriptionForm && !workflowDescriptionForm.hidden) {
-		await commitWorkflowDescription();
-	}
+	await commitWorkflowDescription();
 	if (workflowDescriptionRequest) {
 		await workflowDescriptionRequest;
 	}
-	return (!sideWorkflowTitleForm || sideWorkflowTitleForm.hidden) && (!workflowDescriptionForm || workflowDescriptionForm.hidden);
+	return true;
 }
 
 async function loginAiHubSession(username, password) {
@@ -567,7 +699,15 @@ function saveNeedsLogin(result) {
 
 bindAttachmentPicker(attachmentInput, artifactList, attachmentStatus);
 bindCodePreview(codePreviewToggles, codePreviewModal);
+initializeSidebar();
 renderWorkflowDescription(workflowDescriptionInput?.value || workflowDescription);
+workflowInfoOpen?.addEventListener("click", openWorkflowInfoModal);
+workflowInfoCloseButtons.forEach((button) => button.addEventListener("click", closeWorkflowInfoModal));
+workflowInfoForm?.addEventListener("submit", async (event) => {
+	event.preventDefault();
+	await applyWorkflowInfo();
+	closeWorkflowInfoModal();
+});
 sideWorkflowTitleDisplay?.addEventListener("click", () => {
 	openSideWorkflowTitleEditor();
 });
@@ -631,9 +771,6 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	if (submittedToolCall) {
 		requestPayload.tool_call_submission = submittedToolCall;
 	}
-	if (emptyMessage) {
-		emptyMessage.hidden = true;
-	}
 	hideStarterQuestions();
 	if (showUserMessage) {
 		appendUserMessage(displayMessage || prompt || "（空白訊息）");
@@ -649,8 +786,9 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	setSurfaceBusy(assistant.surface, true);
 	if (assistant.bubble) {
 		assistant.bubble.hidden = false;
+		assistant.bubble.classList.add("is-running");
 	}
-	setProcessSummary(assistant.debugStatus, []);
+	setDebugMessages(assistant.debugStatus, []);
 	setResultMessage(assistant.message, "");
 	setToolCallPanels(assistant.toolCallPanels, []);
 	let liveProcessShown = false;
@@ -681,24 +819,27 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		}
 	}
 	if (runId !== activeRunId) {
+		assistant.bubble?.classList.remove("is-running");
 		return;
 	}
 	const actionReply = actionReplyFrom(result);
 	const debugMessages = debugMessagesFrom(result);
 	const finalProcessEvents = processEventsFrom(result);
 	const finalToolCallPanels = toolCallPanelsFrom(result);
-	const replayProcessEvents = liveProcessShown ? [] : finalProcessEvents;
 	if (actionReply || finalToolCallPanels.length || debugMessages.length || finalProcessEvents.length) {
 		showResultSurface(resultThread);
 		showResultSurface(assistant.surface);
 		if (assistant.bubble) {
-			assistant.bubble.hidden = !(actionReply || finalToolCallPanels.length || replayProcessEvents.length);
+			assistant.bubble.hidden = !(actionReply || finalToolCallPanels.length || finalProcessEvents.length);
 		}
-		if (replayProcessEvents.length) {
+		if (finalProcessEvents.length) {
 			if (runStatus) {
-				runStatus.textContent = "正在整理處理過程...";
+				runStatus.textContent = "處理過程已完成";
 			}
-			await streamProcessEvents(assistant.processTrace, replayProcessEvents, {
+			setProcessEvents(assistant.processTrace, finalProcessEvents, {
+				collapsible: true,
+				latestOnly: true,
+				preserveOpen: true,
 				onUpdate: scrollResultThread,
 			});
 		} else {
@@ -715,9 +856,7 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 			setResultMessage(assistant.message, "");
 		}
 		setToolCallPanels(assistant.toolCallPanels, finalToolCallPanels);
-		if (finalProcessEvents.length) {
-			setProcessSummary(assistant.debugStatus, finalProcessEvents);
-		} else {
+		if (!finalProcessEvents.length) {
 			setDebugMessages(assistant.debugStatus, debugMessages);
 		}
 		scrollResultThread();
@@ -728,11 +867,12 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		clearProcessEvents(assistant.processTrace);
 		setResultMessage(assistant.message, "");
 		setToolCallPanels(assistant.toolCallPanels, []);
-		setProcessSummary(assistant.debugStatus, []);
+		setDebugMessages(assistant.debugStatus, []);
 	}
 	if (runStatus) {
 		runStatus.textContent = executionStatusFrom(result);
 	}
+	assistant.bubble?.classList.remove("is-running");
 	setSurfaceBusy(assistant.surface, false);
 	if (submitButton && runId === activeRunId) {
 		submitButton.disabled = false;
@@ -856,32 +996,13 @@ saveLoginForm?.addEventListener("submit", async (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape" && workflowInfoModal && !workflowInfoModal.hidden) {
+		closeWorkflowInfoModal();
+		return;
+	}
 	if (event.key === "Escape" && saveLoginModal && !saveLoginModal.hidden) {
 		closeSaveLoginModal();
 	}
-});
-
-reloadButton?.addEventListener("click", async () => {
-	reloadButton.disabled = true;
-	if (runStatus) {
-		runStatus.textContent = "正在重新載入...";
-	}
-	let result;
-	try {
-		result = await postJson("/playground/aihub/config/reload");
-	} catch (error) {
-		result = { loaded: false, error: error.message || "重新載入失敗。" };
-	}
-	if (result.loaded) {
-		window.location.href = "/playground/run";
-		return;
-	}
-	const message = result.error || "重新載入失敗。";
-	if (runStatus) {
-		runStatus.textContent = message;
-	}
-	showSavePanel(savePanel, message);
-	reloadButton.disabled = false;
 });
 
 if (autoSaveAfterLogin && saveButton && !saveRequiresLogin) {

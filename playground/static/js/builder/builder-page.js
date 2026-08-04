@@ -92,7 +92,7 @@ function renderBuilderReviewState(items, ready) {
     const answer = item.querySelector("[data-review-answer]");
     const detail = item.querySelector("[data-review-detail]");
     if (status) {
-      status.textContent = completed ? "✓" : "✕";
+      status.checked = completed;
     }
     if (answer) {
       answer.textContent = state.answer || fallbackState.answer;
@@ -142,15 +142,16 @@ function renderBuilderEndpointState(state) {
         const label = document.createElement("label");
         label.className = "endpoint-row";
 
-        const module = document.createElement("span");
-        module.className = "endpoint-module";
-        const strong = document.createElement("strong");
-        strong.textContent = "部署選項";
-        module.append(strong);
-
         const select = document.createElement("select");
         select.name = requirement.role;
         select.dataset.builderEndpointSelect = "true";
+        select.required = true;
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "(請選擇部署選項)";
+        placeholder.disabled = true;
+        placeholder.selected = !selections[requirement.role];
+        select.append(placeholder);
         requirement.options.forEach((endpoint) => {
           const option = document.createElement("option");
           option.value = endpoint.id;
@@ -161,7 +162,7 @@ function renderBuilderEndpointState(state) {
           select.append(option);
         });
 
-        label.append(module, select);
+        label.append(select);
         form.append(label);
       });
       body.append(form);

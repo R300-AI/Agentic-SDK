@@ -1,14 +1,28 @@
 export function bindInputComposer(form, onSubmit) {
+  const messageInput = form?.querySelector("textarea[name='message']");
+
+  messageInput?.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) {
+      return;
+    }
+    event.preventDefault();
+    form.requestSubmit();
+  });
+
   form?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const formData = new FormData(form);
     const files = Array.from(formData.getAll("attachments"))
       .filter((item) => item instanceof File && item.name);
-    onSubmit?.({
+    const payload = {
       message: String(formData.get("message") || ""),
       attachment_names: files.map((file) => file.name),
       attachments: await Promise.all(files.map(fileToAttachment)),
-    });
+    };
+    if (messageInput) {
+      messageInput.value = "";
+    }
+    onSubmit?.(payload);
   });
 }
 

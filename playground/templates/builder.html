@@ -71,14 +71,6 @@
 
 {% block body %}
 <main class="builder-page" data-page="builder">
-  <header class="context-bar builder-context-bar">
-    <div>
-      <span class="eyebrow">Agent 設定</span>
-      <strong>{{ mode_context.label }}</strong>
-      <small>{{ mode_context.source_label }}</small>
-    </div>
-  </header>
-
   <section class="builder-layout">
     {% set step_state = namespace(active_index=1) %}
     {% for step in steps %}
@@ -87,7 +79,7 @@
       {% endif %}
     {% endfor %}
     <nav class="progress-rail" aria-label="建立流程步驟">
-      <p class="progress-current" aria-live="polite" data-progress-current>目前階段：步驟 {{ step_state.active_index }} / {{ steps|length }}</p>
+      <p class="visually-hidden" aria-live="polite" data-progress-current>目前階段：步驟 {{ step_state.active_index }} / {{ steps|length }}</p>
       <ol class="progress-step-list">
       {% for step in steps %}
       <li class="rail-step{% if loop.index < step_state.active_index %} completed{% endif %}{% if step.key == active_step.key %} active{% endif %}" data-progress-step="{{ step.key }}" data-step-index="{{ loop.index }}" data-step-label="{{ step.title }}"{% if step.key == active_step.key %} aria-current="step"{% endif %} aria-label="{{ '目前階段' if step.key == active_step.key else '已完成' if loop.index < step_state.active_index else '尚未進行' }}：步驟 {{ loop.index }} / {{ steps|length }}：{{ step.title }}">
@@ -100,7 +92,6 @@
     <section class="builder-stage" aria-labelledby="builder-step-title">
       {% for step in steps %}
       <article class="step-panel{% if step.key == active_step.key %} active{% endif %}" id="builder-step-{{ step.key }}" data-step-panel="{{ step.key }}"{% if step.key != active_step.key %} hidden{% endif %}>
-        <p class="eyebrow">步驟 {{ loop.index }} / {{ steps|length }}</p>
         <h1{% if step.key == active_step.key %} id="builder-step-title"{% endif %}>{{ step.title }}</h1>
 
         {% if step.control == "text" %}
@@ -110,12 +101,10 @@
         </form>
         {% elif step.control == "finish" %}
         <div class="readiness-card ready" aria-live="polite">
-          <strong>{{ workflow_summary.readiness }}</strong>
-          <span data-summary-field="name">{{ workflow_summary.name }}</span>
           <ul class="readiness-checklist builder-review-checklist" data-builder-review-checklist>
             {% for review_item in builder_review_state %}
             <li class="builder-review-item{% if review_item.completed %} is-complete{% else %} is-incomplete{% endif %}" data-review-item data-review-step="{{ review_item.step_key }}">
-              <span class="builder-review-status" data-review-status aria-hidden="true">{{ '✓' if review_item.completed else '✕' }}</span>
+              <input class="builder-review-status" type="checkbox" data-review-status aria-label="{{ review_item.step_title }} 已完成"{% if review_item.completed %} checked{% endif %} disabled>
               <div class="builder-review-content">
                 <div class="builder-review-header">
                   <strong>{{ review_item.step_title }}</strong>
@@ -305,7 +294,7 @@
         <footer class="stage-actions">
           <button class="button button-secondary" type="button" data-step-back{% if loop.first %} disabled{% endif %}>上一步</button>
           {% if loop.last %}
-          <a class="button button-primary{% if not builder_review_ready %} is-disabled{% endif %}" href="{{ url_for('runner.runner') }}" data-complete-link aria-disabled="{{ 'false' if builder_review_ready else 'true' }}"{% if not builder_review_ready %} tabindex="-1"{% endif %}>開始建立 Agent</a>
+          <a class="button button-primary{% if not builder_review_ready %} is-disabled{% endif %}" href="{{ url_for('runner.runner') }}" data-complete-link aria-disabled="{{ 'false' if builder_review_ready else 'true' }}"{% if not builder_review_ready %} tabindex="-1"{% endif %}>完成</a>
           {% else %}
           <button class="button button-primary" type="button" data-step-continue>下一步</button>
           {% endif %}
@@ -321,5 +310,5 @@
 {% block scripts %}
 <script id="builder-form-state" type="application/json" data-builder-form-state>{{ builder_form_state|tojson }}</script>
 <script id="builder-endpoint-state" type="application/json" data-builder-endpoint-state>{{ builder_endpoint_state|tojson }}</script>
-<script type="module" src="{{ url_for('static', filename='js/builder/builder-page.js') }}"></script>
+<script type="module" src="{{ url_for('static', filename='js/builder/builder-page.js', v='deployment-options-v2') }}"></script>
 {% endblock %}

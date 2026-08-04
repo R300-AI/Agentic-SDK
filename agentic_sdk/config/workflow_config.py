@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from agentic_sdk.core import Gates, Module, Workflow
+from agentic_sdk.core.events import resolve_events_schema
 
 
 @dataclass
@@ -24,9 +25,12 @@ class WorkflowConfig:
     name: str = "default"
     description: str | None = None
     entry: str = "perceive"
-    stage_labels: dict[str, str] = field(default_factory=dict)
+    events_schema: dict[str, dict[str, Any]] | None = None
     gates: GateConfig = field(default_factory=GateConfig)
     modules: dict[str, ModuleSpec] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.events_schema = resolve_events_schema(self.events_schema)
 
 
 _MODULE_CONFIG_PARAMS: dict[str, set[str]] = {
@@ -95,7 +99,7 @@ def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module
         workflow_name=config.name,
         description=config.description,
         entry_module=config.entry,
-        stage_labels=config.stage_labels,
+        events_schema=config.events_schema,
     )
 
 

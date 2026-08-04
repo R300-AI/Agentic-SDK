@@ -1,18 +1,16 @@
 # Notebook 教材
 
-這一區放的是 Agentic SDK 的流程方法教材。模組細節請回到「模組家族」查，這裡只保留 MVP 需要的學習順序：先做出一條能跑的工作流程，再看懂執行過程、接住前後文、查資料、叫工具，最後看懂五大模組共同遵守的執行規範。
+這一區放的是 Agentic SDK 的流程方法教材。模組細節請回到「模組家族」查；每份 Notebook 只處理一個可驗證的主題。先以 00 確認 SDK 能跑，再逐步建立 workflow、顯示執行階段、配置畫面事件、處理多輪對話、驗證回覆、呼叫工具，最後理解模組共同規範。
 
 ## 建議學習順序
 
 | 順序 | 教材 | Notebook |
 | --- | --- | --- |
-| 1 | [做出一條可以跑的工作流程](build-and-run-a-workflow.md) | `01-build-and-run-a-workflow.ipynb` |
-| 2 | [讓畫面知道 Agent 跑到哪一步](watch-a-workflow-run.md) | `02-watch-a-workflow-run.ipynb` |
-| 3 | [讓 Agent 接得住前後文](multi-turn-conversation.md) | `03-multi-turn-conversation.ipynb` |
-| 4 | [讓 Agent 先查資料再回答](search-documents-and-answer.md) | `04-search-documents-and-answer.ipynb` |
-| 5 | [讓 Agent 判斷什麼時候要叫工具](call-tools-from-a-workflow.md) | `05-call-tools-from-a-workflow.ipynb` |
-| 6 | [看懂五大模組的共同規範](from-playground-to-code.md) | `06-from-playground-to-code.ipynb` |
-
-## 什麼內容不放這裡
-
-單一模組的參數、輸入輸出格式與細節，請直接看「模組家族」底下的各頁。Notebook 教材不逐一介紹模組，而是示範一個開發者實際做 Agent 時會走過的流程。
+| 00 | [跑出第一條 Agentic SDK Workflow](getting-started.md) | `00-getting-started.ipynb` |
+| 01 | [做出一條可以跑的工作流程](build-and-run-a-workflow.md) | `01-build-and-run-a-workflow.ipynb` |
+| 02 | [讓畫面知道 Agent 跑到哪一步](watch-a-workflow-run.md) | `02-watch-a-workflow-run.ipynb` |
+| 03 | [配置 workflow 的畫面事件](configure-workflow-events.md) | `03-configure-workflow-events.ipynb` |
+| 04 | [讓 Agent 接得住前後文](multi-turn-conversation.md) | `04-multi-turn-conversation.ipynb` |
+| 05 | [讓 Agent 檢查回答有沒有依據](search-documents-and-answer.md) | `05-search-documents-and-answer.ipynb` |
+| 06 | [讓 Agent 判斷什麼時候要叫工具](call-tools-from-a-workflow.md) | `06-call-tools-from-a-workflow.ipynb` |
+| 07 | [看懂五大模組的共同規範](from-playground-to-code.md) | `07-from-playground-to-code.ipynb` |

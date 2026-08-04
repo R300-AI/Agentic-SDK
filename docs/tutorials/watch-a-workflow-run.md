@@ -2,39 +2,36 @@
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/R300-AI/Agentic-SDK/blob/main/notebooks/02-watch-a-workflow-run.ipynb)
 
-這份教材示範 MVP 階段最重要的執行提示：Chat WebUI 在最終文字開始輸出前，要如何知道目前 workflow 正在哪個階段。SDK 會透過 `event_callback` 送出 stage event，畫面只要讀取事件裡的 `label` 就能更新狀態列。
+這份教材只示範 MVP 階段最重要的執行提示：Chat WebUI 在最終文字開始輸出前，要如何知道目前 workflow 正在哪個階段。SDK 會透過 `event_callback` 送出 stage event，畫面直接讀取事件裡的 `label` 更新狀態列。
 
 ## 你會學到
 
-- 用 `Workflow(stage_labels=...)` 設定每個階段的畫面文字。
-- 用 `event_callback=on_event` 直接印出 SDK 送出的事件格式。
-- 看懂 `type == "stage"`、`status == "running"`、`label` 這幾個欄位如何供 WebUI 顯示。
+- 不設定 `events_schema` 時，直接使用 SDK 的完整預設事件與標準 label。
+- 用 `event_callback=on_event` 顯示 stage start event。
+- 直接使用 SDK 提供的 `label`，不在 UI 自建 module-to-label mapping。
 - 把 notebook 看到的事件格式對照到 Playground Runner 的即時流程畫面。
 
-## 核心寫法
+## 直接使用標準事件
+
+沒有傳入 `events_schema` 時，SDK 對所有實際執行的 module 發送 `stage` 事件，標準 label 是「理解輸入」、「判斷工具順序」、「整理相關來源」、「準備輸出回覆」、「檢查回覆」。
 
 ```python
-stage_labels = {
-	"perceive": "正在理解你的問題",
-	"retrieve": "正在查找參考資料",
-	"action": "正在準備回覆",
-}
-
 workflow = Workflow(
-	workflow_name="WebUI 階段提示 Agent",
-	stage_labels=stage_labels,
-	perceive=PassThroughPerceive(),
-	retrieve=KeywordRetrieve(items=[{"keywords": ["sdk"], "content": "Agentic SDK 可以把工作流階段交給畫面顯示。"}]),
-	action=DirectAnswerAction(),
+    workflow_name='WebUI 階段提示 Agent',
+    perceive=PassThroughPerceive(),
+    retrieve=KeywordRetrieve(items=[{'keywords': ['sdk'], 'content': 'Agentic SDK 可以把工作流階段交給畫面顯示。'}]),
+    action=DirectAnswerAction(),
 )
-
-def on_event(event):
-	print(event)
-
-result = workflow.run("請介紹 SDK 的階段提示方式", event_callback=on_event)
 ```
 
-正式 WebUI 不需要把整包事件印出來；收到 `type == "stage"` 且 `status == "running"` 的事件時，顯示 `event["label"]` 即可。等最終文字開始輸出，再切換成回覆輸出狀態。
+def on_event(event):
+    if event['type'] == 'stage' and event['phase'] == 'start':
+        print(event['label'])
+
+result = workflow.run('請介紹 SDK 的階段提示方式', event_callback=on_event)
+```
+
+正式 WebUI 不需要把整包事件印出來；收到 `type == "stage"` 且 `phase == "start"` 的事件時顯示 `event["label"]` 即可。label 永遠由 SDK 的 `events_schema` 提供。如何配置 label／fields，以及如何在 `stage.finish["fields"]` 顯示欄位，是下一章 [配置 workflow 的畫面事件](configure-workflow-events.md) 的單一主題。
 
 ## 相關文件
 

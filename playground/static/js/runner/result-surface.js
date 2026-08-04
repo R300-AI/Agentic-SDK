@@ -56,7 +56,28 @@ export function clearProcessEvents(element) {
     return;
   }
   element.replaceChildren();
+  element._processEvents = [];
   element.hidden = true;
+}
+
+export function setProcessEvents(element, events, { active = false, collapsible = false, latestOnly = false, preserveOpen = false, onUpdate } = {}) {
+  if (!element) {
+    return;
+  }
+  const processEvents = normalizeProcessEvents(events);
+  const wasOpen = preserveOpen && element.querySelector(".process-trace-disclosure")?.open;
+  clearProcessEvents(element);
+  if (!processEvents.length) {
+    return;
+  }
+  element._processEvents = processEvents;
+  element.hidden = false;
+  if (collapsible) {
+    element.append(createProcessTraceDisclosure(processEvents, { active, latestOnly, open: wasOpen }));
+  } else {
+    element.append(...processEvents.map(createProcessEvent));
+  }
+  onUpdate?.();
 }
 
 export async function streamProcessEvents(element, events, { onUpdate } = {}) {
@@ -86,12 +107,16 @@ export function showLiveProcessEvent(element, event, { onUpdate } = {}) {
     return;
   }
   const processEvent = normalizeProcessEvents([event])[0];
-  clearProcessEvents(element);
   if (!processEvent) {
     return;
   }
-  element.hidden = false;
-  element.append(createProcessEvent(processEvent, { active: true }));
+  const processEvents = [...(Array.isArray(element._processEvents) ? element._processEvents : []), processEvent];
+  setProcessEvents(element, processEvents, {
+    active: true,
+    collapsible: true,
+    latestOnly: true,
+    preserveOpen: true,
+  });
   onUpdate?.();
 }
 
@@ -427,6 +452,46 @@ function createProcessEvent(event, { active = false } = {}) {
 
   item.append(mark, title, description);
   return item;
+}
+
+function createProcessTraceDisclosure(events, { active = false, latestOnly = false, open = false } = {}) {
+  const root = document.createElement("details");
+  root.className = "process-trace-disclosure";
+  root.open = Boolean(open);
+  if (active) {
+    root.classList.add("is-active");
+  }
+
+  const summary = document.createElement("summary");
+  summary.className = "process-trace-toggle";
+
+  const labelRow = document.createElement("span");
+  labelRow.className = "process-trace-label-row";
+  const summaryEvents = latestOnly ? events.slice(-1) : events;
+  const latestEvent = summaryEvents[summaryEvents.length - 1];
+  const label = document.createElement("span");
+  label.className = "process-trace-label";
+  label.textContent = latestEvent?.title || "處理步驟";
+  const description = document.createElement("span");
+  description.className = "process-trace-description";
+  description.textContent = latestEvent?.description || "正在整理這一步的處理結果。";
+  labelRow.append(label, description);
+
+  const chevron = document.createElement("span");
+  chevron.className = "process-trace-toggle-chevron";
+  chevron.setAttribute("aria-hidden", "true");
+  chevron.textContent = root.open ? "v" : ">";
+  summary.append(labelRow, chevron);
+
+  const list = document.createElement("div");
+  list.className = "process-trace-list";
+  events.forEach((event) => list.append(createProcessEvent(event)));
+
+  root.addEventListener("toggle", () => {
+    chevron.textContent = root.open ? "v" : ">";
+  });
+  root.append(summary, list);
+  return root;
 }
 
 function createProcessSummaryItem(event) {

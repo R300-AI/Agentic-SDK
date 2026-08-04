@@ -92,11 +92,9 @@ def normalize_endpoint_selections(python_source: str | None, selections: dict[st
         endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(requirement.role))
         if not endpoints_by_id:
             continue
-        default_endpoint_id = next(iter(endpoints_by_id))
-        endpoint_id = str(raw.get(requirement.role) or default_endpoint_id)
-        if endpoint_id not in endpoints_by_id:
-            endpoint_id = default_endpoint_id
-        normalized[requirement.role] = endpoint_id
+        endpoint_id = str(raw.get(requirement.role) or "")
+        if endpoint_id in endpoints_by_id:
+            normalized[requirement.role] = endpoint_id
     return normalized
 
 
@@ -145,9 +143,7 @@ def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirem
 def _endpoint_for_role(role: str, selections: dict[str, str]) -> ModelEndpoint | None:
     endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(role))
     endpoint_id = selections.get(role, "")
-    if endpoint_id:
-        return endpoints_by_id.get(endpoint_id)
-    return next(iter(endpoints_by_id.values()), None)
+    return endpoints_by_id.get(endpoint_id)
 
 
 def _missing_endpoint_envs(role: str, endpoint: ModelEndpoint | None) -> list[str]:

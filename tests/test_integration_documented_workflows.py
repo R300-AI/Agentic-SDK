@@ -101,10 +101,10 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             perceive=PassThroughPerceive(),
             retrieve=KeywordRetrieve(items=[{"keywords": ["sdk"], "content": "Agentic SDK 可以顯示工作流階段。"}]),
             action=DirectAnswerAction(),
-            stage_labels={
-                "perceive": "正在理解問題",
-                "retrieve": "正在查 SDK 資料",
-                "action": "正在產生回覆",
+            events_schema={
+                "perceive": {"label": "正在理解問題"},
+                "retrieve": {"label": "正在查 SDK 資料"},
+                "action": {"label": "正在產生回覆"},
             },
         )
         events = []
@@ -122,7 +122,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         finish_events = [event for event in events if event["phase"] == "finish"]
         self.assertEqual(["done", "done", "done"], [event["status"] for event in finish_events])
 
-    def test_workflow_does_not_emit_stage_events_without_explicit_labels(self) -> None:
+    def test_workflow_uses_standard_stage_events_without_explicit_schema(self) -> None:
         workflow = Workflow(
             perceive=PassThroughPerceive(),
             retrieve=PassThroughRetrieve(),
@@ -130,16 +130,26 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         )
         events = []
 
-        workflow.run("no stage UI events", event_callback=events.append)
+        workflow.run("default stage UI events", event_callback=events.append)
 
-        self.assertFalse(any(event["type"] == "stage" for event in events))
+        self.assertEqual(
+            [
+                ("start", "perceive", "理解輸入"),
+                ("finish", "perceive", "理解輸入"),
+                ("start", "retrieve", "整理相關來源"),
+                ("finish", "retrieve", "整理相關來源"),
+                ("start", "action", "準備輸出回覆"),
+                ("finish", "action", "準備輸出回覆"),
+            ],
+            [(event["phase"], event["module"], event["label"]) for event in events if event["type"] == "stage"],
+        )
 
-    def test_workflow_emits_only_explicitly_labeled_stage_events(self) -> None:
+    def test_workflow_emits_only_explicitly_configured_stage_events(self) -> None:
         workflow = Workflow(
             perceive=PassThroughPerceive(),
             retrieve=PassThroughRetrieve(),
             action=DirectAnswerAction(),
-            stage_labels={"action": "正在產生回覆"},
+            events_schema={"action": {"label": "正在產生回覆"}},
         )
         events = []
 
@@ -150,11 +160,11 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             [(event["phase"], event["module"], event["label"]) for event in events if event["type"] == "stage"],
         )
 
-    def test_workflow_config_passes_stage_labels_to_workflow(self) -> None:
+    def test_workflow_config_passes_events_schema_to_workflow(self) -> None:
         workflow = build_workflow(
             WorkflowConfig(
                 name="階段設定 Agent",
-                stage_labels={"retrieve": "正在查詢設定資料"},
+                events_schema={"retrieve": {"label": "正在查詢設定資料"}},
                 modules={
                     "retrieve": ModuleSpec(
                         kind="keyword",
