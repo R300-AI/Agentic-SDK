@@ -39,6 +39,7 @@ def load_aihub_config():
     session["mode"] = "aihub_editable" if editable else "aihub_readonly"
     session["agent_id"] = loaded["agent_id"]
     session["python_source"] = loaded["python_source"]
+    session["endpoint_bindings"] = loaded.get("endpoint_bindings") or {}
     bundle_result = _restore_bundle_for_session(str(loaded["agent_id"]), credentials)
     if _semantic_bundle_required_for_source(loaded.get("python_source")) and not bundle_result.get("bundle_restored"):
         return jsonify({**loaded, **bundle_result, "loaded": False, "error": _semantic_bundle_restore_error(bundle_result), "error_code": bundle_result.get("bundle_error_code") or "semantic_bundle_not_restored"}), 502
@@ -76,6 +77,7 @@ def reload_aihub_config():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
     bundle_result = _restore_bundle_for_session(str(result["agent_id"]), credentials)
     if _semantic_bundle_required_for_source(result.get("python_source")) and not bundle_result.get("bundle_restored"):
         return jsonify({**result, **bundle_result, "loaded": False, "error": _semantic_bundle_restore_error(bundle_result), "error_code": bundle_result.get("bundle_error_code") or "semantic_bundle_not_restored"}), 502
@@ -106,12 +108,21 @@ def save_aihub_config():
     workflow_config = config_from_source(python_source)
     workflow_name = workflow_summary.name
     description = workflow_config.task_goal or ""
-    result = save_config(agent_id, python_source, workflow_name=workflow_name, description=description, credentials=credentials, origin=request.host_url)
+    result = save_config(
+        agent_id,
+        python_source,
+        workflow_name=workflow_name,
+        description=description,
+        endpoint_bindings=session.get("endpoint_bindings") or {},
+        credentials=credentials,
+        origin=request.host_url,
+    )
     if result.get("saved"):
         if result.get("agent_id"):
             session["agent_id"] = result["agent_id"]
         if result.get("workflow_name"):
             session["agent_name"] = result["workflow_name"]
+        session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
         session["source_origin"] = "aihub_loaded"
         semantic_ready = _prepare_semantic_runtime_for_save(python_source) if _semantic_bundle_required(workflow_config) else {"prepared": False}
         if semantic_ready.get("error"):
@@ -205,8 +216,8 @@ def _prepare_semantic_runtime_for_save(python_source: str) -> dict[str, object]:
     upload_id = session.get("builder_upload_id")
     if not isinstance(upload_id, str) or not upload_id.strip():
         return {"error": "SemanticRetrieve knowledge files are not available in this Playground session."}
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
-    session["runner_endpoint_selections"] = endpoint_selections
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    session["endpoint_bindings"] = endpoint_selections
     try:
         return prepare_semantic_runtime(
             python_source,

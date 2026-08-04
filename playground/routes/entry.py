@@ -263,7 +263,7 @@ def _clear_selected_agent_state() -> None:
     session.pop("agent_owner", None)
     session.pop("builder_form_state", None)
     session.pop("builder_has_user_config", None)
-    session.pop("runner_endpoint_selections", None)
+    session.pop("endpoint_bindings", None)
     session.pop("builder_upload_id", None)
 
 

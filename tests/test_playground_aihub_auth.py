@@ -189,6 +189,7 @@ def test_save_config_calls_ai_hub_save_api(monkeypatch):
         "print('hello')",
         workflow_name="Agent One",
         description="Demo agent",
+        endpoint_bindings={"perceive": "chat-fast"},
         credentials=aihub_client.AiHubCredentials(username="creator", password="secret"),
         origin="https://playground.example/",
     )
@@ -205,6 +206,7 @@ def test_save_config_calls_ai_hub_save_api(monkeypatch):
                 "python_source": "print('hello')",
                 "workflow_name": "Agent One",
                 "description": "Demo agent",
+                "endpoint_bindings": {"perceive": "chat-fast"},
                 "agent_id": "agent 1",
             },
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
@@ -247,7 +249,7 @@ def test_list_and_load_config_call_ai_hub_agent_apis(monkeypatch):
         calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
         if url.endswith("/api/playground/agents"):
             return httpx.Response(200, json={"items": [{"agent_id": "agent-1", "agent_name": "Agent One"}]})
-        return httpx.Response(200, json={"agent_id": "agent-1", "agent_name": "Agent One", "python_source": "print('loaded')", "playground_exported_at": "2026-07-27T00:00:00Z"})
+        return httpx.Response(200, json={"agent_id": "agent-1", "agent_name": "Agent One", "python_source": "print('loaded')", "endpoint_bindings": {"perceive": "chat-fast"}, "playground_exported_at": "2026-07-27T00:00:00Z"})
 
     credentials = aihub_client.AiHubCredentials(username="creator", password="secret")
     monkeypatch.setenv("AI_HUB_BASE_URL", "https://aihub.example/")
@@ -260,6 +262,7 @@ def test_list_and_load_config_call_ai_hub_agent_apis(monkeypatch):
     assert agents["items"] == [{"agent_id": "agent-1", "agent_name": "Agent One"}]
     assert loaded["loaded"] is True
     assert loaded["python_source"] == "print('loaded')"
+    assert loaded["endpoint_bindings"] == {"perceive": "chat-fast"}
     assert calls[0]["url"] == "https://aihub.example/api/playground/agents"
     assert calls[1]["url"] == "https://aihub.example/api/playground/agents/agent%201/config/load"
 
@@ -269,7 +272,7 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
 
     def fake_post(url, *, json, headers, timeout):
         calls.append({"url": url, "json": json, "headers": headers, "timeout": timeout})
-        return httpx.Response(200, json={"agent_id": "agent 1", "agent_name": "Shared Agent", "python_source": "print('shared')"})
+        return httpx.Response(200, json={"agent_id": "agent 1", "agent_name": "Shared Agent", "python_source": "print('shared')", "endpoint_bindings": {"perceive": "chat-fast"}})
 
     monkeypatch.setenv("AI_HUB_BASE_URL", "https://aihub.example/")
     monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
@@ -281,6 +284,7 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
     assert loaded["loaded"] is True
     assert loaded["agent_name"] == "Shared Agent"
     assert loaded["python_source"] == "print('shared')"
+    assert loaded["endpoint_bindings"] == {"perceive": "chat-fast"}
     assert loaded["access_mode"] == "public_readonly"
     assert calls == [
         {
@@ -1111,9 +1115,9 @@ def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
     seen = []
 
-    def fake_save_config(agent_id, python_source, *, workflow_name=None, description=None, credentials=None, origin=None):
-        seen.append({"agent_id": agent_id, "python_source": python_source, "workflow_name": workflow_name, "description": description, "credentials": credentials, "origin": origin})
-        return {"agent_id": agent_id or "agent-new", "workflow_name": "Agent New", "description": description or "", "saved": True, "integration_status": "aihub", "requires_real_aihub_api": False}
+    def fake_save_config(agent_id, python_source, *, workflow_name=None, description=None, endpoint_bindings=None, credentials=None, origin=None):
+        seen.append({"agent_id": agent_id, "python_source": python_source, "workflow_name": workflow_name, "description": description, "endpoint_bindings": endpoint_bindings, "credentials": credentials, "origin": origin})
+        return {"agent_id": agent_id or "agent-new", "workflow_name": "Agent New", "description": description or "", "endpoint_bindings": endpoint_bindings or {}, "saved": True, "integration_status": "aihub", "requires_real_aihub_api": False}
 
     monkeypatch.setattr(aihub_routes, "save_config", fake_save_config)
     app = create_app()
@@ -1129,6 +1133,7 @@ def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
         with client.session_transaction(base_url="https://playground.example") as session:
             session["agent_id"] = "agent-1"
             session["python_source"] = "print('hello')"
+            session["endpoint_bindings"] = {"perceive": "chat-fast"}
         save_response = client.post("/playground/aihub/config/save", base_url="https://playground.example")
 
     assert save_response.status_code == 200
@@ -1137,6 +1142,7 @@ def test_aihub_save_route_uses_login_ticket_and_session_source(monkeypatch):
     assert seen[0]["python_source"] == "print('hello')"
     assert seen[0]["workflow_name"] == "Untitled Agent"
     assert seen[0]["description"] == ""
+    assert seen[0]["endpoint_bindings"] == {"perceive": "chat-fast"}
     assert seen[0]["origin"] == "https://playground.example/"
     assert seen[0]["credentials"].username == "creator"
     assert seen[0]["credentials"].password == "secret"
@@ -1158,7 +1164,7 @@ workflow = Workflow(
     monkeypatch.setattr(
         aihub_routes,
         "save_config",
-        lambda agent_id, python_source, *, workflow_name=None, description=None, credentials=None, origin=None: {
+        lambda agent_id, python_source, *, workflow_name=None, description=None, endpoint_bindings=None, credentials=None, origin=None: {
             "agent_id": agent_id or "agent-new",
             "workflow_name": workflow_name,
             "description": description or "",
@@ -1211,7 +1217,7 @@ workflow = Workflow(
     monkeypatch.setattr(
         aihub_routes,
         "save_config",
-        lambda agent_id, python_source, *, workflow_name=None, description=None, credentials=None, origin=None: {
+        lambda agent_id, python_source, *, workflow_name=None, description=None, endpoint_bindings=None, credentials=None, origin=None: {
             "agent_id": agent_id or "agent-new",
             "workflow_name": workflow_name,
             "description": description or "",

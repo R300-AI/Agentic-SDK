@@ -229,6 +229,7 @@ def load_config(
         "workflow_name": payload.get("workflow_name") or payload.get("agent_name") or "",
         "description": payload.get("description") or "",
         "python_source": payload.get("python_source") or build_default_python_source(),
+        "endpoint_bindings": _endpoint_bindings_from_payload(payload),
         "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or "",
         "integration_status": "aihub",
         "requires_real_aihub_api": False,
@@ -273,6 +274,7 @@ def load_public_config(
         "workflow_name": response_payload.get("workflow_name") or response_payload.get("agent_name") or "",
         "description": response_payload.get("description") or "",
         "python_source": response_payload.get("python_source") or build_default_python_source(),
+        "endpoint_bindings": _endpoint_bindings_from_payload(response_payload),
         "exported_at": response_payload.get("playground_exported_at") or response_payload.get("exported_at") or "",
         "integration_status": "aihub",
         "access_mode": "public_readonly",
@@ -286,6 +288,7 @@ def save_config(
     *,
     workflow_name: str | None = None,
     description: str | None = None,
+    endpoint_bindings: dict[str, str] | None = None,
     credentials: AiHubCredentials | None = None,
     origin: str | None = None,
 ) -> dict[str, object]:
@@ -307,6 +310,7 @@ def save_config(
         "python_source": python_source,
         "workflow_name": resolved_workflow_name,
         "description": resolved_description,
+        "endpoint_bindings": endpoint_bindings or {},
     }
     payload.update(_credential_payload(credentials))
     resolved_agent_id = (agent_id or "").strip()
@@ -340,10 +344,22 @@ def save_config(
         "agent_id": payload.get("agent_id") or resolved_agent_id,
         "workflow_name": payload.get("workflow_name") or payload.get("agent_name") or resolved_workflow_name,
         "description": payload.get("description") or resolved_description,
+        "endpoint_bindings": _endpoint_bindings_from_payload(payload),
         "saved": bool(saved),
         "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or payload.get("saved_at") or datetime.now(timezone.utc).isoformat(),
         "integration_status": "aihub",
         "requires_real_aihub_api": False,
+    }
+
+
+def _endpoint_bindings_from_payload(payload: object) -> dict[str, str]:
+    raw_bindings = payload.get("endpoint_bindings") if isinstance(payload, dict) else None
+    if not isinstance(raw_bindings, dict):
+        return {}
+    return {
+        str(role): str(endpoint_id)
+        for role, endpoint_id in raw_bindings.items()
+        if isinstance(role, str) and isinstance(endpoint_id, str)
     }
 
 

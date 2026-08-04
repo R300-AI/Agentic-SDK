@@ -51,7 +51,7 @@ def export_source():
 def _current_python_source() -> str:
     canonical_source = normalize_python_source(session.get("python_source") or build_default_python_source())
     session["python_source"] = canonical_source
-    endpoint_bindings = endpoint_env_bindings_for_source(canonical_source, session.get("runner_endpoint_selections") or {})
+    endpoint_bindings = endpoint_env_bindings_for_source(canonical_source, session.get("endpoint_bindings") or {})
     return render_python_source(canonical_source, endpoint_bindings)
 
 

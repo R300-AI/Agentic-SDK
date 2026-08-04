@@ -37,8 +37,8 @@ def runner():
     workflow_summary = get_workflow_summary(python_source)
     config = config_from_source(python_source)
     starter_questions = _starter_questions_from_runner_state(config)
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
-    session["runner_endpoint_selections"] = endpoint_selections
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    session["endpoint_bindings"] = endpoint_selections
     auto_save_after_login = bool(session.pop("pending_runner_auto_save", False)) and mode_context.can_save
 
     return render_template(
@@ -81,7 +81,7 @@ def execute_runner():
         return jsonify({"error": "No Python source is available for execution."}), 400
 
     payload = request.get_json(silent=True) or {}
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
     execution = execute_python_source(
         python_source,
@@ -105,7 +105,7 @@ def execute_runner_stream():
         return jsonify({"error": "No Python source is available for execution."}), 400
 
     payload = request.get_json(silent=True) or {}
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
 
     def generate():
@@ -136,7 +136,7 @@ def initialize_runner_stream():
     if not python_source:
         return jsonify({"error": "No Python source is available for initialization."}), 400
 
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
 
     def generate():
@@ -162,7 +162,7 @@ def update_runner_name():
     payload = request.get_json(silent=True) or {}
     python_source = build_python_source_from_builder_choice("name", str(payload.get("name", "")), python_source)
     session["python_source"] = python_source
-    session["runner_endpoint_selections"] = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
     _store_builder_name(get_workflow_summary(python_source).name)
     workflow_summary = get_workflow_summary(python_source)
@@ -191,7 +191,7 @@ def update_runner_description():
     payload = request.get_json(silent=True) or {}
     python_source = build_python_source_from_builder_choice("description", str(payload.get("description", "")), python_source)
     session["python_source"] = python_source
-    session["runner_endpoint_selections"] = normalize_endpoint_selections(python_source, session.get("runner_endpoint_selections") or {})
+    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
     return jsonify(
         {

@@ -115,7 +115,7 @@ def _clear_selected_agent_state() -> None:
     session.pop("agent_owner", None)
     session.pop("builder_form_state", None)
     session.pop("builder_has_user_config", None)
-    session.pop("runner_endpoint_selections", None)
+    session.pop("endpoint_bindings", None)
     session.pop("builder_upload_id", None)
 
 
@@ -123,6 +123,7 @@ def _store_loaded_agent(result: dict[str, object]) -> None:
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
 
 
 def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials, *, origin: str | None = None) -> dict[str, object]:

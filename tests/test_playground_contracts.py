@@ -8,6 +8,7 @@ from agentic_sdk.core.events import default_events_schema
 from playground.app import create_app
 from playground.routes import builder as builder_routes
 from playground.routes import runner as runner_routes
+from playground.services import model_endpoints
 from playground.services import runner_service
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
 from playground.services.workflow_reachability import reachable_workflow_roles
@@ -41,6 +42,19 @@ def test_builder_choices_map_to_runtime_modules():
     assert interactive.action_module == "ToolCallAction"
     assert "action" in reachable_workflow_roles(free_text)
     assert "action" in reachable_workflow_roles(interactive)
+
+
+def test_endpoint_binding_missing_is_distinct_from_missing_credentials(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_FAST_MODEL", "gpt-test")
+    monkeypatch.setenv("PLAYGROUND_FAST_BASE_URL", "https://models.example")
+    monkeypatch.setenv("PLAYGROUND_FAST_API_KEY", "test-key")
+
+    with __import__("pytest").raises(model_endpoints.MissingEndpointBinding):
+        model_endpoints.endpoint_params_for_role("perceive", {})
+
+    monkeypatch.delenv("PLAYGROUND_FAST_API_KEY")
+    with __import__("pytest").raises(model_endpoints.MissingEndpointCredentials):
+        model_endpoints.endpoint_params_for_role("perceive", {"perceive": "playground-fast"})
 
 
 def test_interactive_action_contract_roundtrips_to_boolean_tool_schema():
