@@ -134,13 +134,18 @@ export async function streamResultMarkdown(element, message, { onUpdate } = {}) 
     onUpdate?.();
     return;
   }
-  const chunks = streamChunks(content);
+  const streamedContent = content.slice(0, 960);
+  const chunks = streamChunks(streamedContent);
   let rendered = "";
   for (const chunk of chunks) {
     rendered += chunk;
     renderMarkdown(element, rendered);
     onUpdate?.();
     await wait(streamDelayFor(chunk));
+  }
+  if (streamedContent.length < content.length) {
+    renderMarkdown(element, content);
+    onUpdate?.();
   }
 }
 
