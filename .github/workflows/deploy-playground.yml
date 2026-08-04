@@ -120,6 +120,8 @@ jobs:
 
       - name: Configure App Service runtime
         uses: azure/CLI@v2
+        continue-on-error: true
+        timeout-minutes: 3
         with:
           azcliversion: latest
           inlineScript: |
