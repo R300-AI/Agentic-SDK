@@ -1805,13 +1805,15 @@ a { color: inherit; text-decoration: none; }
 }
 
 .user-message {
-  grid-template-columns: minmax(0, 1fr) 2.25rem;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
   width: min(100%, 48rem);
   justify-self: end;
 }
 
-.user-message .message-avatar { grid-column: 2; grid-row: 1; }
-.user-message .message-bubble { grid-column: 1; grid-row: 1; }
+.user-message .message-avatar { flex: 0 0 2.25rem; }
+.user-message .message-bubble { min-width: 0; flex: 1 1 auto; }
 .assistant-message { width: min(100%, 52rem); }
 
 .message-avatar {
