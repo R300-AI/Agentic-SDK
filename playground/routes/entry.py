@@ -96,6 +96,7 @@ def navigate_from_aihub_to_runner():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
     bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
         return _navigation_login_error(_semantic_bundle_restore_error(bundle_result)), 502
@@ -120,6 +121,7 @@ def navigate_from_shared_agent_to_runner():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
     session["source_origin"] = "aihub_shared_readonly"
     return redirect(url_for("runner.runner"))
 
@@ -185,6 +187,7 @@ def select_agent():
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
     session["python_source"] = result["python_source"]
+    session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
     bundle_result = _restore_selected_agent_bundle(str(result["agent_id"]), credentials)
     if _semantic_bundle_required_for_result(result) and not bundle_result.get("bundle_restored"):
         agents_result = list_agents(credentials=credentials, origin=request.host_url)
