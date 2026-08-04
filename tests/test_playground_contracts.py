@@ -157,6 +157,32 @@ def test_runner_execute_routes_forward_attachment_payloads(monkeypatch):
     ]
 
 
+def test_atomic_runner_metadata_update_compiles_the_current_v2_spec():
+    app = create_app()
+    app.config.update(TESTING=True)
+    spec = default_spec()
+
+    with app.test_client() as client:
+        with client.session_transaction() as session:
+            session["workflow_spec"] = spec
+            session["python_source"] = build_default_python_source()
+
+        response = client.post(
+            "/playground/run/metadata",
+            json={
+                "name": "Metadata contract verification",
+                "description": "Keep name and description in one v2 mutation.",
+            },
+        )
+        preview = client.get("/playground/source/preview")
+
+    assert response.status_code == 200
+    assert response.get_json()["workflow_summary"]["name"] == "Metadata contract verification"
+    assert preview.status_code == 200
+    assert 'workflow_name="Metadata contract verification"' in preview.get_data(as_text=True)
+    assert "Keep name and description in one v2 mutation." in preview.get_data(as_text=True)
+
+
 def test_semantic_builder_upload_unblocks_review_and_reaches_runner(monkeypatch):
     app = create_app()
     app.config.update(TESTING=True)

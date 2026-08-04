@@ -220,6 +220,44 @@ def update_runner_description():
     )
 
 
+@runner_bp.post("/metadata")
+def update_runner_metadata():
+    python_source = session.get("python_source")
+    if not python_source:
+        return jsonify({"updated": False, "error": "No Python source is available for metadata updates."}), 400
+    if not get_mode_context().can_edit:
+        return jsonify({"updated": False, "error": "This runner is read-only."}), 403
+
+    payload = request.get_json(silent=True) or {}
+    spec = session.get("workflow_spec")
+    if isinstance(spec, dict) and spec.get("version") == "2":
+        spec = apply_builder_step(spec, "name", str(payload.get("name", "")))
+        spec = apply_builder_step(spec, "description", str(payload.get("description", "")))
+        session["workflow_spec"] = spec
+        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+    else:
+        python_source = build_python_source_from_builder_choice("name", str(payload.get("name", "")), python_source)
+        python_source = build_python_source_from_builder_choice("description", str(payload.get("description", "")), python_source)
+    session["python_source"] = python_source
+    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    session["builder_has_user_config"] = True
+    _store_builder_name(get_workflow_summary(python_source).name)
+    workflow_summary = get_workflow_summary(python_source)
+    return jsonify(
+        {
+            "updated": True,
+            "workflow_summary": {
+                "name": workflow_summary.name,
+                "input_contract": workflow_summary.input_contract,
+                "template": workflow_summary.template,
+                "output_contract": workflow_summary.output_contract,
+                "readiness": workflow_summary.readiness,
+            },
+            "description": (str(spec.get("description") or "") if isinstance(spec, dict) and spec.get("version") == "2" else config_from_source(python_source).task_goal or ""),
+        }
+    )
+
+
 def _public_execution_payload(execution: dict[str, object]) -> dict[str, object]:
     result = execution.get("result")
     if isinstance(result, dict):

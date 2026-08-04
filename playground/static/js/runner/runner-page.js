@@ -603,14 +603,21 @@ function closeWorkflowInfoModal() {
 }
 
 async function applyWorkflowInfo() {
-	await commitWorkflowName();
-	if (workflowRenameRequest) {
-		await workflowRenameRequest;
+	const nextName = sideWorkflowTitleInput?.value.trim() || workflowName;
+	const nextDescription = workflowDescriptionInput?.value.trim() || "";
+	let result;
+	try {
+		result = await postJson("/playground/run/metadata", { name: nextName, description: nextDescription });
+	} catch (error) {
+		result = { updated: false, error: error.message || "更新 Agent 基本資料失敗。" };
 	}
-	await commitWorkflowDescription();
-	if (workflowDescriptionRequest) {
-		await workflowDescriptionRequest;
+	if (!result.updated) {
+		showSavePanel(savePanel, result.error || "更新 Agent 基本資料失敗。");
+		return;
 	}
+	renderWorkflowName(result.workflow_summary?.name || nextName);
+	renderWorkflowDescription(result.description ?? nextDescription);
+	refreshSaveStatus();
 }
 
 async function saveCurrentWorkflow() {
