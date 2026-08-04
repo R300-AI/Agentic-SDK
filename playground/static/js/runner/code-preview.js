@@ -19,10 +19,16 @@ export function bindCodePreview(toggles, modal) {
     modal.hidden = false;
     modal.classList.add("open");
     modal.dataset.open = "true";
-    code?.replaceChildren();
+    if (code) {
+      const loading = document.createElement("p");
+      loading.textContent = "正在載入程式碼...";
+      code.replaceChildren(loading);
+    }
     closeButton?.focus();
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch("/playground/source/preview", { cache: "no-store" });
+      const response = await fetch("/playground/source/preview", { cache: "no-store", signal: controller.signal });
       if (!response.ok) {
         throw new Error(`source preview failed with ${response.status}`);
       }
@@ -34,9 +40,11 @@ export function bindCodePreview(toggles, modal) {
     } catch (error) {
       if (code) {
         const paragraph = document.createElement("p");
-        paragraph.textContent = "程式碼載入失敗，請關閉後重新預覽。";
+        paragraph.textContent = error.name === "AbortError" ? "程式碼載入逾時，請關閉後重新預覽。" : "程式碼載入失敗，請關閉後重新預覽。";
         code.replaceChildren(paragraph);
       }
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }
 

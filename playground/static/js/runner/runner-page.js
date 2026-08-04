@@ -1,6 +1,6 @@
 import { postJson, postJsonStream } from "../shared/api-client.js";
 import { bindAttachmentPicker } from "./artifact-panel.js";
-import { bindCodePreview } from "./code-preview.js?v=copy-redesign";
+import { bindCodePreview } from "./code-preview.js?v=preview-feedback-v1";
 import { bindInputComposer } from "./input-composer.js";
 import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js";
 import { showSavePanel } from "./save-panel.js";
