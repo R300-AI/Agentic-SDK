@@ -4,6 +4,8 @@ import json
 from io import BytesIO
 from pathlib import Path
 
+from flask import session
+
 from agentic_sdk.core import WorkflowResult, WorkflowState
 from agentic_sdk.core.events import default_events_schema
 from playground.app import create_app
@@ -12,6 +14,7 @@ from playground.routes import runner as runner_routes
 from playground.services import key_vault_config
 from playground.services import model_endpoints
 from playground.services import runner_service
+from playground.services.aihub_bridge import store_loaded_agent
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
 from playground.services.workflow_spec import apply_builder_step, default_spec
 from playground.services.workflow_reachability import reachable_workflow_roles
@@ -326,6 +329,27 @@ def test_v2_source_preview_preserves_renamed_workflow():
     assert response.status_code == 200
     assert 'workflow_name="Contract verification"' in compiled_source
     assert 'workflow_name="Contract verification"' in response.get_data(as_text=True)
+
+
+def test_loading_v2_agent_compiles_canonical_execution_source():
+    app = create_app()
+    app.config.update(TESTING=True)
+    spec = apply_builder_step(default_spec(), "output_format", "free_text")
+
+    with app.test_request_context():
+        store_loaded_agent(
+            {
+                "agent_id": "agent-1",
+                "agent_name": "Stored Agent",
+                "python_source": build_default_python_source(),
+                "endpoint_bindings": {"action": "gpt-54"},
+                "workflow_spec": spec,
+                "runner_presentation": {},
+            }
+        )
+        config = config_from_source(session["python_source"])
+
+    assert config.action_module == "GenerativeAction"
 
 
 def test_runner_starter_questions_use_session_metadata_not_python_source():

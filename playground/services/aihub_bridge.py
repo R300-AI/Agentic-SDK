@@ -7,7 +7,7 @@ from flask import session
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
 from playground.services.aihub_client import AiHubCredentials, bridge_credentials, exchange_handoff_token, issue_credential_ticket, load_config, load_public_config
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
-from playground.services.workflow_spec import default_runner_presentation
+from playground.services.workflow_spec import compile_python_source, default_runner_presentation
 
 
 def has_builder_bridge_query(args: Mapping[str, object]) -> bool:
@@ -119,14 +119,15 @@ def _clear_selected_agent_state() -> None:
 def store_loaded_agent(result: dict[str, object]) -> None:
     session["agent_id"] = result["agent_id"]
     session["agent_name"] = result.get("agent_name") or ""
-    session["python_source"] = result["python_source"]
     session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
     spec = result.get("workflow_spec")
     if isinstance(spec, dict) and spec.get("version") == "2":
         session["workflow_spec"] = spec
+        session["python_source"] = compile_python_source(spec)
         presentation = result.get("runner_presentation")
         session["runner_presentation"] = presentation if isinstance(presentation, dict) else default_runner_presentation()
     else:
+        session["python_source"] = result["python_source"]
         session.pop("workflow_spec", None)
         session.pop("runner_presentation", None)
     session.pop("builder_form_state", None)
