@@ -1258,7 +1258,7 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
                 "label": _tool_call_field_label(str(name), field_type),
                 "type": field_type,
                 "panel_type": f"tool-call-panel-{field_type}",
-                "description": _tool_call_field_description(field_schema, field_type),
+                "description": "",
                 "required": str(name) in required_names,
                 "value": "" if field_type == "boolean" else (value if value is not None else ""),
                 "choices": _tool_call_field_choices(str(name), field_type),
@@ -1279,8 +1279,8 @@ def _tool_call_field_choices(name: str, field_type: str) -> list[dict[str, objec
     if field_type != "boolean":
         return []
     return [
-        {"value": True, "label": "是", "description": f"我同意：{name}。"},
-        {"value": False, "label": "否", "description": f"我暫不進行：{name}。"},
+        {"value": True, "label": "是", "description": ""},
+        {"value": False, "label": "否", "description": ""},
     ]
 
 

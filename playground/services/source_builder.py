@@ -848,8 +848,14 @@ def _tool_parameters_from_pairs(raw_pairs: str) -> dict[str, object]:
         if not key or key in properties:
             continue
         properties[key] = {"type": json_type, "description": description or key}
-        required.append(key)
+        if not _is_optional_tool_field(description):
+            required.append(key)
     return {"properties": properties, "required": required}
+
+
+def _is_optional_tool_field(description: str) -> bool:
+    normalized = str(description or "").lower()
+    return any(marker in normalized for marker in ("可留空", "選填", "非必填", "optional"))
 
 
 def _field_description_and_json_type(raw_value: str) -> tuple[str, str]:

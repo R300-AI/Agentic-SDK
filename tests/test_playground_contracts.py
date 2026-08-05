@@ -964,10 +964,37 @@ def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
     assert result["tool_call_panels"][0]["description"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["type"] == "boolean"
     assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否通知門市人員帶實體鞋墊說明"
-    assert result["tool_call_panels"][0]["fields"][0]["description"] == "只有顧客明確同意後才填 true；尚未回答時保持未知"
+    assert result["tool_call_panels"][0]["fields"][0]["description"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["value"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["choices"] == [
-        {"value": True, "label": "是", "description": "我同意：是否通知門市人員帶實體鞋墊說明。"},
-        {"value": False, "label": "否", "description": "我暫不進行：是否通知門市人員帶實體鞋墊說明。"},
+        {"value": True, "label": "是", "description": ""},
+        {"value": False, "label": "否", "description": ""},
     ]
     assert result["tool_call_panels"][0]["api"] == {"method": "POST", "url": "https://example.com/confirm"}
+
+
+def test_runner_tool_panel_renderer_omits_empty_field_hints():
+    renderer_source = (Path(__file__).parents[1] / "playground/static/js/runner/result-surface.js").read_text(encoding="utf-8")
+
+    assert 'const hintText = String(field.description || "").trim();' in renderer_source
+    assert "if (hintText)" in renderer_source
+    assert "field.description || dataTypeLabel(field.type)" not in renderer_source
+    assert "function dataTypeLabel" not in renderer_source
+
+
+def test_interactive_optional_field_is_not_required_in_tool_schema():
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)\n顧客補充需求 = 顧客可補充的需求；可留空。",
+        },
+        source,
+    )
+
+    parameters = config_from_source(source).action_tools[0]["function"]["parameters"]
+
+    assert parameters["required"] == ["是否確認"]

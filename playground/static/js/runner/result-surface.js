@@ -351,11 +351,15 @@ function createToolCallFieldPanel(field) {
   label.className = "tool-call-field-label";
   const name = document.createElement("span");
   name.textContent = field.required ? `${field.label} *` : field.label;
-  const hint = document.createElement("small");
-  hint.textContent = field.description || dataTypeLabel(field.type);
-
   const control = createToolCallControl(field);
-  label.append(name, hint, control);
+  label.append(name);
+  const hintText = String(field.description || "").trim();
+  if (hintText) {
+    const hint = document.createElement("small");
+    hint.textContent = hintText;
+    label.append(hint);
+  }
+  label.append(control);
   panel.append(label);
   return panel;
 }
@@ -403,16 +407,6 @@ function createBooleanChoice(field, value, labelText, checked, descriptionText =
     label.append(description);
   }
   return label;
-}
-
-function dataTypeLabel(type) {
-  if (type === "number") {
-    return "數字資料";
-  }
-  if (type === "boolean") {
-    return "是/否確認";
-  }
-  return "文字選項";
 }
 
 function collectToolCallPayload(form) {
