@@ -11,12 +11,21 @@ _DOCUMENT_FACT_TERMS = (
     "目錄",
     "產品編號",
     "商品編號",
+    "sku",
     "品號",
     "價格",
     "價錢",
     "型號",
     "規格",
     "限制",
+    "庫存",
+    "現貨",
+    "展示品",
+    "試穿",
+    "取貨",
+    "調貨",
+    "到貨",
+    "門市",
 )
 _SYSTEM_PROMPT = (
     "PLAN. Decide whether the next module should be retrieve or action. "

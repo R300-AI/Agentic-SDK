@@ -329,6 +329,21 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         self.assertEqual("retrieve", output["next_module"])
 
+    def test_next_step_plan_retrieves_retail_sku_and_availability_before_action(self) -> None:
+        state = WorkflowState(user_message="SKU 7037191 有現貨、展示品或調貨資訊嗎？")
+        state.append(
+            ContextEntry(
+                type=ContextEntryType.PERCEIVED,
+                content="intent=store_availability",
+                metadata={"intent": "store_availability"},
+            )
+        )
+
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient(plan_sequence=["action"])):
+            output = NextStepPlan(retrieve_description="LaNew catalog", **_llm_params())(state)
+
+        self.assertEqual("retrieve", output["next_module"])
+
     def test_keyword_retrieve_hits_expected_items(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         state.payload["query"] = "tsip"

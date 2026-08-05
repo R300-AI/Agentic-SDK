@@ -319,7 +319,7 @@ def build_python_source_from_builder_choice(step_key: str, choice_label: object,
             payload_tools = _tools_from_action_payload(choice_label) if _payload_has_interactive_contract(choice_label) else ()
             action_module = "ToolCallAction" if payload_tools else config.action_module
             action_tools = payload_tools or (config.action_tools if action_module == "ToolCallAction" else ())
-            action_tool_choice = "none" if payload_tools else (config.action_tool_choice if action_module == "ToolCallAction" else None)
+            action_tool_choice = "auto" if payload_tools else (config.action_tool_choice if action_module == "ToolCallAction" else None)
             if action_module == "GenerativeAction" and config.profile_hint == "Structured Result":
                 action_prompt = _fixed_format_action_prompt_from_payload(choice_label, action_prompt)
             updated = _replace_config(
@@ -847,8 +847,6 @@ def _tool_parameters_from_pairs(raw_pairs: str) -> dict[str, object]:
         description, json_type = _field_description_and_json_type(raw_value)
         if not key or key in properties:
             continue
-        if json_type == "boolean" and "暫定" not in description:
-            description = f"{description or key}。若使用者尚未回答，請先用 false 作為暫定值來顯示確認面板。"
         properties[key] = {"type": json_type, "description": description or key}
         required.append(key)
     return {"properties": properties, "required": required}
