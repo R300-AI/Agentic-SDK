@@ -105,6 +105,8 @@ def test_interactive_panel_submission_releases_pending_state():
     assert 'confirmButton.disabled = true;' in surface_source
     assert 'form.addEventListener("runner:tool-call-complete"' in surface_source
     assert 'status.textContent = "已送出選擇。";' in surface_source
+    assert 'const hasBooleanValue = field.value === true || field.value === false' in surface_source
+    assert 'hasBooleanValue && (value ? booleanValue : !booleanValue)' in surface_source
     assert 'event.target?.dispatchEvent(new CustomEvent("runner:tool-call-complete"));' in runner_source
 
 

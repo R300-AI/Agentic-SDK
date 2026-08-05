@@ -364,14 +364,16 @@ function createToolCallControl(field) {
   if (field.type === "boolean") {
     const wrapper = document.createElement("div");
     wrapper.className = "tool-call-choice-list";
-    const booleanValue = field.value === true || String(field.value).toLowerCase() === "true";
+    const rawBooleanValue = String(field.value).toLowerCase();
+    const booleanValue = field.value === true || rawBooleanValue === "true";
+    const hasBooleanValue = field.value === true || field.value === false || rawBooleanValue === "true" || rawBooleanValue === "false";
     const choices = field.choices.length ? field.choices : [
       { value: true, label: "是", description: "" },
       { value: false, label: "否", description: "" },
     ];
     choices.forEach((choice) => {
       const value = choice.value === true || String(choice.value).toLowerCase() === "true";
-      wrapper.append(createBooleanChoice(field, value, choice.label, value ? booleanValue : !booleanValue, choice.description));
+      wrapper.append(createBooleanChoice(field, value, choice.label, hasBooleanValue && (value ? booleanValue : !booleanValue), choice.description));
     });
     return wrapper;
   }
