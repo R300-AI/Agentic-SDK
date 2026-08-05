@@ -94,7 +94,7 @@ def execute_runner():
     payload = request.get_json(silent=True) or {}
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
-    conversation_state = _runner_conversation_state(python_source)
+    conversation_state = _append_normal_user_turn(python_source, payload)
     execution = execute_python_source(
         python_source,
         message=str(payload.get("message", "")),
@@ -120,7 +120,7 @@ def execute_runner_stream():
     payload = request.get_json(silent=True) or {}
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
-    conversation_state = _runner_conversation_state(python_source)
+    conversation_state = _append_normal_user_turn(python_source, payload)
 
     def generate():
         for item in stream_python_source_execution(
@@ -155,6 +155,8 @@ def commit_runner_conversation():
     update = payload.get("conversation_update")
     current = _runner_conversation_state(python_source)
     candidate = RunnerConversationState.from_dict(update, python_source=python_source)
+    if candidate.as_dict() == current.as_dict():
+        return jsonify({"committed": True, "conversation": current.as_dict()})
     if candidate.conversation_id != current.conversation_id or candidate.revision != current.revision + 1:
         return jsonify(
             {
@@ -326,9 +328,21 @@ def _runner_conversation_state(python_source: str) -> RunnerConversationState:
 def _ensure_runner_conversation_state(python_source: str) -> RunnerConversationState:
     current = _runner_conversation_state(python_source)
     stored = session.get(_CONVERSATION_SESSION_KEY)
-    if not isinstance(stored, dict) or stored.get("workflow_fingerprint") != current.workflow_fingerprint:
+    if not isinstance(stored, dict) or stored != current.as_dict():
         session[_CONVERSATION_SESSION_KEY] = current.as_dict()
     return current
+
+
+def _append_normal_user_turn(python_source: str, payload: dict[str, object]) -> RunnerConversationState:
+    current = _runner_conversation_state(python_source)
+    if isinstance(payload.get("tool_call_submission"), dict):
+        return current
+    message = str(payload.get("message") or "").strip()
+    if not message:
+        return current
+    candidate = current.append_user(message)
+    session[_CONVERSATION_SESSION_KEY] = candidate.as_dict()
+    return candidate
 
 
 @runner_bp.get("/profile")

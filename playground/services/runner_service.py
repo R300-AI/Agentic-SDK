@@ -18,7 +18,7 @@ from agentic_sdk.core.events import WORKFLOW_MODULE_NAMES, default_event_label
 
 from playground.models import RunnerSceneProfile
 from playground.services.model_endpoints import MissingEndpointCredentials, endpoint_params_for_role
-from playground.services.runner_conversation import RunnerConversationState
+from playground.services.runner_conversation import RunnerConversationState, RunnerConversationTurn
 from playground.services.source_builder import BuilderSourceConfig, config_from_source
 from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
@@ -145,7 +145,7 @@ def execute_python_source(
             )
         else:
             workflow_result = workflow.run(
-                user_message,
+                user_message=None if conversation_state else user_message,
                 memory=conversation_state.memory(workflow_name=execution_workflow_name) if conversation_state else None,
                 session_id=conversation_state.conversation_id if conversation_state else None,
                 attachments=parsed_attachments,
@@ -222,7 +222,12 @@ def execute_python_source(
         "visit_counts": workflow_result.visit_counts,
         "abort_reason": handoff_reason or workflow_result.abort_reason,
         "source_execution": source_execution,
-        "conversation_update": conversation_state.update_from_result(workflow_result).as_dict() if conversation_state else None,
+        "conversation_update": _conversation_update(
+            conversation_state,
+            final_message,
+            retrieval_evidence=_retrieval_evidence_from_result(workflow_result),
+            tool_submission_context=tool_submission_context,
+        ),
     }
 
 
@@ -403,6 +408,37 @@ def _message_with_tool_submission(message: str, context: dict[str, object] | Non
         parts.append("API 工具回傳結果：")
         parts.append(json.dumps(api_result, ensure_ascii=False, indent=2))
     return "\n".join(parts)
+
+
+def _conversation_update(
+    conversation_state: RunnerConversationState | None,
+    final_message: str,
+    *,
+    retrieval_evidence: str,
+    tool_submission_context: dict[str, object] | None,
+) -> dict[str, object] | None:
+    if conversation_state is None:
+        return None
+    turns: list[RunnerConversationTurn] = []
+    if tool_submission_context is not None:
+        internal_metadata = {
+            "visibility": "internal",
+            "source": "tool_call_submission",
+            "function_name": str(tool_submission_context.get("function_name") or "tool_call"),
+        }
+        turns.append(RunnerConversationTurn(role="user", content=_tool_submission_memory_message(tool_submission_context), metadata=internal_metadata))
+        outcome = _tool_submission_outcome_message(tool_submission_context)
+        if outcome:
+            turns.append(RunnerConversationTurn(role="assistant", content=outcome, metadata=internal_metadata))
+    turns.append(RunnerConversationTurn(role="assistant", content=final_message))
+    return conversation_state.append_turns(tuple(turns), retrieval_evidence=retrieval_evidence).as_dict()
+
+
+def _tool_submission_outcome_message(context: dict[str, object]) -> str:
+    api_result = context.get("api_result")
+    if not isinstance(api_result, dict):
+        return ""
+    return "工具執行結果：\n" + json.dumps(api_result, ensure_ascii=False, indent=2)
 
 
 def _tool_api_for_submission(action_tools: tuple[dict[str, object], ...], submission: dict[str, object], function_name: str) -> dict[str, str] | None:
@@ -824,6 +860,11 @@ def _latest_entry(entries: list[ContextEntry], entry_type: ContextEntryType) -> 
         if _entry_type(entry) == entry_type.value:
             return entry
     return None
+
+
+def _retrieval_evidence_from_result(workflow_result: WorkflowResult) -> str:
+    entry = _latest_entry(workflow_result.entries, ContextEntryType.RETRIEVED)
+    return str(entry.content or "").strip() if entry is not None else ""
 
 
 def _entry_type(entry: ContextEntry) -> str:

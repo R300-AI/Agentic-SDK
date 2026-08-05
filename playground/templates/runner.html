@@ -81,6 +81,12 @@
             <p data-user-message-text></p>
           </div>
         </article>
+        <article class="chat-message user-message user-interaction-message" data-user-interaction-message hidden>
+          <div class="message-avatar user-avatar" aria-hidden="true">你</div>
+          <div class="message-bubble user-bubble user-interaction-bubble assistant-bubble">
+            <div class="tool-call-panel-list" data-user-interaction-panels aria-label="等待你的選擇" hidden></div>
+          </div>
+        </article>
         <article class="chat-message assistant-message" data-result-surface hidden>
           {% set workflow_initial_source = workflow_summary.name|trim %}
           {% set workflow_initial_first = workflow_initial_source[:1] %}
@@ -94,7 +100,6 @@
             <div class="assistant-response" aria-live="polite">
               <div class="process-trace" data-process-trace aria-label="AI 處理過程" hidden></div>
               <div class="markdown-output" data-result-message></div>
-              <div class="tool-call-panel-list" data-tool-call-panels aria-label="工具呼叫互動面板" hidden></div>
             </div>
           </div>
           <div class="message-debug" data-debug-status hidden></div>

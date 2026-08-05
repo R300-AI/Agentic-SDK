@@ -207,7 +207,7 @@ def test_runner_execute_routes_forward_attachment_payloads(monkeypatch):
     ]
 
 
-def test_runner_conversation_state_restores_ordered_turns_and_resets_for_new_workflow():
+def test_runner_conversation_state_restores_ordered_turns_across_source_changes():
     first = RunnerConversationState.for_workflow("workflow = 'first'")
     restored = RunnerConversationState.from_dict(
         {
@@ -224,7 +224,8 @@ def test_runner_conversation_state_restores_ordered_turns_and_resets_for_new_wor
 
     assert [turn.role for turn in memory.turns] == ["user", "assistant"]
     assert memory.turns[-1].content == "推薦科技鞋墊 加強型，SKU 7037439。"
-    assert RunnerConversationState.from_dict(restored.as_dict(), python_source="workflow = 'changed'").turns == ()
+    changed = RunnerConversationState.from_dict(restored.as_dict(), python_source="workflow = 'changed'")
+    assert [turn.content for turn in changed.turns] == ["我有高足弓", "推薦科技鞋墊 加強型，SKU 7037439。"]
 
 
 def test_runner_conversation_memory_exposes_prior_retrieval_evidence_to_modules():
@@ -254,13 +255,13 @@ def test_runner_execution_injects_conversation_memory_into_workflow(monkeypatch)
             ],
         },
         python_source=source,
-    )
+    ).append_user("台北信義區")
 
     class FakeWorkflow:
-        def run(self, _message, **kwargs):
+        def run(self, *, user_message=None, **kwargs):
             captured.update(kwargs)
+            captured["user_message"] = user_message
             memory = kwargs["memory"]
-            memory.append_message("user", _message)
             memory.append_message("assistant", "已保留高足弓推薦。")
             return WorkflowResult(workflow_id="workflow", final_message="已保留高足弓推薦。", memory=memory)
 
@@ -269,6 +270,7 @@ def test_runner_execution_injects_conversation_memory_into_workflow(monkeypatch)
     execution = runner_service.execute_python_source(source, message="台北信義區", conversation_state=state)
 
     assert captured["session_id"] == state.conversation_id
+    assert captured["user_message"] is None
     assert [turn.content for turn in captured["memory"].turns[:2]] == ["我有高足弓", "推薦科技鞋墊 加強型，SKU 7037439。"]
     assert execution["conversation_update"]["turns"][-1]["content"] == "已保留高足弓推薦。"
 
@@ -316,6 +318,32 @@ def test_tool_continuation_extends_the_same_conversation_memory():
     assert conversation.update_from_result(result).retrieval_evidence == "科技鞋墊 加強型，SKU 7037439。"
 
 
+def test_tool_submission_update_keeps_selection_and_api_outcome_internal():
+    source = build_default_python_source()
+    conversation = RunnerConversationState.for_workflow(source)
+
+    update = runner_service._conversation_update(
+        conversation,
+        "已完成門市協助需求。",
+        retrieval_evidence="",
+        tool_submission_context={
+            "function_name": "門市協助",
+            "arguments": {"是否通知": False},
+            "api_result": {"ok": True, "status_code": 200},
+        },
+    )
+
+    assert update is not None
+    turns = update["turns"]
+    assert [turn["role"] for turn in turns] == ["user", "assistant", "assistant"]
+    assert turns[0]["metadata"]["visibility"] == "internal"
+    assert "是否通知" in turns[0]["content"]
+    assert turns[1]["metadata"]["visibility"] == "internal"
+    assert "status_code" in turns[1]["content"]
+    assert turns[2]["content"] == "已完成門市協助需求。"
+    assert update["revision"] == conversation.revision + 1
+
+
 def test_runner_conversation_commit_persists_one_expected_revision(monkeypatch):
     app = create_app()
     app.config.update(TESTING=True)
@@ -336,16 +364,58 @@ def test_runner_conversation_commit_persists_one_expected_revision(monkeypatch):
             ],
         }
         committed = client.post("/playground/run/conversation/commit", json={"conversation_update": update})
-        conflict = client.post("/playground/run/conversation/commit", json={"conversation_update": update})
+        idempotent = client.post("/playground/run/conversation/commit", json={"conversation_update": update})
+        conflict = client.post(
+            "/playground/run/conversation/commit",
+            json={
+                "conversation_update": {
+                    **update,
+                    "turns": [
+                        {"role": "user", "content": "高足弓適合哪款？"},
+                        {"role": "assistant", "content": "不同的過期回覆。"},
+                    ],
+                }
+            },
+        )
 
         with client.session_transaction() as current_session:
             stored = current_session["runner_conversation"]
 
     assert committed.status_code == 200
     assert committed.json["committed"] is True
+    assert idempotent.status_code == 200
+    assert idempotent.json["committed"] is True
     assert stored["turns"][-1]["content"] == "科技鞋墊 加強型，SKU 7037439。"
     assert conflict.status_code == 409
     assert conflict.json["conflict"] is True
+
+
+def test_runner_persists_normal_user_turn_before_execution(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+    source = build_default_python_source()
+    captured = {}
+
+    def fake_execute(_source, **kwargs):
+        captured["conversation"] = kwargs["conversation_state"]
+        return {"status": "ok", "final_message": "已處理", "result": {}, "conversation_update": None}
+
+    monkeypatch.setattr(runner_routes, "execute_python_source", fake_execute)
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["python_source"] = source
+            current_session["runner_conversation"] = RunnerConversationState.for_workflow(source).as_dict()
+
+        response = client.post("/playground/run/execute", json={"message": "我有高足弓"})
+
+        with client.session_transaction() as current_session:
+            stored = current_session["runner_conversation"]
+
+    assert response.status_code == 200
+    assert [turn.content for turn in captured["conversation"].turns] == ["我有高足弓"]
+    assert captured["conversation"].revision == 1
+    assert stored["turns"] == [{"role": "user", "content": "我有高足弓", "metadata": {}}]
 
 
 def test_runner_page_initializes_conversation_state_for_first_turn():
@@ -780,7 +850,8 @@ def test_streaming_execute_route_forwards_finish_fields_as_ndjson_process_events
         }
 
     class FakeWorkflow:
-        def run(self, _message, *, event_callback=None, **_kwargs):
+        def run(self, *, user_message=None, event_callback=None, **_kwargs):
+            assert user_message is None
             assert event_callback is not None
             state = WorkflowState(user_message="測試輸入", workflow_id="workflow-1", session_id="session-1")
             events = [

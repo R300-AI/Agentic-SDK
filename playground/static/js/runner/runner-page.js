@@ -10,6 +10,7 @@ const runStatus = document.querySelector("[data-run-status]");
 const resultThread = document.querySelector("[data-result-thread]");
 const resultSurface = document.querySelector("[data-result-surface]");
 const userMessage = document.querySelector("[data-user-message]");
+const userInteractionMessage = document.querySelector("[data-user-interaction-message]");
 const emptyMessage = document.querySelector("[data-empty-message]");
 const starterQuestions = document.querySelector("[data-starter-questions]");
 const saveButton = document.querySelector("[data-save-action]");
@@ -66,6 +67,7 @@ const initialSaveStatusText = saveStatus?.textContent?.trim() || "";
 let savedWorkflowName = initialSaveStatusText === "尚未儲存" ? null : workflowName;
 let savedWorkflowDescription = initialSaveStatusText === "尚未儲存" ? null : workflowDescription;
 let lastStableSaveStatusText = initialSaveStatusText && initialSaveStatusText !== "儲存中..." ? initialSaveStatusText : "已儲存";
+let pendingUserInteraction = null;
 
 function setSidebarCollapsed(collapsed) {
 	if (!runnerPage || !runnerSidebar || !sidebarToggle) {
@@ -515,11 +517,19 @@ async function commitConversationUpdate(update) {
 	if (!update || typeof update !== "object") {
 		return true;
 	}
-	const result = await postJson("/playground/run/conversation/commit", { conversation_update: update });
-	if (result.committed) {
-		return true;
+	let lastError;
+	for (let attempt = 0; attempt < 2; attempt += 1) {
+		try {
+			const result = await postJson("/playground/run/conversation/commit", { conversation_update: update });
+			if (result.committed) {
+				return true;
+			}
+			lastError = new Error(result.error || "對話內容無法保存，請重新送出。");
+		} catch (error) {
+			lastError = error;
+		}
 	}
-	throw new Error(result.error || "對話內容無法保存，請重新送出。" );
+	throw lastError || new Error("對話內容無法保存，請重新送出。");
 }
 
 function toolSubmissionDisplay(submission) {
@@ -554,9 +564,28 @@ function appendAssistantSurface() {
 		bubble: surface.querySelector("[data-result-bubble]"),
 		processTrace: surface.querySelector("[data-process-trace]"),
 		message: surface.querySelector("[data-result-message]"),
-		toolCallPanels: surface.querySelector("[data-tool-call-panels]"),
 		debugStatus: surface.querySelector("[data-debug-status]"),
 	};
+}
+
+function appendUserInteractionPanels(panels) {
+	if (!resultThread || !userInteractionMessage) {
+		return null;
+	}
+	const interaction = userInteractionMessage.cloneNode(true);
+	const panelList = interaction.querySelector("[data-user-interaction-panels]");
+	setToolCallPanels(panelList, panels);
+	interaction.hidden = false;
+	resultThread.append(interaction);
+	return interaction;
+}
+
+function discardPendingUserInteraction() {
+	if (!pendingUserInteraction) {
+		return;
+	}
+	pendingUserInteraction.remove();
+	pendingUserInteraction = null;
 }
 
 function setSurfaceBusy(surface, isBusy) {
@@ -764,6 +793,8 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	}
 	if (submittedToolCall) {
 		requestPayload.tool_call_submission = submittedToolCall;
+	} else {
+		discardPendingUserInteraction();
 	}
 	hideStarterQuestions();
 	if (showUserMessage) {
@@ -784,7 +815,6 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	}
 	setDebugMessages(assistant.debugStatus, []);
 	setResultMessage(assistant.message, "");
-	setToolCallPanels(assistant.toolCallPanels, []);
 	let liveProcessShown = false;
 	clearProcessEvents(assistant.processTrace);
 	if (submitButton) {
@@ -820,6 +850,15 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		await commitConversationUpdate(result.conversation_update);
 	} catch (error) {
 		showSavePanel(savePanel, error.message || "對話內容無法保存，請重新送出。");
+		if (runStatus) {
+			runStatus.textContent = "回覆尚未保存，請重新整理頁面後再繼續對話。";
+		}
+		assistant.bubble?.classList.remove("is-running");
+		if (assistant.bubble) {
+			assistant.bubble.hidden = true;
+		}
+		setSurfaceBusy(assistant.surface, false);
+		return;
 	}
 	const actionReply = actionReplyFrom(result);
 	const debugMessages = debugMessagesFrom(result);
@@ -854,7 +893,9 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		} else {
 			setResultMessage(assistant.message, "");
 		}
-		setToolCallPanels(assistant.toolCallPanels, finalToolCallPanels);
+		if (finalToolCallPanels.length) {
+			pendingUserInteraction = appendUserInteractionPanels(finalToolCallPanels);
+		}
 		if (!finalProcessEvents.length) {
 			setDebugMessages(assistant.debugStatus, debugMessages);
 		}
@@ -865,7 +906,6 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		}
 		clearProcessEvents(assistant.processTrace);
 		setResultMessage(assistant.message, "");
-		setToolCallPanels(assistant.toolCallPanels, []);
 		setDebugMessages(assistant.debugStatus, []);
 	}
 	if (runStatus) {
@@ -894,6 +934,7 @@ starterQuestions?.addEventListener("click", (event) => {
 
 resultThread?.addEventListener("runner:tool-call-submit", async (event) => {
 	const submission = event.detail || {};
+	pendingUserInteraction = null;
 	try {
 		await runWorkflow(
 			{ message: "", tool_call_submission: submission },
