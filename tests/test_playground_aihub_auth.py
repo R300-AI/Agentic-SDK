@@ -83,6 +83,12 @@ def test_configured_key_vault_name_wins_over_default(monkeypatch):
     assert key_vault_config._key_vault_name() == "release-vault"
 
 
+def test_ai_hub_request_timeout_defaults_to_twenty_seconds(monkeypatch):
+    monkeypatch.delenv("AI_HUB_REQUEST_TIMEOUT_SECONDS", raising=False)
+
+    assert aihub_client._request_timeout_seconds() == 20.0
+
+
 def test_verify_credentials_calls_ai_hub_auth_api(monkeypatch):
     calls = []
 
