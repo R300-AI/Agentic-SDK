@@ -50,4 +50,6 @@ jobs:
           python -m pip install -r requirements.txt pytest
 
       - name: Run tests
+        env:
+          PLAYGROUND_TEST_MODE: "true"
         run: python -m pytest -q

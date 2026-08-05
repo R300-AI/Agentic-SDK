@@ -27,6 +27,7 @@ def _typed_key_vault_settings(monkeypatch):
 
 
 def test_key_vault_settings_uses_official_resource_inventory(monkeypatch):
+    monkeypatch.delenv("PLAYGROUND_TEST_MODE", raising=False)
     monkeypatch.setattr(
         key_vault_config,
         "_key_vault_values",
@@ -54,6 +55,20 @@ def test_key_vault_settings_uses_official_resource_inventory(monkeypatch):
     assert settings.ai_hub.playground_origin == "https://playground.example"
     assert [endpoint.id for endpoint in settings.chat_endpoints] == ["gpt-54", "gpt-55"]
     assert [endpoint.id for endpoint in settings.embedding_endpoints] == ["embedded-large", "embedded-small"]
+
+
+def test_key_vault_settings_uses_non_secret_values_only_in_explicit_test_mode(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_TEST_MODE", "true")
+    monkeypatch.setenv("PLAYGROUND_TEST_AI_HUB_BASE_URL", "https://ci-aihub.example/")
+    monkeypatch.setenv("PLAYGROUND_TEST_AI_HUB_PLAYGROUND_ORIGIN", "https://ci-playground.example/")
+    monkeypatch.setattr(key_vault_config, "_key_vault_values", lambda _: (_ for _ in ()).throw(AssertionError("Key Vault must not load in test mode")))
+
+    settings = key_vault_config.key_vault_settings()
+
+    assert settings.ai_hub.base_url == "https://ci-aihub.example"
+    assert settings.ai_hub.playground_origin == "https://ci-playground.example"
+    assert settings.chat_endpoints == ()
+    assert settings.embedding_endpoints == ()
 
 
 def test_model_endpoints_use_typed_key_vault_settings_without_exposing_keys(monkeypatch):

@@ -254,6 +254,7 @@ jobs:
         env:
           PYTHONPATH: .python_packages/lib/site-packages:.
           KEY_VAULT_NAME: ${{ vars.KEY_VAULT_NAME }}
+          PLAYGROUND_TEST_MODE: "true"
         run: |
           python - <<'PY'
           from fastapi.testclient import TestClient

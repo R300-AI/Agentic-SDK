@@ -51,7 +51,18 @@ class KeyVaultSettings:
 
 
 def key_vault_settings() -> KeyVaultSettings:
+    if _test_mode_enabled():
+        return _settings_from_values(
+            {
+                "AI-HUB-BASE-URL": os.environ.get("PLAYGROUND_TEST_AI_HUB_BASE_URL", "https://aihub.test"),
+                "AI-HUB-PLAYGROUND-ORIGIN": os.environ.get("PLAYGROUND_TEST_AI_HUB_PLAYGROUND_ORIGIN", "https://playground.test"),
+            }
+        )
     return _settings_from_values(_key_vault_values(_key_vault_name()))
+
+
+def _test_mode_enabled() -> bool:
+    return os.environ.get("PLAYGROUND_TEST_MODE", "").strip().lower() in {"1", "true", "yes"}
 
 
 def _settings_from_values(values: dict[str, str]) -> KeyVaultSettings:
