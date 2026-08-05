@@ -682,6 +682,36 @@ def test_tool_call_panel_does_not_fallback_for_optional_followup_question(monkey
     assert result["tool_call_panels"] == []
 
 
+def test_tool_call_panel_does_not_fallback_for_health_or_safety_concern(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="建議先就醫評估。確認後要不要安排門市下一步？",
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="我足底很痛，走路會刺痛。")
+
+    assert result["tool_calls"] == []
+    assert result["tool_call_panels"] == []
+    assert result["panel_decision"] == "safety_concern"
+
+
 def test_tool_call_panel_falls_back_for_reservation_confirmation(monkeypatch):
     source = build_python_source_from_builder_choice("output_format", "interactive", None)
     source = build_python_source_from_builder_choice(

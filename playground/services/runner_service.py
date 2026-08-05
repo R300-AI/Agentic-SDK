@@ -179,10 +179,11 @@ def execute_python_source(
     if final_message == "No matching entries.":
         final_message = _source_fallback_text(python_source) or "目前沒有找到符合的參考資料。"
     handoff_reason = _human_handoff_reason(config, workflow_result.entries, user_message)
-    tool_calls = [] if handoff_reason else workflow_result.entities.get("latest_tool_calls", [])
-    tool_call_panels = [] if handoff_reason else _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
-    panel_decision = "human_handoff" if handoff_reason else "tool_call" if tool_call_panels else ""
-    if not handoff_reason and not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
+    safety_concern = _has_health_or_safety_concern(user_message, final_message)
+    tool_calls = [] if handoff_reason or safety_concern else workflow_result.entities.get("latest_tool_calls", [])
+    tool_call_panels = [] if handoff_reason or safety_concern else _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
+    panel_decision = "human_handoff" if handoff_reason else "safety_concern" if safety_concern else "tool_call" if tool_call_panels else ""
+    if not handoff_reason and not safety_concern and not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
         tool_call_panels = _tool_call_panels_from_schemas(config.action_tools, final_message=final_message)
         panel_decision = "fallback_eligible" if tool_call_panels else "no_panel"
     if not panel_decision:
@@ -1131,6 +1132,11 @@ def _panel_decision_reason(user_message: str, final_message: str) -> str:
     if _asks_for_missing_input(str(final_message or "").lower()):
         return "missing_evidence"
     return "no_tool_call"
+
+
+def _has_health_or_safety_concern(*texts: str) -> bool:
+    combined = "\n".join(str(text or "").lower() for text in texts)
+    return any(term in combined for term in ("疼痛", "刺痛", "很痛", "受傷", "麻木", "腫脹", "就醫", "醫療", "診斷", "medical", "injury", "pain"))
 
 
 def _configured_tool_text(config: BuilderSourceConfig) -> str:
