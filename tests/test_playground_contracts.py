@@ -618,7 +618,7 @@ def test_tool_call_panel_does_not_fallback_for_information_intent(monkeypatch):
             "interaction_trigger": "需要使用者確認時呼叫。",
             "api_method": "POST",
             "api_url": "https://example.com/confirm",
-            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+            "component_fields": "是否通知門市人員帶實體鞋墊說明 = 只有顧客明確同意後才填 true；尚未回答時保持未知（資料類型：是/否)",
         },
         source,
     )
@@ -882,7 +882,7 @@ def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
             "interaction_trigger": "需要使用者確認時呼叫。",
             "api_method": "POST",
             "api_url": "https://example.com/confirm",
-            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+            "component_fields": "是否通知門市人員帶實體鞋墊說明 = 只有顧客明確同意後才填 true；尚未回答時保持未知（資料類型：是/否)",
         },
         source,
     )
@@ -897,7 +897,7 @@ def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
                         {
                             "id": "call-1",
                             "type": "function",
-                            "function": {"name": "submit_api_1", "arguments": '{"是否確認": true}'},
+                            "function": {"name": "submit_api_1", "arguments": '{"是否通知門市人員帶實體鞋墊說明": false}'},
                         }
                     ]
                 },
@@ -908,15 +908,15 @@ def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
     result = runner_service.execute_python_source(source, message="請推薦鞋墊")
 
     assert result["status"] == "completed"
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否通知門市人員帶實體鞋墊說明"
     assert "資料缺口" not in result["tool_call_panels"][0]["title"]
     assert "https://example.com/confirm" not in result["tool_call_panels"][0]["description"]
     assert result["tool_call_panels"][0]["fields"][0]["type"] == "boolean"
-    assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否確認"
-    assert result["tool_call_panels"][0]["fields"][0]["description"] == "使用者是否確認"
+    assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否通知門市人員帶實體鞋墊說明"
+    assert result["tool_call_panels"][0]["fields"][0]["description"] == "只有顧客明確同意後才填 true；尚未回答時保持未知"
     assert result["tool_call_panels"][0]["fields"][0]["value"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["choices"] == [
-        {"value": True, "label": "是", "description": "我同意：是否確認。"},
-        {"value": False, "label": "否", "description": "我暫不進行：是否確認。"},
+        {"value": True, "label": "是", "description": "我同意：是否通知門市人員帶實體鞋墊說明。"},
+        {"value": False, "label": "否", "description": "我暫不進行：是否通知門市人員帶實體鞋墊說明。"},
     ]
     assert result["tool_call_panels"][0]["api"] == {"method": "POST", "url": "https://example.com/confirm"}
