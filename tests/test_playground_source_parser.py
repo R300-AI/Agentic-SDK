@@ -4,6 +4,7 @@ from agentic_sdk.core.events import default_events_schema
 from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source, get_builder_form_state, get_workflow_summary
 from playground.services.source_parser import parse_supported_source
 from playground.services.runner_service import _process_event_for_workflow_event, execute_python_source
+from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 
 
 def _sample_workflow_source(workflow_name: str, profile_hint: str | None = None) -> str:
@@ -352,3 +353,18 @@ def test_interactive_action_adds_generic_intent_gate_without_polluting_form_stat
     assert config.action_prompt == "請依使用者情境回覆，必要時才請使用者確認下一步。"
     assert config.action_tool_choice == "auto"
     assert state["values"]["action"]["response_instruction"] == "請依使用者情境回覆，必要時才請使用者確認下一步。"
+
+
+def test_v2_interactive_action_enables_tool_calling_after_builder_update():
+    spec = apply_builder_step(default_spec(), "output_format", "interactive")
+    spec = apply_builder_step(
+        spec,
+        "action",
+        {
+            "response_instruction": "只有明確需要門市協助時才呼叫工具。",
+            "api_contracts": '[{"interaction_trigger":"顧客明確要求門市協助時呼叫。","api_method":"POST","api_url":"https://example.com/assist","component_fields":"是否協助 = 顧客同意（資料類型：是/否）"}]',
+        },
+    )
+
+    assert spec["action"]["params"]["tool_choice"] == "auto"
+    assert 'tool_choice="auto"' in compile_python_source(spec)

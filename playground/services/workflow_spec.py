@@ -441,7 +441,7 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
         if payload_tools:
             action_module = "ToolCallAction"
             new_params["tools"] = list(payload_tools)
-            new_params["tool_choice"] = "none"
+            new_params["tool_choice"] = "auto"
         elif action_module == "ToolCallAction" and not payload_tools:
             new_params["tools"] = existing_params.get("tools") or []
 
