@@ -298,6 +298,21 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual("action", output["next_module"])
         self.assertEqual("route to action", output["payload"]["plan_thought"])
 
+    def test_next_step_plan_retrieves_catalog_facts_before_action(self) -> None:
+        state = WorkflowState(user_message="請依 catalog 推薦產品編號 230619521，列出價格與限制。")
+        state.append(
+            ContextEntry(
+                type=ContextEntryType.PERCEIVED,
+                content="intent=product_recommendation",
+                metadata={"intent": "product_recommendation"},
+            )
+        )
+
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient(plan_sequence=["action"])):
+            output = NextStepPlan(retrieve_description="LaNew catalog", **_llm_params())(state)
+
+        self.assertEqual("retrieve", output["next_module"])
+
     def test_keyword_retrieve_hits_expected_items(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         state.payload["query"] = "tsip"

@@ -6,6 +6,18 @@ from agentic_sdk.memory.in_context import build_module_messages
 
 
 _ALLOWED_NEXT = {"retrieve", "action"}
+_DOCUMENT_FACT_TERMS = (
+    "catalog",
+    "目錄",
+    "產品編號",
+    "商品編號",
+    "品號",
+    "價格",
+    "價錢",
+    "型號",
+    "規格",
+    "限制",
+)
 _SYSTEM_PROMPT = (
     "PLAN. Decide whether the next module should be retrieve or action. "
     "Return JSON with fields thought and next_module."
@@ -70,6 +82,8 @@ class NextStepPlan:
         parsed = response.as_json()
         thought = str(parsed.get("thought", ""))
         next_module = parsed.get("next_module")
+        if _requires_document_retrieval(state, self._has_retrieve_source):
+            next_module = "retrieve"
         fallback = next_module not in _ALLOWED_NEXT
         if fallback:
             next_module = "action"
@@ -91,3 +105,14 @@ class NextStepPlan:
                 )
             ],
         )
+
+    @property
+    def _has_retrieve_source(self) -> bool:
+        return "Available retrieve source:" in self._system_prompt
+
+
+def _requires_document_retrieval(state: WorkflowState, has_retrieve_source: bool) -> bool:
+    if not has_retrieve_source or state.latest_of(ContextEntryType.RETRIEVED) is not None:
+        return False
+    message = state.latest_user_message().lower()
+    return any(term in message for term in _DOCUMENT_FACT_TERMS)
