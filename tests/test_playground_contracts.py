@@ -348,6 +348,26 @@ def test_runner_conversation_commit_persists_one_expected_revision(monkeypatch):
     assert conflict.json["conflict"] is True
 
 
+def test_runner_page_initializes_conversation_state_for_first_turn():
+    app = create_app()
+    app.config.update(TESTING=True)
+    source = build_default_python_source()
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["python_source"] = source
+
+        response = client.get("/playground/run")
+
+        with client.session_transaction() as current_session:
+            stored = current_session["runner_conversation"]
+
+    assert response.status_code == 200
+    assert stored["workflow_fingerprint"] == RunnerConversationState.for_workflow(source).workflow_fingerprint
+    assert stored["revision"] == 0
+    assert stored["turns"] == []
+
+
 def test_atomic_runner_metadata_update_compiles_the_current_v2_spec():
     app = create_app()
     app.config.update(TESTING=True)

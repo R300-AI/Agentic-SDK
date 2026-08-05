@@ -34,6 +34,7 @@ def runner():
     if not python_source:
         return redirect(url_for("builder.builder"))
 
+    _ensure_runner_conversation_state(python_source)
     mode_context = get_mode_context()
     scene_profile = get_scene_profile(python_source)
     demo_result = get_runner_demo_result(scene_profile)
@@ -320,6 +321,14 @@ def _semantic_runtime_paths() -> tuple[list[str] | None, str | None]:
 
 def _runner_conversation_state(python_source: str) -> RunnerConversationState:
     return RunnerConversationState.from_dict(session.get(_CONVERSATION_SESSION_KEY), python_source=python_source)
+
+
+def _ensure_runner_conversation_state(python_source: str) -> RunnerConversationState:
+    current = _runner_conversation_state(python_source)
+    stored = session.get(_CONVERSATION_SESSION_KEY)
+    if not isinstance(stored, dict) or stored.get("workflow_fingerprint") != current.workflow_fingerprint:
+        session[_CONVERSATION_SESSION_KEY] = current.as_dict()
+    return current
 
 
 @runner_bp.get("/profile")
