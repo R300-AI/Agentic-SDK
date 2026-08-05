@@ -95,6 +95,24 @@ def test_restored_bundle_can_be_loaded_by_semantic_retrieve_saved_path(tmp_path,
     assert "R300_SEMANTIC_RESTORE_TEST" in hits[0].content
 
 
+def test_restore_rejects_legacy_archive_sources_and_invalidates_vectorstore(tmp_path, monkeypatch):
+    runtime_root = tmp_path / "agentic-sdk-playground"
+    monkeypatch.setattr(bundle_store, "_RUNTIME_ROOT", runtime_root)
+    bundle_path = tmp_path / "legacy.zip"
+    with zipfile.ZipFile(bundle_path, "w") as archive:
+        archive.writestr("tmp/source-files/unknown.zip", b"not an archive")
+        archive.writestr("tmp/vectorstore/index.faiss", b"stale")
+
+    restored = bundle_store.restore_agent_bundle_zip(bundle_path)
+    restored_root = runtime_root / "semantic-runtime" / restored.builder_upload_id
+
+    assert restored.source_file_count == 0
+    assert restored.vectorstore_file_count == 0
+    assert restored.rejected_source_files == ("unknown.zip: 不支援壓縮檔；請先解壓縮後上傳其中需要建立知識庫的文件。",)
+    assert not restored_root.joinpath("source-files", "unknown.zip").exists()
+    assert not restored_root.joinpath("vectorstore", "index.faiss").exists()
+
+
 def test_bundle_upload_and_download_use_signed_urls(tmp_path, monkeypatch):
     uploaded = {}
 

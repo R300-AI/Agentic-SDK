@@ -13,9 +13,9 @@ export function bindCodePreview(toggles, modal) {
   let lastToggle = null;
   const customScrollbar = bindCustomScrollbar(code, scrollbar, scrollbarThumb);
 
-  async function open(event) {
+  async function open(event, toggle) {
     event.preventDefault();
-    lastToggle = event.currentTarget;
+    lastToggle = toggle;
     modal.hidden = false;
     modal.classList.add("open");
     modal.dataset.open = "true";
@@ -56,7 +56,12 @@ export function bindCodePreview(toggles, modal) {
     lastToggle?.focus();
   }
 
-  toggles.forEach((toggle) => toggle.addEventListener("click", open));
+  document.addEventListener("click", (event) => {
+    const toggle = event.target.closest?.("[data-code-preview-open]");
+    if (toggle && toggles instanceof NodeList && Array.from(toggles).includes(toggle)) {
+      open(event, toggle);
+    }
+  });
   closeButtons.forEach((button) => button.addEventListener("click", close));
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !modal.hidden) {

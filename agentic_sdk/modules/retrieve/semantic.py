@@ -242,23 +242,12 @@ class FaissKnowledgeBase:
         return documents
 
     def _read_document(self, file_path: Path) -> str:
-        if file_path.suffix.lower() in {".txt", ".md", ".py", ".json", ".yaml", ".yml", ".csv"}:
+        try:
             return file_path.read_text(encoding="utf-8")
-        try:
-            from markitdown import MarkItDown
-        except Exception as exc:
+        except UnicodeDecodeError as exc:
             raise RuntimeError(
-                "非文字檔解析需要 markitdown。請使用 Python 3.12 建立專案虛擬環境，"
-                "再執行 uv add -r requirements.txt。"
+                "知識庫來源必須是已驗證的 UTF-8 文字檔；請在 Builder 重新上傳原始文件。"
             ) from exc
-        try:
-            result = MarkItDown().convert(str(file_path))
-        except Exception as exc:
-            raise RuntimeError(
-                "非文字檔解析需要 MarkItDown 的格式轉換套件。請使用 Python 3.12，"
-                "並執行 uv add -r requirements.txt 安裝 markitdown[all]。"
-            ) from exc
-        return str(getattr(result, "text_content", "") or "")
 
     def _is_stale(self) -> bool:
         source_files = self._iter_source_files()

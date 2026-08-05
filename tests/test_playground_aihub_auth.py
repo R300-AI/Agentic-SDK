@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 
 import httpx
+import pytest
 from flask import jsonify, session
 
 from playground import create_app
@@ -11,27 +12,78 @@ from playground.routes import runner as runner_routes
 from playground.services import aihub_client
 from playground.services import aihub_bridge
 from playground.services import key_vault_config
+from playground.services import model_endpoints
 from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 
 
-def test_create_app_loads_ai_hub_url_from_key_vault(monkeypatch):
-    monkeypatch.delenv("AI_HUB_BASE_URL", raising=False)
-    monkeypatch.delenv("AIHUB_BASE_URL", raising=False)
-    monkeypatch.delenv("AI_HUB_PLAYGROUND_ORIGIN", raising=False)
-    monkeypatch.setenv("KEY_VAULT_NAME", "test-vault")
+@pytest.fixture(autouse=True)
+def _typed_key_vault_settings(monkeypatch):
+    settings = key_vault_config.KeyVaultSettings(
+        ai_hub=key_vault_config.AiHubSettings(base_url="https://aihub.example", playground_origin="https://playground.example"),
+        chat_endpoints=(),
+        embedding_endpoints=(),
+    )
+    monkeypatch.setattr(aihub_client, "key_vault_settings", lambda: settings)
+
+
+def test_key_vault_settings_uses_official_resource_inventory(monkeypatch):
     monkeypatch.setattr(
         key_vault_config,
         "_key_vault_values",
         lambda vault_name: {
             "AI-HUB-BASE-URL": "https://aihub.example",
             "AI-HUB-PLAYGROUND-ORIGIN": "https://playground.example",
+            "GPT-54-API-KEY": "gpt-54-key",
+            "GPT-54-BASE-URL": "https://gpt-54.example",
+            "GPT-54-MODEL": "gpt-5.4",
+            "GPT-55-API-KEY": "gpt-55-key",
+            "GPT-55-BASE-URL": "https://gpt-55.example",
+            "GPT-55-MODEL": "gpt-5.5",
+            "EMBEDDED-LARGE-API-KEY": "large-key",
+            "EMBEDDED-LARGE-ENDPOINT": "https://embedded-large.example",
+            "EMBEDDED-LARGE-DEPLOYMENT-NAME": "embedded-large",
+            "EMBEDDED-SMALL-API-KEY": "small-key",
+            "EMBEDDED-SMALL-ENDPOINT": "https://embedded-small.example",
+            "EMBEDDED-SMALL-DEPLOYMENT-NAME": "embedded-small",
         },
     )
 
-    create_app()
+    settings = key_vault_config.key_vault_settings()
 
-    assert os.environ["AI_HUB_BASE_URL"] == "https://aihub.example"
-    assert os.environ["AI_HUB_PLAYGROUND_ORIGIN"] == "https://playground.example"
+    assert settings.ai_hub.base_url == "https://aihub.example"
+    assert settings.ai_hub.playground_origin == "https://playground.example"
+    assert [endpoint.id for endpoint in settings.chat_endpoints] == ["gpt-54", "gpt-55"]
+    assert [endpoint.id for endpoint in settings.embedding_endpoints] == ["embedded-large", "embedded-small"]
+
+
+def test_model_endpoints_use_typed_key_vault_settings_without_exposing_keys(monkeypatch):
+    settings = key_vault_config.KeyVaultSettings(
+        ai_hub=key_vault_config.AiHubSettings(base_url="https://aihub.example", playground_origin="https://playground.example"),
+        chat_endpoints=(
+            key_vault_config.ChatEndpointSettings(id="gpt-54", api_key="chat-secret", base_url="https://chat.example", model="gpt-5.4"),
+        ),
+        embedding_endpoints=(
+            key_vault_config.EmbeddingEndpointSettings(id="embedded-small", api_key="embedding-secret", endpoint="https://embedding.example", deployment_name="text-embedding-3-small"),
+        ),
+    )
+    monkeypatch.setattr(model_endpoints, "key_vault_settings", lambda: settings)
+
+    options = model_endpoints.endpoint_options()
+    params = model_endpoints.endpoint_params_for_role("action", {"action": "gpt-54"})
+
+    assert options == [
+        {
+            "id": "gpt-54",
+            "label": "gpt-5.4",
+            "model": "gpt-5.4",
+            "model_env": "GPT_54_MODEL",
+            "base_url": "https://chat.example",
+            "base_url_env": "GPT_54_BASE_URL",
+            "api_key_env": "GPT_54_API_KEY",
+        }
+    ]
+    assert params == {"api_key": "chat-secret", "base_url": "https://chat.example", "model": "gpt-5.4"}
+    assert "chat-secret" not in str(options)
 
 
 def test_large_v2_workflow_session_survives_reload_without_large_cookie(monkeypatch, tmp_path):
@@ -75,12 +127,12 @@ def test_key_vault_name_does_not_skip_for_local_or_ci_flags(monkeypatch):
     assert key_vault_config._key_vault_name() == key_vault_config.DEFAULT_KEY_VAULT_NAME
 
 
-def test_configured_key_vault_name_wins_over_default(monkeypatch):
+def test_environment_key_vault_name_does_not_override_official_vault(monkeypatch):
     monkeypatch.setenv("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "true")
     monkeypatch.setenv("CI", "true")
     monkeypatch.setenv("KEY_VAULT_NAME", "release-vault")
 
-    assert key_vault_config._key_vault_name() == "release-vault"
+    assert key_vault_config._key_vault_name() == key_vault_config.DEFAULT_KEY_VAULT_NAME
 
 
 def test_ai_hub_request_timeout_defaults_to_twenty_seconds(monkeypatch):
@@ -107,7 +159,7 @@ def test_verify_credentials_calls_ai_hub_auth_api(monkeypatch):
             "url": "https://aihub.example/api/playground/auth/verify",
             "json": {"username": "creator", "password": "secret"},
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
-            "timeout": 1.25,
+            "timeout": 20.0,
         }
     ]
 
@@ -151,7 +203,7 @@ def test_verify_handoff_token_calls_ai_hub_handoff_api(monkeypatch):
             "url": "https://aihub.example/api/playground/handoff/verify",
             "json": {"token": "handoff-token"},
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
-            "timeout": 1.25,
+            "timeout": 20.0,
             "follow_redirects": True,
         }
     ]
@@ -249,7 +301,7 @@ def test_save_config_calls_ai_hub_save_api(monkeypatch):
                 "agent_id": "agent 1",
             },
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
-            "timeout": 1.25,
+            "timeout": 20.0,
         }
     ]
 
@@ -344,7 +396,7 @@ def test_load_public_config_calls_ai_hub_public_load_api(monkeypatch):
             "url": "https://aihub.example/api/playground/agents/agent%201/config/public/load",
             "json": {},
             "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
-            "timeout": 1.25,
+            "timeout": 20.0,
         }
     ]
 
@@ -379,7 +431,7 @@ def test_bundle_url_requests_call_ai_hub_storage_api(monkeypatch):
         "url": "https://aihub.example/api/playground/agents/agent%201/bundle/save",
         "json": {"username": "creator", "password": "secret"},
         "headers": {"Accept": "application/json", "Origin": "https://playground.example"},
-        "timeout": 1.25,
+        "timeout": 20.0,
     }
     assert calls[1] == {
         "method": "GET",
@@ -390,7 +442,7 @@ def test_bundle_url_requests_call_ai_hub_storage_api(monkeypatch):
             "X-Playground-Username": "creator",
             "X-Playground-Password": "secret",
         },
-        "timeout": 1.25,
+        "timeout": 20.0,
     }
 
 
@@ -1129,7 +1181,7 @@ def test_shared_runner_loads_public_agent_as_read_only(monkeypatch):
     assert builder_response.status_code == 403
     assert builder_state_response.status_code == 403
     assert source_preview_response.status_code == 403
-    assert source_export_response.status_code == 403
+    assert source_export_response.status_code == 404
 
 
 def test_shared_runner_accepts_post_json_payload(monkeypatch):
@@ -1529,7 +1581,36 @@ def test_aihub_save_route_requires_login_ticket(monkeypatch):
     assert created_response.status_code == 200
     assert created_response.json["agent_id"] == "agent-new"
     assert missing_ticket_response.status_code == 401
-    assert missing_ticket_response.json["error"] == "AI Hub login is required before saving."
+    assert missing_ticket_response.json["reauthentication_required"] is True
+    assert missing_ticket_response.json["operation"] == "save"
+
+
+def test_expired_ticket_downgrades_save_without_clearing_runner_workflow(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["mode"] = "aihub_editable"
+            current_session["account_context_present"] = True
+            current_session["ai_hub_credential_ticket"] = "expired-ticket"
+            current_session["ai_hub_username"] = "creator"
+            current_session["python_source"] = "print('active workflow')"
+            current_session["workflow_spec"] = {"version": "2", "workflow_name": "Active workflow"}
+            current_session["runner_presentation"] = {"version": "1", "starter_questions": ["Continue"]}
+
+        response = client.post("/playground/aihub/config/save")
+
+        with client.session_transaction() as current_session:
+            assert current_session["mode"] == "anonymous"
+            assert current_session["python_source"] == "print('active workflow')"
+            assert current_session["workflow_spec"] == {"version": "2", "workflow_name": "Active workflow"}
+            assert current_session["runner_presentation"] == {"version": "1", "starter_questions": ["Continue"]}
+            assert "ai_hub_credential_ticket" not in current_session
+            assert "ai_hub_username" not in current_session
+
+    assert response.status_code == 401
+    assert response.json["operation"] == "save"
 
 
 def test_aihub_login_route_authenticates_without_saving(monkeypatch):
@@ -1550,14 +1631,14 @@ def test_aihub_login_route_authenticates_without_saving(monkeypatch):
             saved_mode = session["mode"]
             saved_username = session["ai_hub_username"]
             saved_source = session["python_source"]
-            pending_auto_save = session["pending_runner_auto_save"]
+            pending_auto_save = session.get("pending_runner_auto_save")
 
     assert response.status_code == 200
     assert response.json["authenticated"] is True
     assert saved_mode == "manual_auth"
     assert saved_username == "creator"
     assert saved_source == "print('hello')"
-    assert pending_auto_save is True
+    assert pending_auto_save is None
 
 
 def test_login_rejects_invalid_ai_hub_credentials(monkeypatch):

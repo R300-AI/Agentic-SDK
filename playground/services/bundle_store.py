@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 import httpx
 
+from playground.services.semantic_ingestion import ingest_semantic_upload
 from playground.services.semantic_runtime import new_upload_id
 
 
@@ -34,6 +35,7 @@ class BundleRestoreResult:
     python_source: str | None
     source_file_count: int
     vectorstore_file_count: int
+    rejected_source_files: tuple[str, ...] = ()
 
 
 def create_agent_bundle_zip(
@@ -90,6 +92,8 @@ def restore_agent_bundle_zip(zip_path: Path) -> BundleRestoreResult:
     python_source: str | None = None
     source_file_count = 0
     vectorstore_file_count = 0
+    rejected_source_files: list[str] = []
+    source_migrated = False
 
     with zipfile.ZipFile(zip_path) as archive:
         for member in archive.infolist():
@@ -103,10 +107,17 @@ def restore_agent_bundle_zip(zip_path: Path) -> BundleRestoreResult:
                 continue
             source_relative = _bundle_relative_path(member_path, ("tmp", "source-files"), ("source-files",))
             if source_relative is not None:
-                relative = source_relative
-                if not _unsafe_zip_path(relative):
-                    _extract_member(archive, member, source_dir / Path(*relative.parts))
-                    source_file_count += 1
+                if not _unsafe_zip_path(source_relative):
+                    result = ingest_semantic_upload(
+                        filename=source_relative.name,
+                        stream=archive.open(member),
+                        target_dir=source_dir,
+                    )
+                    if result.accepted:
+                        source_migrated = source_migrated or result.canonical_name != source_relative.name
+                        source_file_count += 1
+                    else:
+                        rejected_source_files.append(f"{source_relative.name}: {result.reason}")
                 continue
             vectorstore_relative = _bundle_relative_path(member_path, ("tmp", "vectorstore"), ("vectorstore",))
             if vectorstore_relative is not None:
@@ -115,12 +126,18 @@ def restore_agent_bundle_zip(zip_path: Path) -> BundleRestoreResult:
                     _extract_member(archive, member, vectorstore_path / Path(*relative.parts))
                     vectorstore_file_count += 1
 
+    if source_migrated or rejected_source_files:
+        shutil.rmtree(vectorstore_path, ignore_errors=True)
+        vectorstore_path.mkdir(parents=True, exist_ok=True)
+        vectorstore_file_count = 0
+
     return BundleRestoreResult(
         restored=True,
         builder_upload_id=upload_id,
         python_source=python_source,
         source_file_count=source_file_count,
         vectorstore_file_count=vectorstore_file_count,
+        rejected_source_files=tuple(rejected_source_files),
     )
 
 

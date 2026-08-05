@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import ast
 
-from flask import Blueprint, Response, abort, render_template, session
+from flask import Blueprint, Response, abort, session
 
 from playground.services.model_endpoints import endpoint_env_bindings_for_source
 from playground.services.mode_context import get_mode_context
@@ -19,34 +19,10 @@ def require_source_view_permission():
         abort(403)
 
 
-@source_bp.get("")
-def source_page():
-    mode_context = get_mode_context()
-    python_source = _current_python_source()
-    python_imports, python_workflow = _split_python_source_blocks(python_source)
-    return render_template(
-        "source_preview.html",
-        mode_context=mode_context,
-        python_source=python_source,
-        python_imports=python_imports,
-        python_workflow=python_workflow,
-    )
-
-
 @source_bp.get("/preview")
 def preview_source():
     python_source = _current_python_source()
     return Response(_source_preview_markdown(python_source), mimetype="text/markdown")
-
-
-@source_bp.post("/export")
-def export_source():
-    python_source = _current_python_source()
-    return Response(
-        python_source,
-        mimetype="text/x-python",
-        headers={"Content-Disposition": "attachment; filename=agentic_workflow.py"},
-    )
 
 
 def _current_python_source() -> str:

@@ -35,3 +35,9 @@ For interactive cases, use `http://127.0.0.1:5050/playground/test-support/intera
 ## Cloud Replay
 
 After local cases pass, push and wait for CI and deployment. In a fresh VS Code Browser context, repeat the same matrix against the deployed Playground using synthetic fixtures and an approved no-side-effect test target. A cloud failure blocks release: reproduce locally, repair, rerun local FAE, deploy, and replay the complete cloud matrix.
+
+### Test-support route window
+
+`PLAYGROUND_ENABLE_TEST_SUPPORT_ROUTES` is disabled by default and must stay disabled outside an explicitly scheduled Cloud Replay window. Before enabling it, verify that `POST /playground/test-support/interactive-echo` returns `404` in the deployed environment. Record the owner, start time, expected end time, and synthetic case IDs for the window.
+
+Enable the setting only for the replay, then verify the endpoint accepts the expected synthetic JSON payload. Immediately after the final case, remove the setting, restart the App Service if required by the platform, and verify the same endpoint again returns `404`. A replay is incomplete until this final `404` check is recorded.

@@ -10,6 +10,7 @@ from playground.services.aihub_client import credentials_for_ticket, issue_crede
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import normalize_endpoint_selections
+from playground.services.runner_conversation import RunnerConversationState
 from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution, stream_python_source_initialization
 from playground.services.semantic_runtime import runtime_root, source_files_dir
 from playground.services.source_builder import _DEFAULT_RUNNER_DESCRIPTION, build_python_source_from_builder_choice, config_from_source, get_workflow_summary
@@ -17,6 +18,7 @@ from playground.services.workflow_spec import apply_builder_step, compile_python
 
 
 runner_bp = Blueprint("runner", __name__, url_prefix="/playground/run")
+_CONVERSATION_SESSION_KEY = "runner_conversation"
 
 
 @runner_bp.get("")
@@ -91,9 +93,11 @@ def execute_runner():
     payload = request.get_json(silent=True) or {}
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
+    conversation_state = _runner_conversation_state(python_source)
     execution = execute_python_source(
         python_source,
         message=str(payload.get("message", "")),
+        conversation_state=conversation_state,
         attachments=payload.get("attachments") or [],
         endpoint_selections=endpoint_selections,
         semantic_sources=semantic_sources,
@@ -115,11 +119,13 @@ def execute_runner_stream():
     payload = request.get_json(silent=True) or {}
     endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
+    conversation_state = _runner_conversation_state(python_source)
 
     def generate():
         for item in stream_python_source_execution(
             python_source,
             message=str(payload.get("message", "")),
+            conversation_state=conversation_state,
             attachments=payload.get("attachments") or [],
             endpoint_selections=endpoint_selections,
             semantic_sources=semantic_sources,
@@ -136,6 +142,30 @@ def execute_runner_stream():
                 yield json.dumps(item, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
+
+
+@runner_bp.post("/conversation/commit")
+def commit_runner_conversation():
+    python_source = session.get("python_source")
+    if not python_source:
+        return jsonify({"committed": False, "error": "No Python source is available for execution."}), 400
+
+    payload = request.get_json(silent=True) or {}
+    update = payload.get("conversation_update")
+    current = _runner_conversation_state(python_source)
+    candidate = RunnerConversationState.from_dict(update, python_source=python_source)
+    if candidate.conversation_id != current.conversation_id or candidate.revision != current.revision + 1:
+        return jsonify(
+            {
+                "committed": False,
+                "conflict": True,
+                "conversation": current.as_dict(),
+                "error": "對話狀態已變更，請使用最新內容再試一次。",
+            }
+        ), 409
+
+    session[_CONVERSATION_SESSION_KEY] = candidate.as_dict()
+    return jsonify({"committed": True, "conversation": candidate.as_dict()})
 
 
 @runner_bp.post("/initialize/stream")
@@ -275,6 +305,7 @@ def _public_execution_payload(execution: dict[str, object]) -> dict[str, object]
         "process_events": execution.get("process_events") or [],
         "result": result,
         "scene_profile": execution.get("scene_profile"),
+        "conversation_update": execution.get("conversation_update"),
     }
 
 
@@ -285,6 +316,10 @@ def _semantic_runtime_paths() -> tuple[list[str] | None, str | None]:
     source_path = source_files_dir(upload_id)
     saved_path = runtime_root(upload_id)
     return [str(source_path)], str(saved_path)
+
+
+def _runner_conversation_state(python_source: str) -> RunnerConversationState:
+    return RunnerConversationState.from_dict(session.get(_CONVERSATION_SESSION_KEY), python_source=python_source)
 
 
 @runner_bp.get("/profile")

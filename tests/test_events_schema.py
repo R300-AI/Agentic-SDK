@@ -238,6 +238,7 @@ def test_explicit_events_schema_restricts_stages_and_structured_fields() -> None
     assert {(event["module"], event["field"]) for event in events if event["type"] == "structured_field"} == {
         ("perceive", "summary"),
     }
+    assert {event["module"] for event in events if event["type"] == "token_delta"} == {"perceive"}
     assert next(
         event["fields"]
         for event in events

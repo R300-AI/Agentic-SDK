@@ -14,21 +14,25 @@ from playground.routes import runner as runner_routes
 from playground.services import key_vault_config
 from playground.services import model_endpoints
 from playground.services import runner_service
+from playground.services import semantic_ingestion
+from playground.services.runner_conversation import RunnerConversationState
 from playground.services.aihub_bridge import store_loaded_agent
 from playground.services.source_builder import BuilderSourceConfig, build_default_python_source, build_python_source_from_builder_choice, config_from_source
 from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 from playground.services.workflow_reachability import reachable_workflow_roles
 
 
-def test_local_fae_can_skip_key_vault_loading(monkeypatch):
+def test_key_vault_skip_flag_does_not_bypass_typed_settings(monkeypatch):
     monkeypatch.setenv("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "true")
-    monkeypatch.setattr(
-        key_vault_config,
-        "_access_token",
-        lambda: (_ for _ in ()).throw(AssertionError("Key Vault access should be skipped")),
+
+    settings = key_vault_config._settings_from_values(
+        {
+            "AI-HUB-BASE-URL": "https://aihub.example",
+            "AI-HUB-PLAYGROUND-ORIGIN": "https://playground.example",
+        }
     )
 
-    assert key_vault_config.load_key_vault_secrets() == {}
+    assert settings.ai_hub.base_url == "https://aihub.example"
 
 
 def test_builder_choices_map_to_runtime_modules():
@@ -61,7 +65,7 @@ def test_builder_choices_map_to_runtime_modules():
     assert "action" in reachable_workflow_roles(interactive)
 
 
-def test_endpoint_binding_missing_is_distinct_from_missing_credentials(monkeypatch):
+def test_environment_endpoint_discovery_is_not_supported(monkeypatch):
     monkeypatch.setenv("PLAYGROUND_FAST_MODEL", "gpt-test")
     monkeypatch.setenv("PLAYGROUND_FAST_BASE_URL", "https://models.example")
     monkeypatch.setenv("PLAYGROUND_FAST_API_KEY", "test-key")
@@ -69,9 +73,20 @@ def test_endpoint_binding_missing_is_distinct_from_missing_credentials(monkeypat
     with __import__("pytest").raises(model_endpoints.MissingEndpointBinding):
         model_endpoints.endpoint_params_for_role("perceive", {})
 
-    monkeypatch.delenv("PLAYGROUND_FAST_API_KEY")
-    with __import__("pytest").raises(model_endpoints.MissingEndpointCredentials):
+    with __import__("pytest").raises(model_endpoints.MissingEndpointBinding):
         model_endpoints.endpoint_params_for_role("perceive", {"perceive": "playground-fast"})
+
+
+def test_partial_key_vault_endpoint_family_is_rejected():
+    with __import__("pytest").raises(key_vault_config.KeyVaultConfigurationError, match="GPT-54-MODEL"):
+        key_vault_config._settings_from_values(
+            {
+                "AI-HUB-BASE-URL": "https://aihub.example",
+                "AI-HUB-PLAYGROUND-ORIGIN": "https://playground.example",
+                "GPT-54-API-KEY": "key",
+                "GPT-54-BASE-URL": "https://models.example",
+            }
+        )
 
 
 def test_interactive_action_contract_roundtrips_to_boolean_tool_schema():
@@ -107,7 +122,25 @@ def test_interactive_panel_submission_releases_pending_state():
     assert 'status.textContent = "已送出選擇。";' in surface_source
     assert 'const hasBooleanValue = field.value === true || field.value === false' in surface_source
     assert 'hasBooleanValue && (value ? booleanValue : !booleanValue)' in surface_source
+    assert 'const missingRequiredFields = panel.fields.filter((field) => field.required && !hasToolCallValue(argumentsPayload[field.name]));' in surface_source
+    assert 'if (missingRequiredFields.length)' in surface_source
+    assert 'function hasToolCallValue(value)' in surface_source
     assert 'event.target?.dispatchEvent(new CustomEvent("runner:tool-call-complete"));' in runner_source
+
+
+def test_runner_does_not_refresh_ai_hub_credentials_in_background():
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert 'postJson("/playground/aihub/config/save")' in runner_source
+    assert 'postJson("/playground/aihub/session/refresh")' not in runner_source
+    assert "refreshAiHubSession" not in runner_source
+
+
+def test_runner_commits_conversation_after_stream_completion():
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert 'postJson("/playground/run/conversation/commit", { conversation_update: update })' in runner_source
+    assert "await commitConversationUpdate(result.conversation_update);" in runner_source
 
 
 def test_runner_execution_stream_emits_one_final_event(monkeypatch):
@@ -172,6 +205,147 @@ def test_runner_execute_routes_forward_attachment_payloads(monkeypatch):
             "content": "data:image/png;base64,abc",
         }
     ]
+
+
+def test_runner_conversation_state_restores_ordered_turns_and_resets_for_new_workflow():
+    first = RunnerConversationState.for_workflow("workflow = 'first'")
+    restored = RunnerConversationState.from_dict(
+        {
+            **first.as_dict(),
+            "turns": [
+                {"role": "user", "content": "我有高足弓"},
+                {"role": "assistant", "content": "推薦科技鞋墊 加強型，SKU 7037439。"},
+            ],
+        },
+        python_source="workflow = 'first'",
+    )
+
+    memory = restored.memory(workflow_name="LaNew")
+
+    assert [turn.role for turn in memory.turns] == ["user", "assistant"]
+    assert memory.turns[-1].content == "推薦科技鞋墊 加強型，SKU 7037439。"
+    assert RunnerConversationState.from_dict(restored.as_dict(), python_source="workflow = 'changed'").turns == ()
+
+
+def test_runner_conversation_memory_exposes_prior_retrieval_evidence_to_modules():
+    source = build_default_python_source()
+    state = RunnerConversationState.from_dict(
+        {
+            **RunnerConversationState.for_workflow(source).as_dict(),
+            "retrieval_evidence": "高足弓適用：科技鞋墊 加強型，SKU 7037439。",
+        },
+        python_source=source,
+    )
+
+    memory = state.memory(workflow_name="LaNew")
+
+    assert memory.metadata["continuity_evidence"] == "高足弓適用：科技鞋墊 加強型，SKU 7037439。"
+
+
+def test_runner_execution_injects_conversation_memory_into_workflow(monkeypatch):
+    captured = {}
+    source = build_default_python_source()
+    state = RunnerConversationState.from_dict(
+        {
+            **RunnerConversationState.for_workflow(source).as_dict(),
+            "turns": [
+                {"role": "user", "content": "我有高足弓"},
+                {"role": "assistant", "content": "推薦科技鞋墊 加強型，SKU 7037439。"},
+            ],
+        },
+        python_source=source,
+    )
+
+    class FakeWorkflow:
+        def run(self, _message, **kwargs):
+            captured.update(kwargs)
+            memory = kwargs["memory"]
+            memory.append_message("user", _message)
+            memory.append_message("assistant", "已保留高足弓推薦。")
+            return WorkflowResult(workflow_id="workflow", final_message="已保留高足弓推薦。", memory=memory)
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    execution = runner_service.execute_python_source(source, message="台北信義區", conversation_state=state)
+
+    assert captured["session_id"] == state.conversation_id
+    assert [turn.content for turn in captured["memory"].turns[:2]] == ["我有高足弓", "推薦科技鞋墊 加強型，SKU 7037439。"]
+    assert execution["conversation_update"]["turns"][-1]["content"] == "已保留高足弓推薦。"
+
+
+def test_tool_continuation_extends_the_same_conversation_memory():
+    source = build_default_python_source()
+    conversation = RunnerConversationState.from_dict(
+        {
+            **RunnerConversationState.for_workflow(source).as_dict(),
+            "retrieval_evidence": "科技鞋墊 加強型，SKU 7037439。",
+            "turns": [
+                {"role": "user", "content": "高足弓適合哪款？"},
+                {"role": "assistant", "content": "推薦科技鞋墊 加強型。"},
+            ],
+        },
+        python_source=source,
+    )
+    captured = {}
+
+    class FakeAction:
+        def __call__(self, state):
+            captured["memory"] = state.memory
+            captured["evidence"] = state.entities.get("latest_retrieved_content")
+            return {"next_module": None, "payload": {"latest_final_message": "已送出門市協助需求。"}}
+
+    class FakeWorkflow:
+        workflow_name = "LaNew"
+        memory_store = None
+        modules = {"action": FakeAction()}
+
+    result = runner_service._run_tool_submission_continuation(
+        FakeWorkflow(),
+        BuilderSourceConfig(workflow_name="LaNew"),
+        "使用者已送出互動選項。\n工具名稱：門市協助",
+        {"function_name": "門市協助", "arguments": {"是否通知": True}, "api_result": {"skipped": True}},
+        conversation_state=conversation,
+        attachments=[],
+        process_observer=None,
+    )
+
+    assert [turn.role for turn in captured["memory"].turns] == ["user", "assistant", "user", "assistant"]
+    assert "是否通知" in captured["memory"].turns[2].content
+    assert "7037439" in captured["evidence"]
+    assert result.memory.turns[-1].content == "已送出門市協助需求。"
+    assert conversation.update_from_result(result).retrieval_evidence == "科技鞋墊 加強型，SKU 7037439。"
+
+
+def test_runner_conversation_commit_persists_one_expected_revision(monkeypatch):
+    app = create_app()
+    app.config.update(TESTING=True)
+    source = build_default_python_source()
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["python_source"] = source
+            initial = RunnerConversationState.for_workflow(source)
+            current_session["runner_conversation"] = initial.as_dict()
+
+        update = {
+            **initial.as_dict(),
+            "revision": 1,
+            "turns": [
+                {"role": "user", "content": "高足弓適合哪款？"},
+                {"role": "assistant", "content": "科技鞋墊 加強型，SKU 7037439。"},
+            ],
+        }
+        committed = client.post("/playground/run/conversation/commit", json={"conversation_update": update})
+        conflict = client.post("/playground/run/conversation/commit", json={"conversation_update": update})
+
+        with client.session_transaction() as current_session:
+            stored = current_session["runner_conversation"]
+
+    assert committed.status_code == 200
+    assert committed.json["committed"] is True
+    assert stored["turns"][-1]["content"] == "科技鞋墊 加強型，SKU 7037439。"
+    assert conflict.status_code == 409
+    assert conflict.json["conflict"] is True
 
 
 def test_atomic_runner_metadata_update_compiles_the_current_v2_spec():
@@ -250,6 +424,51 @@ def test_semantic_builder_upload_unblocks_review_and_reaches_runner(monkeypatch)
     assert run_response.status_code == 200
     assert captured["semantic_sources"] and captured["semantic_sources"][0].endswith("source-files")
     assert captured["semantic_saved_path"]
+
+
+def test_semantic_builder_upload_rejects_archives_before_saving():
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.test_client() as client:
+        response = client.post(
+            "/playground/builder/uploads",
+            data={"files": (BytesIO(b"not an archive"), "catalog.zip")},
+            content_type="multipart/form-data",
+        )
+        with client.session_transaction() as current_session:
+            upload_id = current_session.get("builder_upload_id")
+
+    assert response.status_code == 400
+    assert response.json["updated"] is False
+    assert response.json["rejected_files"] == [
+        {"name": "catalog.zip", "reason": "不支援壓縮檔；請先解壓縮後上傳其中需要建立知識庫的文件。"}
+    ]
+    assert not upload_id
+
+
+def test_semantic_ingestion_rejects_oversized_file_without_persisting(monkeypatch, tmp_path):
+    monkeypatch.setattr(semantic_ingestion, "_MAX_UPLOAD_BYTES", 3)
+
+    result = semantic_ingestion.ingest_semantic_upload(
+        filename="catalog.md",
+        stream=BytesIO(b"four"),
+        target_dir=tmp_path,
+    )
+
+    assert result.accepted is False
+    assert result.reason == "檔案超過知識庫上傳大小限制。"
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_builder_semantic_upload_ui_advertises_only_supported_formats():
+    template = (Path(__file__).parents[1] / "playground" / "templates" / "builder.html").read_text(encoding="utf-8")
+    script = (Path(__file__).parents[1] / "playground" / "static" / "js" / "builder" / "builder-page.js").read_text(encoding="utf-8")
+
+    assert 'accept=".md,.txt,.csv' in template
+    assert ".zip" not in template
+    assert "const allowedExtensions = new Set([" in script
+    assert "rejected_files" in script
 
 
 def test_runner_keeps_chat_attachments_transient_without_knowledge_upload_controls():
@@ -384,7 +603,7 @@ def test_runner_without_source_redirects_to_builder_without_dead_end():
     assert follow_response.status_code == 200
 
 
-def test_source_preview_roundtrip_preserves_current_draft():
+def test_source_preview_api_preserves_current_draft_without_legacy_page():
     app = create_app()
     app.config.update(TESTING=True)
     source = build_python_source_from_builder_choice("input_type", "text", build_default_python_source())
@@ -394,12 +613,16 @@ def test_source_preview_roundtrip_preserves_current_draft():
             session["python_source"] = source
             session["builder_has_user_config"] = True
 
-        source_response = client.get("/playground/source")
+        source_response = client.get("/playground/source/preview")
+        legacy_page_response = client.get("/playground/source")
+        export_response = client.post("/playground/source/export")
         runner_response = client.get("/playground/run")
         with client.session_transaction() as session:
             preserved_config = config_from_source(session["python_source"])
 
     assert source_response.status_code == 200
+    assert legacy_page_response.status_code == 404
+    assert export_response.status_code == 404
     assert runner_response.status_code == 200
     assert preserved_config.perceive_module == "TextPerceive"
 

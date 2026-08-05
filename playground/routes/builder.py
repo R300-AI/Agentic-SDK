@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import tempfile
 from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
@@ -10,6 +11,7 @@ from playground.services.aihub_bridge import has_builder_bridge_query, start_bui
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
 from playground.services.semantic_runtime import new_upload_id, runtime_root, source_files_dir
+from playground.services.semantic_ingestion import ingest_semantic_upload
 from playground.services.source_builder import (
     build_default_python_source,
     get_builder_steps,
@@ -171,19 +173,37 @@ def upload_builder_files():
     if not uploaded_files:
         return jsonify({"updated": False, "error": "沒有可上傳的檔案。"}), 400
 
-    upload_dir = _builder_upload_dir()
-    upload_dir.mkdir(parents=True, exist_ok=True)
-
     stored_names: list[str] = _existing_semantic_support_files()
     new_names: list[str] = []
-    for upload in uploaded_files:
-        filename = Path(str(upload.filename or "")).name.strip()
-        if not filename:
-            continue
-        upload.save(upload_dir / filename)
-        if filename not in stored_names:
-            stored_names.append(filename)
-        new_names.append(filename)
+    rejected_files: list[dict[str, str]] = []
+    with tempfile.TemporaryDirectory(prefix="builder-knowledge-") as temporary_dir:
+        staging_dir = Path(temporary_dir)
+        for upload in uploaded_files:
+            filename = Path(str(upload.filename or "")).name.strip()
+            if not filename:
+                continue
+            upload_dir = _builder_upload_dir() if session.get("builder_upload_id") else staging_dir
+            result = ingest_semantic_upload(filename=filename, stream=upload.stream, target_dir=upload_dir)
+            if not result.accepted:
+                rejected_files.append({"name": result.display_name, "reason": result.reason})
+                continue
+            if session.get("builder_upload_id") is None:
+                staged_path = staging_dir / result.canonical_name
+                upload_dir = _builder_upload_dir()
+                upload_dir.mkdir(parents=True, exist_ok=True)
+                staged_path.replace(upload_dir / result.canonical_name)
+            if result.canonical_name not in stored_names:
+                stored_names.append(result.canonical_name)
+            new_names.append(result.display_name)
+
+    if not new_names:
+        return jsonify(
+            {
+                "updated": False,
+                "error": "沒有可用的參考文件。",
+                "rejected_files": rejected_files,
+            }
+        ), 400
 
     spec = _current_spec()
     spec = apply_builder_step(spec, "retrieve", {"semantic_support_files": "\n".join(stored_names)})
@@ -201,6 +221,7 @@ def upload_builder_files():
         {
             "updated": True,
             "uploaded_files": new_names,
+            "rejected_files": rejected_files,
             "semantic_support_files": stored_names,
             "workflow_summary": {
                 "name": workflow_summary.name,

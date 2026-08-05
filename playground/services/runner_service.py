@@ -18,6 +18,7 @@ from agentic_sdk.core.events import WORKFLOW_MODULE_NAMES, default_event_label
 
 from playground.models import RunnerSceneProfile
 from playground.services.model_endpoints import MissingEndpointCredentials, endpoint_params_for_role
+from playground.services.runner_conversation import RunnerConversationState
 from playground.services.source_builder import BuilderSourceConfig, config_from_source
 from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
@@ -65,6 +66,7 @@ def execute_python_source(
     python_source: str,
     *,
     message: str = "",
+    conversation_state: RunnerConversationState | None = None,
     attachments: list[dict] | None = None,
     endpoint_selections: dict[str, str] | None = None,
     semantic_sources: list[str] | None = None,
@@ -137,12 +139,15 @@ def execute_python_source(
                 config,
                 user_message,
                 tool_submission_context,
+                conversation_state=conversation_state,
                 attachments=parsed_attachments,
                 process_observer=emit_process_event,
             )
         else:
             workflow_result = workflow.run(
                 user_message,
+                memory=conversation_state.memory(workflow_name=execution_workflow_name) if conversation_state else None,
+                session_id=conversation_state.conversation_id if conversation_state else None,
                 attachments=parsed_attachments,
                 event_callback=_workflow_event_observer(
                     config,
@@ -217,6 +222,7 @@ def execute_python_source(
         "visit_counts": workflow_result.visit_counts,
         "abort_reason": handoff_reason or workflow_result.abort_reason,
         "source_execution": source_execution,
+        "conversation_update": conversation_state.update_from_result(workflow_result).as_dict() if conversation_state else None,
     }
 
 
@@ -224,6 +230,7 @@ def stream_python_source_execution(
     python_source: str,
     *,
     message: str = "",
+    conversation_state: RunnerConversationState | None = None,
     attachments: list[dict] | None = None,
     endpoint_selections: dict[str, str] | None = None,
     semantic_sources: list[str] | None = None,
@@ -242,6 +249,7 @@ def stream_python_source_execution(
             execution = execute_python_source(
                 python_source,
                 message=message,
+                conversation_state=conversation_state,
                 attachments=attachments,
                 endpoint_selections=endpoint_selections,
                 semantic_sources=semantic_sources,
@@ -350,7 +358,10 @@ def prepare_semantic_runtime(
     return {"prepared": True}
 
 
-def _tool_submission_context(config: BuilderSourceConfig, submission: dict[str, object] | None) -> dict[str, object] | None:
+def _tool_submission_context(
+    config: BuilderSourceConfig,
+    submission: dict[str, object] | None,
+) -> dict[str, object] | None:
     if not isinstance(submission, dict):
         return None
     arguments = _tool_submission_arguments(submission)
@@ -429,6 +440,14 @@ def _validated_tool_api(method: str, url: str) -> dict[str, str] | None:
 def _call_tool_api(api: dict[str, str], arguments: dict[str, object]) -> dict[str, object]:
     method = api["method"]
     url = api["url"]
+    hostname = (urlparse(url).hostname or "").lower()
+    if hostname == "example.com" or hostname.endswith(".example.com"):
+        return {
+            "ok": False,
+            "skipped": True,
+            "reason": "placeholder_endpoint",
+            "message": "這是示範 API 端點，尚未設定可執行的門市服務，因此未送出通知。",
+        }
     try:
         if method == "GET":
             response = httpx.request(method, url, params=arguments, timeout=10.0)
@@ -450,10 +469,22 @@ def _run_tool_submission_continuation(
     user_message: str,
     context: dict[str, object],
     *,
+    conversation_state: RunnerConversationState | None,
     attachments: list[Attachment],
     process_observer: Callable[[dict[str, str]], None] | None,
 ) -> WorkflowResult:
-    state = WorkflowState(user_message=user_message, workflow_name=workflow.workflow_name)
+    memory = conversation_state.memory(workflow_name=workflow.workflow_name) if conversation_state else InContextMemory(workflow_name=workflow.workflow_name)
+    memory.append_message(
+        "user",
+        _tool_submission_memory_message(context),
+        metadata={"source": "tool_call_submission", "function_name": str(context.get("function_name") or "tool_call")},
+    )
+    state = WorkflowState(
+        user_message=user_message,
+        workflow_name=workflow.workflow_name,
+        session_id=conversation_state.conversation_id if conversation_state else "default",
+        memory=memory,
+    )
     state.attachments = list(attachments)
     state.memory_store = workflow.memory_store
     state.append(ContextEntry(type=ContextEntryType.USER_INPUT, content=user_message, metadata={"source": "tool_call_submission"}))
@@ -464,9 +495,10 @@ def _run_tool_submission_continuation(
             metadata={"summary": user_message, "source": "tool_call_submission", "model_filled": True},
         )
     )
-    retrieved_context = _tool_submission_retrieved_context(context)
+    retrieved_context = _tool_submission_retrieved_context(context, conversation_state.retrieval_evidence if conversation_state else "")
     if retrieved_context:
         state.entities.update({"retrieved_snippet": retrieved_context, "latest_retrieved_content": retrieved_context})
+        state.payload.update({"retrieved_snippet": retrieved_context, "latest_retrieved_content": retrieved_context})
     state.entities.update({"tool_call_submission": context, "perceived_input": user_message, "query": user_message})
     action = workflow.modules.get("action")
     if action is None:
@@ -479,21 +511,38 @@ def _run_tool_submission_continuation(
     state.apply(output)
     if process_observer is not None:
         process_observer(_process_event("action", _default_label("action"), f"{_action_process_name(config)}已依互動選項完成回覆。"))
+    final_message = _final_message_from_continuation(state)
+    if final_message:
+        memory.append_message("assistant", final_message, metadata={"source": "tool_call_submission"})
     return WorkflowResult(
         workflow_id=state.workflow_id,
-        final_message=_final_message_from_continuation(state),
+        final_message=final_message,
+        session_id=state.session_id,
         entries=list(state.entries),
         visit_counts=dict(state.visit_counts),
         usage=state.payload.get("_llm_usage"),
         entities=state.entities.as_dict(),
+        memory=memory.copy_for_run(),
     )
 
 
-def _tool_submission_retrieved_context(context: dict[str, object]) -> str:
+def _tool_submission_retrieved_context(context: dict[str, object], retrieval_evidence: str = "") -> str:
+    parts = [str(retrieval_evidence or "").strip()]
     api_result = context.get("api_result")
     if isinstance(api_result, dict):
-        return json.dumps(api_result, ensure_ascii=False, indent=2)
-    return ""
+        parts.append(json.dumps(api_result, ensure_ascii=False, indent=2))
+    return "\n\n".join(part for part in parts if part)
+
+
+def _tool_submission_memory_message(context: dict[str, object]) -> str:
+    return "\n".join(
+        (
+            "使用者已送出互動選項。",
+            f"工具名稱：{context.get('function_name') or 'tool_call'}",
+            "使用者選項：",
+            json.dumps(context.get("arguments") or {}, ensure_ascii=False, indent=2),
+        )
+    )
 
 
 def _final_message_from_continuation(state: WorkflowState) -> str:

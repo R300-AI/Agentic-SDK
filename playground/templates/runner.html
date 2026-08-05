@@ -43,10 +43,10 @@
           <span class="runner-sidebar-label">編輯流程</span>
         </a>
         {% if mode_context.can_view_code %}
-        <a class="runner-sidebar-action" href="{{ url_for('source.source_page') }}" aria-label="檢視程式碼" data-code-preview-open>
+        <button class="runner-sidebar-action" type="button" aria-label="檢視程式碼" data-code-preview-open>
           <span class="runner-sidebar-icon runner-sidebar-icon-export" aria-hidden="true"></span>
           <span class="runner-sidebar-label">檢視程式碼</span>
-        </a>
+        </button>
         {% endif %}
       </nav>
       {% endif %}
@@ -199,5 +199,5 @@
 {% endblock %}
 
 {% block scripts %}
-<script type="module" src="{{ url_for('static', filename='js/runner/runner-page.js') }}?v=metadata-atomic-v1"></script>
+<script type="module" src="{{ url_for('static', filename='js/runner/runner-page.js') }}?v=conversation-state-v1"></script>
 {% endblock %}

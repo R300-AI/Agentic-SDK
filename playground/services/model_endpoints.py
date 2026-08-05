@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import os
 from dataclasses import asdict, dataclass
 
+from playground.services.key_vault_config import key_vault_settings
 from playground.services.source_builder import BuilderSourceConfig, config_from_source
 from playground.services.workflow_reachability import reachable_openai_roles, reachable_workflow_roles
 
@@ -30,9 +30,9 @@ class MissingEndpointCredentials(ValueError):
     def __init__(self, role_label: str, endpoint: ModelEndpoint | None, missing_envs: list[str]) -> None:
         missing = "、".join(missing_envs)
         if endpoint is None:
-            super().__init__(f"{role_label} 需要模型 endpoint。請在 .env 宣告 {missing}。")
+            super().__init__(f"{role_label} 需要模型 endpoint。請在 Key Vault 設定 {missing}。")
         else:
-            super().__init__(f"{role_label} 選用了 {endpoint.label}，請在 .env 填入 {missing}。")
+            super().__init__(f"{role_label} 選用了 {endpoint.label}，請確認 Key Vault 設定 {missing}。")
         self.role_label = role_label
         self.endpoint = endpoint
         self.missing_envs = missing_envs
@@ -180,7 +180,11 @@ def _missing_endpoint_envs(role: str, endpoint: ModelEndpoint | None) -> list[st
 
 
 def _api_key_for_role(endpoint: ModelEndpoint, role: str) -> str:
-    return _env_value(endpoint.api_key_env)
+    settings = key_vault_settings()
+    for configured_endpoint in (*settings.chat_endpoints, *settings.embedding_endpoints):
+        if configured_endpoint.id == endpoint.id:
+            return configured_endpoint.api_key
+    return ""
 
 
 def _role_label(role: str) -> str:
@@ -193,55 +197,33 @@ def _role_label(role: str) -> str:
 
 
 def _model_endpoints() -> tuple[ModelEndpoint, ...]:
-    return _configured_model_endpoints()
-
-
-def _configured_model_endpoints() -> tuple[ModelEndpoint, ...]:
-    endpoints: list[ModelEndpoint] = []
-    for model_env in sorted(key for key, value in _normalized_env_items() if key.endswith("_MODEL") and value.strip()):
-        env_prefix = model_env[: -len("_MODEL")]
-        if _is_module_prefix(env_prefix):
-            continue
-        model = _env_value(model_env).strip()
-        label = _env_value(f"{env_prefix}_LABEL", _display_label_for_model(model)).strip() or _display_label_for_model(model)
-        base_url_env = f"{env_prefix}_BASE_URL"
-        base_url = _env_value(base_url_env).strip()
-        api_key_env = f"{env_prefix}_API_KEY"
-        endpoints.append(
-            ModelEndpoint(
-                id=_model_id(env_prefix),
-                label=label,
-                model=model,
-                model_env=model_env,
-                base_url=base_url,
-                base_url_env=base_url_env,
-                api_key_env=api_key_env,
-            )
+    return tuple(
+        ModelEndpoint(
+            id=endpoint.id,
+            label=_display_label_for_model(endpoint.model),
+            model=endpoint.model,
+            model_env=f"{endpoint.id.upper().replace('-', '_')}_MODEL",
+            base_url=endpoint.base_url,
+            base_url_env=f"{endpoint.id.upper().replace('-', '_')}_BASE_URL",
+            api_key_env=f"{endpoint.id.upper().replace('-', '_')}_API_KEY",
         )
-    return _dedupe_endpoints(endpoints)
+        for endpoint in key_vault_settings().chat_endpoints
+    )
 
 
 def _embedding_endpoints() -> tuple[ModelEndpoint, ...]:
-    endpoints: list[ModelEndpoint] = []
-    for deployment_env in sorted(key for key, value in _normalized_env_items() if key.endswith("_DEPLOYMENT_NAME") and value.strip()):
-        env_prefix = deployment_env[: -len("_DEPLOYMENT_NAME")]
-        deployment_name = _env_value(deployment_env).strip()
-        base_url_env = f"{env_prefix}_ENDPOINT"
-        base_url = _env_value(base_url_env).strip()
-        api_key_env = f"{env_prefix}_API_KEY"
-        label = _env_value(f"{env_prefix}_LABEL", _display_label_for_model(deployment_name)).strip() or _display_label_for_model(deployment_name)
-        endpoints.append(
-            ModelEndpoint(
-                id=_model_id(env_prefix),
-                label=label,
-                model=deployment_name,
-                model_env=deployment_env,
-                base_url=base_url,
-                base_url_env=base_url_env,
-                api_key_env=api_key_env,
-            )
+    return tuple(
+        ModelEndpoint(
+            id=endpoint.id,
+            label=_display_label_for_model(endpoint.deployment_name),
+            model=endpoint.deployment_name,
+            model_env=f"{endpoint.id.upper().replace('-', '_')}_DEPLOYMENT_NAME",
+            base_url=endpoint.endpoint,
+            base_url_env=f"{endpoint.id.upper().replace('-', '_')}_ENDPOINT",
+            api_key_env=f"{endpoint.id.upper().replace('-', '_')}_API_KEY",
         )
-    return _dedupe_endpoints(endpoints)
+        for endpoint in key_vault_settings().embedding_endpoints
+    )
 
 
 def _endpoint_options_for_role(role: str) -> tuple[ModelEndpoint, ...]:
@@ -254,47 +236,5 @@ def _endpoints_by_id(endpoints: tuple[ModelEndpoint, ...]) -> dict[str, ModelEnd
     return {endpoint.id: endpoint for endpoint in endpoints}
 
 
-def _dedupe_endpoints(endpoints: object) -> tuple[ModelEndpoint, ...]:
-    deduped: dict[str, ModelEndpoint] = {}
-    for endpoint in endpoints:
-        if isinstance(endpoint, ModelEndpoint) and endpoint.id not in deduped:
-            deduped[endpoint.id] = endpoint
-    return tuple(deduped.values())
-
-
-def _model_id(model: str) -> str:
-    normalized = "-".join(model.strip().lower().replace(":", "-").replace("_", "-").split())
-    return normalized or "model"
-
-
 def _display_label_for_model(model: str) -> str:
     return model.removeprefix("agentic-sdk-")
-
-
-def _is_module_prefix(env_prefix: str) -> bool:
-    return env_prefix in {"PERCEIVE", "PLAN", "ACTION", "REFLECT"}
-
-
-def _env_value(name: str, default: str = "") -> str:
-    return _normalized_env_map().get(name, default)
-
-
-def _normalized_env_items() -> list[tuple[str, str]]:
-    return list(_normalized_env_map().items())
-
-
-def _normalized_env_map() -> dict[str, str]:
-    values: dict[str, str] = {}
-    for key, value in os.environ.items():
-        clean_key = _clean_env_key(key)
-        if key == clean_key:
-            values[clean_key] = value
-    for key, value in os.environ.items():
-        clean_key = _clean_env_key(key)
-        if clean_key not in values:
-            values[clean_key] = value
-    return values
-
-
-def _clean_env_key(key: str) -> str:
-    return key.lstrip("\ufeff")

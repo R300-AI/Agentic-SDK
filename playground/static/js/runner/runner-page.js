@@ -1,8 +1,8 @@
 import { postJson, postJsonStream } from "../shared/api-client.js";
 import { bindAttachmentPicker } from "./artifact-panel.js";
-import { bindCodePreview } from "./code-preview.js?v=preview-feedback-v1";
+import { bindCodePreview } from "./code-preview.js?v=delegated-trigger-v1";
 import { bindInputComposer } from "./input-composer.js";
-import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js";
+import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js?v=required-tool-validation-v1";
 import { showSavePanel } from "./save-panel.js";
 
 const form = document.querySelector("[data-input-composer]");
@@ -511,6 +511,17 @@ async function executeRunnerStream(requestPayload, runId, onLiveProcess) {
 	return finalResult;
 }
 
+async function commitConversationUpdate(update) {
+	if (!update || typeof update !== "object") {
+		return true;
+	}
+	const result = await postJson("/playground/run/conversation/commit", { conversation_update: update });
+	if (result.committed) {
+		return true;
+	}
+	throw new Error(result.error || "對話內容無法保存，請重新送出。" );
+}
+
 function toolSubmissionDisplay(submission) {
 	const values = submission?.arguments && typeof submission.arguments === "object" ? submission.arguments : {};
 	const text = Object.entries(values).map(([key, value]) => `${key}: ${value}`).join("，");
@@ -679,21 +690,6 @@ function saveNeedsLogin(result) {
 	return result?.reauthentication_required === true || error === "Current mode cannot save to AI Hub." || error === "AI Hub login is required before saving.";
 }
 
-async function refreshAiHubSession() {
-	if (!saveLoginModal || saveRequiresLogin) {
-		return;
-	}
-	let result;
-	try {
-		result = await postJson("/playground/aihub/session/refresh");
-	} catch (error) {
-		return;
-	}
-	if (result?.reauthentication_required) {
-		openSaveLoginModal();
-	}
-}
-
 bindAttachmentPicker(attachmentInput, artifactList, attachmentStatus);
 bindCodePreview(codePreviewToggles, codePreviewModal);
 initializeSidebar();
@@ -819,6 +815,11 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	if (runId !== activeRunId) {
 		assistant.bubble?.classList.remove("is-running");
 		return;
+	}
+	try {
+		await commitConversationUpdate(result.conversation_update);
+	} catch (error) {
+		showSavePanel(savePanel, error.message || "對話內容無法保存，請重新送出。");
 	}
 	const actionReply = actionReplyFrom(result);
 	const debugMessages = debugMessagesFrom(result);
@@ -1011,10 +1012,6 @@ if (autoSaveAfterLogin && saveButton && !saveRequiresLogin) {
 	queueMicrotask(() => {
 		saveButton.click();
 	});
-}
-
-if (saveLoginModal && !saveRequiresLogin) {
-	window.setInterval(refreshAiHubSession, 5 * 60 * 1000);
 }
 
 initializeRunner();

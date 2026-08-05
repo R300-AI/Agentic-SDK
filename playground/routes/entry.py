@@ -6,6 +6,7 @@ from playground.models import ModeContext
 from playground.services.aihub_bridge import start_builder_bridge_session, start_runner_bridge_session, store_loaded_agent
 from playground.services.aihub_bundle_flow import restore_runtime_bundle
 from playground.services.aihub_client import AiHubCredentials, credentials_for_ticket, exchange_handoff_token, issue_credential_ticket, list_agents, load_config, load_public_config, verify_credentials, verify_identity
+from playground.services.aihub_session import active_credentials
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.source_builder import build_default_python_source, semantic_bundle_required_from_source
 
@@ -131,7 +132,7 @@ def navigate_from_aihub_bridge_to_runner():
 
 @entry_bp.get("/playground/agents")
 def agent_picker():
-    credentials = credentials_for_ticket(session.get("ai_hub_credential_ticket"))
+    credentials = active_credentials()
     if not credentials:
         return redirect(url_for("entry.entry"))
 
@@ -147,7 +148,7 @@ def agent_picker():
 
 @entry_bp.post("/playground/agents/new")
 def start_new_agent():
-    if not credentials_for_ticket(session.get("ai_hub_credential_ticket")):
+    if not active_credentials():
         return redirect(url_for("entry.entry"))
 
     _clear_selected_agent_state()
@@ -160,7 +161,7 @@ def start_new_agent():
 
 @entry_bp.post("/playground/agents/select")
 def select_agent():
-    credentials = credentials_for_ticket(session.get("ai_hub_credential_ticket"))
+    credentials = active_credentials()
     if not credentials:
         return redirect(url_for("entry.entry"))
 

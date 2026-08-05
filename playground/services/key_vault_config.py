@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from dataclasses import dataclass
 from functools import lru_cache
 from urllib.parse import quote
 
@@ -10,23 +11,99 @@ import httpx
 
 
 DEFAULT_KEY_VAULT_NAME = "agentic-sdk-models"
+_CHAT_ENDPOINT_PREFIXES = ("GPT-54", "GPT-55")
+_EMBEDDING_ENDPOINT_PREFIXES = ("EMBEDDED-LARGE", "EMBEDDED-SMALL")
 
 
-def load_key_vault_secrets(*, override: bool = False) -> dict[str, str]:
-    if os.environ.get("PLAYGROUND_SKIP_KEY_VAULT_LOAD", "").strip().lower() in {"1", "true", "yes"}:
-        return {}
-    vault_name = _key_vault_name()
-    if not vault_name:
-        return {}
+class KeyVaultConfigurationError(RuntimeError):
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(message)
+        self.code = code
 
-    loaded: dict[str, str] = {}
-    for secret_name, value in _key_vault_values(vault_name).items():
-        env_name = _env_name_for_secret(secret_name)
-        if not override and os.environ.get(env_name):
-            continue
-        os.environ[env_name] = value
-        loaded[env_name] = value
-    return loaded
+
+@dataclass(frozen=True)
+class AiHubSettings:
+    base_url: str
+    playground_origin: str
+
+
+@dataclass(frozen=True)
+class ChatEndpointSettings:
+    id: str
+    api_key: str
+    base_url: str
+    model: str
+
+
+@dataclass(frozen=True)
+class EmbeddingEndpointSettings:
+    id: str
+    api_key: str
+    endpoint: str
+    deployment_name: str
+
+
+@dataclass(frozen=True)
+class KeyVaultSettings:
+    ai_hub: AiHubSettings
+    chat_endpoints: tuple[ChatEndpointSettings, ...]
+    embedding_endpoints: tuple[EmbeddingEndpointSettings, ...]
+
+
+def key_vault_settings() -> KeyVaultSettings:
+    return _settings_from_values(_key_vault_values(_key_vault_name()))
+
+
+def _settings_from_values(values: dict[str, str]) -> KeyVaultSettings:
+    normalized = {str(name).strip().upper(): str(value or "").strip() for name, value in values.items()}
+    base_url = _required_setting(normalized, "AI-HUB-BASE-URL")
+    playground_origin = _required_setting(normalized, "AI-HUB-PLAYGROUND-ORIGIN")
+    chat_endpoints = tuple(
+        endpoint
+        for prefix in _CHAT_ENDPOINT_PREFIXES
+        if (endpoint := _chat_endpoint_settings(normalized, prefix)) is not None
+    )
+    embedding_endpoints = tuple(
+        endpoint
+        for prefix in _EMBEDDING_ENDPOINT_PREFIXES
+        if (endpoint := _embedding_endpoint_settings(normalized, prefix)) is not None
+    )
+    return KeyVaultSettings(
+        ai_hub=AiHubSettings(base_url=base_url.rstrip("/"), playground_origin=playground_origin.rstrip("/")),
+        chat_endpoints=chat_endpoints,
+        embedding_endpoints=embedding_endpoints,
+    )
+
+
+def _required_setting(values: dict[str, str], secret_name: str) -> str:
+    value = values.get(secret_name, "")
+    if not value:
+        raise KeyVaultConfigurationError("missing_secret", f"Key Vault is missing required secret {secret_name}.")
+    return value
+
+
+def _chat_endpoint_settings(values: dict[str, str], prefix: str) -> ChatEndpointSettings | None:
+    secret_names = (f"{prefix}-API-KEY", f"{prefix}-BASE-URL", f"{prefix}-MODEL")
+    if not any(values.get(name) for name in secret_names):
+        return None
+    return ChatEndpointSettings(
+        id=prefix.lower(),
+        api_key=_required_setting(values, secret_names[0]),
+        base_url=_required_setting(values, secret_names[1]),
+        model=_required_setting(values, secret_names[2]),
+    )
+
+
+def _embedding_endpoint_settings(values: dict[str, str], prefix: str) -> EmbeddingEndpointSettings | None:
+    secret_names = (f"{prefix}-API-KEY", f"{prefix}-ENDPOINT", f"{prefix}-DEPLOYMENT-NAME")
+    if not any(values.get(name) for name in secret_names):
+        return None
+    return EmbeddingEndpointSettings(
+        id=prefix.lower(),
+        api_key=_required_setting(values, secret_names[0]),
+        endpoint=_required_setting(values, secret_names[1]),
+        deployment_name=_required_setting(values, secret_names[2]),
+    )
 
 
 @lru_cache(maxsize=4)
@@ -37,7 +114,6 @@ def _key_vault_values(vault_name: str) -> dict[str, str]:
         for secret_name in _secret_names(vault_name, token):
             values[secret_name] = _secret_value(vault_name, token, secret_name)
     except (KeyError, OSError, subprocess.SubprocessError, httpx.HTTPError, ValueError) as error:
-        os.environ["PLAYGROUND_KEY_VAULT_LOAD_ERROR"] = error.__class__.__name__
         return {}
     return values
 
@@ -49,24 +125,8 @@ def configured_key_vault_secret_names() -> tuple[str, ...]:
     return tuple(sorted(_key_vault_values(vault_name)))
 
 
-def configured_key_vault_env_names() -> tuple[str, ...]:
-    return tuple(_env_name_for_secret(secret_name) for secret_name in configured_key_vault_secret_names())
-
-
 def _key_vault_name() -> str:
-    configured_name = (
-        os.environ.get("PLAYGROUND_KEY_VAULT_NAME")
-        or os.environ.get("AZURE_KEY_VAULT_NAME")
-        or os.environ.get("KEY_VAULT_NAME")
-        or ""
-    ).strip()
-    if configured_name:
-        return configured_name
     return DEFAULT_KEY_VAULT_NAME
-
-
-def _env_name_for_secret(secret_name: str) -> str:
-    return secret_name.strip().replace("-", "_")
 
 
 def _secret_names(vault_name: str, token: str) -> list[str]:

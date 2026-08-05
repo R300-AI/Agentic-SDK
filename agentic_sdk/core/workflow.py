@@ -209,7 +209,8 @@ class Workflow:
                         state=state,
                         events_schema=active_events_schema,
                     )
-                )
+                ),
+                set(active_events_schema),
             )
             state.set_structured_field_callback(
                 lambda module_name, field, value, metadata: event_callback(
@@ -589,6 +590,9 @@ def _final_message_from(state: WorkflowState) -> str:
     result = state.last_action_result or {}
     if "content" in result:
         return str(result["content"])
+    workflow_error = state.last_workflow_error
+    if workflow_error:
+        return f"[workflow ended with error] {workflow_error['message']}"
     err = state.last_action_error
     if err:
         return f"[workflow ended with error] {err.get('message', '')}"

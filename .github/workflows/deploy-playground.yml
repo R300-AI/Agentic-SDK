@@ -120,11 +120,12 @@ jobs:
 
       - name: Configure App Service runtime
         uses: azure/CLI@v2
-        continue-on-error: true
-        timeout-minutes: 3
+        timeout-minutes: 10
         with:
           azcliversion: latest
           inlineScript: |
+            set -euo pipefail
+
             STARTUP_COMMAND='python -m playground.main'
             CURRENT_STARTUP=$(az webapp show \
               --name "${{ vars.AZURE_WEBAPP_NAME }}" \
@@ -205,6 +206,43 @@ jobs:
                 --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
                 --settings "${APP_SETTINGS[@]}" \
                 --output none
+            fi
+
+            assert_setting() {
+              local name="$1"
+              local expected="$2"
+              local actual
+              actual=$(az webapp config appsettings list \
+                --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+                --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+                --query "[?name=='${name}'].value | [0]" \
+                -o tsv)
+              if [ "$actual" != "$expected" ]; then
+                echo "::error::App Service setting ${name} did not match the required runtime value."
+                exit 1
+              fi
+            }
+
+            ACTUAL_STARTUP=$(az webapp show \
+              --name "${{ vars.AZURE_WEBAPP_NAME }}" \
+              --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" \
+              --query "siteConfig.appCommandLine" \
+              -o tsv)
+            if [ "$ACTUAL_STARTUP" != "$STARTUP_COMMAND" ]; then
+              echo "::error::App Service startup command did not match the required runtime command."
+              exit 1
+            fi
+
+            assert_setting "PORT" "8000"
+            assert_setting "WEBSITES_PORT" "8000"
+            assert_setting "SCM_DO_BUILD_DURING_DEPLOYMENT" "false"
+            assert_setting "ENABLE_ORYX_BUILD" "false"
+            assert_setting "PYTHONPATH" "$DESIRED_PYTHONPATH"
+            assert_setting "KEY_VAULT_NAME" "${{ vars.KEY_VAULT_NAME }}"
+
+            if [ -z "$CURRENT_SECRET" ]; then
+              echo "::error::PLAYGROUND_SECRET_KEY is not configured."
+              exit 1
             fi
 
       - name: Install Python dependencies into package

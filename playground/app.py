@@ -14,11 +14,11 @@ from playground.routes.entry import entry_bp
 from playground.routes.runner import runner_bp
 from playground.routes.source import source_bp
 from playground.routes.test_support import test_support_bp
-from playground.services.key_vault_config import load_key_vault_secrets
+from playground.services.key_vault_config import key_vault_settings
 
 
 def create_app() -> Flask:
-    load_key_vault_secrets(override=False)
+    settings = key_vault_settings()
 
     app = Flask(__name__)
     session_dir = Path(os.environ.get("PLAYGROUND_SESSION_FILE_DIR", Path(tempfile.gettempdir()) / "agentic-sdk-playground-sessions"))
@@ -30,6 +30,7 @@ def create_app() -> Flask:
         SESSION_PERMANENT=False,
     )
     Session(app)
+    app.extensions["key_vault_settings"] = settings
     asset_dir = Path(__file__).resolve().parents[1] / "assets"
 
     @app.get("/healthz")

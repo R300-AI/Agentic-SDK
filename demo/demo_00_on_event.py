@@ -1,3 +1,10 @@
+import os
+import sys
+
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.chdir(REPO_ROOT)
+sys.path.insert(0, REPO_ROOT)
+
 from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, KeywordRetrieve, TextPerceive
 

@@ -38,9 +38,15 @@ class WorkflowState:
     visit_counts: dict[str, int] = field(default_factory=dict)
     last_action_result: dict[str, Any] | None = None
     last_action_error: dict[str, Any] | None = None
+    last_workflow_error: dict[str, str] | None = None
     attachments: list[Attachment] = field(default_factory=list)
     _token_delta_callback: Callable[[str, str, dict[str, Any]], None] | None = field(
         default=None,
+        init=False,
+        repr=False,
+    )
+    _token_delta_modules: set[str] = field(
+        default_factory=set,
         init=False,
         repr=False,
     )
@@ -126,8 +132,10 @@ class WorkflowState:
     def set_token_delta_callback(
         self,
         callback: Callable[[str, str, dict[str, Any]], None] | None,
+        modules: set[str] | None = None,
     ) -> None:
         self._token_delta_callback = callback
+        self._token_delta_modules = set(modules or ())
 
     def emit_token_delta(
         self,
@@ -136,7 +144,7 @@ class WorkflowState:
         *,
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        if self._token_delta_callback is None or content is None:
+        if self._token_delta_callback is None or str(module) not in self._token_delta_modules or content is None:
             return
         resolved_content = str(content)
         if not resolved_content:

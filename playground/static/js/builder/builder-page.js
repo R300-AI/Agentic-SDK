@@ -665,13 +665,28 @@ function uploadSemanticFiles(panel) {
     return Promise.resolve();
   }
 
+  const allowedExtensions = new Set([
+    ".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".htm", ".xml", ".py", ".js", ".ts", ".tsx", ".jsx", ".sql", ".toml", ".ini", ".cfg",
+    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".gif", ".webp",
+  ]);
+  const rejectedNames = files
+    .filter((file) => !allowedExtensions.has(`.${file.name.split(".").pop()?.toLowerCase() || ""}`))
+    .map((file) => file.name);
+  const acceptedFiles = files.filter((file) => !rejectedNames.includes(file.name));
+  if (!acceptedFiles.length) {
+    status.classList.add("error");
+    status.textContent = `不支援上傳：${rejectedNames.join("、")}。`;
+    input.value = "";
+    return Promise.resolve();
+  }
+
   status.classList.remove("error");
-  status.textContent = `準備上傳 ${files.length} 份參考文件...`;
+  status.textContent = `準備上傳 ${acceptedFiles.length} 份參考文件...`;
   progress.hidden = false;
   progress.value = 0;
 
   const formData = new FormData();
-  files.forEach((file) => formData.append("files", file));
+  acceptedFiles.forEach((file) => formData.append("files", file));
 
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
@@ -686,13 +701,23 @@ function uploadSemanticFiles(panel) {
       progress.value = 100;
       try {
         const response = JSON.parse(xhr.responseText || "{}");
+        const rejectedFiles = Array.isArray(response.rejected_files) ? response.rejected_files : [];
         if (xhr.status >= 400 || response.updated === false) {
-          throw new Error(response.error || "上傳失敗。");
+          const rejectedMessage = rejectedFiles.map((file) => `${file.name}：${file.reason}`).join("；");
+          throw new Error(rejectedMessage || response.error || "上傳失敗。");
         }
         output.value = Array.isArray(response.semantic_support_files)
           ? response.semantic_support_files.join("\n")
           : "";
         syncSemanticUploadPanel(panel);
+        const rejectedMessage = [
+          ...rejectedNames.map((name) => `${name}：不支援的檔案格式。`),
+          ...rejectedFiles.map((file) => `${file.name}：${file.reason}`),
+        ].join("；");
+        if (rejectedMessage) {
+          status.classList.add("error");
+          status.textContent = rejectedMessage;
+        }
         updateSummary(response.workflow_summary);
         renderBuilderEndpointState(response.builder_endpoint_state);
         renderBuilderReviewState(response.builder_review_state, response.builder_review_ready);

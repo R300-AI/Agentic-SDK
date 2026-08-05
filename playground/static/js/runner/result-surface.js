@@ -149,12 +149,6 @@ export async function streamResultMarkdown(element, message, { onUpdate } = {}) 
   }
 }
 
-const TOOL_CALL_PANEL_CLASS_BY_TYPE = {
-  string: "tool-call-panel-string",
-  number: "tool-call-panel-number",
-  boolean: "tool-call-panel-boolean",
-};
-
 export function renderMarkdown(element, markdown) {
   if (!element) {
     return;
@@ -280,18 +274,17 @@ function normalizeToolCallFieldType(rawType) {
 
 function createToolCallPanel(panel) {
   const form = document.createElement("form");
-  form.className = "tool-call-card";
+  form.className = "tool-call-card interactive-followup";
   form.dataset.toolCallForm = panel.id;
   form.dataset.toolCallFunction = panel.functionName;
 
   const header = document.createElement("header");
   header.className = "tool-call-card-header";
-  const label = document.createElement("span");
-  label.className = "eyebrow";
-  label.textContent = "需要你選擇";
   const title = document.createElement("h3");
+  const titleId = `${panel.id}-title`;
+  title.id = titleId;
   title.textContent = panel.title || "下一步方向";
-  header.append(label, title);
+  header.append(title);
 
   if (panel.description && panel.description !== panel.title) {
     const description = document.createElement("p");
@@ -302,28 +295,43 @@ function createToolCallPanel(panel) {
 
   const fieldList = document.createElement("div");
   fieldList.className = "tool-call-fields";
-  panel.fields.forEach((field) => fieldList.append(createToolCallFieldPanel(field)));
+  panel.fields.forEach((field, index) => fieldList.append(createToolCallFieldPanel(field, `${panel.id}-${index + 1}`)));
 
   const status = document.createElement("p");
   status.className = "tool-call-status";
+  status.id = `${panel.id}-status`;
+  status.setAttribute("aria-live", "polite");
   status.textContent = "請選擇後送出。";
 
   const actions = document.createElement("div");
   actions.className = "tool-call-actions";
   const confirmButton = document.createElement("button");
-  confirmButton.className = "button button-secondary";
+  confirmButton.className = "tool-call-submit";
   confirmButton.type = "submit";
+  confirmButton.setAttribute("aria-describedby", status.id);
   confirmButton.textContent = "送出選擇";
   actions.append(confirmButton, status);
 
   form.append(header, fieldList, actions);
   form.addEventListener("input", () => {
+    clearToolCallValidation(form);
     status.textContent = "選擇已更新，尚未送出。";
   });
   form.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (form.dataset.toolCallSubmitting === "true") {
+      return;
+    }
     const argumentsPayload = collectToolCallPayload(form);
+    const missingRequiredFields = panel.fields.filter((field) => field.required && !hasToolCallValue(argumentsPayload[field.name]));
+    if (missingRequiredFields.length) {
+      setToolCallValidation(form, missingRequiredFields);
+      status.textContent = `請先填寫：${missingRequiredFields.map((field) => field.label).join("、")}。`;
+      return;
+    }
+    clearToolCallValidation(form);
     form.dataset.toolCallPayload = JSON.stringify(argumentsPayload);
+    form.dataset.toolCallSubmitting = "true";
     status.textContent = "正在送出選擇...";
     confirmButton.disabled = true;
     form.dispatchEvent(new CustomEvent("runner:tool-call-submit", {
@@ -337,37 +345,48 @@ function createToolCallPanel(panel) {
     }));
   });
   form.addEventListener("runner:tool-call-complete", () => {
+    delete form.dataset.toolCallSubmitting;
     status.textContent = "已送出選擇。";
     confirmButton.disabled = false;
   });
   return form;
 }
 
-function createToolCallFieldPanel(field) {
+function createToolCallFieldPanel(field, fieldId) {
   const panel = document.createElement("section");
-  panel.className = `tool-call-panel ${TOOL_CALL_PANEL_CLASS_BY_TYPE[field.type] || TOOL_CALL_PANEL_CLASS_BY_TYPE.string}`;
+  panel.className = "tool-call-panel interactive-field";
+  panel.dataset.toolCallField = field.name;
 
   const label = document.createElement("label");
   label.className = "tool-call-field-label";
+  label.htmlFor = `${fieldId}-control`;
   const name = document.createElement("span");
   name.textContent = field.required ? `${field.label} *` : field.label;
-  const control = createToolCallControl(field);
+  const control = createToolCallControl(field, fieldId, name);
   label.append(name);
   const hintText = String(field.description || "").trim();
   if (hintText) {
     const hint = document.createElement("small");
+    hint.id = `${fieldId}-hint`;
     hint.textContent = hintText;
     label.append(hint);
   }
   label.append(control);
-  panel.append(label);
+  const error = document.createElement("p");
+  error.className = "tool-call-field-error";
+  error.id = `${fieldId}-error`;
+  error.hidden = true;
+  panel.append(label, error);
   return panel;
 }
 
-function createToolCallControl(field) {
+function createToolCallControl(field, fieldId, label) {
   if (field.type === "boolean") {
     const wrapper = document.createElement("div");
     wrapper.className = "tool-call-choice-list";
+    wrapper.setAttribute("role", "radiogroup");
+    wrapper.setAttribute("aria-labelledby", label.id || `${fieldId}-label`);
+    label.id = `${fieldId}-label`;
     const rawBooleanValue = String(field.value).toLowerCase();
     const booleanValue = field.value === true || rawBooleanValue === "true";
     const hasBooleanValue = field.value === true || field.value === false || rawBooleanValue === "true" || rawBooleanValue === "false";
@@ -377,22 +396,29 @@ function createToolCallControl(field) {
     ];
     choices.forEach((choice) => {
       const value = choice.value === true || String(choice.value).toLowerCase() === "true";
-      wrapper.append(createBooleanChoice(field, value, choice.label, hasBooleanValue && (value ? booleanValue : !booleanValue), choice.description));
+      wrapper.append(createBooleanChoice(field, fieldId, value, choice.label, hasBooleanValue && (value ? booleanValue : !booleanValue), choice.description));
     });
     return wrapper;
   }
-  const input = document.createElement("input");
-  input.name = field.name;
-  input.dataset.toolCallType = field.type;
-  input.type = field.type === "number" ? "number" : "text";
-  input.value = field.value == null ? "" : String(field.value);
-  return input;
+  const value = field.value == null ? "" : String(field.value);
+  const control = field.type === "string" && value.length > 60 ? document.createElement("textarea") : document.createElement("input");
+  control.id = `${fieldId}-control`;
+  control.name = field.name;
+  control.dataset.toolCallType = field.type;
+  control.value = value;
+  if (control instanceof HTMLTextAreaElement) {
+    control.rows = 3;
+  } else {
+    control.type = field.type === "number" ? "number" : "text";
+  }
+  return control;
 }
 
-function createBooleanChoice(field, value, labelText, checked, descriptionText = "") {
+function createBooleanChoice(field, fieldId, value, labelText, checked, descriptionText = "") {
   const label = document.createElement("label");
   label.className = "tool-call-choice";
   const input = document.createElement("input");
+  input.id = `${fieldId}-${value ? "true" : "false"}`;
   input.type = "radio";
   input.name = field.name;
   input.value = value ? "true" : "false";
@@ -407,6 +433,40 @@ function createBooleanChoice(field, value, labelText, checked, descriptionText =
     label.append(description);
   }
   return label;
+}
+
+function setToolCallValidation(form, fields) {
+  const missingFields = new Set(fields.map((field) => field.name));
+  form.querySelectorAll("[data-tool-call-field]").forEach((fieldPanel) => {
+    const isMissing = missingFields.has(fieldPanel.dataset.toolCallField);
+    fieldPanel.classList.toggle("is-invalid", isMissing);
+    const error = fieldPanel.querySelector(".tool-call-field-error");
+    if (error) {
+      error.hidden = !isMissing;
+      error.textContent = isMissing ? "此欄位為必填。" : "";
+    }
+    fieldPanel.querySelectorAll("[data-tool-call-type]").forEach((control) => {
+      control.setAttribute("aria-invalid", String(isMissing));
+      if (isMissing && error) {
+        control.setAttribute("aria-describedby", error.id);
+      }
+    });
+  });
+}
+
+function clearToolCallValidation(form) {
+  form.querySelectorAll(".tool-call-panel.is-invalid").forEach((fieldPanel) => {
+    fieldPanel.classList.remove("is-invalid");
+    const error = fieldPanel.querySelector(".tool-call-field-error");
+    if (error) {
+      error.hidden = true;
+      error.textContent = "";
+    }
+    fieldPanel.querySelectorAll("[data-tool-call-type]").forEach((control) => {
+      control.removeAttribute("aria-invalid");
+      control.removeAttribute("aria-describedby");
+    });
+  });
 }
 
 function collectToolCallPayload(form) {
@@ -429,6 +489,16 @@ function collectToolCallPayload(form) {
     }
   });
   return payload;
+}
+
+function hasToolCallValue(value) {
+  if (typeof value === "boolean") {
+    return true;
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value);
+  }
+  return String(value ?? "").trim().length > 0;
 }
 
 function createProcessEvent(event, { active = false } = {}) {

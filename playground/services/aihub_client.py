@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-import os
 from secrets import token_urlsafe
 from time import time
 from urllib.parse import quote
 
 import httpx
 
+from playground.services.key_vault_config import KeyVaultConfigurationError, key_vault_settings
 from playground.services.source_builder import build_default_python_source
 
 
@@ -207,7 +207,10 @@ def bridge_credentials(token: str | None, *, api_base_url: str | None = None) ->
 
 
 def _ai_hub_base_url() -> str:
-    return (os.environ.get("AI_HUB_BASE_URL") or os.environ.get("AIHUB_BASE_URL") or "").strip().rstrip("/")
+    try:
+        return key_vault_settings().ai_hub.base_url
+    except KeyVaultConfigurationError:
+        return ""
 
 
 def _base_url_for_credentials(credentials: AiHubCredentials | None = None) -> str:
@@ -215,17 +218,14 @@ def _base_url_for_credentials(credentials: AiHubCredentials | None = None) -> st
 
 
 def _playground_origin(origin: str | None) -> str:
-    return (os.environ.get("AI_HUB_PLAYGROUND_ORIGIN") or origin or "").strip().rstrip("/")
+    try:
+        return key_vault_settings().ai_hub.playground_origin
+    except KeyVaultConfigurationError:
+        return ""
 
 
 def _request_timeout_seconds() -> float:
-    raw_timeout = os.environ.get("AI_HUB_REQUEST_TIMEOUT_SECONDS", "")
-    if not raw_timeout:
-        return _DEFAULT_TIMEOUT_SECONDS
-    try:
-        return max(float(raw_timeout), 0.1)
-    except ValueError:
-        return _DEFAULT_TIMEOUT_SECONDS
+    return _DEFAULT_TIMEOUT_SECONDS
 
 
 def list_agents(*, credentials: AiHubCredentials | None = None, origin: str | None = None) -> dict[str, object]:
@@ -688,13 +688,7 @@ def _bundle_error(message: str, code: str, *, agent_id: str | None = None, statu
 
 
 def _credential_ttl_seconds() -> float:
-    raw_ttl = os.environ.get("AI_HUB_CREDENTIAL_TTL_SECONDS", "")
-    if not raw_ttl:
-        return _DEFAULT_CREDENTIAL_TTL_SECONDS
-    try:
-        return max(float(raw_ttl), 60.0)
-    except ValueError:
-        return _DEFAULT_CREDENTIAL_TTL_SECONDS
+    return _DEFAULT_CREDENTIAL_TTL_SECONDS
 
 
 def _cleanup_expired_tickets() -> None:

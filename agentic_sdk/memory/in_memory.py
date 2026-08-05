@@ -6,6 +6,7 @@ import re
 import time
 
 from agentic_sdk.core.entities import Attachment
+from agentic_sdk.memory._attachments import image_url_for_attachment
 from agentic_sdk.memory.in_context import ConversationRole, ConversationTurn
 from agentic_sdk.memory.protocol import MemoryEntry, MemorySearchResult
 
@@ -191,7 +192,7 @@ class InMemoryStore:
 def _message_content_with_attachments(turn: ConversationTurn) -> str | list[dict[str, object]]:
     image_parts: list[dict[str, object]] = []
     for attachment in turn.attachments:
-        image_url = _attachment_image_url(attachment)
+        image_url = image_url_for_attachment(attachment)
         if image_url is not None:
             image_parts.append({"type": "image_url", "image_url": {"url": image_url}})
     if not image_parts:

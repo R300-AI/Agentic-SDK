@@ -4,6 +4,7 @@
 
 ## 檔案
 
+- `demo_00_on_event.py`: 示範 `event_callback` 與 events schema
 - `demo_01_direct_answer.py`: 對應 README 案例 1
 - `demo_02_ollama_completion.py`: 對應 README 案例 2
 - `demo_03_tool_call_action.py`: 對應 README 案例 3
@@ -14,6 +15,7 @@
 在 repo root 執行：
 
 ```powershell
+C:/Python314/python.exe demo/demo_00_on_event.py
 C:/Python314/python.exe demo/demo_01_direct_answer.py
 C:/Python314/python.exe demo/demo_02_ollama_completion.py
 C:/Python314/python.exe demo/demo_03_tool_call_action.py
