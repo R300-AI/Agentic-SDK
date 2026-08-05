@@ -23,7 +23,7 @@ _CONFIG_SAVE_PATH = "/api/playground/config/save"
 _CONTRACT_SAVE_PATH = "/api/playground/contract/save"
 _BUNDLE_SAVE_PATH = "/api/playground/agents/{agent_id}/bundle/save"
 _BUNDLE_LOAD_PATH = "/api/playground/agents/{agent_id}/bundle/load"
-_DEFAULT_TIMEOUT_SECONDS = 5.0
+_DEFAULT_TIMEOUT_SECONDS = 20.0
 _DEFAULT_CREDENTIAL_TTL_SECONDS = 8 * 60 * 60
 
 
