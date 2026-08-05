@@ -1078,7 +1078,7 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
             {
                 "id": str(tool_call.get("id") or f"tool_call_{index}"),
                 "function_name": function_name,
-                "title": _tool_call_panel_title(final_message, schema_description, function_name),
+                "title": _tool_call_panel_title(schema, function_name),
                 "description": _user_facing_tool_description(schema_description),
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": arguments_text,
@@ -1088,19 +1088,16 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
     return panels
 
 
-def _tool_call_panel_title(final_message: str, schema_description: str, function_name: str) -> str:
-    cleaned_message = str(final_message or "").strip()
-    if cleaned_message and cleaned_message != "已產生工具呼叫。":
-        return _confirmation_title_from_message(cleaned_message)
-    return _user_facing_tool_description(schema_description) or function_name
-
-
-def _confirmation_title_from_message(message: str) -> str:
-    lines = [line.strip().strip("*_`# ") for line in str(message or "").splitlines() if line.strip()]
-    for line in reversed(lines):
-        if _asks_for_confirmation(line):
-            return line[:160]
-    return (lines[-1] if lines else str(message or "").strip())[:160]
+def _tool_call_panel_title(schema: dict[str, object], function_name: str) -> str:
+    parameters = schema.get("parameters")
+    properties = parameters.get("properties") if isinstance(parameters, dict) else {}
+    properties = properties if isinstance(properties, dict) else {}
+    for name, field_schema in properties.items():
+        if isinstance(field_schema, dict) and _tool_call_field_type(field_schema.get("type"), None) == "boolean":
+            return f"請確認：{name}"
+    if properties:
+        return "請補充以下需求"
+    return _user_facing_tool_description(str(schema.get("description") or "")) or function_name
 
 
 def _user_facing_tool_description(description: str) -> str:
@@ -1181,7 +1178,7 @@ def _tool_call_panels_from_schemas(action_tools: tuple[dict[str, object], ...], 
             {
                 "id": f"configured_tool_{index}",
                 "function_name": function_name,
-                "title": _tool_call_panel_title(final_message, str(schema.get("description") or ""), function_name),
+                "title": _tool_call_panel_title(schema, function_name),
                 "description": _user_facing_tool_description(str(schema.get("description") or "")),
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": "{}",
@@ -1243,31 +1240,27 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
                 "panel_type": f"tool-call-panel-{field_type}",
                 "description": _tool_call_field_description(field_schema, field_type),
                 "required": str(name) in required_names,
-                "value": value if value is not None else "",
-                "choices": _tool_call_field_choices(field_type),
+                "value": "" if field_type == "boolean" else (value if value is not None else ""),
+                "choices": _tool_call_field_choices(str(name), field_type),
             }
         )
     return fields
 
 
 def _tool_call_field_label(name: str, field_type: str) -> str:
-    if field_type == "boolean":
-        return "你的選擇"
     return name
 
 
 def _tool_call_field_description(field_schema: dict[str, object], field_type: str) -> str:
-    if field_type == "boolean":
-        return "請根據上方問題選擇是否繼續。"
     return str(field_schema.get("description") or "")
 
 
-def _tool_call_field_choices(field_type: str) -> list[dict[str, object]]:
+def _tool_call_field_choices(name: str, field_type: str) -> list[dict[str, object]]:
     if field_type != "boolean":
         return []
     return [
-        {"value": True, "label": "是", "description": "我同意進行這個下一步。"},
-        {"value": False, "label": "否", "description": "我暫時不進行這個下一步。"},
+        {"value": True, "label": "是", "description": f"我同意：{name}。"},
+        {"value": False, "label": "否", "description": f"我暫不進行：{name}。"},
     ]
 
 

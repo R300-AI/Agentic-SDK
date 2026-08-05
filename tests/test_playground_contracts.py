@@ -690,7 +690,7 @@ def test_tool_call_panel_falls_back_for_reservation_confirmation(monkeypatch):
     result = runner_service.execute_python_source(source, message="好，那就幫我保留你推薦的那款。")
 
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "請問我要先為您登記保留這款推薦嗎？"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
 
 
 def test_tool_call_panel_allows_data_limitations_after_recommendation(monkeypatch):
@@ -719,7 +719,7 @@ def test_tool_call_panel_allows_data_limitations_after_recommendation(monkeypatc
     result = runner_service.execute_python_source(source, message="請直接幫我推薦一款合適的鞋墊。")
 
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "您要我先幫您保留或購買這款推薦嗎？"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
 
 
 def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(monkeypatch):
@@ -746,8 +746,8 @@ def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(
     assert result["status"] == "completed"
     assert result["tool_calls"] == []
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "我建議採用第一個方案。是否要進入下一步？"
-    assert result["tool_call_panels"][0]["fields"][0]["label"] == "你的選擇"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否確認"
 
 
 def test_tool_call_panel_falls_back_for_natural_next_step_question(monkeypatch):
@@ -776,7 +776,7 @@ def test_tool_call_panel_falls_back_for_natural_next_step_question(monkeypatch):
     result = runner_service.execute_python_source(source, message="請推薦適合久站通勤的產品，並確認下一步。")
 
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "推薦商品：寬楦通勤鞋。要不要幫你進行下一步？"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
 
 
 def test_catalog_identifier_without_retrieved_evidence_stops_for_human_confirmation(monkeypatch):
@@ -845,7 +845,7 @@ def test_tool_call_panel_uses_final_confirmation_line_for_long_recommendation(mo
 
     result = runner_service.execute_python_source(source, message="請推薦下一步")
 
-    assert result["tool_call_panels"][0]["title"] == "要幫你保留這項推薦嗎？"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
 
 
 def test_tool_call_panel_does_not_fallback_when_recommendation_needs_more_input(monkeypatch):
@@ -874,7 +874,7 @@ def test_tool_call_panel_does_not_fallback_when_recommendation_needs_more_input(
     assert result["tool_call_panels"] == []
 
 
-def test_tool_call_panel_uses_model_message_as_user_facing_question(monkeypatch):
+def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
     source = build_python_source_from_builder_choice("output_format", "interactive", None)
     source = build_python_source_from_builder_choice(
         "action",
@@ -891,7 +891,7 @@ def test_tool_call_panel_uses_model_message_as_user_facing_question(monkeypatch)
         def run(self, *_args, **_kwargs):
             return WorkflowResult(
                 workflow_id="workflow-1",
-                final_message="我建議先採用支撐型鞋墊。是否要購買這項推薦？",
+                final_message="我建議先採用支撐型鞋墊。\n資料缺口：仍需由門市確認技術細節。",
                 entities={
                     "latest_tool_calls": [
                         {
@@ -908,13 +908,15 @@ def test_tool_call_panel_uses_model_message_as_user_facing_question(monkeypatch)
     result = runner_service.execute_python_source(source, message="請推薦鞋墊")
 
     assert result["status"] == "completed"
-    assert result["tool_call_panels"][0]["title"] == "我建議先採用支撐型鞋墊。是否要購買這項推薦？"
+    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert "資料缺口" not in result["tool_call_panels"][0]["title"]
     assert "https://example.com/confirm" not in result["tool_call_panels"][0]["description"]
     assert result["tool_call_panels"][0]["fields"][0]["type"] == "boolean"
-    assert result["tool_call_panels"][0]["fields"][0]["label"] == "你的選擇"
-    assert result["tool_call_panels"][0]["fields"][0]["description"] == "請根據上方問題選擇是否繼續。"
+    assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否確認"
+    assert result["tool_call_panels"][0]["fields"][0]["description"] == "使用者是否確認"
+    assert result["tool_call_panels"][0]["fields"][0]["value"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["choices"] == [
-        {"value": True, "label": "是", "description": "我同意進行這個下一步。"},
-        {"value": False, "label": "否", "description": "我暫時不進行這個下一步。"},
+        {"value": True, "label": "是", "description": "我同意：是否確認。"},
+        {"value": False, "label": "否", "description": "我暫不進行：是否確認。"},
     ]
     assert result["tool_call_panels"][0]["api"] == {"method": "POST", "url": "https://example.com/confirm"}
