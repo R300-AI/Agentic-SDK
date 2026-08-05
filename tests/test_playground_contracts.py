@@ -6,7 +6,7 @@ from pathlib import Path
 
 from flask import session
 
-from agentic_sdk.core import WorkflowResult, WorkflowState
+from agentic_sdk.core import ContextEntry, ContextEntryType, WorkflowResult, WorkflowState
 from agentic_sdk.core.events import default_events_schema
 from playground.app import create_app
 from playground.routes import builder as builder_routes
@@ -737,6 +737,76 @@ def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(
     assert len(result["tool_call_panels"]) == 1
     assert result["tool_call_panels"][0]["title"] == "我建議採用第一個方案。是否要進入下一步？"
     assert result["tool_call_panels"][0]["fields"][0]["label"] == "你的選擇"
+
+
+def test_tool_call_panel_falls_back_for_natural_next_step_question(monkeypatch):
+    source = build_python_source_from_builder_choice("output_format", "interactive", None)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="推薦商品：寬楦通勤鞋。要不要幫你進行下一步？",
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請推薦適合久站通勤的產品，並確認下一步。")
+
+    assert len(result["tool_call_panels"]) == 1
+    assert result["tool_call_panels"][0]["title"] == "推薦商品：寬楦通勤鞋。要不要幫你進行下一步？"
+
+
+def test_catalog_identifier_without_retrieved_evidence_stops_for_human_confirmation(monkeypatch):
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
+    source = build_python_source_from_builder_choice("output_format", "interactive", source)
+    source = build_python_source_from_builder_choice(
+        "action",
+        {
+            "interaction_trigger": "需要使用者確認下一步時呼叫。",
+            "api_method": "POST",
+            "api_url": "https://example.com/confirm",
+            "component_fields": "是否確認 = 使用者是否確認（資料類型：是/否)",
+        },
+        source,
+    )
+    source = build_python_source_from_builder_choice("failure_policy", "handoff", source)
+
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(
+                workflow_id="workflow-1",
+                final_message="推薦商品：科技鞋墊 通用型。要不要幫你進行下一步？",
+                entries=[
+                    ContextEntry(
+                        type=ContextEntryType.RETRIEVED,
+                        content="商品編號：291090970，科技鞋墊 通用型。",
+                        metadata={"source": "semantic_retrieve", "kb_hit_count": 1, "memory_hit_count": 0},
+                    )
+                ],
+                entities={},
+            )
+
+    monkeypatch.setattr(runner_service, "_workflow_from_source", lambda *_args, **_kwargs: FakeWorkflow())
+
+    result = runner_service.execute_python_source(source, message="請推薦產品編號 X-UNKNOWN-999，並進行下一步。")
+
+    assert result["status"] == "aborted"
+    assert result["tool_calls"] == []
+    assert result["tool_call_panels"] == []
+    assert "X-UNKNOWN-999" in result["final_message"]
+    assert "人工確認" in result["final_message"]
 
 
 def test_tool_call_panel_uses_final_confirmation_line_for_long_recommendation(monkeypatch):

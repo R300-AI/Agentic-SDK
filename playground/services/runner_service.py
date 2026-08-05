@@ -177,16 +177,19 @@ def execute_python_source(
     final_message = workflow_result.final_message or get_runner_demo_result(scene_profile)["message"]
     if final_message == "No matching entries.":
         final_message = _source_fallback_text(python_source) or "目前沒有找到符合的參考資料。"
-    tool_calls = workflow_result.entities.get("latest_tool_calls", [])
-    tool_call_panels = _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
-    if not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
+    handoff_reason = _human_handoff_reason(config, workflow_result.entries, user_message)
+    tool_calls = [] if handoff_reason else workflow_result.entities.get("latest_tool_calls", [])
+    tool_call_panels = [] if handoff_reason else _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
+    if not handoff_reason and not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
         tool_call_panels = _tool_call_panels_from_schemas(config.action_tools, final_message=final_message)
+    if handoff_reason:
+        final_message = f"{handoff_reason} 已停止推薦與下一步送出，請交由 LaNew 門市人員人工確認產品資料、庫存與適用條件。"
     result = {
         "title": "回覆結果",
         "message": final_message,
         "tool_calls": tool_calls,
         "tool_call_panels": tool_call_panels,
-        "adoption_level": "建議人工確認" if workflow_result.aborted else "可供採用",
+        "adoption_level": "建議人工確認" if workflow_result.aborted or handoff_reason else "可供採用",
         "scene_profile": scene_profile,
         "evidence": [
             "來源：目前輸入內容。",
@@ -194,7 +197,7 @@ def execute_python_source(
         ],
     }
     return {
-        "status": "aborted" if workflow_result.aborted else "completed",
+        "status": "aborted" if workflow_result.aborted or handoff_reason else "completed",
         "final_message": final_message,
         "tool_calls": tool_calls,
         "tool_call_panels": tool_call_panels,
@@ -204,7 +207,7 @@ def execute_python_source(
         "scene_profile": asdict(scene_profile),
         "workflow_id": workflow_result.workflow_id,
         "visit_counts": workflow_result.visit_counts,
-        "abort_reason": workflow_result.abort_reason,
+        "abort_reason": handoff_reason or workflow_result.abort_reason,
         "source_execution": source_execution,
     }
 
@@ -781,6 +784,26 @@ def _retrieve_missed(entries: list[ContextEntry]) -> bool:
     return metadata.get("source") == "semantic_retrieve" and hit_total == 0
 
 
+def _human_handoff_reason(config: BuilderSourceConfig, entries: list[ContextEntry], user_message: str) -> str | None:
+    if config.reflect_module != "EvidenceCheckReflect" or config.reflect_on_failure != "end":
+        return None
+    retrieve_entries = [entry for entry in entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
+    if _retrieve_missed(retrieve_entries):
+        return "目前沒有找到可支持這項決策的產品資料。"
+    requested_identifiers = _requested_product_identifiers(user_message)
+    if not requested_identifiers or not retrieve_entries:
+        return None
+    retrieved_content = "\n".join(str(entry.content or "") for entry in retrieve_entries).lower()
+    missing_identifier = next((identifier for identifier in requested_identifiers if identifier.lower() not in retrieved_content), None)
+    if missing_identifier:
+        return f"catalog 沒有可驗證產品編號 {missing_identifier} 的資料。"
+    return None
+
+
+def _requested_product_identifiers(message: str) -> list[str]:
+    return re.findall(r"(?:產品|商品|品)\s*編號\s*[:：]?\s*([A-Za-z0-9][A-Za-z0-9_-]{2,})", str(message or ""), flags=re.IGNORECASE)
+
+
 def _retrieve_debug_message(config: BuilderSourceConfig, entries: list[ContextEntry], missed: bool) -> str:
     latest = entries[-1]
     metadata = latest.metadata
@@ -1077,7 +1100,7 @@ def _asks_for_confirmation(text: str) -> bool:
 def _asks_for_business_confirmation(text: str) -> bool:
     if not _asks_for_confirmation(text):
         return False
-    return any(term in text for term in ("購買", "保留", "送出", "登記", "進入下一步", "進行下一步", "購買建議", "提交", "confirm", "submit", "next step"))
+    return any(term in text for term in ("購買", "保留", "送出", "登記", "下一步", "購買建議", "提交", "confirm", "submit", "next step"))
 
 
 def _asks_for_missing_input(text: str) -> bool:
