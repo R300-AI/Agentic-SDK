@@ -5,6 +5,7 @@ import json
 import re
 from collections.abc import Callable, Iterator
 from dataclasses import asdict
+from pathlib import Path
 from queue import Queue
 from threading import Thread
 from typing import Any
@@ -886,18 +887,62 @@ def _initialization_steps(
     semantic_saved_path: str | None,
     semantic_index_path: str | None,
 ):
-    steps = []
+    semantic_retrieve_required = "retrieve" in reachable_roles and config.retrieve_module == "SemanticRetrieve"
+    steps = [
+        (
+            "knowledge_requirement",
+            "工作流程知識庫需求",
+            lambda: _validate_knowledge_requirement(semantic_retrieve_required),
+        )
+    ]
+    if semantic_retrieve_required:
+        steps.append(
+            (
+                "knowledge_resources",
+                "知識庫資源",
+                lambda: _validate_semantic_knowledge_resources(config, semantic_sources),
+            )
+        )
     if "perceive" in reachable_roles:
         steps.append(("perceive", "輸入解析器", lambda: _perceive_from_config(config, endpoint_selections, reachable_roles)))
     if "plan" in reachable_roles and config.plan_strategy:
         steps.append(("plan", "流程判斷器", lambda: _plan_from_config(config, endpoint_selections, reachable_roles)))
     if "retrieve" in reachable_roles:
-        steps.append(("retrieve", _retrieve_process_title(config), lambda: _retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_sources, semantic_saved_path, semantic_index_path)))
+        retrieve_label = "知識庫索引" if semantic_retrieve_required else _retrieve_process_title(config)
+        steps.append(("retrieve", retrieve_label, lambda: _retrieve_from_config(config, endpoint_selections, reachable_roles, semantic_sources, semantic_saved_path, semantic_index_path)))
     if "action" in reachable_roles:
         steps.append(("action", _action_process_name(config), lambda: _action_from_config(config, endpoint_selections, reachable_roles)))
     if "reflect" in reachable_roles and config.reflect_module:
         steps.append(("reflect", "回覆檢核器", lambda: _reflect_from_config(config, endpoint_selections, reachable_roles)))
     return steps
+
+
+def _validate_knowledge_requirement(semantic_retrieve_required: bool) -> None:
+    if semantic_retrieve_required:
+        return
+
+
+def _validate_semantic_knowledge_resources(config: BuilderSourceConfig, semantic_sources: list[str] | None) -> None:
+    configured_files = [Path(name).name for name in config.semantic_support_files if Path(name).name]
+    if not configured_files:
+        raise ValueError("這個工作流程需要知識庫，但尚未設定參考文件。請回到編輯流程上傳文件並儲存 Agent。")
+    if not semantic_sources:
+        raise ValueError("知識庫尚未還原。請確認 Agent 已儲存，然後從 AI Hub 重新開啟。")
+
+    source_paths = [Path(source) for source in semantic_sources]
+    if not any(source_path.exists() for source_path in source_paths):
+        raise ValueError("知識庫資源無法取得。請回到編輯流程重新上傳文件並儲存 Agent。")
+
+    missing_files = [
+        filename
+        for filename in configured_files
+        if not any(
+            (source_path / filename).is_file() if source_path.is_dir() else source_path.name == filename and source_path.is_file()
+            for source_path in source_paths
+        )
+    ]
+    if missing_files:
+        raise ValueError(f"知識庫缺少設定的參考文件：{', '.join(missing_files)}。請重新上傳文件並儲存 Agent。")
 
 
 def _perceive_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):

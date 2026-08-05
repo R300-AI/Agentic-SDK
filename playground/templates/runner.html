@@ -111,12 +111,6 @@
             </label>
             <input class="visually-hidden" id="runner-attachments" name="attachments" type="file" multiple data-attachment-input>
           </div>
-          {% if uses_semantic_retrieve %}
-          <div class="attachment-picker">
-            <label class="attachment-trigger" for="runner-knowledge-files" aria-label="新增知識庫檔案" title="新增知識庫檔案">知識庫</label>
-            <input class="visually-hidden" id="runner-knowledge-files" type="file" multiple data-knowledge-input>
-          </div>
-          {% endif %}
           <textarea id="runner-message" name="message" rows="1" placeholder="問問 Agent"></textarea>
           <button class="composer-submit-button" type="submit" aria-label="送出訊息"><span aria-hidden="true">›</span><span class="visually-hidden">產生回覆</span></button>
         </div>

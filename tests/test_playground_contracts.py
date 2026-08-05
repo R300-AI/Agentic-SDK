@@ -15,7 +15,7 @@ from playground.services import key_vault_config
 from playground.services import model_endpoints
 from playground.services import runner_service
 from playground.services.aihub_bridge import store_loaded_agent
-from playground.services.source_builder import build_default_python_source, build_python_source_from_builder_choice, config_from_source
+from playground.services.source_builder import BuilderSourceConfig, build_default_python_source, build_python_source_from_builder_choice, config_from_source
 from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 from playground.services.workflow_reachability import reachable_workflow_roles
 
@@ -235,42 +235,53 @@ def test_semantic_builder_upload_unblocks_review_and_reaches_runner(monkeypatch)
     assert captured["semantic_saved_path"]
 
 
-def test_runner_semantic_upload_persists_knowledge_files(monkeypatch):
-    app = create_app()
-    app.config.update(TESTING=True)
-    semantic_spec = apply_builder_step(default_spec(), "retrieve_policy", "semantic")
-
-    with app.test_client() as client:
-        with client.session_transaction() as current_session:
-            current_session["mode"] = "aihub_editable"
-            current_session["workflow_spec"] = semantic_spec
-            current_session["python_source"] = compile_python_source(semantic_spec)
-
-        response = client.post(
-            "/playground/run/knowledge/uploads",
-            data={"files": (BytesIO(b"persistent semantic knowledge"), "knowledge.md")},
-            content_type="multipart/form-data",
-        )
-        with client.session_transaction() as current_session:
-            upload_id = current_session["builder_upload_id"]
-            support_files = current_session["workflow_spec"]["retrieve"]["params"]["support_files"]
-
-    assert response.status_code == 200
-    assert response.get_json()["uploaded_files"] == ["knowledge.md"]
-    assert support_files == ["knowledge.md"]
-    assert runner_routes.source_files_dir(upload_id).joinpath("knowledge.md").read_bytes() == b"persistent semantic knowledge"
-
-
-def test_semantic_runner_keeps_chat_attachments_separate_from_knowledge_uploads():
+def test_runner_keeps_chat_attachments_transient_without_knowledge_upload_controls():
     template = (Path(__file__).parents[1] / "playground" / "templates" / "runner.html").read_text(encoding="utf-8")
     runner_script = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
 
     assert 'data-attachment-input' in template
-    assert 'data-knowledge-input' in template
     assert 'for="runner-attachments" aria-label="上傳本次試跑附件"' in template
-    assert 'for="runner-knowledge-files" aria-label="新增知識庫檔案"' in template
-    assert 'knowledgeInput?.addEventListener("change"' in runner_script
+    assert 'data-knowledge-input' not in template
+    assert '新增知識庫檔案' not in template
+    assert '/playground/run/knowledge/uploads' not in runner_script
     assert 'attachmentInput?.addEventListener("change", async () =>' not in runner_script
+
+
+def test_semantic_initialization_checks_knowledge_requirement_and_restored_sources(tmp_path):
+    config = BuilderSourceConfig(
+        workflow_name="semantic readiness",
+        retrieve_module="SemanticRetrieve",
+        semantic_support_files=("catalog.md",),
+    )
+    source_dir = tmp_path / "source-files"
+    source_dir.mkdir()
+    source_dir.joinpath("catalog.md").write_text("catalog content", encoding="utf-8")
+
+    steps = runner_service._initialization_steps(config, {}, {"retrieve"}, [str(source_dir)], str(tmp_path), None)
+    initializers = {role: initializer for role, _label, initializer in steps}
+
+    assert [role for role, _label, _initializer in steps[:3]] == ["knowledge_requirement", "knowledge_resources", "retrieve"]
+    assert initializers["knowledge_requirement"]() is None
+    assert initializers["knowledge_resources"]() is None
+
+
+def test_semantic_initialization_blocks_when_configured_knowledge_is_unavailable():
+    source = compile_python_source(apply_builder_step(default_spec(), "retrieve_policy", "semantic"))
+
+    events = list(runner_service.stream_python_source_initialization(source))
+
+    assert events[-1]["type"] == "final"
+    assert events[-1]["ready"] is False
+    assert events[-1]["role"] == "knowledge_resources"
+    assert "尚未設定參考文件" in events[-1]["error"]
+
+
+def test_nonsemantic_initialization_does_not_require_knowledge_sources():
+    config = BuilderSourceConfig(workflow_name="no knowledge")
+    steps = runner_service._initialization_steps(config, {}, set(), None, None, None)
+
+    assert [role for role, _label, _initializer in steps] == ["knowledge_requirement"]
+    assert steps[0][2]() is None
 
 
 def test_runner_edit_settings_navigation_preserves_current_draft():

@@ -15,7 +15,6 @@ const starterQuestions = document.querySelector("[data-starter-questions]");
 const saveButton = document.querySelector("[data-save-action]");
 const saveStatus = document.querySelector("[data-save-status]");
 const attachmentInput = document.querySelector("[data-attachment-input]");
-const knowledgeInput = document.querySelector("[data-knowledge-input]");
 const artifactList = document.querySelector("[data-artifact-list]");
 const attachmentStatus = document.querySelector("[data-attachment-status]");
 const savePanel = document.querySelector("[data-save-panel]");
@@ -63,7 +62,6 @@ let workflowDescriptionRequest = null;
 const workflowDescriptionPlaceholder = workflowDescriptionInput?.getAttribute("placeholder") || workflowDescriptionDisplay?.dataset.placeholder || "";
 let lastSaveTrigger = null;
 let runnerInitialized = !initializationOverlay;
-let knowledgeUploadInFlight = false;
 const initialSaveStatusText = saveStatus?.textContent?.trim() || "";
 let savedWorkflowName = initialSaveStatusText === "尚未儲存" ? null : workflowName;
 let savedWorkflowDescription = initialSaveStatusText === "尚未儲存" ? null : workflowDescription;
@@ -883,36 +881,6 @@ bindInputComposer(form, async (payload) => {
 	await runWorkflow(payload);
 });
 
-knowledgeInput?.addEventListener("change", async () => {
-	if (!usesSemanticRetrieve || !knowledgeInput.files?.length) {
-		return;
-	}
-	const body = new FormData();
-	Array.from(knowledgeInput.files).forEach((file) => body.append("files", file));
-	knowledgeUploadInFlight = true;
-	knowledgeInput.disabled = true;
-	if (attachmentStatus) {
-		attachmentStatus.textContent = "正在加入知識庫...";
-	}
-	try {
-		const response = await fetch("/playground/run/knowledge/uploads", { method: "POST", body });
-		const result = await response.json();
-		if (!response.ok || !result.updated) {
-			throw new Error(result.error || "知識庫檔案上傳失敗。");
-		}
-		if (attachmentStatus) {
-			attachmentStatus.textContent = `已加入知識庫 ${result.uploaded_files.length} 個檔案；儲存 Agent 後會一併保存。`;
-		}
-	} catch (error) {
-		if (attachmentStatus) {
-			attachmentStatus.textContent = error.message || "知識庫檔案上傳失敗。";
-		}
-	} finally {
-		knowledgeUploadInFlight = false;
-		knowledgeInput.disabled = false;
-	}
-});
-
 starterQuestions?.addEventListener("click", (event) => {
 	const button = event.target.closest?.("[data-starter-question-button]");
 	if (!button || !messageInput) {
@@ -936,10 +904,6 @@ resultThread?.addEventListener("runner:tool-call-submit", async (event) => {
 });
 
 saveButton?.addEventListener("click", async () => {
-	if (knowledgeUploadInFlight) {
-		showSavePanel(savePanel, "知識庫檔案仍在上傳，請完成後再儲存 Agent。")
-		return;
-	}
 	const readyToSave = await flushWorkflowMetadataEdits();
 	if (!readyToSave) {
 		showSavePanel(savePanel, "請先完成名稱或 description 的更新。");
