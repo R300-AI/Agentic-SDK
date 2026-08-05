@@ -181,8 +181,12 @@ def execute_python_source(
     handoff_reason = _human_handoff_reason(config, workflow_result.entries, user_message)
     tool_calls = [] if handoff_reason else workflow_result.entities.get("latest_tool_calls", [])
     tool_call_panels = [] if handoff_reason else _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
+    panel_decision = "human_handoff" if handoff_reason else "tool_call" if tool_call_panels else ""
     if not handoff_reason and not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
         tool_call_panels = _tool_call_panels_from_schemas(config.action_tools, final_message=final_message)
+        panel_decision = "fallback_eligible" if tool_call_panels else "no_panel"
+    if not panel_decision:
+        panel_decision = _panel_decision_reason(user_message, final_message)
     if handoff_reason:
         final_message = f"{handoff_reason} 已停止推薦與下一步送出，請交由服務人員人工確認產品資料、庫存與適用條件。"
     result = {
@@ -190,6 +194,7 @@ def execute_python_source(
         "message": final_message,
         "tool_calls": tool_calls,
         "tool_call_panels": tool_call_panels,
+        "panel_decision": panel_decision,
         "adoption_level": "建議人工確認" if workflow_result.aborted or handoff_reason else "可供採用",
         "scene_profile": scene_profile,
         "evidence": [
@@ -202,6 +207,7 @@ def execute_python_source(
         "final_message": final_message,
         "tool_calls": tool_calls,
         "tool_call_panels": tool_call_panels,
+        "panel_decision": panel_decision,
         "debug_messages": _debug_messages_for_execution(config, workflow_result, final_message),
         "process_events": streamed_process_events,
         "result": result,
@@ -1079,7 +1085,7 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
                 "id": str(tool_call.get("id") or f"tool_call_{index}"),
                 "function_name": function_name,
                 "title": _tool_call_panel_title(schema, function_name),
-                "description": _user_facing_tool_description(schema_description),
+                "description": "",
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": arguments_text,
                 "fields": _tool_call_fields_from(schema, arguments),
@@ -1117,6 +1123,14 @@ def _should_offer_configured_tool_panel(config: BuilderSourceConfig, user_messag
     if not _has_decision_context(user_text):
         return False
     return _has_actionable_response(final_text) and _asks_for_business_confirmation(final_text)
+
+
+def _panel_decision_reason(user_message: str, final_message: str) -> str:
+    if _has_information_intent(str(user_message or "").lower()):
+        return "information_request"
+    if _asks_for_missing_input(str(final_message or "").lower()):
+        return "missing_evidence"
+    return "no_tool_call"
 
 
 def _configured_tool_text(config: BuilderSourceConfig) -> str:
@@ -1179,7 +1193,7 @@ def _tool_call_panels_from_schemas(action_tools: tuple[dict[str, object], ...], 
                 "id": f"configured_tool_{index}",
                 "function_name": function_name,
                 "title": _tool_call_panel_title(schema, function_name),
-                "description": _user_facing_tool_description(str(schema.get("description") or "")),
+                "description": "",
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": "{}",
                 "fields": fields,

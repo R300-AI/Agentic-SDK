@@ -110,6 +110,21 @@ def test_interactive_panel_submission_releases_pending_state():
     assert 'event.target?.dispatchEvent(new CustomEvent("runner:tool-call-complete"));' in runner_source
 
 
+def test_runner_execution_stream_emits_one_final_event(monkeypatch):
+    def fake_execute(_python_source, *, process_observer=None, **_kwargs):
+        if process_observer is not None:
+            process_observer({"stage": "perceive", "status": "completed"})
+            process_observer({"stage": "action", "status": "completed"})
+        return {"status": "completed", "final_message": "單一最終回覆"}
+
+    monkeypatch.setattr(runner_service, "execute_python_source", fake_execute)
+
+    events = list(runner_service.stream_python_source_execution("workflow = Workflow()", message="測試"))
+
+    assert [event["type"] for event in events].count("final") == 1
+    assert events[-1] == {"type": "final", "execution": {"status": "completed", "final_message": "單一最終回覆"}}
+
+
 def test_runner_execute_routes_forward_attachment_payloads(monkeypatch):
     app = create_app()
     app.config.update(TESTING=True)
@@ -636,6 +651,7 @@ def test_tool_call_panel_does_not_fallback_for_information_intent(monkeypatch):
     assert result["status"] == "completed"
     assert result["tool_calls"] == []
     assert result["tool_call_panels"] == []
+    assert result["panel_decision"] == "information_request"
 
 
 def test_tool_call_panel_does_not_fallback_for_optional_followup_question(monkeypatch):
@@ -748,7 +764,9 @@ def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(
     assert result["status"] == "completed"
     assert result["tool_calls"] == []
     assert len(result["tool_call_panels"]) == 1
+    assert result["panel_decision"] == "fallback_eligible"
     assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["description"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否確認"
 
 
@@ -910,9 +928,10 @@ def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
     result = runner_service.execute_python_source(source, message="請推薦鞋墊")
 
     assert result["status"] == "completed"
+    assert result["panel_decision"] == "tool_call"
     assert result["tool_call_panels"][0]["title"] == "請確認：是否通知門市人員帶實體鞋墊說明"
     assert "資料缺口" not in result["tool_call_panels"][0]["title"]
-    assert "https://example.com/confirm" not in result["tool_call_panels"][0]["description"]
+    assert result["tool_call_panels"][0]["description"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["type"] == "boolean"
     assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否通知門市人員帶實體鞋墊說明"
     assert result["tool_call_panels"][0]["fields"][0]["description"] == "只有顧客明確同意後才填 true；尚未回答時保持未知"
