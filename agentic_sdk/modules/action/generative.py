@@ -96,7 +96,7 @@ def _build_messages(state: WorkflowState, system_prompt: str) -> list[dict[str, 
         state.memory,
         system_prompt=system_prompt,
         extra_context={
-            "perceived_context_instruction": "perceived_context 是輸入理解階段整理出的使用者需求與附件判讀；回答時必須保留這些事實，不要被 retrieved_context 覆蓋。影像資料只能輸出其中同時具有清楚欄位名稱與數值的事實；不得依版面位置推測欄位名稱，欄位或數值不清楚時必須標示不確定。",
+            "perceived_context_instruction": "perceived_context 是輸入理解階段整理出的使用者需求與附件判讀；回答時必須保留這些事實，不要被 retrieved_context 覆蓋。影像資料只能輸出其中同時具有清楚欄位名稱與數值的事實；不得依版面位置推測欄位名稱，欄位或數值不清楚時必須標示不確定。未勾選的對照圖、圖例或範例分類不可當作使用者的實際分類。",
             "perceived_context": perceived,
             "retrieved_context_instruction": "retrieved_context 是已檢索到的可靠資料；如果它不是空白，請優先依據它回答。",
             "retrieved_context": retrieved,

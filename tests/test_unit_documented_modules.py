@@ -281,7 +281,9 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertIn("input_images", user_content[0]["text"])
         self.assertEqual("image_url", user_content[1]["type"])
         self.assertEqual("data:image/png;base64,AAAA", user_content[1]["image_url"]["url"])
-        self.assertIn("only report a value as a named fact", client.last_create_kwargs["messages"][0]["content"])
+        system_prompt = client.last_create_kwargs["messages"][0]["content"]
+        self.assertIn("only report a value as a named fact", system_prompt)
+        self.assertIn("Never treat an unmarked comparison chart", system_prompt)
 
     def test_next_step_plan_uses_openai_decision(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")

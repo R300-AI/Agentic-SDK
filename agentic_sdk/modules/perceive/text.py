@@ -15,7 +15,8 @@ _SYSTEM_PROMPT = (
     "When fields_to_notice is provided, use those names in details when possible. "
     "For image-derived measurements, only report a value as a named fact when both its label "
     "and value are legible. Never infer a label from a value's position or surrounding layout; "
-    "record it as uncertain when either is unclear."
+    "record it as uncertain when either is unclear. Never treat an unmarked comparison chart, "
+    "legend, or example category as the user's selected classification."
 )
 
 

@@ -183,7 +183,7 @@ def execute_python_source(
     if not handoff_reason and not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
         tool_call_panels = _tool_call_panels_from_schemas(config.action_tools, final_message=final_message)
     if handoff_reason:
-        final_message = f"{handoff_reason} 已停止推薦與下一步送出，請交由 LaNew 門市人員人工確認產品資料、庫存與適用條件。"
+        final_message = f"{handoff_reason} 已停止推薦與下一步送出，請交由服務人員人工確認產品資料、庫存與適用條件。"
     result = {
         "title": "回覆結果",
         "message": final_message,
