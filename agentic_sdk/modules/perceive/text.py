@@ -16,7 +16,10 @@ _SYSTEM_PROMPT = (
     "For image-derived measurements, only report a value as a named fact when both its label "
     "and value are legible. Never infer a label from a value's position or surrounding layout; "
     "record it as uncertain when either is unclear. Never treat an unmarked comparison chart, "
-    "legend, or example category as the user's selected classification."
+    "legend, or example category as the user's selected classification. A category name appearing "
+    "beside a foot illustration is only an example, even when its text is legible. Report a left or "
+    "right foot classification only when the image explicitly identifies that user's foot side and "
+    "shows a selected result or result field; otherwise state that the classification is uncertain."
 )
 
 

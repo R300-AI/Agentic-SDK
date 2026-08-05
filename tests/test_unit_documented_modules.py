@@ -71,6 +71,19 @@ class StaticEmbedder:
 
 
 class DocumentedModuleUnitTests(unittest.TestCase):
+    def test_image_category_examples_require_an_explicit_selected_result(self) -> None:
+        from agentic_sdk.modules.action.generative import _build_messages
+        from agentic_sdk.modules.perceive.text import _SYSTEM_PROMPT
+
+        state = WorkflowState(user_message="請分析圖片")
+        state.payload["perceived_details"] = {"image": "foot chart"}
+        messages = _build_messages(state, "test system prompt")
+        extra_context = next(message["content"] for message in messages if message["role"] == "system")
+
+        self.assertIn("selected result or result field", _SYSTEM_PROMPT)
+        self.assertIn("左右腳", extra_context)
+        self.assertIn("選取結果或結果欄位", extra_context)
+
     def test_faiss_knowledge_base_chunks_long_documents(self) -> None:
         from agentic_sdk.modules.retrieve.semantic import FaissKnowledgeBase
 
