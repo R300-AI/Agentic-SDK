@@ -998,3 +998,20 @@ def test_interactive_optional_field_is_not_required_in_tool_schema():
     parameters = config_from_source(source).action_tools[0]["function"]["parameters"]
 
     assert parameters["required"] == ["是否確認"]
+
+
+def test_runner_optional_field_is_not_required_for_legacy_tool_schema():
+    fields = runner_service._tool_call_fields_from(
+        {
+            "parameters": {
+                "properties": {
+                    "是否確認": {"type": "boolean", "description": "使用者是否確認"},
+                    "顧客補充需求": {"type": "string", "description": "顧客可補充需求；可留空。"},
+                },
+                "required": ["是否確認", "顧客補充需求"],
+            }
+        },
+        {},
+    )
+
+    assert [field["required"] for field in fields] == [True, False]

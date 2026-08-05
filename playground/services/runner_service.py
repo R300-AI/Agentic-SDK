@@ -1259,7 +1259,7 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
                 "type": field_type,
                 "panel_type": f"tool-call-panel-{field_type}",
                 "description": "",
-                "required": str(name) in required_names,
+                "required": str(name) in required_names and not _is_optional_tool_field(field_schema),
                 "value": "" if field_type == "boolean" else (value if value is not None else ""),
                 "choices": _tool_call_field_choices(str(name), field_type),
             }
@@ -1269,6 +1269,11 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
 
 def _tool_call_field_label(name: str, field_type: str) -> str:
     return name
+
+
+def _is_optional_tool_field(field_schema: dict[str, object]) -> bool:
+    description = str(field_schema.get("description") or "").lower()
+    return any(marker in description for marker in ("可留空", "選填", "非必填", "optional"))
 
 
 def _tool_call_field_description(field_schema: dict[str, object], field_type: str) -> str:
