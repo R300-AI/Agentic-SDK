@@ -12,7 +12,10 @@ from agentic_sdk.memory.in_context import build_module_messages
 _SYSTEM_PROMPT = (
     "PERCEIVE. Understand the user message and return JSON with fields "
     "intent, summary, and details. Use a concise snake_case English intent. "
-    "When fields_to_notice is provided, use those names in details when possible."
+    "When fields_to_notice is provided, use those names in details when possible. "
+    "For image-derived measurements, only report a value as a named fact when both its label "
+    "and value are legible. Never infer a label from a value's position or surrounding layout; "
+    "record it as uncertain when either is unclear."
 )
 
 
