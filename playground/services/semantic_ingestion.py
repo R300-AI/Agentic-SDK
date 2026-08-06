@@ -113,6 +113,11 @@ def _read_indexable_text(path: Path, suffix: str) -> str:
             return path.read_text(encoding="utf-8")
         except UnicodeDecodeError as exc:
             raise ValueError("文字檔必須使用 UTF-8 編碼。") from exc
+    if suffix == ".pdf":
+        try:
+            return _read_pdf_text(path)
+        except ValueError:
+            pass
     try:
         from markitdown import MarkItDown
         content = str(getattr(MarkItDown().convert(str(path)), "text_content", "") or "")

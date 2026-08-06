@@ -248,6 +248,13 @@ class FaissKnowledgeBase:
             return self._extract_binary_document(file_path)
 
     def _extract_binary_document(self, file_path: Path) -> str:
+        if file_path.suffix.lower() == ".pdf":
+            try:
+                from pdfminer.high_level import extract_text
+
+                return str(extract_text(str(file_path)) or "")
+            except Exception:
+                pass
         try:
             from markitdown import MarkItDown
         except Exception as exc:

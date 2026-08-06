@@ -122,10 +122,10 @@ def test_semantic_upload_preserves_unicode_source_filename(tmp_path, monkeypatch
     assert (tmp_path / result.canonical_name).read_bytes() == b"pptx-binary-content"
 
 
-def test_semantic_pdf_upload_falls_back_when_markitdown_cannot_convert(tmp_path, monkeypatch):
+def test_semantic_pdf_upload_prefers_pdfminer(tmp_path, monkeypatch):
     class FailingMarkItDown:
         def convert(self, _path):
-            raise RuntimeError("primary converter failed")
+            raise AssertionError("PDF validation should not call MarkItDown when pdfminer is available")
 
     monkeypatch.setitem(sys.modules, "markitdown", SimpleNamespace(MarkItDown=FailingMarkItDown))
     monkeypatch.setitem(sys.modules, "pdfminer.high_level", SimpleNamespace(extract_text=lambda _path: "PDF workshop content"))
@@ -155,13 +155,13 @@ def test_semantic_retrieve_extracts_original_binary_pptx(tmp_path, monkeypatch):
     assert knowledge_base._read_document(source) == "AI Hub deployment workshop"
 
 
-def test_semantic_retrieve_falls_back_to_pdfminer_for_pdf(tmp_path, monkeypatch):
+def test_semantic_retrieve_prefers_pdfminer_for_pdf(tmp_path, monkeypatch):
     source = tmp_path / "workshop.pdf"
     source.write_bytes(b"%PDF-1.7\n%\xff\xff\xff\xff")
 
     class FailingMarkItDown:
         def convert(self, _path):
-            raise RuntimeError("primary converter failed")
+            raise AssertionError("PDF retrieval should not call MarkItDown when pdfminer is available")
 
     monkeypatch.setitem(sys.modules, "markitdown", SimpleNamespace(MarkItDown=FailingMarkItDown))
     monkeypatch.setitem(sys.modules, "pdfminer.high_level", SimpleNamespace(extract_text=lambda _path: "PDF workshop content"))
