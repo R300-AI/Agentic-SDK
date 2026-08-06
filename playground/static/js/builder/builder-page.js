@@ -656,10 +656,12 @@ function uploadSemanticFiles(panel) {
     return Promise.resolve();
   }
 
-  const allowedExtensions = new Set([
-    ".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html", ".htm", ".xml", ".py", ".js", ".ts", ".tsx", ".jsx", ".sql", ".toml", ".ini", ".cfg",
-    ".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".gif", ".webp",
-  ]);
+  const allowedExtensions = new Set(
+    String(input.accept || "")
+      .split(",")
+      .map((extension) => extension.trim().toLowerCase())
+      .filter((extension) => extension.startsWith(".")),
+  );
   const rejectedNames = files
     .filter((file) => !allowedExtensions.has(`.${file.name.split(".").pop()?.toLowerCase() || ""}`))
     .map((file) => file.name);

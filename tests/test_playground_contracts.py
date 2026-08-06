@@ -327,6 +327,8 @@ def test_runner_hydrates_metadata_from_server_rendered_fields():
 def test_reasoning_surface_uses_controlled_stage_descriptions_only():
     surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
 
+    assert 'if (title === "流程中止")' in surface_source
+    assert 'return String(event?.description || "").trim() || "流程已被安全限制中止。";' in surface_source
     assert "return \"正在處理這個步驟。\";" in surface_source
     assert "test(description)" not in surface_source
 
@@ -1039,7 +1041,8 @@ def test_builder_semantic_upload_ui_advertises_only_supported_formats():
 
     assert 'accept="{{ semantic_upload_accept }}"' in template
     assert ".zip" not in template
-    assert "const allowedExtensions = new Set([" in script
+    assert "String(input.accept || \"\")" in script
+    assert ".doc\", \".docx\"" not in script
     assert "rejected_files" in script
 
 

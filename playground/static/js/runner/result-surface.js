@@ -250,6 +250,9 @@ function processDisplayDescription(event) {
   if (descriptions[title]) {
     return descriptions[title];
   }
+  if (title === "流程中止") {
+    return String(event?.description || "").trim() || "流程已被安全限制中止。";
+  }
   return "正在處理這個步驟。";
 }
 
