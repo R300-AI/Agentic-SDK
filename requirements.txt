@@ -1,5 +1,6 @@
 # 手動維護。新增/修改套件後直接更新此檔案並 commit。
 # Oryx 在 Azure App Service 部署時執行 pip install -r requirements.txt。
+# CI 與 Azure Playground 部署都驗證這份鎖定的執行期相依套件。
 azure-identity==1.19.0
 azure-keyvault-secrets==4.9.0
 annotated-doc==0.0.4

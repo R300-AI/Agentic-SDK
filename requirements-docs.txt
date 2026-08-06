@@ -1,4 +1,5 @@
 # Documentation site build dependencies.
+# Docs Pages uses this pinned toolchain for strict MkDocs builds.
 mkdocs==1.6.1
 mkdocs-material==9.7.6
 pymdown-extensions==10.15
