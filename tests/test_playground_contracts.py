@@ -183,6 +183,24 @@ def test_semantic_pdf_upload_prefers_pdfminer(tmp_path, monkeypatch):
     assert result.canonical_name == "Agentic SDK使用教學.pdf"
 
 
+def test_semantic_pdf_upload_falls_back_to_pypdf(tmp_path, monkeypatch):
+    def fail_pdfminer(_path):
+        raise RuntimeError("pdfminer unavailable")
+
+    page = SimpleNamespace(extract_text=lambda: "PDF workshop fallback content")
+    monkeypatch.setitem(sys.modules, "pdfminer.high_level", SimpleNamespace(extract_text=fail_pdfminer))
+    monkeypatch.setitem(sys.modules, "pypdf", SimpleNamespace(PdfReader=lambda _path: SimpleNamespace(pages=[page])))
+
+    result = semantic_ingestion.ingest_semantic_upload(
+        filename="Agentic SDK使用教學.pdf",
+        stream=BytesIO(b"%PDF-1.7"),
+        target_dir=tmp_path,
+    )
+
+    assert result.accepted is True
+    assert result.canonical_name == "Agentic SDK使用教學.pdf"
+
+
 def test_semantic_retrieve_extracts_original_binary_pptx(tmp_path, monkeypatch):
     source = tmp_path / "workshop.pptx"
     source.write_bytes(b"\xff\xfebinary-presentation")
@@ -211,6 +229,21 @@ def test_semantic_retrieve_prefers_pdfminer_for_pdf(tmp_path, monkeypatch):
     knowledge_base = FaissKnowledgeBase(index_path=str(tmp_path / "index"), embedder=object())
 
     assert knowledge_base._read_document(source) == "PDF workshop content"
+
+
+def test_semantic_retrieve_falls_back_to_pypdf_for_pdf(tmp_path, monkeypatch):
+    source = tmp_path / "workshop.pdf"
+    source.write_bytes(b"%PDF-1.7\n%\xff\xff\xff\xff")
+
+    def fail_pdfminer(_path):
+        raise RuntimeError("pdfminer unavailable")
+
+    page = SimpleNamespace(extract_text=lambda: "PDF workshop fallback content")
+    monkeypatch.setitem(sys.modules, "pdfminer.high_level", SimpleNamespace(extract_text=fail_pdfminer))
+    monkeypatch.setitem(sys.modules, "pypdf", SimpleNamespace(PdfReader=lambda _path: SimpleNamespace(pages=[page])))
+    knowledge_base = FaissKnowledgeBase(index_path=str(tmp_path / "index"), embedder=object())
+
+    assert knowledge_base._read_document(source) == "PDF workshop fallback content"
 
 
 def test_runner_execution_memory_keeps_current_image_attachment_transient():

@@ -128,8 +128,13 @@ def _read_pdf_text(path: Path, cause: Exception | None = None) -> str:
         from pdfminer.high_level import extract_text
 
         return str(extract_text(str(path)) or "")
-    except Exception as exc:
-        raise ValueError("PDF 文件格式無法驗證或轉換為知識庫文字。") from (cause or exc)
+    except Exception as pdfminer_error:
+        try:
+            from pypdf import PdfReader
+
+            return "\n".join(str(page.extract_text() or "") for page in PdfReader(str(path)).pages)
+        except Exception as pypdf_error:
+            raise ValueError("PDF 文件格式無法驗證或轉換為知識庫文字。") from (cause or pypdf_error or pdfminer_error)
 
 
 def _normalize_text(content: str) -> str:

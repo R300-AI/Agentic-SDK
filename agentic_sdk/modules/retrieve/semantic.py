@@ -254,7 +254,12 @@ class FaissKnowledgeBase:
 
                 return str(extract_text(str(file_path)) or "")
             except Exception:
-                pass
+                try:
+                    from pypdf import PdfReader
+
+                    return "\n".join(str(page.extract_text() or "") for page in PdfReader(str(file_path)).pages)
+                except Exception:
+                    pass
         try:
             from markitdown import MarkItDown
         except Exception as exc:
@@ -270,7 +275,12 @@ class FaissKnowledgeBase:
 
                     return str(extract_text(str(file_path)) or "")
                 except Exception:
-                    pass
+                    try:
+                        from pypdf import PdfReader
+
+                        return "\n".join(str(page.extract_text() or "") for page in PdfReader(str(file_path)).pages)
+                    except Exception:
+                        pass
             raise RuntimeError(f"無法讀取知識庫來源 {file_path.name}：文件格式無法轉換為文字。") from exc
 
     def _is_stale(self) -> bool:

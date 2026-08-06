@@ -9,6 +9,7 @@ _REQUIRED_MODULES = (
     "openpyxl",
     "pandas",
     "pdfminer.high_level",
+    "pypdf",
     "pptx",
     "xlrd",
 )
