@@ -30,7 +30,7 @@ dependencies = [
     "httpx==0.28.1",
     "idna==3.18",
     "jiter==0.15.0",
-    "markitdown[all] ; python_full_version < '3.13'",
+    "markitdown[all]==0.1.7 ; python_full_version < '3.13'",
     "msgspec==0.21.1",
     "openai==2.41.1",
     "pydantic==2.13.4",

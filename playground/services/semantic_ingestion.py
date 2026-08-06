@@ -28,17 +28,10 @@ _DIRECT_TEXT_EXTENSIONS = {
 }
 _MARKITDOWN_EXTENSIONS = {
     ".pdf",
-    ".doc",
     ".docx",
     ".xls",
     ".xlsx",
-    ".ppt",
     ".pptx",
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".webp",
 }
 _ARCHIVE_EXTENSIONS = {".zip", ".tar", ".gz", ".tgz", ".7z", ".rar"}
 _MAX_UPLOAD_BYTES = 20 * 1024 * 1024

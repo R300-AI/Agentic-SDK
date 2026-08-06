@@ -122,6 +122,49 @@ def test_semantic_upload_preserves_unicode_source_filename(tmp_path, monkeypatch
     assert (tmp_path / result.canonical_name).read_bytes() == b"pptx-binary-content"
 
 
+def test_semantic_upload_advertises_only_verified_indexable_formats():
+    assert set(semantic_ingestion.accepted_upload_extensions()) == {
+        ".cfg",
+        ".csv",
+        ".docx",
+        ".htm",
+        ".html",
+        ".ini",
+        ".js",
+        ".json",
+        ".jsx",
+        ".md",
+        ".pdf",
+        ".pptx",
+        ".py",
+        ".sql",
+        ".toml",
+        ".ts",
+        ".tsx",
+        ".txt",
+        ".xls",
+        ".xlsx",
+        ".xml",
+        ".yaml",
+        ".yml",
+    }
+
+
+def test_builder_upload_input_uses_verified_extension_list(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_TEST_MODE", "true")
+    app = create_app()
+
+    with app.test_client() as client:
+        response = client.get("/playground/builder")
+
+    expected_accept = ",".join(semantic_ingestion.accepted_upload_extensions())
+    assert response.status_code == 200
+    assert f'accept="{expected_accept}"' in response.text
+    assert ".doc," not in response.text
+    assert ".ppt," not in response.text
+    assert ".png," not in response.text
+
+
 def test_semantic_pdf_upload_prefers_pdfminer(tmp_path, monkeypatch):
     class FailingMarkItDown:
         def convert(self, _path):
@@ -961,7 +1004,7 @@ def test_builder_semantic_upload_ui_advertises_only_supported_formats():
     template = (Path(__file__).parents[1] / "playground" / "templates" / "builder.html").read_text(encoding="utf-8")
     script = (Path(__file__).parents[1] / "playground" / "static" / "js" / "builder" / "builder-page.js").read_text(encoding="utf-8")
 
-    assert 'accept=".md,.txt,.csv' in template
+    assert 'accept="{{ semantic_upload_accept }}"' in template
     assert ".zip" not in template
     assert "const allowedExtensions = new Set([" in script
     assert "rejected_files" in script

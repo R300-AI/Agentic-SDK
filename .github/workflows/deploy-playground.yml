@@ -7,6 +7,7 @@ on:
       - "agentic_sdk/**"
       - "assets/**"
       - "playground/**"
+      - "pyproject.toml"
       - "requirements.txt"
       - ".github/workflows/deploy-playground.yml"
   workflow_dispatch:
@@ -249,6 +250,26 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install --target .python_packages/lib/site-packages -r requirements.txt
+
+      - name: Verify packaged semantic ingestion conversion dependencies
+        env:
+          PYTHONPATH: .python_packages/lib/site-packages:.
+        run: |
+          python - <<'PY'
+          import importlib
+
+          required_modules = (
+              "markitdown",
+              "mammoth",
+              "openpyxl",
+              "pandas",
+              "pdfminer.high_level",
+              "pptx",
+              "xlrd",
+          )
+          for module in required_modules:
+              importlib.import_module(module)
+          PY
 
       - name: Verify FastAPI Playground package
         env:

@@ -11,7 +11,7 @@ from playground.services.aihub_bridge import has_builder_bridge_query, start_bui
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
 from playground.services.semantic_runtime import new_upload_id, runtime_root, source_files_dir
-from playground.services.semantic_ingestion import ingest_semantic_upload
+from playground.services.semantic_ingestion import accepted_upload_extensions, ingest_semantic_upload
 from playground.services.source_builder import (
     build_default_python_source,
     get_builder_steps,
@@ -92,6 +92,7 @@ def builder():
         builder_endpoint_state=builder_endpoint_state,
         builder_review_state=builder_review["items"],
         builder_review_ready=builder_review["ready"],
+        semantic_upload_accept=",".join(accepted_upload_extensions()),
     )
 
 
