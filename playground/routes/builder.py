@@ -481,10 +481,10 @@ def _endpoint_requirements_by_step(builder_endpoint_state: dict[str, object]) ->
             continue
         options = options_by_role.get(role)
         if not isinstance(options, list) or not options:
-            errors.setdefault(step_key, []).append("請先完成「部署選項」設定。")
+            errors.setdefault(step_key, []).append("Key Vault 中沒有可用的模型端點。")
             continue
         if configured_roles.get(role) is False:
-            errors.setdefault(step_key, []).append("請先完成「部署選項」設定。")
+            errors.setdefault(step_key, []).append("Key Vault 的模型設定不完整，請確認所需 secret。")
     return errors
 
 

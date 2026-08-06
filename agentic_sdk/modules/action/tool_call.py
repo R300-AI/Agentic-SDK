@@ -65,7 +65,7 @@ class ToolCallAction:
             )
 
         tool_calls = _normalize_tool_calls(response.tool_calls)
-        content = response.content or ("已產生工具呼叫。" if tool_calls else "")
+        content = _tool_call_content(response.content, tool_calls)
         response_model = response.model or self._model
         state.last_action_error = None
         state.last_action_result = {"content": content, "model": response_model, "tool_calls": tool_calls}
@@ -107,6 +107,13 @@ def _normalize_tool_calls(raw_tool_calls: object) -> list[dict[str, Any]]:
             }
         )
     return tool_calls
+
+
+def _tool_call_content(content: object, tool_calls: list[dict[str, Any]]) -> str:
+    resolved = str(content or "").strip()
+    if resolved:
+        return resolved
+    return "請確認下列選項。" if tool_calls else ""
 
 
 def _tool_call_value(source: object, key: str) -> object:

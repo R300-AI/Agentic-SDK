@@ -6,15 +6,17 @@ from pathlib import Path
 
 from flask import session
 
-from agentic_sdk.core import ContextEntry, ContextEntryType, WorkflowResult, WorkflowState
+from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, InContextMemory, WorkflowResult, WorkflowState
 from agentic_sdk.core.events import default_events_schema
+from agentic_sdk.modules.action.generative import _FINAL_RESPONSE_CONTRACT, _build_messages
+from agentic_sdk.modules.action.tool_call import _tool_call_content
 from playground.app import create_app
 from playground.routes import builder as builder_routes
 from playground.routes import runner as runner_routes
-from playground.services import key_vault_config
-from playground.services import model_endpoints
+from playground.services import key_vault_config, model_endpoints
 from playground.services import runner_service
 from playground.services import semantic_ingestion
+from playground.services import source_builder
 from playground.services.runner_conversation import RunnerConversationState
 from playground.services.aihub_bridge import store_loaded_agent
 from playground.services.source_builder import BuilderSourceConfig, build_default_python_source, build_python_source_from_builder_choice, config_from_source
@@ -33,6 +35,154 @@ def test_key_vault_skip_flag_does_not_bypass_typed_settings(monkeypatch):
     )
 
     assert settings.ai_hub.base_url == "https://aihub.example"
+
+
+def test_key_vault_secret_list_uses_secret_name_not_version(monkeypatch):
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "value": [
+                    {"id": "https://agentic-sdk-models.vault.azure.net/secrets/AI-HUB-BASE-URL/123456"},
+                    {"id": "https://agentic-sdk-models.vault.azure.net/secrets/GPT-54-MODEL"},
+                ]
+            }
+
+    class FakeClient:
+        def __init__(self, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def get(self, *_args, **_kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(key_vault_config.httpx, "Client", FakeClient)
+
+    assert key_vault_config._secret_names("agentic-sdk-models", "token") == ["AI-HUB-BASE-URL", "GPT-54-MODEL"]
+
+
+def test_key_vault_uses_azure_cli_command_wrapper_on_windows(monkeypatch):
+    monkeypatch.setattr(key_vault_config.os, "name", "nt")
+    monkeypatch.setattr(key_vault_config.shutil, "which", lambda command: f"C:/tools/{command}" if command == "az.cmd" else None)
+
+    assert key_vault_config._azure_cli_command() == "C:/tools/az.cmd"
+
+
+def test_runner_execution_memory_keeps_current_image_attachment_transient():
+    source = build_default_python_source()
+    conversation = RunnerConversationState.for_workflow(source).append_user("請解讀足測報告")
+    attachment = Attachment(
+        kind="image",
+        name="foot-report.png",
+        media_type="image/png",
+        content="data:image/png;base64,aGVsbG8=",
+    )
+
+    memory = runner_service._conversation_memory_for_execution(conversation, "LaNew鞋墊顧問", [attachment])
+
+    assert memory is not None
+    message = memory.as_openai_messages(include_attachments=True)[-1]
+    assert message["content"][-1]["image_url"]["url"] == attachment.content
+    assert conversation.as_dict()["turns"][-1].get("attachments") is None
+
+
+def test_action_messages_require_direct_user_facing_answers_for_custom_prompts():
+    memory = InContextMemory()
+    memory.append_message("user", "解讀足測報告中的數值")
+    state = WorkflowState(
+        user_message="解讀足測報告中的數值",
+        memory=memory,
+    )
+    state.payload.update(
+        {
+            "perceived_summary": "足弓指數正常",
+            "perceived_details": {"左足 B%": "24.9%"},
+            "latest_retrieved_content": "商品目錄內容",
+        }
+    )
+
+    messages = _build_messages(state, "你是鞋墊顧問。")
+    system_message = messages[0]["content"]
+
+    assert _FINAL_RESPONSE_CONTRACT in system_message
+    assert "第一句就提供所問的結果" in system_message
+    assert "不得在對外回答中逐段盤點" in system_message
+    assert "skipped=true" in system_message
+    assert "perceived_context" in system_message
+    assert "retrieved_context" in system_message
+
+
+def test_interactive_policy_keeps_tool_decisions_internal():
+    assert "內部決策規則" in source_builder._INTERACTIVE_TOOL_POLICY
+    assert "不要向使用者描述判斷、工具或元件流程" in source_builder._INTERACTIVE_TOOL_POLICY
+
+
+def test_runner_offers_confirmation_for_mixed_analysis_and_explicit_decision_request():
+    config = BuilderSourceConfig(
+        workflow_name="LaNew鞋墊顧問",
+        action_module="ToolCallAction",
+        action_tools=(
+            {
+                "type": "function",
+                "function": {
+                    "name": "confirm_store_assistance",
+                    "parameters": {"type": "object", "properties": {"是否進行下一步": {"type": "boolean"}}},
+                },
+            },
+        ),
+    )
+    user_message = "根據剛才的足測結果推薦鞋墊；我想安排門市協助。"
+    final_message = "推薦科技鞋墊 通用型。請確認是否要這樣送出門市協助需求。"
+
+    assert runner_service._should_offer_configured_tool_panel(config, user_message, final_message)
+
+
+def test_placeholder_tool_submission_reports_verified_unsent_outcome():
+    message = runner_service._tool_submission_final_message(
+        "模型回覆。",
+        {
+            "api_result": {
+                "skipped": True,
+                "message": "這是示範 API 端點，尚未設定可執行的門市服務，因此未送出通知。",
+            }
+        },
+    )
+
+    assert message.startswith("本次請求未送出：")
+    assert "未送出通知" in message
+    assert message.endswith("模型回覆。")
+
+
+def test_runner_does_not_offer_confirmation_for_status_recall_question():
+    config = BuilderSourceConfig(
+        workflow_name="LaNew鞋墊顧問",
+        action_module="ToolCallAction",
+        action_tools=(
+            {
+                "type": "function",
+                "function": {
+                    "name": "confirm_store_assistance",
+                    "parameters": {"type": "object", "properties": {"是否進行下一步": {"type": "boolean"}}},
+                },
+            },
+        ),
+    )
+    user_message = "剛才推薦的是哪一款、商品編號多少？通知有沒有真的送出？"
+    final_message = "推薦科技鞋墊 通用型，商品編號 291090970；本次沒有送出通知。"
+
+    assert not runner_service._should_offer_configured_tool_panel(config, user_message, final_message)
+
+
+def test_tool_call_without_text_uses_user_facing_confirmation_message():
+    assert _tool_call_content("", [{"function": {"name": "confirm"}}]) == "請確認下列選項。"
+    assert _tool_call_content("已找到推薦。", [{"function": {"name": "confirm"}}]) == "已找到推薦。"
 
 
 def test_builder_choices_map_to_runtime_modules():
@@ -65,16 +215,31 @@ def test_builder_choices_map_to_runtime_modules():
     assert "action" in reachable_workflow_roles(interactive)
 
 
-def test_environment_endpoint_discovery_is_not_supported(monkeypatch):
+def test_key_vault_model_endpoint_is_auto_bound_without_environment_discovery(monkeypatch):
     monkeypatch.setenv("PLAYGROUND_FAST_MODEL", "gpt-test")
     monkeypatch.setenv("PLAYGROUND_FAST_BASE_URL", "https://models.example")
     monkeypatch.setenv("PLAYGROUND_FAST_API_KEY", "test-key")
+    settings = key_vault_config.KeyVaultSettings(
+        ai_hub=key_vault_config.AiHubSettings("https://aihub.example", "https://playground.example"),
+        chat_endpoints=(key_vault_config.ChatEndpointSettings("gpt-54", "key-vault-key", "https://key-vault-models.example", "gpt-5.4"),),
+        embedding_endpoints=(),
+    )
+    monkeypatch.setattr(model_endpoints, "key_vault_settings", lambda: settings)
 
-    with __import__("pytest").raises(model_endpoints.MissingEndpointBinding):
-        model_endpoints.endpoint_params_for_role("perceive", {})
+    assert model_endpoints.endpoint_params_for_role("action", {}) == {
+        "api_key": "key-vault-key",
+        "base_url": "https://key-vault-models.example",
+        "model": "gpt-5.4",
+    }
+    assert model_endpoints.normalize_endpoint_selections(build_default_python_source(), {}) == {}
 
-    with __import__("pytest").raises(model_endpoints.MissingEndpointBinding):
-        model_endpoints.endpoint_params_for_role("perceive", {"perceive": "playground-fast"})
+
+def test_builder_model_status_is_key_vault_only():
+    builder_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "builder" / "builder-page.js").read_text(encoding="utf-8")
+
+    assert ".env" not in builder_source
+    assert "data-builder-endpoint-select" not in builder_source
+    assert "Key Vault 中沒有可用的模型端點" in builder_source
 
 
 def test_partial_key_vault_endpoint_family_is_rejected():
@@ -109,7 +274,47 @@ def test_interactive_action_contract_roundtrips_to_boolean_tool_schema():
 
     assert config.action_module == "ToolCallAction"
     assert field["type"] == "boolean"
-    assert config.action_tools[0]["function"]["parameters"]["required"] == ["是否提交"]
+    parameters = config.action_tools[0]["function"]["parameters"]
+    assert parameters["required"] == ["是否提交", "__playground_review", "__playground_options"]
+    assert parameters["properties"]["__playground_review"]["type"] == "string"
+    assert parameters["properties"]["__playground_options"]["type"] == "object"
+    assert "__playground_review" not in source_builder._component_fields_text_from_parameters(parameters)
+    assert "__playground_options" not in source_builder._component_fields_text_from_parameters(parameters)
+
+
+def test_runner_projects_generated_string_choices_without_submitting_platform_metadata():
+    schema = {
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "開發方向": {"type": "string"},
+                "預算": {"type": "number"},
+                "__playground_options": {"type": "object"},
+            },
+            "required": ["開發方向", "預算", "__playground_options"],
+        }
+    }
+    arguments = {
+        "開發方向": "Web 應用程式",
+        "預算": 50000,
+        "__playground_options": {
+            "開發方向": {
+                "choices": ["Web 應用程式", "行動應用程式", "桌面應用程式"],
+                "custom_label": "自訂開發方向",
+            }
+        },
+    }
+
+    fields = runner_service._tool_call_fields_from(schema, arguments)
+
+    assert fields[0]["choices"] == [
+        {"value": "Web 應用程式", "label": "Web 應用程式", "description": ""},
+        {"value": "行動應用程式", "label": "行動應用程式", "description": ""},
+        {"value": "桌面應用程式", "label": "桌面應用程式", "description": ""},
+    ]
+    assert fields[1]["value"] == 50000
+    assert fields[0]["custom_label"] == "自訂開發方向"
+    assert runner_service._without_tool_call_review(arguments) == {"開發方向": "Web 應用程式", "預算": 50000}
 
 
 def test_interactive_panel_submission_releases_pending_state():
@@ -119,7 +324,17 @@ def test_interactive_panel_submission_releases_pending_state():
 
     assert 'confirmButton.disabled = true;' in surface_source
     assert 'form.addEventListener("runner:tool-call-complete"' in surface_source
-    assert 'status.textContent = "已送出選擇。";' in surface_source
+    assert 'completion.className = "tool-call-status tool-call-complete";' in surface_source
+    assert 'completion.textContent = "已送出選擇";' in surface_source
+    assert 'confirmButton.replaceWith(completion);' in surface_source
+    assert 'status.remove();' in surface_source
+    assert '選擇已更新，尚未送出。' not in surface_source
+    assert 'function createStringChoiceControl(field, fieldId, label)' in surface_source
+    assert 'wrapper.append(createStringChoice(field, fieldId, "__custom__", field.customLabel, false));' in surface_source
+    assert 'choices.forEach((choice, index) =>' in surface_source
+    assert 'function createNumberControl(field, fieldId)' in surface_source
+    assert 'decrement.addEventListener("click", () => input.stepDown());' in surface_source
+    assert 'increment.addEventListener("click", () => input.stepUp());' in surface_source
     assert 'const hasBooleanValue = field.value === true || field.value === false' in surface_source
     assert 'hasBooleanValue && (value ? booleanValue : !booleanValue)' in surface_source
     assert 'const missingRequiredFields = panel.fields.filter((field) => field.required && !hasToolCallValue(argumentsPayload[field.name]));' in surface_source
@@ -289,6 +504,7 @@ def test_tool_continuation_extends_the_same_conversation_memory():
         python_source=source,
     )
     captured = {}
+    process_events = []
 
     class FakeAction:
         def __call__(self, state):
@@ -308,7 +524,7 @@ def test_tool_continuation_extends_the_same_conversation_memory():
         {"function_name": "門市協助", "arguments": {"是否通知": True}, "api_result": {"skipped": True}},
         conversation_state=conversation,
         attachments=[],
-        process_observer=None,
+        process_observer=process_events.append,
     )
 
     assert [turn.role for turn in captured["memory"].turns] == ["user", "assistant", "user", "assistant"]
@@ -316,6 +532,8 @@ def test_tool_continuation_extends_the_same_conversation_memory():
     assert "7037439" in captured["evidence"]
     assert result.memory.turns[-1].content == "已送出門市協助需求。"
     assert conversation.update_from_result(result).retrieval_evidence == "科技鞋墊 加強型，SKU 7037439。"
+    assert [event["phase"] for event in process_events] == ["start", "finish"]
+    assert process_events[0]["visit_id"] == process_events[1]["visit_id"]
 
 
 def test_tool_submission_update_keeps_selection_and_api_outcome_internal():
@@ -896,7 +1114,96 @@ def test_streaming_execute_route_forwards_finish_fields_as_ndjson_process_events
         "正在判斷這次需要先整理來源，或可以直接準備回覆。",
         "判斷依據：需要先整理來源",
     ]
+    assert [event["visit_id"] for event in process_events if event["role"] == "perceive"] == [
+        "workflow-1:perceive:1",
+        "workflow-1:perceive:1",
+    ]
+    assert "details" not in process_events[1]
     assert final["process_events"] == process_events
+
+
+def test_runner_only_projects_explicit_scalar_trace_details():
+    schema = {"label": "理解輸入", "fields": ["details.foot_arch"], "metadata": {}}
+    workflow_event = {
+        "type": "structured_field",
+        "phase": "field",
+        "status": "completed",
+        "module": "perceive",
+        "label": schema["label"],
+        "schema": schema,
+        "visit_id": "workflow-1:perceive:1",
+        "visit_count": 1,
+        "field": "details.foot_arch",
+        "value": "一般足弓",
+    }
+
+    assert runner_service._structured_field_process_event(
+        "perceive",
+        "details.foot_arch",
+        "一般足弓",
+        label=schema["label"],
+        workflow_event=workflow_event,
+    )["details"] == [{"field": "details.foot_arch", "description": "details.foot_arch：一般足弓"}]
+
+
+def test_runner_does_not_project_wildcard_structured_trace_details():
+    schema = default_events_schema()["perceive"]
+    workflow_event = {
+        "type": "structured_field",
+        "phase": "field",
+        "status": "completed",
+        "module": "perceive",
+        "label": schema["label"],
+        "schema": schema,
+        "visit_id": "workflow-1:perceive:1",
+        "visit_count": 1,
+        "field": "details.foot_arch.value",
+        "value": "一般足弓",
+    }
+
+    assert runner_service._structured_field_process_event(
+        "perceive",
+        "details.foot_arch.value",
+        "一般足弓",
+        label=schema["label"],
+        workflow_event=workflow_event,
+    ) is None
+
+
+def test_runner_hides_unavailable_structured_trace_values():
+    schema = default_events_schema()["perceive"]
+    workflow_event = {
+        "type": "structured_field",
+        "phase": "field",
+        "status": "completed",
+        "module": "perceive",
+        "label": schema["label"],
+        "schema": schema,
+        "visit_id": "workflow-1:perceive:1",
+        "visit_count": 1,
+        "field": "details.foot_arch",
+        "value": "未提供／無法判讀",
+    }
+
+    assert runner_service._structured_field_process_event(
+        "perceive",
+        "details.foot_arch",
+        "未提供／無法判讀",
+        label=schema["label"],
+        workflow_event=workflow_event,
+    ) is None
+
+
+def test_runner_uses_module_specific_process_completion_summaries():
+    config = BuilderSourceConfig(
+        workflow_name="測試工作流",
+        action_module="ToolCallAction",
+        retrieve_module="SemanticRetrieve",
+    )
+
+    assert runner_service._module_finish_process_summary(config, "retrieve") == "已整理相關來源，交給回覆階段使用。"
+    assert runner_service._module_finish_process_summary(config, "action") == "工具呼叫回覆器已完成回覆整理。"
+    assert runner_service._module_finish_process_summary(config, "reflect") == "已檢查回覆內容，可交付。"
 
 
 def test_runner_process_event_rejects_legacy_stage_event_without_schema():
@@ -1052,7 +1359,7 @@ def test_tool_call_panel_falls_back_for_reservation_confirmation(monkeypatch):
     result = runner_service.execute_python_source(source, message="好，那就幫我保留你推薦的那款。")
 
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["title"] == "下一步確認"
 
 
 def test_tool_call_panel_allows_data_limitations_after_recommendation(monkeypatch):
@@ -1081,7 +1388,7 @@ def test_tool_call_panel_allows_data_limitations_after_recommendation(monkeypatc
     result = runner_service.execute_python_source(source, message="請直接幫我推薦一款合適的鞋墊。")
 
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["title"] == "下一步確認"
 
 
 def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(monkeypatch):
@@ -1109,7 +1416,7 @@ def test_tool_call_panel_falls_back_for_decision_intent_without_model_tool_call(
     assert result["tool_calls"] == []
     assert len(result["tool_call_panels"]) == 1
     assert result["panel_decision"] == "fallback_eligible"
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["title"] == "下一步確認"
     assert result["tool_call_panels"][0]["description"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["label"] == "是否確認"
 
@@ -1140,7 +1447,7 @@ def test_tool_call_panel_falls_back_for_natural_next_step_question(monkeypatch):
     result = runner_service.execute_python_source(source, message="請推薦適合久站通勤的產品，並確認下一步。")
 
     assert len(result["tool_call_panels"]) == 1
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["title"] == "下一步確認"
 
 
 def test_catalog_identifier_without_retrieved_evidence_stops_for_human_confirmation(monkeypatch):
@@ -1209,7 +1516,7 @@ def test_tool_call_panel_uses_final_confirmation_line_for_long_recommendation(mo
 
     result = runner_service.execute_python_source(source, message="請推薦下一步")
 
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否確認"
+    assert result["tool_call_panels"][0]["title"] == "下一步確認"
 
 
 def test_tool_call_panel_does_not_fallback_when_recommendation_needs_more_input(monkeypatch):
@@ -1273,7 +1580,7 @@ def test_tool_call_panel_uses_schema_for_user_facing_confirmation(monkeypatch):
 
     assert result["status"] == "completed"
     assert result["panel_decision"] == "tool_call"
-    assert result["tool_call_panels"][0]["title"] == "請確認：是否通知門市人員帶實體鞋墊說明"
+    assert result["tool_call_panels"][0]["title"] == "下一步確認"
     assert "資料缺口" not in result["tool_call_panels"][0]["title"]
     assert result["tool_call_panels"][0]["description"] == ""
     assert result["tool_call_panels"][0]["fields"][0]["type"] == "boolean"
@@ -1311,7 +1618,7 @@ def test_interactive_optional_field_is_not_required_in_tool_schema():
 
     parameters = config_from_source(source).action_tools[0]["function"]["parameters"]
 
-    assert parameters["required"] == ["是否確認"]
+    assert parameters["required"] == ["是否確認", "__playground_review", "__playground_options"]
 
 
 def test_runner_optional_field_is_not_required_for_legacy_tool_schema():
@@ -1329,3 +1636,35 @@ def test_runner_optional_field_is_not_required_for_legacy_tool_schema():
     )
 
     assert [field["required"] for field in fields] == [True, False]
+
+
+def test_runner_tool_panel_extracts_platform_review_without_making_it_a_field():
+    fields = runner_service._tool_call_fields_from(
+        {
+            "parameters": {
+                "properties": {
+                    "是否確認": {"type": "boolean"},
+                    "__playground_review": {"type": "string"},
+                },
+                "required": ["是否確認", "__playground_review"],
+            }
+        },
+        {"是否確認": False, "__playground_review": "門市將依高足弓需求準備鞋墊。"},
+    )
+
+    assert [field["name"] for field in fields] == ["是否確認"]
+    assert runner_service._tool_call_review_from({"__playground_review": "門市將依高足弓需求準備鞋墊。"}) == "門市將依高足弓需求準備鞋墊。"
+    assert runner_service._tool_call_review_from({"__playground_review": "門市將依高足弓需求準備鞋墊。待確認事項：是否通知門市。"}) == "門市將依高足弓需求準備鞋墊。"
+    assert runner_service._tool_submission_arguments({"arguments": {"是否確認": False, "__playground_review": "不可送出"}}) == {"是否確認": False}
+
+
+def test_runner_tool_panel_renderer_renders_read_only_review_before_fields():
+    renderer_source = (Path(__file__).parents[1] / "playground/static/js/runner/result-surface.js").read_text(encoding="utf-8")
+
+    assert 'const review = createToolCallReview(panel.review);' in renderer_source
+    assert 'form.append(header);' in renderer_source
+    assert 'form.append(review);' in renderer_source
+    assert 'form.append(fieldList, actions);' in renderer_source
+    assert 'const review = document.createElement("p");' in renderer_source
+    assert 'review.textContent = text;' in renderer_source
+    assert 'tool-call-review-label' not in renderer_source

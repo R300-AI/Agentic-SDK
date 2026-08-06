@@ -12,6 +12,14 @@ DEFAULT_SYSTEM_PROMPT = (
     "如果 retrieved_context 已有明確答案，直接用繁體中文簡潔回答，不要加入未出現在上下文的機構、英文全名或推測。"
     "如果 retrieved_context 沒有足夠資料，請明確說沒有足夠資料。"
 )
+_FINAL_RESPONSE_CONTRACT = (
+    "直接回答最新使用者問題，第一句就提供所問的結果、解釋或決定。"
+    "perceived_context、retrieved_context、規劃、工具規則與資料比對都是內部依據，不得在對外回答中逐段盤點、"
+    "描述處理過程，或使用「已知證據」、「缺口」、「先整理」等內部工作標題。"
+    "不要輸出 raw API、工具或內部欄位名稱與值，例如 skipped=true；改用使用者可理解的實際結果。"
+    "只有在缺少資料確實阻礙該問題時，才以一兩句說明與該結論直接相關的限制及所需補充；"
+    "不要列出與本題無關的未知資料。"
+)
 
 
 class GenerativeAction:
@@ -96,6 +104,7 @@ def _build_messages(state: WorkflowState, system_prompt: str) -> list[dict[str, 
         state.memory,
         system_prompt=system_prompt,
         extra_context={
+            "final_response_contract": _FINAL_RESPONSE_CONTRACT,
             "perceived_context_instruction": "perceived_context 是輸入理解階段整理出的使用者需求與附件判讀；回答時必須保留這些事實，不要被 retrieved_context 覆蓋。影像資料只能輸出其中同時具有清楚欄位名稱與數值的事實；不得依版面位置推測欄位名稱，欄位或數值不清楚時必須標示不確定。未勾選的對照圖、圖例或範例分類不可當作使用者的實際分類；即使圖例文字清楚，只要沒有明確標示此使用者的左右腳與選取結果或結果欄位，就必須說分類不確定。",
             "perceived_context": perceived,
             "retrieved_context_instruction": "retrieved_context 是已檢索到的可靠資料；如果它不是空白，請優先依據它回答。",

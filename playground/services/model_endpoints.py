@@ -12,10 +12,8 @@ class ModelEndpoint:
     id: str
     label: str
     model: str
-    model_env: str
     base_url: str
-    base_url_env: str
-    api_key_env: str
+    secret_prefix: str
 
 
 @dataclass(frozen=True)
@@ -27,20 +25,20 @@ class OpenAIRequirement:
 
 
 class MissingEndpointCredentials(ValueError):
-    def __init__(self, role_label: str, endpoint: ModelEndpoint | None, missing_envs: list[str]) -> None:
-        missing = "、".join(missing_envs)
+    def __init__(self, role_label: str, endpoint: ModelEndpoint | None, missing_secrets: list[str]) -> None:
+        missing = "、".join(missing_secrets)
         if endpoint is None:
             super().__init__(f"{role_label} 需要模型 endpoint。請在 Key Vault 設定 {missing}。")
         else:
             super().__init__(f"{role_label} 選用了 {endpoint.label}，請確認 Key Vault 設定 {missing}。")
         self.role_label = role_label
         self.endpoint = endpoint
-        self.missing_envs = missing_envs
+        self.missing_secrets = missing_secrets
 
 
 class MissingEndpointBinding(ValueError):
     def __init__(self, role_label: str) -> None:
-        super().__init__(f"{role_label} 尚未選擇模型 endpoint。請先完成部署選項設定。")
+        super().__init__(f"{role_label} 找不到可用的 Key Vault 模型端點。")
         self.role_label = role_label
 
 
@@ -59,8 +57,8 @@ def endpoint_state(python_source: str | None, selections: dict[str, str] | None)
         requirement.role: _endpoint_for_role(requirement.role, normalized)
         for requirement in requirements
     }
-    missing_envs_by_role = {
-        requirement.role: _missing_endpoint_envs(requirement.role, selected_endpoints[requirement.role])
+    missing_secrets_by_role = {
+        requirement.role: _missing_endpoint_secrets(requirement.role, selected_endpoints[requirement.role])
         for requirement in requirements
     }
     binding_missing_roles = {
@@ -68,11 +66,11 @@ def endpoint_state(python_source: str | None, selections: dict[str, str] | None)
         for requirement in requirements
     }
     credential_missing_roles = {
-        requirement.role: bool(missing_envs_by_role[requirement.role]) and not binding_missing_roles[requirement.role]
+        requirement.role: bool(missing_secrets_by_role[requirement.role]) and not binding_missing_roles[requirement.role]
         for requirement in requirements
     }
     configured_roles = {
-        requirement.role: not missing_envs_by_role[requirement.role]
+        requirement.role: not missing_secrets_by_role[requirement.role]
         for requirement in requirements
     }
     return {
@@ -89,7 +87,7 @@ def endpoint_state(python_source: str | None, selections: dict[str, str] | None)
             role: asdict(endpoint) if endpoint else None
             for role, endpoint in selected_endpoints.items()
         },
-        "missing_envs_by_role": missing_envs_by_role,
+        "missing_secrets_by_role": missing_secrets_by_role,
         "binding_missing_roles": binding_missing_roles,
         "credential_missing_roles": credential_missing_roles,
         "configured": all(configured_roles.values()) if requirements else True,
@@ -109,8 +107,7 @@ def normalize_endpoint_selections(python_source: str | None, selections: dict[st
         if not endpoints_by_id:
             continue
         endpoint_id = str(raw.get(requirement.role) or "")
-        if endpoint_id in endpoints_by_id:
-            normalized[requirement.role] = endpoint_id
+        normalized[requirement.role] = endpoint_id if endpoint_id in endpoints_by_id else next(iter(endpoints_by_id))
     return normalized
 
 
@@ -118,16 +115,16 @@ def endpoint_params_for_role(role: str, selections: dict[str, str] | None) -> di
     endpoint = _endpoint_for_role(role, selections or {})
     if endpoint is None:
         raise MissingEndpointBinding(_role_label(role))
-    missing_envs = _missing_endpoint_envs(role, endpoint)
-    if missing_envs:
-        raise MissingEndpointCredentials(_role_label(role), endpoint, missing_envs)
+    missing_secrets = _missing_endpoint_secrets(role, endpoint)
+    if missing_secrets:
+        raise MissingEndpointCredentials(_role_label(role), endpoint, missing_secrets)
     api_key = _api_key_for_role(endpoint, role)
     if role == "retrieve":
         return {"api_key": api_key, "base_url": endpoint.base_url, "embedding_model": endpoint.model}
     return {"api_key": api_key, "base_url": endpoint.base_url, "model": endpoint.model}
 
 
-def endpoint_env_bindings_for_source(python_source: str | None, selections: dict[str, str] | None) -> dict[str, dict[str, str]]:
+def endpoint_key_vault_bindings_for_source(python_source: str | None, selections: dict[str, str] | None) -> dict[str, dict[str, str]]:
     requirements = _deployment_requirements(config_from_source(python_source))
     normalized = normalize_endpoint_selections(python_source, selections)
     bindings: dict[str, dict[str, str]] = {}
@@ -136,9 +133,8 @@ def endpoint_env_bindings_for_source(python_source: str | None, selections: dict
         if endpoint is None:
             continue
         bindings[requirement.role] = {
-            "api_key_env": endpoint.api_key_env,
-            "base_url_env": endpoint.base_url_env,
-            "model_env": endpoint.model_env,
+            "endpoint_id": endpoint.id,
+            "secret_prefix": endpoint.secret_prefix,
         }
     return bindings
 
@@ -161,21 +157,21 @@ def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirem
 def _endpoint_for_role(role: str, selections: dict[str, str]) -> ModelEndpoint | None:
     endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(role))
     endpoint_id = selections.get(role, "")
-    return endpoints_by_id.get(endpoint_id)
+    return endpoints_by_id.get(endpoint_id) or next(iter(endpoints_by_id.values()), None)
 
 
-def _missing_endpoint_envs(role: str, endpoint: ModelEndpoint | None) -> list[str]:
+def _missing_endpoint_secrets(role: str, endpoint: ModelEndpoint | None) -> list[str]:
     if endpoint is None:
         if role == "retrieve":
-            return ["<PREFIX>_DEPLOYMENT_NAME", "<PREFIX>_ENDPOINT", "<PREFIX>_API_KEY"]
-        return ["<PREFIX>_MODEL", "<PREFIX>_BASE_URL", "<PREFIX>_API_KEY"]
+            return ["<PREFIX>-DEPLOYMENT-NAME", "<PREFIX>-ENDPOINT", "<PREFIX>-API-KEY"]
+        return ["<PREFIX>-MODEL", "<PREFIX>-BASE-URL", "<PREFIX>-API-KEY"]
     missing: list[str] = []
     if not endpoint.model.strip():
-        missing.append(endpoint.model_env)
+        missing.append(f"{endpoint.secret_prefix}-MODEL")
     if not endpoint.base_url.strip():
-        missing.append(endpoint.base_url_env)
+        missing.append(f"{endpoint.secret_prefix}-BASE-URL")
     if not _api_key_for_role(endpoint, ""):
-        missing.append(endpoint.api_key_env)
+        missing.append(f"{endpoint.secret_prefix}-API-KEY")
     return missing
 
 
@@ -202,10 +198,8 @@ def _model_endpoints() -> tuple[ModelEndpoint, ...]:
             id=endpoint.id,
             label=_display_label_for_model(endpoint.model),
             model=endpoint.model,
-            model_env=f"{endpoint.id.upper().replace('-', '_')}_MODEL",
             base_url=endpoint.base_url,
-            base_url_env=f"{endpoint.id.upper().replace('-', '_')}_BASE_URL",
-            api_key_env=f"{endpoint.id.upper().replace('-', '_')}_API_KEY",
+            secret_prefix=endpoint.id.upper(),
         )
         for endpoint in key_vault_settings().chat_endpoints
     )
@@ -217,10 +211,8 @@ def _embedding_endpoints() -> tuple[ModelEndpoint, ...]:
             id=endpoint.id,
             label=_display_label_for_model(endpoint.deployment_name),
             model=endpoint.deployment_name,
-            model_env=f"{endpoint.id.upper().replace('-', '_')}_DEPLOYMENT_NAME",
             base_url=endpoint.endpoint,
-            base_url_env=f"{endpoint.id.upper().replace('-', '_')}_ENDPOINT",
-            api_key_env=f"{endpoint.id.upper().replace('-', '_')}_API_KEY",
+            secret_prefix=endpoint.id.upper(),
         )
         for endpoint in key_vault_settings().embedding_endpoints
     )

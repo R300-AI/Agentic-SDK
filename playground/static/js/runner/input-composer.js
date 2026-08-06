@@ -1,4 +1,4 @@
-export function bindInputComposer(form, onSubmit) {
+export function bindInputComposer(form, onSubmit, { clearAttachments } = {}) {
   const messageInput = form?.querySelector("textarea[name='message']");
 
   messageInput?.addEventListener("keydown", (event) => {
@@ -19,11 +19,23 @@ export function bindInputComposer(form, onSubmit) {
       attachment_names: files.map((file) => file.name),
       attachments: await Promise.all(files.map(fileToAttachment)),
     };
+    const displayAttachments = files.map(fileToDisplayAttachment);
     if (messageInput) {
       messageInput.value = "";
     }
-    onSubmit?.(payload);
+    clearAttachments?.();
+    onSubmit?.({ ...payload, displayAttachments });
   });
+}
+
+function fileToDisplayAttachment(file) {
+  return {
+    kind: file.type.startsWith("image/") ? "image" : "file",
+    name: file.name,
+    media_type: file.type || "application/octet-stream",
+    size: file.size,
+    preview_url: file.type.startsWith("image/") ? URL.createObjectURL(file) : "",
+  };
 }
 
 function fileToAttachment(file) {

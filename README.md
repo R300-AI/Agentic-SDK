@@ -272,4 +272,4 @@ http://127.0.0.1:5050/playground
 
 操作：**`/playground`** -> **登入並開始建立** -> **編輯** -> **Runner** -> **編輯設定** -> **Runner** -> **儲存**
 
-> Runner 若要呼叫 OpenAI-compatible endpoint，請在啟動 Flask 前於 `.env` 或環境變數提供對應的 `*_MODEL`、`*_BASE_URL`、`*_API_KEY`。
+> Runner 的模型設定一律由 Key Vault 提供。請確認 Key Vault 已設定模型的 `MODEL`、`BASE-URL`、`API-KEY` secret。

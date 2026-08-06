@@ -2,7 +2,7 @@ import { postJson, postJsonStream } from "../shared/api-client.js";
 import { bindAttachmentPicker } from "./artifact-panel.js";
 import { bindCodePreview } from "./code-preview.js?v=delegated-trigger-v1";
 import { bindInputComposer } from "./input-composer.js";
-import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js?v=required-tool-validation-v1";
+import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js?v=generated-choice-stepper-v1";
 import { showSavePanel } from "./save-panel.js";
 
 const form = document.querySelector("[data-input-composer]");
@@ -538,7 +538,7 @@ function toolSubmissionDisplay(submission) {
 	return text ? `送出選擇：${text}` : "送出選擇";
 }
 
-function appendUserMessage(text) {
+function appendUserMessage(text, attachments = []) {
 	if (!resultThread || !userMessage) {
 		return null;
 	}
@@ -547,9 +547,42 @@ function appendUserMessage(text) {
 	if (textElement) {
 		textElement.textContent = text || "（空白訊息）";
 	}
+	const attachmentList = message.querySelector("[data-user-message-attachments]");
+	const visibleAttachments = attachments.slice(0, 3);
+	if (attachmentList && visibleAttachments.length) {
+		attachmentList.replaceChildren(
+			...visibleAttachments.map(createSentAttachmentPreview),
+			...(attachments.length > visibleAttachments.length ? [createAttachmentOverflow(attachments.length - visibleAttachments.length)] : []),
+		);
+		attachmentList.hidden = false;
+	}
 	message.hidden = false;
 	resultThread.append(message);
 	return message;
+}
+
+function createSentAttachmentPreview(attachment) {
+	const item = document.createElement("div");
+	const isImage = attachment?.kind === "image" || String(attachment?.media_type || "").startsWith("image/");
+	item.className = isImage ? "artifact-preview artifact-preview-image" : "artifact-preview artifact-preview-file";
+	if (isImage && attachment?.preview_url) {
+		const image = document.createElement("img");
+		image.src = attachment.preview_url;
+		image.alt = attachment.name || "已送出的圖片";
+		item.append(image);
+	}
+	const name = document.createElement("span");
+	name.textContent = attachment?.name || "附件";
+	item.append(name);
+	return item;
+}
+
+function createAttachmentOverflow(count) {
+	const item = document.createElement("div");
+	item.className = "artifact-preview artifact-preview-overflow";
+	item.textContent = `+${count}`;
+	item.setAttribute("aria-label", `還有 ${count} 個附件未顯示`);
+	return item;
 }
 
 function appendAssistantSurface() {
@@ -719,7 +752,7 @@ function saveNeedsLogin(result) {
 	return result?.reauthentication_required === true || error === "Current mode cannot save to AI Hub." || error === "AI Hub login is required before saving.";
 }
 
-bindAttachmentPicker(attachmentInput, artifactList, attachmentStatus);
+const attachmentPicker = bindAttachmentPicker(attachmentInput, artifactList, attachmentStatus);
 bindCodePreview(codePreviewToggles, codePreviewModal);
 initializeSidebar();
 renderWorkflowDescription(workflowDescriptionInput?.value || workflowDescription);
@@ -798,7 +831,7 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	}
 	hideStarterQuestions();
 	if (showUserMessage) {
-		appendUserMessage(displayMessage || prompt || "（空白訊息）");
+		appendUserMessage(displayMessage || prompt || "（空白訊息）", payload?.displayAttachments || []);
 	}
 	const assistant = appendAssistantSurface();
 	if (!assistant) {
@@ -920,7 +953,7 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 
 bindInputComposer(form, async (payload) => {
 	await runWorkflow(payload);
-});
+}, { clearAttachments: () => attachmentPicker?.clear() });
 
 starterQuestions?.addEventListener("click", (event) => {
 	const button = event.target.closest?.("[data-starter-question-button]");

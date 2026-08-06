@@ -4,7 +4,7 @@ import ast
 
 from flask import Blueprint, Response, abort, session
 
-from playground.services.model_endpoints import endpoint_env_bindings_for_source
+from playground.services.model_endpoints import endpoint_key_vault_bindings_for_source
 from playground.services.mode_context import get_mode_context
 from playground.services.source_builder import build_default_python_source, normalize_python_source, render_python_source
 from playground.services.workflow_spec import compile_python_source
@@ -29,20 +29,20 @@ def _current_python_source() -> str:
     spec = session.get("workflow_spec")
     if isinstance(spec, dict) and spec.get("version") == "2":
         python_source = compile_python_source(spec)
-        endpoint_bindings = endpoint_env_bindings_for_source(python_source, session.get("endpoint_bindings") or {})
+        endpoint_bindings = endpoint_key_vault_bindings_for_source(python_source, session.get("endpoint_bindings") or {})
         python_source = compile_python_source(spec, endpoint_bindings=endpoint_bindings)
         session["python_source"] = python_source
         return python_source
 
     canonical_source = normalize_python_source(session.get("python_source") or build_default_python_source())
     session["python_source"] = canonical_source
-    endpoint_bindings = endpoint_env_bindings_for_source(canonical_source, session.get("endpoint_bindings") or {})
+    endpoint_bindings = endpoint_key_vault_bindings_for_source(canonical_source, session.get("endpoint_bindings") or {})
     return render_python_source(canonical_source, endpoint_bindings)
 
 
 def _source_preview_markdown(python_source: str) -> str:
     python_imports, python_workflow = _split_python_source_blocks(python_source)
-    placeholder_notice = "貼上主要流程設定，並將 **api_key**、**base_url**、**model** 或 **embedding_model** 的 `<...>` 替換成你的部署值。"
+    placeholder_notice = "此 Playground 在執行期會從 Key Vault 取得 **api_key**、**base_url** 與模型設定；匯出後請以相同的 Key Vault 設定提供這些值。"
     if python_imports:
         source_steps = f"""## 匯入 SDK 模組
 
@@ -62,7 +62,7 @@ def _source_preview_markdown(python_source: str) -> str:
     else:
         source_steps = f"""## 建立 Workflow
 
-複製下方 Python 程式碼，並將 **api_key**、**base_url**、**model** 或 **embedding_model** 的 `<...>` 替換成你的部署值。
+複製下方 Python 程式碼；執行期的 **api_key**、**base_url**、**model** 或 **embedding_model** 必須由 Key Vault 提供。
 
 ```python
 {python_workflow}

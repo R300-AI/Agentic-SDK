@@ -24,6 +24,10 @@ from playground.services.source_parser import parse_supported_source
 from playground.services.workflow_reachability import reachable_workflow_roles
 
 
+_PLAYGROUND_REVIEW_FIELD = "__playground_review"
+_PLAYGROUND_OPTIONS_FIELD = "__playground_options"
+
+
 def get_scene_profile(python_source: str | None) -> RunnerSceneProfile:
     source = python_source or ""
     parsed = parse_supported_source(source)
@@ -74,7 +78,7 @@ def execute_python_source(
     semantic_source_path: str | None = None,
     semantic_index_path: str | None = None,
     tool_call_submission: dict[str, object] | None = None,
-    process_observer: Callable[[dict[str, str]], None] | None = None,
+    process_observer: Callable[[dict[str, object]], None] | None = None,
 ) -> dict[str, object]:
     scene_profile = get_scene_profile(python_source)
     parsed_source = parse_supported_source(python_source)
@@ -88,9 +92,9 @@ def execute_python_source(
     resolved_semantic_sources = _semantic_sources(semantic_sources, semantic_source_path)
     tool_submission_context = _tool_submission_context(config, tool_call_submission)
     user_message = _message_with_tool_submission(message.strip(), tool_submission_context)
-    streamed_process_events: list[dict[str, str]] = []
+    streamed_process_events: list[dict[str, object]] = []
 
-    def emit_process_event(event: dict[str, str]) -> None:
+    def emit_process_event(event: dict[str, object]) -> None:
         streamed_process_events.append(event)
         if process_observer is not None:
             process_observer(event)
@@ -144,9 +148,14 @@ def execute_python_source(
                 process_observer=emit_process_event,
             )
         else:
+            execution_memory = _conversation_memory_for_execution(
+                conversation_state,
+                execution_workflow_name,
+                parsed_attachments,
+            )
             workflow_result = workflow.run(
-                user_message=None if conversation_state else user_message,
-                memory=conversation_state.memory(workflow_name=execution_workflow_name) if conversation_state else None,
+                user_message=None if execution_memory else user_message,
+                memory=execution_memory,
                 session_id=conversation_state.conversation_id if conversation_state else None,
                 attachments=parsed_attachments,
                 event_callback=_workflow_event_observer(
@@ -188,7 +197,13 @@ def execute_python_source(
     tool_calls = [] if handoff_reason or safety_concern else workflow_result.entities.get("latest_tool_calls", [])
     tool_call_panels = [] if handoff_reason or safety_concern else _tool_call_panels_from(config.action_tools, tool_calls, final_message=final_message)
     panel_decision = "human_handoff" if handoff_reason else "safety_concern" if safety_concern else "tool_call" if tool_call_panels else ""
-    if not handoff_reason and not safety_concern and not tool_call_panels and _should_offer_configured_tool_panel(config, user_message, final_message):
+    if (
+        not handoff_reason
+        and not safety_concern
+        and tool_submission_context is None
+        and not tool_call_panels
+        and _should_offer_configured_tool_panel(config, user_message, final_message)
+    ):
         tool_call_panels = _tool_call_panels_from_schemas(config.action_tools, final_message=final_message)
         panel_decision = "fallback_eligible" if tool_call_panels else "no_panel"
     if not panel_decision:
@@ -229,6 +244,20 @@ def execute_python_source(
             tool_submission_context=tool_submission_context,
         ),
     }
+
+
+def _conversation_memory_for_execution(
+    conversation_state: RunnerConversationState | None,
+    workflow_name: str,
+    attachments: list[Attachment],
+) -> InContextMemory | None:
+    if conversation_state is None:
+        return None
+    memory = conversation_state.memory(workflow_name=workflow_name)
+    latest_user_turn = memory.latest_user_turn()
+    if latest_user_turn is not None:
+        latest_user_turn.attachments = list(attachments)
+    return memory
 
 
 def stream_python_source_execution(
@@ -387,10 +416,19 @@ def _tool_submission_arguments(submission: dict[str, object]) -> dict[str, objec
     for key in ("arguments", "payload", "body", "values"):
         value = submission.get(key)
         if isinstance(value, dict):
-            return value
+            return _without_tool_call_review(value)
     excluded_keys = {"id", "name", "function_name", "api", "tool_call_id"}
     flattened = {str(key): value for key, value in submission.items() if str(key) not in excluded_keys}
-    return flattened or None
+    return _without_tool_call_review(flattened)
+
+
+def _without_tool_call_review(arguments: dict[str, object]) -> dict[str, object] | None:
+    filtered = {
+        str(key): value
+        for key, value in arguments.items()
+        if str(key) not in {_PLAYGROUND_REVIEW_FIELD, _PLAYGROUND_OPTIONS_FIELD}
+    }
+    return filtered or None
 
 
 def _message_with_tool_submission(message: str, context: dict[str, object] | None) -> str:
@@ -539,15 +577,36 @@ def _run_tool_submission_continuation(
     action = workflow.modules.get("action")
     if action is None:
         raise WorkflowAborted("unknown module 'action'")
+    action_visit_count = state.visit_counts.get("action", 0) + 1
+    action_visit = {
+        "module": "action",
+        "visit_id": f"{state.workflow_id}:action:{action_visit_count}",
+        "visit_count": action_visit_count,
+        "schema": {"fields": []},
+    }
     if process_observer is not None:
-        process_observer(_process_event("action", _default_label("action"), f"已收到互動選項，直接交給{_action_process_name(config)}繼續產生回覆。"))
+        process_observer(
+            _process_event(
+                "action",
+                _default_label("action"),
+                f"已收到互動選項，直接交給{_action_process_name(config)}繼續產生回覆。",
+                workflow_event={**action_visit, "phase": "start", "status": "running"},
+            )
+        )
     state.increment_visit("action")
     raw_output = _call_action_for_tool_continuation(action, state)
     output = raw_output if isinstance(raw_output, dict) else {"next_module": None, "payload": {"latest_final_message": str(raw_output or "")}}
     state.apply(output)
     if process_observer is not None:
-        process_observer(_process_event("action", _default_label("action"), f"{_action_process_name(config)}已依互動選項完成回覆。"))
-    final_message = _final_message_from_continuation(state)
+        process_observer(
+            _process_event(
+                "action",
+                _default_label("action"),
+                f"{_action_process_name(config)}已依互動選項完成回覆。",
+                workflow_event={**action_visit, "phase": "finish", "status": "done"},
+            )
+        )
+    final_message = _tool_submission_final_message(_final_message_from_continuation(state), context)
     if final_message:
         memory.append_message("assistant", final_message, metadata={"source": "tool_call_submission"})
     return WorkflowResult(
@@ -589,6 +648,16 @@ def _final_message_from_continuation(state: WorkflowState) -> str:
     if err:
         return f"[workflow ended with error] {err.get('message', '')}"
     return str(state.lookup("latest_final_message") or "")
+
+
+def _tool_submission_final_message(message: str, context: dict[str, object]) -> str:
+    api_result = context.get("api_result")
+    if not isinstance(api_result, dict) or not api_result.get("skipped"):
+        return message
+    outcome = str(api_result.get("message") or "").strip()
+    if not outcome:
+        return message
+    return f"本次請求未送出：{outcome}\n\n{message}".strip()
 
 
 def _call_action_for_tool_continuation(action: object, state: WorkflowState) -> object:
@@ -653,7 +722,7 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
 
 def _workflow_event_observer(
     config: BuilderSourceConfig,
-    observer: Callable[[dict[str, str]], None],
+    observer: Callable[[dict[str, object]], None],
 ) -> Callable[[dict[str, Any]], None]:
     def emit(workflow_event: dict[str, Any]) -> None:
         _validate_standard_workflow_event(workflow_event)
@@ -664,25 +733,11 @@ def _workflow_event_observer(
                 workflow_event["field"],
                 workflow_event["value"],
                 label=workflow_event["label"],
+                workflow_event=workflow_event,
             )
             if process_event is not None:
                 observer(process_event)
             return
-        if (
-            workflow_event.get("type") == "stage"
-            and workflow_event.get("phase") == "finish"
-        ):
-            for item in workflow_event.get("fields", []):
-                process_event = _structured_field_process_event(
-                    module,
-                    _require_standard_field_name(item),
-                    _require_standard_field_value(item),
-                    label=workflow_event["label"],
-                )
-                if process_event is not None:
-                    observer(process_event)
-            if workflow_event.get("fields"):
-                return
         process_event = _process_event_for_workflow_event(config, workflow_event)
         if process_event is not None:
             observer(process_event)
@@ -762,16 +817,28 @@ def _require_standard_field_value(item: dict[str, Any]) -> object:
     return item["value"]
 
 
-def _process_event_for_workflow_event(config: BuilderSourceConfig, workflow_event: dict[str, Any]) -> dict[str, str] | None:
+def _process_event_for_workflow_event(config: BuilderSourceConfig, workflow_event: dict[str, Any]) -> dict[str, object] | None:
     _validate_standard_workflow_event(workflow_event)
     module = workflow_event["module"]
     phase = workflow_event["phase"]
     if phase == "start":
-        return _module_start_process_event(config, module, label=workflow_event["label"])
+        return _module_start_process_event(config, module, label=workflow_event["label"], workflow_event=workflow_event)
     if phase == "finish":
-        return _process_event(module, workflow_event["label"], "已完成這個階段。")
+        summary = _structured_finish_summary(module, workflow_event.get("fields", []))
+        return _process_event(
+            module,
+            workflow_event["label"],
+            summary or _module_finish_process_summary(config, module),
+            workflow_event=workflow_event,
+            details=_structured_details_for_finish(workflow_event),
+        )
     if phase == "abort":
-        return _process_event("gate", "流程中止", str(workflow_event.get("reason") or "流程已被安全限制中止。"))
+        return _process_event(
+            "gate",
+            "流程中止",
+            str(workflow_event.get("reason") or "流程已被安全限制中止。"),
+            workflow_event=workflow_event,
+        )
     return None
 
 
@@ -781,21 +848,87 @@ def _structured_field_process_event(
     value: object,
     *,
     label: str,
-) -> dict[str, str] | None:
+    workflow_event: dict[str, Any],
+) -> dict[str, object] | None:
     value_text = _preview_text(_structured_field_value_text(value))
-    if not field or not value_text:
+    if not field or not _is_displayable_trace_value(value_text):
         return None
     title = label or _default_label(module, fallback="處理流程")
     if module == "perceive" and field == "summary":
-        return _process_event("perceive", title, f"目前理解為：{value_text}")
+        return _process_event("perceive", title, f"目前理解為：{value_text}", workflow_event=workflow_event)
     if module == "perceive" and field == "details.next_step":
-        return _process_event("perceive", title, f"建議下一步：{value_text}")
+        return _process_event("perceive", title, f"建議下一步：{value_text}", workflow_event=workflow_event)
     if module == "plan" and field == "thought":
-        return _process_event("plan", title, f"判斷依據：{value_text}")
+        return _process_event("plan", title, f"判斷依據：{value_text}", workflow_event=workflow_event)
     if module == "plan" and field == "next_module":
         next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
-        return _process_event("plan", title, f"目前決定：{next_label}。")
-    return _process_event(module or "workflow", title, f"{field}：{value_text}")
+        return _process_event("plan", title, f"目前決定：{next_label}。", workflow_event=workflow_event)
+    if not _is_user_visible_trace_detail(field, value, workflow_event):
+        return None
+    return _process_event(
+        module or "workflow",
+        title,
+        "",
+        workflow_event=workflow_event,
+        details=[{"field": field, "description": f"{field}：{value_text}"}],
+    )
+
+
+def _structured_details_for_finish(workflow_event: dict[str, Any]) -> list[dict[str, str]]:
+    details: list[dict[str, str]] = []
+    for item in workflow_event.get("fields", []):
+        field = _require_standard_field_name(item)
+        value = _require_standard_field_value(item)
+        value_text = _preview_text(_structured_field_value_text(value))
+        if _is_user_visible_trace_detail(field, value, workflow_event) and _is_displayable_trace_value(value_text):
+            details.append({"field": field, "description": f"{field}：{value_text}"})
+    return details
+
+
+def _structured_finish_summary(module: str, fields: object) -> str:
+    if not isinstance(fields, list):
+        return ""
+    if module == "plan":
+        next_module = next((item for item in fields if isinstance(item, dict) and item.get("field") == "next_module"), None)
+        if isinstance(next_module, dict):
+            value_text = _preview_text(_structured_field_value_text(_require_standard_field_value(next_module)))
+            if _is_displayable_trace_value(value_text):
+                next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+                return f"目前決定：{next_label}。"
+    for item in fields:
+        if not isinstance(item, dict):
+            continue
+        field = _require_standard_field_name(item)
+        value_text = _preview_text(_structured_field_value_text(_require_standard_field_value(item)))
+        if not _is_displayable_trace_value(value_text):
+            continue
+        if module == "perceive" and field == "summary":
+            return f"目前理解為：{value_text}"
+        if module == "perceive" and field == "details.next_step":
+            return f"建議下一步：{value_text}"
+        if module == "plan" and field == "thought":
+            return f"判斷依據：{value_text}"
+        if module == "plan" and field == "next_module":
+            next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+            return f"目前決定：{next_label}。"
+    return ""
+
+
+def _is_user_visible_trace_detail(field: str, value: object, workflow_event: dict[str, Any]) -> bool:
+    if isinstance(value, (dict, list, tuple, set)):
+        return False
+    schema = workflow_event.get("schema")
+    configured_fields = schema.get("fields", []) if isinstance(schema, dict) else []
+    if "*" in configured_fields:
+        return False
+    if field not in configured_fields:
+        return False
+    # These fields have purpose-built summary text and must not appear twice.
+    return field not in {"intent", "summary", "details.next_step", "thought", "next_module", "verdict", "reason", "suggestion"}
+
+
+def _is_displayable_trace_value(value: str) -> bool:
+    return str(value or "").strip() not in {"", "未提供／無法判讀", "未提供/無法判讀", "null", "None"}
 
 
 def _structured_field_value_text(value: object) -> str:
@@ -807,19 +940,39 @@ def _structured_field_value_text(value: object) -> str:
         return str(value)
 
 
-def _module_start_process_event(config: BuilderSourceConfig, module: str, *, label: str = "") -> dict[str, str] | None:
+def _module_start_process_event(
+    config: BuilderSourceConfig,
+    module: str,
+    *,
+    label: str = "",
+    workflow_event: dict[str, Any],
+) -> dict[str, object] | None:
     if module == "perceive":
-        return _process_event("perceive", label or _default_label("perceive"), "正在讀取使用者輸入，整理成後續步驟可使用的內容。")
+        return _process_event("perceive", label or _default_label("perceive"), "正在讀取使用者輸入，整理成後續步驟可使用的內容。", workflow_event=workflow_event)
     if module == "plan":
-        return _process_event("plan", label or _default_label("plan"), "正在判斷這次需要先整理來源，或可以直接準備回覆。")
+        return _process_event("plan", label or _default_label("plan"), "正在判斷這次需要先整理來源，或可以直接準備回覆。", workflow_event=workflow_event)
     if module == "retrieve":
         title = label or _retrieve_process_title(config)
-        return _process_event("retrieve", title, "正在整理這一步可用的參考內容。")
+        return _process_event("retrieve", title, "正在整理這一步可用的參考內容。", workflow_event=workflow_event)
     if module == "action":
-        return _process_event("action", label or _default_label("action"), f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。")
+        return _process_event("action", label or _default_label("action"), f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。", workflow_event=workflow_event)
     if module == "reflect":
-        return _process_event("reflect", label or _default_label("reflect"), "正在檢查回覆是否可交付，必要時會回到前一步調整。")
+        return _process_event("reflect", label or _default_label("reflect"), "正在檢查回覆是否可交付，必要時會回到前一步調整。", workflow_event=workflow_event)
     return None
+
+
+def _module_finish_process_summary(config: BuilderSourceConfig, module: str) -> str:
+    if module == "perceive":
+        return "已整理可供後續判斷使用的輸入內容。"
+    if module == "plan":
+        return "已決定下一步處理方式。"
+    if module == "retrieve":
+        return "已整理相關來源，交給回覆階段使用。"
+    if module == "action":
+        return f"{_action_process_name(config)}已完成回覆整理。"
+    if module == "reflect":
+        return "已檢查回覆內容，可交付。"
+    return "已完成這個階段。"
 
 
 def _retrieve_process_title(config: BuilderSourceConfig) -> str:
@@ -830,8 +983,30 @@ def _retrieve_process_title(config: BuilderSourceConfig) -> str:
     return "比對參考資料"
 
 
-def _process_event(role: str, title: str, description: str) -> dict[str, str]:
-    return {"role": role, "title": title, "description": description}
+def _process_event(
+    role: str,
+    title: str,
+    description: str,
+    *,
+    workflow_event: dict[str, Any] | None = None,
+    details: list[dict[str, str]] | None = None,
+) -> dict[str, object]:
+    event: dict[str, object] = {"role": role, "title": title, "description": description}
+    if workflow_event is not None:
+        schema = workflow_event.get("schema") or {}
+        event.update(
+            {
+                "module": workflow_event.get("module") or role,
+                "visit_id": workflow_event.get("visit_id"),
+                "visit_count": workflow_event.get("visit_count"),
+                "phase": workflow_event.get("phase"),
+                "status": workflow_event.get("status"),
+                "tracked_fields": list(schema.get("fields") or []),
+            }
+        )
+    if details:
+        event["details"] = details
+    return event
 
 
 def _default_label(module: str, *, fallback: str = "") -> str:
@@ -1179,6 +1354,7 @@ def _tool_call_panels_from(action_tools: tuple[dict[str, object], ...], tool_cal
                 "description": "",
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": arguments_text,
+                "review": _tool_call_review_from(arguments),
                 "fields": _tool_call_fields_from(schema, arguments),
             }
         )
@@ -1191,7 +1367,7 @@ def _tool_call_panel_title(schema: dict[str, object], function_name: str) -> str
     properties = properties if isinstance(properties, dict) else {}
     for name, field_schema in properties.items():
         if isinstance(field_schema, dict) and _tool_call_field_type(field_schema.get("type"), None) == "boolean":
-            return f"請確認：{name}"
+            return "下一步確認"
     if properties:
         return "請補充以下需求"
     return _user_facing_tool_description(str(schema.get("description") or "")) or function_name
@@ -1207,11 +1383,14 @@ def _should_offer_configured_tool_panel(config: BuilderSourceConfig, user_messag
         return False
     user_text = str(user_message or "").lower()
     final_text = str(final_message or "").lower()
-    if _has_information_intent(user_text):
+    has_decision_context = _has_decision_context(user_text)
+    if _is_status_or_recall_question(user_text):
+        return False
+    if _has_information_intent(user_text) and not has_decision_context:
         return False
     if _asks_for_missing_input(final_text):
         return False
-    if not _has_decision_context(user_text):
+    if not has_decision_context:
         return False
     return _has_actionable_response(final_text) and _asks_for_business_confirmation(final_text)
 
@@ -1238,6 +1417,10 @@ def _configured_tool_text(config: BuilderSourceConfig) -> str:
 
 def _has_information_intent(text: str) -> bool:
     return any(term in text for term in ("分析", "解釋", "說明", "結果", "原因", "現況", "為什麼", "問題", "算不算", "怎麼說", "話術", "差在哪", "差異", "治好", "診斷", "how", "why", "explain", "analysis", "result"))
+
+
+def _is_status_or_recall_question(text: str) -> bool:
+    return any(term in text for term in ("哪一款", "多少", "有沒有", "到底有沒有", "通知狀態", "送出狀態"))
 
 
 def _has_decision_context(*texts: str) -> bool:
@@ -1292,6 +1475,7 @@ def _tool_call_panels_from_schemas(action_tools: tuple[dict[str, object], ...], 
                 "description": "",
                 "api": _tool_api_from_schema(schema),
                 "raw_arguments": "{}",
+                "review": "",
                 "fields": fields,
             }
         )
@@ -1331,10 +1515,11 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
     required = parameters.get("required") if isinstance(parameters, dict) else []
     properties = properties if isinstance(properties, dict) else {}
     required_names = {str(name) for name in required} if isinstance(required, list) else set()
-    names = list(properties)
+    names = [name for name in properties if name not in {_PLAYGROUND_REVIEW_FIELD, _PLAYGROUND_OPTIONS_FIELD}]
     for name in arguments:
-        if name not in properties:
+        if name not in properties and name not in {_PLAYGROUND_REVIEW_FIELD, _PLAYGROUND_OPTIONS_FIELD}:
             names.append(name)
+    generated_options = _tool_call_options_from(arguments)
     fields = []
     for name in names:
         field_schema = properties.get(name)
@@ -1351,10 +1536,17 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
                 "description": "",
                 "required": str(name) in required_names and not _is_optional_tool_field(field_schema),
                 "value": "" if field_type == "boolean" else (value if value is not None else ""),
-                "choices": _tool_call_field_choices(str(name), field_type),
+                "choices": _tool_call_field_choices(str(name), field_type, generated_options.get(str(name), {}).get("choices", [])),
+                "custom_label": str(generated_options.get(str(name), {}).get("custom_label") or "自行填寫"),
             }
         )
     return fields
+
+
+def _tool_call_review_from(arguments: dict[str, object]) -> str:
+    review = str(arguments.get(_PLAYGROUND_REVIEW_FIELD) or "").strip()
+    review = re.split(r"\s*待確認事項\s*[:：]", review, maxsplit=1)[0]
+    return review.rstrip("；;，, ").strip()
 
 
 def _tool_call_field_label(name: str, field_type: str) -> str:
@@ -1370,7 +1562,33 @@ def _tool_call_field_description(field_schema: dict[str, object], field_type: st
     return str(field_schema.get("description") or "")
 
 
-def _tool_call_field_choices(name: str, field_type: str) -> list[dict[str, object]]:
+def _tool_call_options_from(arguments: dict[str, object]) -> dict[str, dict[str, object]]:
+    raw_options = arguments.get(_PLAYGROUND_OPTIONS_FIELD)
+    if not isinstance(raw_options, dict):
+        return {}
+    options: dict[str, dict[str, object]] = {}
+    for name, raw_field_options in raw_options.items():
+        if isinstance(raw_field_options, dict):
+            values = raw_field_options.get("choices")
+            custom_label = str(raw_field_options.get("custom_label") or "").strip()
+        else:
+            values = raw_field_options
+            custom_label = ""
+        if not isinstance(values, list):
+            continue
+        choices = []
+        for value in values:
+            text = str(value).strip()
+            if text and text not in choices:
+                choices.append(text)
+        if choices:
+            options[str(name)] = {"choices": choices[:4], "custom_label": custom_label or "自行填寫"}
+    return options
+
+
+def _tool_call_field_choices(name: str, field_type: str, generated_options: list[str] | None = None) -> list[dict[str, object]]:
+    if field_type == "string":
+        return [{"value": value, "label": value, "description": ""} for value in (generated_options or [])]
     if field_type != "boolean":
         return []
     return [

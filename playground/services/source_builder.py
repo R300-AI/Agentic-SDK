@@ -41,10 +41,10 @@ _OUTPUT_FORMAT_PROMPTS = {
     "custom_schema": "請依指定格式輸出；欄位缺資料時使用空字串或明確標註未知。",
 }
 _INTERACTIVE_TOOL_POLICY = """互動元件使用原則：
-請先判斷使用者這一輪的意圖類型，而不是因為已配置互動元件就要求使用者選擇。
+以下是內部決策規則，不要向使用者描述判斷、工具或元件流程。先在內部判斷使用者這一輪的意圖類型，而不是因為已配置互動元件就要求使用者選擇。
 當使用者只是詢問資訊、要求分析、要求解釋、比較原因、了解現況或追問依據時，只用自然語言回答，不要提出確認問題。
 只有當使用者明確進入決策、確認、提交、申請、送出表單、安排後續流程或選擇下一步，且該需求符合工具描述時，才提出互動確認。
-需要互動確認時，請先完整輸出你的建議、依據、限制與下一步，最後用自然語言提出清楚的確認問題；Playground 會依配置顯示互動元件並收集使用者選擇。
+需要互動確認時，對使用者直接輸出建議、必要依據、限制與下一步，最後用自然語言提出清楚的確認問題；Playground 會依配置顯示互動元件並收集使用者選擇。
 不要把 API URL、component schema、欄位 JSON 或內部工具設定當成使用者可見文字輸出。"""
 _FREE_TEXT_OUTPUT_CHOICES = {"free_text", "natural", "bullets"}
 _INTERACTIVE_OUTPUT_CHOICES = {"interactive", "table", "json", "custom_schema"}
@@ -57,6 +57,8 @@ _DEFAULT_SEMANTIC_RETRIEVE_DESCRIPTION = "依上傳的參考文件查找與問�
 _DEFAULT_SEMANTIC_SAVED_PATH = SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 _DEFAULT_SEMANTIC_SOURCE_DIR = "./tmp/source-files"
 _DEFAULT_RUNNER_DESCRIPTION = "可填寫這個 Agent 的用途、適用情境或回覆目標。"
+_PLAYGROUND_REVIEW_FIELD = "__playground_review"
+_PLAYGROUND_OPTIONS_FIELD = "__playground_options"
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
     "TextPerceive",
@@ -660,6 +662,8 @@ def _component_fields_text_from_parameters(parameters: object) -> str:
     type_labels = {"string": "文字", "number": "數字", "boolean": "是/否"}
     lines: list[str] = []
     for name, field in properties.items():
+        if name in {_PLAYGROUND_REVIEW_FIELD, _PLAYGROUND_OPTIONS_FIELD}:
+            continue
         if not isinstance(field, dict):
             continue
         label = _clean_short_text(str(name), "")
@@ -817,6 +821,25 @@ def _tools_from_action_payload(payload: dict[str, Any]) -> tuple[dict[str, objec
         if api_url:
             description_parts.append(f"API：{api_method} {api_url}")
         description = " ".join(part for part in description_parts if part).strip() or "提交 API 所需資料。"
+        fields["properties"][_PLAYGROUND_REVIEW_FIELD] = {
+            "type": "string",
+            "description": "平台顯示用確認摘要。只列出本輪已知事實與必要限制，例如安排、商品、時間、供應或缺口；不要提問、不要寫待確認事項、不要重述任何表單欄位或選項。表單本身會提出唯一需要使用者決定的問題。不要把它當成使用者輸入，也不要要求使用者編輯。",
+        }
+        fields["required"].append(_PLAYGROUND_REVIEW_FIELD)
+        fields["properties"][_PLAYGROUND_OPTIONS_FIELD] = {
+            "type": "object",
+            "description": "平台顯示用文字選項。針對每個資料類型為文字的欄位，以該欄位名稱為 key，提供 choices（1 到 4 個簡短且具體的建議選項字串）和 custom_label（使用者自行填寫時的按鈕標籤）。choices 第一個必須是最推薦的選項，且同時填入該文字欄位作為預設值。只提供文字欄位的 key，不要包含是/否、數字或平台保留欄位。不要把它當成使用者輸入。",
+            "additionalProperties": {
+                "type": "object",
+                "properties": {
+                    "choices": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 4},
+                    "custom_label": {"type": "string"},
+                },
+                "required": ["choices", "custom_label"],
+                "additionalProperties": False,
+            },
+        }
+        fields["required"].append(_PLAYGROUND_OPTIONS_FIELD)
         tools.append(
             {
                 "type": "function",

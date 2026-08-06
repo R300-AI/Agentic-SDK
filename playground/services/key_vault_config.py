@@ -150,8 +150,12 @@ def _secret_names(vault_name: str, token: str) -> list[str]:
             response.raise_for_status()
             payload = response.json()
             for item in payload.get("value", []):
-                secret_id = str(item.get("id") or "").rstrip("/")
-                name = secret_id.rsplit("/", 1)[-1].strip()
+                secret_path = str(item.get("id") or "").rstrip("/").split("/")
+                try:
+                    secrets_index = secret_path.index("secrets")
+                    name = secret_path[secrets_index + 1].strip()
+                except (ValueError, IndexError):
+                    name = ""
                 if name:
                     names.append(name)
             url = str(payload.get("nextLink") or "")
@@ -211,7 +215,8 @@ def _azure_cli_token() -> str:
 
 
 def _azure_cli_command() -> str:
-    for command in ("az", "az.cmd"):
+    commands = ("az.cmd", "az") if os.name == "nt" else ("az", "az.cmd")
+    for command in commands:
         resolved = shutil.which(command)
         if resolved:
             return resolved

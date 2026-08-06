@@ -51,9 +51,9 @@ function endpointStatusText(state) {
   const requirements = Array.isArray(state?.requirements) ? state.requirements : [];
   const hasOptions = requirements.some((requirement) => Array.isArray(requirement.options) && requirement.options.length);
   if (!hasOptions) {
-    return "目前沒有可用的模型端點。請先在 .env 設定至少一組 <PREFIX>_MODEL / <PREFIX>_BASE_URL / <PREFIX>_API_KEY。";
+    return "Key Vault 中沒有可用的模型端點。請確認至少一組模型的 MODEL、BASE-URL 與 API-KEY secret。";
   }
-  return state.configured ? "" : "請選擇部署選項。";
+  return state.configured ? "模型設定由 Key Vault 自動提供。" : "Key Vault 的模型設定不完整，請確認所需 secret。";
 }
 
 function reviewAnswerForStep(stepKey) {
@@ -133,45 +133,11 @@ function renderBuilderEndpointState(state) {
       return;
     }
 
-    const hasOptions = stepRequirements.every((requirement) => Array.isArray(requirement.options) && requirement.options.length);
-    if (hasOptions) {
-      const form = document.createElement("form");
-      form.className = "module-param-form endpoint-form";
-      form.dataset.builderEndpointForm = "true";
-      stepRequirements.forEach((requirement) => {
-        const label = document.createElement("label");
-        label.className = "endpoint-row";
-
-        const select = document.createElement("select");
-        select.name = requirement.role;
-        select.dataset.builderEndpointSelect = "true";
-        select.required = true;
-        const placeholder = document.createElement("option");
-        placeholder.value = "";
-        placeholder.textContent = "(請選擇部署選項)";
-        placeholder.disabled = true;
-        placeholder.selected = !selections[requirement.role];
-        select.append(placeholder);
-        requirement.options.forEach((endpoint) => {
-          const option = document.createElement("option");
-          option.value = endpoint.id;
-          option.textContent = endpoint.label;
-          if (selections[requirement.role] === endpoint.id) {
-            option.selected = true;
-          }
-          select.append(option);
-        });
-
-        label.append(select);
-        form.append(label);
-      });
-      body.append(form);
-    }
-
     const statusText = endpointStatusText(state);
     if (statusText) {
       const status = document.createElement("p");
-      status.className = `inline-status${hasOptions ? "" : " error"}`;
+      const hasOptions = stepRequirements.every((requirement) => Array.isArray(requirement.options) && requirement.options.length);
+      status.className = `inline-status${hasOptions && state.configured ? "" : " error"}`;
       status.dataset.builderEndpointStatus = "true";
       status.textContent = statusText;
       body.append(status);
@@ -189,26 +155,6 @@ async function postBuilderState(payload) {
   });
   stateQueue = task.then(() => undefined, () => undefined);
   return task;
-}
-
-async function syncBuilderEndpointSelections() {
-  const forms = Array.from(document.querySelectorAll("[data-builder-endpoint-form]"));
-  if (!forms.length) {
-    return;
-  }
-  document.querySelectorAll("[data-builder-endpoint-status]").forEach((status) => {
-    status.textContent = "正在更新部署選項...";
-    status.classList.remove("error");
-  });
-  const selections = {};
-  forms.forEach((form) => {
-    Object.assign(selections, Object.fromEntries(new FormData(form).entries()));
-  });
-  const result = await postJson("/playground/builder/endpoints", {
-    selections,
-  });
-  renderBuilderEndpointState(result);
-  renderBuilderReviewState(result.builder_review_state, result.builder_review_ready);
 }
 
 async function flushBuilderState() {
@@ -1152,10 +1098,3 @@ document.querySelectorAll("[data-runner-link], [data-complete-link]").forEach((l
   });
 });
 
-document.addEventListener("change", async (event) => {
-  const select = event.target.closest?.("[data-builder-endpoint-select]");
-  if (!select) {
-    return;
-  }
-  await syncBuilderEndpointSelections();
-});

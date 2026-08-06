@@ -6,9 +6,26 @@ export function bindAttachmentPicker(input, list, status) {
   let previewUrls = [];
   const maxVisibleArtifacts = 3;
 
-  input?.addEventListener("change", () => {
+  function clearPreview() {
     previewUrls.forEach((url) => URL.revokeObjectURL(url));
     previewUrls = [];
+    if (list) {
+      list.replaceChildren();
+    }
+  }
+
+  function clear() {
+    clearPreview();
+    if (input) {
+      input.value = "";
+    }
+    if (status) {
+      status.textContent = "尚未選擇附件。";
+    }
+  }
+
+  input?.addEventListener("change", () => {
+    clearPreview();
     const files = Array.from(input.files || []);
     if (status) {
       status.textContent = files.length
@@ -41,6 +58,8 @@ export function bindAttachmentPicker(input, list, status) {
       );
     }
   });
+
+  return { clear };
 }
 
 function artifactOverflowItem(count) {
