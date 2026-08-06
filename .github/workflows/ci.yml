@@ -8,6 +8,7 @@ on:
       - 'tests/**'
       - 'demo/**'
       - 'playground/**'
+      - 'scripts/**'
       - 'docs/**'
       - 'pyproject.toml'
       - 'requirements.txt'
@@ -19,6 +20,7 @@ on:
       - 'tests/**'
       - 'demo/**'
       - 'playground/**'
+      - 'scripts/**'
       - 'docs/**'
       - 'pyproject.toml'
       - 'requirements.txt'
@@ -54,22 +56,7 @@ jobs:
           python -m pip install -r requirements.txt pytest
 
       - name: Verify semantic ingestion conversion dependencies
-        run: |
-          python - <<'PY'
-          import importlib
-
-          required_modules = (
-              "markitdown",
-              "mammoth",
-              "openpyxl",
-              "pandas",
-              "pdfminer.high_level",
-              "pptx",
-              "xlrd",
-          )
-          for module in required_modules:
-              importlib.import_module(module)
-          PY
+        run: python scripts/verify_semantic_ingestion_dependencies.py
 
       - name: Run tests
         run: python -m pytest -q
