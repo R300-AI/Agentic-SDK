@@ -16,11 +16,11 @@ from playground.services import model_endpoints
 from playground.services.workflow_spec import apply_builder_step, compile_python_source, default_spec
 
 
-def test_key_vault_settings_uses_live_resource_inventory():
+def test_key_vault_settings_uses_deterministic_test_inventory():
     settings = key_vault_config.key_vault_settings()
 
-    assert settings.ai_hub.base_url.startswith("https://")
-    assert settings.ai_hub.playground_origin.startswith("https://")
+    assert settings.ai_hub.base_url == "https://aihub.test"
+    assert settings.ai_hub.playground_origin == "https://playground.test"
     assert {endpoint.id for endpoint in settings.chat_endpoints} == {"gpt-54", "gpt-55"}
     assert {endpoint.id for endpoint in settings.embedding_endpoints} == {"embedded-large", "embedded-small"}
 

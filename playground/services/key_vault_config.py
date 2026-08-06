@@ -13,6 +13,22 @@ import httpx
 DEFAULT_KEY_VAULT_NAME = "agentic-sdk-models"
 _CHAT_ENDPOINT_PREFIXES = ("GPT-54", "GPT-55")
 _EMBEDDING_ENDPOINT_PREFIXES = ("EMBEDDED-LARGE", "EMBEDDED-SMALL")
+_TEST_KEY_VAULT_VALUES = {
+    "AI-HUB-BASE-URL": "https://aihub.test",
+    "AI-HUB-PLAYGROUND-ORIGIN": "https://playground.test",
+    "GPT-54-API-KEY": "test-gpt-54-key",
+    "GPT-54-BASE-URL": "https://models.test/openai/v1",
+    "GPT-54-MODEL": "gpt-5.4",
+    "GPT-55-API-KEY": "test-gpt-55-key",
+    "GPT-55-BASE-URL": "https://models.test/openai/v1",
+    "GPT-55-MODEL": "gpt-5.5",
+    "EMBEDDED-LARGE-API-KEY": "test-embedded-large-key",
+    "EMBEDDED-LARGE-ENDPOINT": "https://models.test/openai/v1",
+    "EMBEDDED-LARGE-DEPLOYMENT-NAME": "text-embedding-3-large",
+    "EMBEDDED-SMALL-API-KEY": "test-embedded-small-key",
+    "EMBEDDED-SMALL-ENDPOINT": "https://models.test/openai/v1",
+    "EMBEDDED-SMALL-DEPLOYMENT-NAME": "text-embedding-3-small",
+}
 
 
 class KeyVaultConfigurationError(RuntimeError):
@@ -51,7 +67,13 @@ class KeyVaultSettings:
 
 
 def key_vault_settings() -> KeyVaultSettings:
+    if _test_mode_enabled():
+        return _settings_from_values(_TEST_KEY_VAULT_VALUES)
     return _settings_from_values(_key_vault_values(_key_vault_name()))
+
+
+def _test_mode_enabled() -> bool:
+    return os.environ.get("PLAYGROUND_TEST_MODE", "").strip().lower() in {"1", "true", "yes"}
 
 
 def _settings_from_values(values: dict[str, str]) -> KeyVaultSettings:

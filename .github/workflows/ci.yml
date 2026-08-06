@@ -30,6 +30,8 @@ jobs:
   test:
     name: Python tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      PLAYGROUND_TEST_MODE: "true"
     strategy:
       fail-fast: false
       matrix:
@@ -50,6 +52,4 @@ jobs:
           python -m pip install -r requirements.txt pytest
 
       - name: Run tests
-        env:
-          PLAYGROUND_TEST_MODE: "true"
         run: python -m pytest -q

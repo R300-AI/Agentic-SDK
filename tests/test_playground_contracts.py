@@ -40,6 +40,20 @@ def test_key_vault_skip_flag_does_not_bypass_typed_settings(monkeypatch):
     assert settings.ai_hub.base_url == "https://aihub.example"
 
 
+def test_key_vault_test_mode_uses_only_non_secret_test_inventory(monkeypatch):
+    monkeypatch.setenv("PLAYGROUND_TEST_MODE", "true")
+    monkeypatch.setattr(
+        key_vault_config,
+        "_key_vault_values",
+        lambda _vault_name: (_ for _ in ()).throw(AssertionError("test mode must not read Azure Key Vault")),
+    )
+
+    settings = key_vault_config.key_vault_settings()
+
+    assert settings.ai_hub.base_url == "https://aihub.test"
+    assert {endpoint.id for endpoint in settings.chat_endpoints} == {"gpt-54", "gpt-55"}
+
+
 def test_key_vault_secret_list_uses_secret_name_not_version(monkeypatch):
     class FakeResponse:
         def raise_for_status(self):

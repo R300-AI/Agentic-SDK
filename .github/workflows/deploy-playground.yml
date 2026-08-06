@@ -281,13 +281,15 @@ jobs:
 
       - name: Create deployment package
         run: |
-          zip -r deploy.zip \
+          set -euo pipefail
+          zip -rq deploy.zip \
             agentic_sdk/ \
             assets/ \
             playground/ \
             .python_packages/ \
             requirements.txt \
             -x "*.pyc" -x "*/__pycache__/*" -x "playground/visual-audit/*"
+          unzip -t deploy.zip
 
       - name: Deploy package to Azure App Service
         uses: azure/webapps-deploy@v3
