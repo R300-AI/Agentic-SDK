@@ -43,11 +43,11 @@ nav:
     - 跑出第一條 Agentic SDK Workflow: tutorials/getting-started.md
     - 做出一條可以跑的工作流程: tutorials/build-and-run-a-workflow.md
     - 讓畫面知道 Agent 跑到哪一步: tutorials/watch-a-workflow-run.md
-    - 配置 workflow 的畫面事件: tutorials/configure-workflow-events.md
+    - 設定工作流程的畫面事件: tutorials/configure-workflow-events.md
     - 讓 Agent 接得住前後文: tutorials/multi-turn-conversation.md
     - 讓 Agent 檢查回答有沒有依據: tutorials/search-documents-and-answer.md
     - 讓 Agent 判斷什麼時候要叫工具: tutorials/call-tools-from-a-workflow.md
-    - 看懂五大模組的共同規範: tutorials/from-playground-to-code.md
+    - 五大模組的共同寫法: tutorials/module-writing-basics.md
   - Use Case 實施例:
     - use-cases/index.md
     - LaNew 售鞋顧問: use-cases/lanew-footwear-advisor.md

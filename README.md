@@ -1,8 +1,8 @@
 # Agentic SDK
 
-Agentic SDK 是一個以 Python workflow 組裝 Agent 行為的 SDK。你可以用 Perceive、Plan、Retrieve、Action、Reflect 等模組建立可測試、可替換、可觀測的 Agent 流程，並在 Playground 中用 Builder / Runner 快速試作。
+Agentic SDK 是一個用 Python 組合 Agent 工作流程的程式庫。你可以用輸入理解、步驟安排、資料查找、回覆與動作、結果檢查等模組，建立可測試、可替換、可觀察的 Agent 流程。
 
-從這個版本開始，SDK 的共同 memory 抽象是 `MemoryStore`，而 `InContextMemory` 與 `PersistentMemory` 是同層、可互換的 memory 類型。`InContextMemory` 偏重以時間順序保存同一個 session 的 `user -> assistant -> user -> assistant` 完整 turn 歷史；所有需要模型的模組都會透過 `MemoryStore` 讀取這份歷史，不再只看當輪 `user_message`。
+SDK 以 `MemoryStore` 統一管理對話記憶；`InContextMemory` 與 `PersistentMemory` 提供兩種可替換的記憶方式。`InContextMemory` 依時間順序保存同一個 `session_id` 的完整對話歷史，所有需要模型的模組都可透過 `MemoryStore` 讀取這份前文。
 
 ## 核心概念
 
@@ -27,7 +27,7 @@ python -m pip install "git+https://github.com/R300-AI/Agentic-SDK.git"
 python -c "import agentic_sdk; print('Agentic SDK import ok')"
 ```
 
-`pip install https://github.com/R300-AI/Agentic-SDK.git` 不是 pip 的 Git repository 語法；pip 會把它當成一般下載檔。請使用上面的 `git+https://...` VCS URL，或命名形式：`python -m pip install "agentic-sdk @ git+https://github.com/R300-AI/Agentic-SDK.git"`。
+從 GitHub 安裝時，pip 使用 `git+https://...` 格式；也可使用命名形式：`python -m pip install "agentic-sdk @ git+https://github.com/R300-AI/Agentic-SDK.git"`。
 
 ## 快速開始
 
@@ -103,7 +103,7 @@ print(result.final_message)
 
 ### 3. 觀察 workflow 與直接串流 Action 回覆
 
-沒有傳入 `events_schema` 時，Workflow 會使用 SDK 的完整預設觀測契約：所有執行到的 Perceive、Plan、Retrieve、Action、Reflect 都會送出 start／finish／abort stage event，標準 label 依序為「理解輸入」、「判斷工具順序」、「整理相關來源」、「準備輸出回覆」、「檢查回覆」；所有 LLM token delta 都會送出，且結構化 JSON 的每個欄位與巢狀值都會送出 `structured_field`。欄位值必須已是完整 JSON value，不會送出 partial JSON。
+省略 `events_schema` 時，`Workflow` 會送出每個實際執行步驟的開始、完成與中止事件；標準名稱依序是「理解輸入」、「判斷工具順序」、「整理相關來源」、「準備輸出回覆」、「檢查回覆」。模型產生的文字會以 `token_delta` 送出，結構化欄位則以完整 JSON 值的 `structured_field` 送出。
 
 傳入 `events_schema` 則是明確覆寫／限制：只有列出的 module 會送出 stage event，`fields` 只送出列出的 dot path；若明確要保留完整欄位觀測，可指定 `"*"`. 下例刻意只觀察部分欄位：
 
@@ -128,7 +128,7 @@ workflow = Workflow(
 )
 ```
 
-`Workflow.stream(...)` 會直接迭代使用者可見的 Action text，不會輸出 Perceive、Plan 或 Reflect 的結構化 JSON。可串流的 Action 會即時產生 token；非串流 Action 會在完成時產生一次最終文字。完整迭代後可從 `stream.result` 取得 `WorkflowResult`：
+`Workflow.stream(...)` 會依序提供回覆步驟產生的使用者可見文字。可串流的回覆會即時提供文字片段，其他回覆會在完成時提供最終文字。完整迭代後可從 `stream.result` 取得 `WorkflowResult`：
 
 ```python
 def on_event(event):
@@ -146,7 +146,7 @@ for delta in stream:
 result = stream.result
 ```
 
-`run(..., event_callback=on_event)` 與 `stream(..., event_callback=on_event)` 使用同一份預設或自訂 `events_schema`、送出相同的 `stage`、`token_delta` 與 `structured_field` 事件。`stream()` 接受與 `run()` 相同的輸入、session、memory 與 attachment 參數。若 callback 自己輸出 `token_delta`，預設 iterator 不會再 yield Action token，避免重複輸出；此時只要迭代 stream 以等待完成即可。若確實需要兩條通道，設定 `yield_action_deltas=True`。`events_schema` 是唯一的事件設定入口。
+`run(..., event_callback=on_event)` 與 `stream(..., event_callback=on_event)` 使用同一份預設或自訂 `events_schema`，並送出相同的 `stage`、`token_delta` 與 `structured_field` 事件。`stream()` 接受與 `run()` 相同的輸入、對話識別、記憶與附件參數。callback 處理文字片段時，iterator 以完成等待為主；設定 `yield_action_deltas=True` 可同時從 iterator 取得文字片段。`events_schema` 集中管理事件設定。
 
 ### 4. 使用 ToolCallAction 產生 OpenAI 標準工具呼叫
 
@@ -206,7 +206,7 @@ print(result.final_message)
 print(result.entities["latest_tool_calls"])
 ```
 
-SDK 只負責產生與保存標準 tool call 結果；真正呼叫外部 API、呈現確認面板或提交表單，可以由應用層或 Playground Runner 承接。
+SDK 會產生並保存標準工具請求結果。你的應用程式讀取工具名稱與參數後，負責呼叫外部 API、顯示確認內容或提交資料。
 
 ### 5. 自訂 Action
 
@@ -242,34 +242,8 @@ result = workflow.run("請介紹 Agentic SDK")
 print(result.final_message)
 ```
 
-若自訂模組需要直接讀取完整對話，應優先透過 `state.memory` 這個通用 `MemoryStore` 介面，而不是把模組綁死在特定 `InContextMemory` 類別；要讀取最新一輪使用者文字，則可使用 `state.latest_user_message()`。
+自訂模組可透過 `state.memory` 讀取完整對話，這個欄位使用通用的 `MemoryStore` 介面；要讀取最新一輪使用者文字，可使用 `state.latest_user_message()`。
 
-## Playground
+## 示範程式
 
-正式 Playground 是 Flask app，包含 Entry、Builder、Runner、Source preview/export、AI Hub 登入與儲存串接，以及 ToolCallAction 互動面板。
-
-```bash
-uv run python -m flask --app playground.app:app run --host 127.0.0.1 --port 5050 --no-reload --no-debugger
-```
-
-啟動後開啟 Playground 入口：
-
-```text
-http://127.0.0.1:5050/playground
-```
-
-以下流程都從 `http://127.0.0.1:5050/playground` 開始；第一頁會看到「使用 AI Hub 登入」與「不登入，匿名試用」兩張卡片。
-
-### 基本功能
-
-操作：**`/playground`** -> **開始匿名試用** -> **Builder** -> **開始建立 Agent** -> **Runner**
-
-### 新建與儲存
-
-操作：**`/playground`** -> **登入並開始建立** -> **開始新建** -> **Builder** -> **開始建立 Agent** -> **Runner** -> **儲存**
-
-### 載入與更新
-
-操作：**`/playground`** -> **登入並開始建立** -> **編輯** -> **Runner** -> **編輯設定** -> **Runner** -> **儲存**
-
-> Runner 的模型設定一律由 Key Vault 提供。請確認 Key Vault 已設定模型的 `MODEL`、`BASE-URL`、`API-KEY` secret。
+專案另附一個 Flask 示範程式，用來展示工作流程的建立、執行與互動方式。安裝、啟動與示範環境設定請閱讀 [playground/README.md](playground/README.md)。

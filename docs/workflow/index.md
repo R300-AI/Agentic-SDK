@@ -33,7 +33,42 @@ Workflow(
 )
 ```
 
-`workflow_name` 用來標示這條流程的公開名稱；未顯式指定時，SDK 與 Playground 都使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState` 上，供應用層或自訂模組使用。省略 `events_schema` 時，SDK 預設完整送出事件：每個執行到的 module 都會送出 start、finish、abort stage event，標準 label 分別是 Perceive「理解輸入」、Plan「判斷工具順序」、Retrieve「整理相關來源」、Action「準備輸出回覆」、Reflect「檢查回覆」；所有 LLM token delta 與結構化 JSON 欄位（含巢狀值）也會送出。傳入 `events_schema` 是明確覆寫／限制：只有列出的 module 送出 stage event，`fields` 只送出明確 dot path 的完整 JSON value；`"*"` 可明確要求全部欄位。`Workflow` 建立完成後，未顯式指定的節點會由內建預設實作補上；本次執行會走到哪些節點，取決於前一節點回傳的 `next_module`。`events_schema` 是唯一的事件設定入口。
+`workflow_name` 用來標示這條流程的名稱；未指定時使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState`，供你的程式或自訂模組讀取。省略 `events_schema` 時，SDK 會送出每個實際執行步驟的開始、完成與中止事件，並提供模型輸出文字與完整結構化欄位。傳入 `events_schema` 後，可指定要觀察的步驟、中文名稱與欄位。`Workflow` 會為未指定的步驟補上內建實作；每次執行實際經過哪些步驟，由前一步回傳的 `next_module` 決定。
+
+### 用程式直接建立
+
+直接在 Python 程式裡建立 `Workflow`，適合流程結構固定、設定和應用程式一起維護的情況。你可以在建構子中放入需要的模組，並在同一處寫清楚名稱、說明與事件設定。
+
+### 用設定資料建立
+
+當你的應用程式要把流程選項保存成 JSON、YAML 或資料庫資料時，可先建立一份設定資料，再由 SDK 組成工作流程。`WorkflowConfig` 表示整條流程，`ModuleSpec` 表示其中一個步驟的種類與參數，`build_workflow()` 則依設定建立 `Workflow`。
+
+```python
+from agentic_sdk import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
+
+config = WorkflowConfig(
+    name="保險接待人員",
+    description="根據常見保單問題提供初步說明。",
+    modules={
+        "perceive": ModuleSpec(kind="pass_through"),
+        "retrieve": ModuleSpec(
+            kind="keyword",
+            params={
+                "items": [
+                    {"keywords": ["理賠", "申請"], "content": "請先準備保單號碼與事故資料。"},
+                ]
+            },
+        ),
+        "action": ModuleSpec(kind="direct_answer"),
+    },
+)
+
+workflow = build_workflow(config)
+result = workflow.run("我要申請理賠，需要先準備什麼？")
+print(result.final_message)
+```
+
+設定資料中的步驟種類使用固定名稱，SDK 會依名稱建立對應模組，並檢查參數是否適用。常用種類包括 `pass_through`、`text`、`text_image`、`next_step`、`keyword`、`pass_through_retrieve`、`semantic`、`direct_answer`、`generative`、`tool_call_action`、`response_check` 與 `evidence_check`。程式直接建立與設定資料建立，最後都會得到相同的 `Workflow` 物件和執行方式。
 
 執行期間有四層資料分工：
 
@@ -63,9 +98,26 @@ Workflow(
 
 這種設計讓節點在執行期間決定下一步要交給誰。同一個 `Workflow` 物件因此可以支援不同長度、不同分支的執行路徑。
 
+## 執行上限
+
+每次執行都有三項上限，讓流程能在合理時間內完成。`GateConfig` 用來調整這些數值；未設定時，SDK 使用預設值。
+
+| 中文意義 | 設定欄位 | 預設值 | 作用 |
+| --- | --- | --- | --- |
+| 全部步驟次數 | `max_node_hops` | `50` | 一次執行最多經過的步驟數。 |
+| 同一步驟重複次數 | `max_revisit` | `5` | 同一個步驟最多重複執行的次數。 |
+| 最長執行時間 | `timeout_sec` | `300.0` | 一次執行可使用的最長秒數。 |
+
+達到任一上限時，SDK 會結束本次執行，並在結果中提供中止原因。一般應用程式可保留預設值；當流程有明確的外部等待或重試需求時，再依實際執行紀錄調整。
+
+```python
+config.gates = GateConfig(max_node_hops=20, max_revisit=3, timeout_sec=120.0)
+workflow = build_workflow(config)
+```
+
 ## 執行事件
 
-如果呼叫 `run()` 或 `stream()` 時傳入 `event_callback`，省略 `events_schema` 的 `Workflow` 會對所有執行到的模組，在開始、完成或中止時送出 `stage` event，並送出完整的結構化 JSON 欄位。自訂 `events_schema` 時，則只對列出的模組與 `fields` 送出事件。MVP UI 可在開始時顯示 label，並在完成時直接讀取 SDK 依 schema 彙整的 fields：
+如果呼叫 `run()` 或 `stream()` 時傳入 `event_callback`，省略 `events_schema` 的 `Workflow` 會對所有執行到的模組，在開始、完成或中止時送出 `stage` event，並送出完整的結構化 JSON 欄位。自訂 `events_schema` 時，則只對列出的模組與 `fields` 送出事件。你的應用程式可在開始時更新狀態，並在完成時讀取 SDK 依設定整理的欄位：
 
 ```python
 def on_event(event):
@@ -89,14 +141,14 @@ result = workflow.run("請介紹 SDK", event_callback=on_event)
     "label": "整理相關來源",
     "module": "retrieve",
     "module_class": "KeywordRetrieve",
-    "workflow_name": "WebUI 階段提示 Agent",
+    "workflow_name": "執行狀態範例",
     "workflow_id": "...",
     "session_id": "...",
     "visit_count": 1,
 }
 ```
 
-`structured_field` 的 `value` 是完整 JSON scalar、object 或 array，不是 token fragment，且每個 module visit 與欄位只會發送一次。對需要「節點完成後才顯示」的 UI，`stage.finish["fields"]` 是 SDK 依 schema 彙整的 list，格式為 `[{"field": "...", "value": ...}]`：明確列出的 field 依 `events_schema.fields` 順序排列；`"*"` 則列出該次實際完成的所有 path。需要最小化觀測面時，請用自訂 `events_schema.fields` 明確列出要給使用者或 UI 顯示的摘要與決策欄位；不要把模型的隱藏推理或未經審核的任意文字當作觀測欄位。這不是完整 tracing 規格；它是給 MVP Chat WebUI 使用的輕量階段提示。前端應顯示 SDK 事件提供的 `label`，不要另外硬編模組名稱與畫面文字；Playground 會把這些事件轉換成 NDJSON process event。若要做除錯、成本分析或跨服務追蹤，可以在這個 callback 之上另外接 OpenTelemetry、LangSmith 或自訂 exporter。
+`structured_field` 的 `value` 是完整 JSON 值，每個步驟與欄位各送出一次。`stage.finish["fields"]` 是 SDK 依設定整理的欄位清單，格式為 `[{"field": "...", "value": ...}]`；明確列出的欄位依 `events_schema.fields` 順序排列，`"*"` 則列出該步驟完成時取得的所有欄位。應用程式可選擇要顯示或記錄的摘要與決策欄位，並在 callback 上串接自己的除錯、成本分析或跨服務追蹤工具。
 
 ## 直接串流 Action 回覆
 

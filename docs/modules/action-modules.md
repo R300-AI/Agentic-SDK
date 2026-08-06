@@ -1,6 +1,17 @@
-# Action
+# 回覆與動作
 
-Action 模組負責把前面節點收集到的資訊轉成回應內容。這一頁先整理 Action 家族的交付方式，再依序展開三種不同的回應產生模組。每個模組會先列出建立物件時使用的初始化參數，再列出 Action 對外交付的標準輸出參數；前段帶入的內容主要來自 `Entities`，可回到 [Module Family](index.md) 的中央定義理解。
+回覆與動作模組把前面步驟整理的資料轉成使用者可讀的回覆，或整理成你的程式可以執行的工具請求。前段資料主要來自 [模組家族](index.md) 所說的共用資料。
+
+## 取得回覆結果
+
+每次工作流程完成後，應用程式從 `result.final_message` 取得最後回覆文字。需要讓後續步驟或周邊程式讀取本輪資料時，可從 `result.entities` 取得最新回覆、工具請求和模型用量。
+
+| 你要取得的資料 | 程式欄位 | 用途 |
+| --- | --- | --- |
+| 最後回覆 | `result.final_message` | 顯示或傳回給使用者的文字。 |
+| 最新回覆內容 | `result.entities["latest_final_message"]` | 供後續步驟或你的程式接續處理。 |
+| 工具請求 | `result.entities["latest_tool_calls"]` | `ToolCallAction` 整理出的工具名稱與參數。 |
+| 模型用量 | `result.entities["_llm_usage"]` | 生成回覆或工具請求時使用的模型和 token 數。 |
 
 ## DirectAnswerAction
 
@@ -16,14 +27,9 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | `fallback` | `string` | 否 | `"No matching entries."` | 指定 key 沒有內容時使用的回答文字。 |
 | `prefix` | `string` | 否 | `""` | 加在回答文字前的固定前綴。 |
 
-### 標準輸出參數
+### 回覆內容
 
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
-| `final_message` | `string` | `"Agentic SDK 可以用 workflow 組裝 agent 行為。"` | 對外回應文字。 |
-| `final_data` | `object|null` | `null` | 純文字回應時固定 `null`。 |
-| `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
+`DirectAnswerAction` 會把取回內容放入 `result.final_message`，並同步寫入 `result.entities["latest_final_message"]`。
 
 ## GenerativeAction
 
@@ -45,14 +51,9 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | `temperature` | `number|null` | 否 | `null` | 生成溫度；`null` 時不傳此參數，交由端點預設處理。 |
 | `system_prompt` | `string|null` | 否 | `null` | 覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。 |
 
-### 標準輸出參數
+### 回覆內容與用量
 
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
-| `final_message` | `string` | `"建議先確認目前設定，再依錯誤訊息建立任務記錄。"` | 對外回應文字。 |
-| `final_data` | `object|null` | `null` | SDK 不解析模型文字；若需要固定格式，請在 `system_prompt` 約束輸出內容，應用層再自行解析。 |
-| `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
+`GenerativeAction` 會把模型產生的文字放入 `result.final_message` 和 `result.entities["latest_final_message"]`。`result.entities["_llm_usage"]` 會記錄模型名稱、輸入 token 數與輸出 token 數。需要 JSON、表格或固定欄位時，可在 `system_prompt` 說明回覆格式，再由你的程式讀取與驗證。
 
 ## ToolCallAction
 
@@ -62,7 +63,7 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 
 若 `tool_choice="none"`，SDK 會把該輪請求視為文字優先模式，不把 `tools` 傳給模型。這可避免部分 OpenAI-compatible 端點在收到 tools 後仍提前產生 tool call；應用層仍可保留同一份 schema 作為 UI 表單或確認面板的呈現合約。
 
-此模組只產生 OpenAI 標準 tool call，不會在 SDK 內直接執行外部工具。應用層可以讀取 `latest_tool_calls`，再依照自己的權限控管、驗證與錯誤處理流程執行實際 API 或函式。
+此模組產生 OpenAI 標準工具請求，並將結果保存到 `latest_tool_calls`。應用程式讀取後，依自身的權限、驗證與錯誤處理規則執行對應的 API 或函式。
 
 ### 初始化參數
 
@@ -73,18 +74,12 @@ Action 模組負責把前面節點收集到的資訊轉成回應內容。這一�
 | `model` | `string` | 是 | 無 | 每次推論呼叫送出的模型名稱；需選用支援 tool calling 的模型。 |
 | `temperature` | `number|null` | 否 | `null` | 生成溫度；`null` 時不傳此參數。 |
 | `system_prompt` | `string|null` | 否 | `null` | 覆寫 Action 系統提示；未提供時使用 SDK 預設 prompt。 |
-| `tools` | `array<object>` | 否 | `[]` | OpenAI Chat Completions tools schema；目前主要使用 `type="function"` 的 function tool。 |
+| `tools` | `array<object>` | 否 | `[]` | OpenAI Chat Completions 的工具定義；常用 `type="function"` 表示函式工具。 |
 | `tool_choice` | `string|object|null` | 否 | `"auto"` | Tool choice 設定，例如 `"auto"`、`"none"` 或指定 function；其中 `"none"` 會讓 SDK 不送出 `tools`，改為只產生文字回覆。 |
 
-### 標準輸出參數
+### 工具請求與回覆內容
 
-| 參數 | 型態 | 格式 | 說明 |
-| --- | --- | --- | --- |
-| `action_status` | `string` | `"ok"` | 只允許 `ok` 或 `error`。 |
-| `final_message` | `string` | `"已產生工具呼叫。"` | 對外回應文字；若模型只回傳 tool calls 而沒有文字內容，SDK 會保留一段簡短訊息。 |
-| `tool_calls` | `array<object>` | `[{"id":"call_123","type":"function","function":{"name":"record_task","arguments":"{...}"}}]` | OpenAI `message.tool_calls` 的標準化結果，會保存在 workflow `Entities` 的 `latest_tool_calls`。 |
-| `final_data` | `object|null` | `null` | `ToolCallAction` 不直接執行工具，因此不在此放入外部 API 執行結果。 |
-| `action_error` | `string` | `""` | 成功時固定空字串；失敗時填錯誤訊息。 |
+`ToolCallAction` 會把回覆文字放入 `result.final_message`，並將工具請求整理到 `result.entities["latest_tool_calls"]`。每一筆工具請求包含識別碼、工具名稱和參數文字；你的程式讀取後驗證參數、執行對應工作，再決定如何回覆使用者。`result.entities["_llm_usage"]` 會記錄本輪模型用量。
 
 ### 範例
 

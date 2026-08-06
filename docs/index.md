@@ -1,24 +1,24 @@
 # Agentic SDK 開發者文件站
 
-這套文件站以 SDK reference 為主，目標是讓進階開發者快速查到 `Workflow` 的公開組裝模型、五大功能的模組分類、各模組的參數與輸入輸出契約，以及 `Workflow` 在執行時如何使用 `MemoryStore`、`InContextMemory` 與 `PersistentMemory`。
+這套文件站說明如何使用 Agentic SDK 建立 Python 應用程式。你可以在這裡查到工作流程的組成方式、五類工作各自使用的模組、模組參數與資料傳遞方式，以及工作流程如何保存對話內容。
 
 這一版文件聚焦公開 SDK 規格、模組參數與文件站導覽。所有需要模型的模組，都使用 OpenAI 相容介面作為統一接入方式。
 
 ## 這個文件站回答什麼
 
-### 公開組裝模型
+### 組合工作流程
 
-說明 `Workflow` 如何承接五大功能，並定義模組在流程中的位置與責任。
+說明 `Workflow` 如何承接五類工作，並定義模組在流程中的位置與責任。
 
-### 模組與參數
+### 模組與設定值
 
 列出目前文件涵蓋的模組、其初始化參數與適用情境。
 
-### 記憶類型
+### 對話記憶
 
-說明 `Workflow` 如何用 `MemoryStore` 承接模組可讀的共同 memory，並以 `InContextMemory` 與 `PersistentMemory` 這兩種同層 memory 類型實作不同的記憶策略。
+說明 `Workflow` 如何用 `MemoryStore` 保存模組可讀的共同對話資料，並以 `InContextMemory` 與 `PersistentMemory` 提供不同的記憶方式。
 
-### Use Case 實施例
+### 應用實例
 
 用三個具體場景說明如何把 `Workflow`、`Module Family` 與資料來源組合成可落地的 agent 實施例。
 
@@ -80,7 +80,7 @@
       <td><a href="modules/action-modules.md#directansweraction">DirectAnswerAction</a></td>
       <td>no</td>
       <td>--</td>
-      <td>把前面已找到的內容直接整理成答案，適合不需要模型重新生成文字的情況。</td>
+      <td>把前面找到的內容直接整理成答案，適合以固定文字回覆的情況。</td>
     </tr>
     <tr>
       <td><a href="modules/action-modules.md#generativeaction">GenerativeAction</a></td>
@@ -110,4 +110,4 @@
   </tbody>
 </table>
 
-這一版首頁只負責文件站導覽與目前文件範圍，模組細節請進各功能頁查看。
+首頁提供文件導覽與目前文件範圍；各模組的詳細設定請進對應頁面查看。
