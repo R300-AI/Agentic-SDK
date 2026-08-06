@@ -133,16 +133,61 @@ function renderBuilderEndpointState(state) {
       return;
     }
 
+    const hasOptions = stepRequirements.every((requirement) => Array.isArray(requirement.options) && requirement.options.length);
+    if (hasOptions) {
+      const form = document.createElement("form");
+      form.className = "module-param-form endpoint-form";
+      form.dataset.builderEndpointForm = "true";
+      stepRequirements.forEach((requirement) => {
+        const label = document.createElement("label");
+        label.className = "endpoint-row";
+
+        const select = document.createElement("select");
+        select.name = requirement.role;
+        select.dataset.builderEndpointSelect = "true";
+        select.required = true;
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "(請選擇部署選項)";
+        placeholder.disabled = true;
+        placeholder.selected = !selections[requirement.role];
+        select.append(placeholder);
+        requirement.options.forEach((endpoint) => {
+          const option = document.createElement("option");
+          option.value = endpoint.id;
+          option.textContent = endpoint.label;
+          option.selected = selections[requirement.role] === endpoint.id;
+          select.append(option);
+        });
+
+        label.append(select);
+        form.append(label);
+      });
+      body.append(form);
+      return;
+    }
+
     const statusText = endpointStatusText(state);
     if (statusText) {
       const status = document.createElement("p");
-      const hasOptions = stepRequirements.every((requirement) => Array.isArray(requirement.options) && requirement.options.length);
-      status.className = `inline-status${hasOptions && state.configured ? "" : " error"}`;
+      status.className = "inline-status error";
       status.dataset.builderEndpointStatus = "true";
       status.textContent = statusText;
       body.append(status);
     }
   });
+}
+
+async function syncBuilderEndpointSelections() {
+  const forms = Array.from(document.querySelectorAll("[data-builder-endpoint-form]"));
+  if (!forms.length) {
+    return;
+  }
+  const selections = {};
+  forms.forEach((form) => Object.assign(selections, Object.fromEntries(new FormData(form).entries())));
+  const result = await postJson("/playground/builder/endpoints", { selections });
+  renderBuilderEndpointState(result);
+  renderBuilderReviewState(result.builder_review_state, result.builder_review_ready);
 }
 
 async function postBuilderState(payload) {
@@ -720,6 +765,38 @@ function syncApiEditors(root) {
   root.querySelectorAll("[data-api-editor]").forEach(syncApiEditor);
 }
 
+function requiredStepError(panel) {
+  const selectedChoice = panel?.querySelector("[data-choice-card].selected:not([hidden])")
+    || panel?.querySelector("[data-choice-card].selected");
+  if (!panel || !selectedChoice) {
+    return "請先選擇這一題的設定。";
+  }
+  if (panel.dataset.stepPanel === "retrieve_policy" && selectedChoice.dataset.choiceLabel === "semantic") {
+    const sources = panel.querySelector("[data-semantic-upload-output]")?.value.trim();
+    return sources ? "" : "請完成必填欄位。";
+  }
+  if (panel.dataset.stepPanel === "output_format" && selectedChoice.dataset.choiceLabel === "interactive") {
+    const contracts = apiContracts(panel.querySelector("[data-api-editor]"));
+    const hasCompleteContract = contracts.some((contract) => contract.api_url && contract.component_fields);
+    return hasCompleteContract ? "" : "請完成必填欄位。";
+  }
+  return "";
+}
+
+function showStepValidationError(panel, message) {
+  let status = panel?.querySelector("[data-step-validation-error]");
+  if (!status && panel) {
+    status = document.createElement("p");
+    status.className = "inline-status error";
+    status.dataset.stepValidationError = "true";
+    panel.append(status);
+  }
+  if (status) {
+    status.textContent = message;
+    status.hidden = !message;
+  }
+}
+
 function clearApiBlock(block) {
   block.querySelectorAll("[data-api-trigger], [data-api-url]").forEach((field) => {
     field.value = "";
@@ -940,6 +1017,12 @@ cards.forEach((card) => {
   });
 });
 
+document.addEventListener("change", async (event) => {
+  if (event.target.matches("[data-builder-endpoint-select]")) {
+    await syncBuilderEndpointSelections();
+  }
+});
+
 document.querySelectorAll("[data-name-form]").forEach((form) => {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1061,10 +1144,16 @@ document.querySelectorAll("[data-param-form]").forEach((form) => {
 document.querySelectorAll("[data-step-continue]").forEach((button) => {
   button.addEventListener("click", async () => {
     const activeIndex = panels.findIndex((panel) => !panel.hidden);
+    const activePanel = panels[activeIndex];
     await flushBuilderState();
-    await syncSelectedChoice(panels[activeIndex]);
-    await syncTextInput(panels[activeIndex]);
-    await syncParamForms(panels[activeIndex]);
+    await syncSelectedChoice(activePanel);
+    await syncTextInput(activePanel);
+    await syncParamForms(activePanel);
+    const validationError = requiredStepError(activePanel);
+    showStepValidationError(activePanel, validationError);
+    if (validationError) {
+      return;
+    }
     const nextStep = progressSteps[activeIndex + 1];
     if (nextStep) {
       showStep(nextStep.dataset.progressStep);

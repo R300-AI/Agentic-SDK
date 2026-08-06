@@ -244,10 +244,20 @@ class FaissKnowledgeBase:
     def _read_document(self, file_path: Path) -> str:
         try:
             return file_path.read_text(encoding="utf-8")
-        except UnicodeDecodeError as exc:
+        except UnicodeDecodeError:
+            return self._extract_binary_document(file_path)
+
+    def _extract_binary_document(self, file_path: Path) -> str:
+        try:
+            from markitdown import MarkItDown
+        except Exception as exc:
             raise RuntimeError(
-                "知識庫來源必須是已驗證的 UTF-8 文字檔；請在 Builder 重新上傳原始文件。"
+                f"無法讀取知識庫來源 {file_path.name}：文件轉換服務目前不可用。"
             ) from exc
+        try:
+            return str(getattr(MarkItDown().convert(str(file_path)), "text_content", "") or "")
+        except Exception as exc:
+            raise RuntimeError(f"無法讀取知識庫來源 {file_path.name}：文件格式無法轉換為文字。") from exc
 
     def _is_stale(self) -> bool:
         source_files = self._iter_source_files()

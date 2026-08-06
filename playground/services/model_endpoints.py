@@ -70,7 +70,7 @@ def endpoint_state(python_source: str | None, selections: dict[str, str] | None)
         for requirement in requirements
     }
     configured_roles = {
-        requirement.role: not missing_secrets_by_role[requirement.role]
+        requirement.role: not credential_missing_roles[requirement.role]
         for requirement in requirements
     }
     return {
@@ -107,7 +107,7 @@ def normalize_endpoint_selections(python_source: str | None, selections: dict[st
         if not endpoints_by_id:
             continue
         endpoint_id = str(raw.get(requirement.role) or "")
-        normalized[requirement.role] = endpoint_id if endpoint_id in endpoints_by_id else next(iter(endpoints_by_id))
+        normalized[requirement.role] = endpoint_id if endpoint_id in endpoints_by_id else ""
     return normalized
 
 
@@ -122,21 +122,6 @@ def endpoint_params_for_role(role: str, selections: dict[str, str] | None) -> di
     if role == "retrieve":
         return {"api_key": api_key, "base_url": endpoint.base_url, "embedding_model": endpoint.model}
     return {"api_key": api_key, "base_url": endpoint.base_url, "model": endpoint.model}
-
-
-def endpoint_key_vault_bindings_for_source(python_source: str | None, selections: dict[str, str] | None) -> dict[str, dict[str, str]]:
-    requirements = _deployment_requirements(config_from_source(python_source))
-    normalized = normalize_endpoint_selections(python_source, selections)
-    bindings: dict[str, dict[str, str]] = {}
-    for requirement in requirements:
-        endpoint = _endpoint_for_role(requirement.role, normalized)
-        if endpoint is None:
-            continue
-        bindings[requirement.role] = {
-            "endpoint_id": endpoint.id,
-            "secret_prefix": endpoint.secret_prefix,
-        }
-    return bindings
 
 
 def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirement]:
@@ -157,7 +142,7 @@ def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirem
 def _endpoint_for_role(role: str, selections: dict[str, str]) -> ModelEndpoint | None:
     endpoints_by_id = _endpoints_by_id(_endpoint_options_for_role(role))
     endpoint_id = selections.get(role, "")
-    return endpoints_by_id.get(endpoint_id) or next(iter(endpoints_by_id.values()), None)
+    return endpoints_by_id.get(endpoint_id)
 
 
 def _missing_endpoint_secrets(role: str, endpoint: ModelEndpoint | None) -> list[str]:

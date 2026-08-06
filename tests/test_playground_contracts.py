@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import sys
 from io import BytesIO
 from pathlib import Path
+from types import SimpleNamespace
 
 from flask import session
 
@@ -10,6 +12,7 @@ from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, InConte
 from agentic_sdk.core.events import default_events_schema
 from agentic_sdk.modules.action.generative import _FINAL_RESPONSE_CONTRACT, _build_messages
 from agentic_sdk.modules.action.tool_call import _tool_call_content
+from agentic_sdk.modules.retrieve.semantic import FaissKnowledgeBase
 from playground.app import create_app
 from playground.routes import builder as builder_routes
 from playground.routes import runner as runner_routes
@@ -75,6 +78,51 @@ def test_key_vault_uses_azure_cli_command_wrapper_on_windows(monkeypatch):
     assert key_vault_config._azure_cli_command() == "C:/tools/az.cmd"
 
 
+def test_semantic_upload_preserves_original_pptx_source_file(tmp_path, monkeypatch):
+    source_bytes = b"pptx-binary-content"
+    monkeypatch.setattr(semantic_ingestion, "_read_indexable_text", lambda _path, _suffix: "Workshop deployment content")
+
+    result = semantic_ingestion.ingest_semantic_upload(
+        filename="AI Hub 工作坊.pptx",
+        stream=BytesIO(source_bytes),
+        target_dir=tmp_path,
+    )
+
+    assert result.accepted is True
+    assert result.canonical_name == "AI Hub 工作坊.pptx"
+    assert (tmp_path / result.canonical_name).read_bytes() == source_bytes
+    assert not list(tmp_path.glob("*.md"))
+
+
+def test_semantic_upload_preserves_unicode_source_filename(tmp_path, monkeypatch):
+    monkeypatch.setattr(semantic_ingestion, "_read_indexable_text", lambda _path, _suffix: "AI Hub workshop content")
+
+    result = semantic_ingestion.ingest_semantic_upload(
+        filename="AI Hub上架教學.pptx",
+        stream=BytesIO(b"pptx-binary-content"),
+        target_dir=tmp_path,
+    )
+
+    assert result.accepted is True
+    assert result.canonical_name == "AI Hub上架教學.pptx"
+    assert (tmp_path / result.canonical_name).read_bytes() == b"pptx-binary-content"
+
+
+def test_semantic_retrieve_extracts_original_binary_pptx(tmp_path, monkeypatch):
+    source = tmp_path / "workshop.pptx"
+    source.write_bytes(b"\xff\xfebinary-presentation")
+
+    class FakeMarkItDown:
+        def convert(self, path):
+            assert path == str(source)
+            return SimpleNamespace(text_content="AI Hub deployment workshop")
+
+    monkeypatch.setitem(sys.modules, "markitdown", SimpleNamespace(MarkItDown=FakeMarkItDown))
+    knowledge_base = FaissKnowledgeBase(index_path=str(tmp_path / "index"), embedder=object())
+
+    assert knowledge_base._read_document(source) == "AI Hub deployment workshop"
+
+
 def test_runner_execution_memory_keeps_current_image_attachment_transient():
     source = build_default_python_source()
     conversation = RunnerConversationState.for_workflow(source).append_user("請解讀足測報告")
@@ -122,6 +170,51 @@ def test_action_messages_require_direct_user_facing_answers_for_custom_prompts()
 def test_interactive_policy_keeps_tool_decisions_internal():
     assert "內部決策規則" in source_builder._INTERACTIVE_TOOL_POLICY
     assert "不要向使用者描述判斷、工具或元件流程" in source_builder._INTERACTIVE_TOOL_POLICY
+    assert "只能收集該工具 schema 中定義的欄位" in source_builder._INTERACTIVE_TOOL_POLICY
+    assert "不可自行要求、暗示或臆測未配置的業務欄位" in source_builder._INTERACTIVE_TOOL_POLICY
+
+
+def test_completed_runner_trace_is_collapsed_by_default():
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+    surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
+
+    completed_trace = runner_source.split("setProcessEvents(assistant.processTrace, finalProcessEvents", 1)[1].split("});", 1)[0]
+
+    assert "collapsible: true" in completed_trace
+    assert "preserveOpen" not in completed_trace
+    assert "open: true" not in surface_source.split("export function showLiveProcessEvent", 1)[1].split("function updateLiveProcessTrace", 1)[0]
+    assert "processDisplayDescription" in surface_source
+    assert "process-event-mark" not in surface_source
+
+
+def test_runner_explains_expired_save_session_before_reauthentication():
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert 'openSaveLoginModal({ sessionExpired: true })' in runner_source
+    assert "登入工作階段已過期，請重新登入後儲存。" in runner_source
+
+
+def test_runner_hydrates_metadata_from_server_rendered_fields():
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert "workflowNameTargets[0]?.textContent?.trim()" in runner_source
+    assert "workflowDescriptionTargets[0]?.textContent?.trim()" in runner_source
+
+
+def test_reasoning_surface_uses_controlled_stage_descriptions_only():
+    surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
+
+    assert "return \"正在處理這個步驟。\";" in surface_source
+    assert "test(description)" not in surface_source
+
+
+def test_builder_blocks_incomplete_interactive_contract_before_advancing():
+    builder_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "builder" / "builder-page.js").read_text(encoding="utf-8")
+
+    assert "請完成必填欄位。" in builder_source
+    assert "請至少完成一組「API URL」與「需要收集的資訊」。" not in builder_source
+    assert "const validationError = requiredStepError(activePanel);" in builder_source
+    assert "if (validationError)" in builder_source
 
 
 def test_runner_offers_confirmation_for_mixed_analysis_and_explicit_decision_request():
@@ -150,13 +243,14 @@ def test_placeholder_tool_submission_reports_verified_unsent_outcome():
         {
             "api_result": {
                 "skipped": True,
-                "message": "這是示範 API 端點，尚未設定可執行的門市服務，因此未送出通知。",
+                "message": "這是示範 API 端點，尚未設定可執行的外部服務，因此未送出動作。",
             }
         },
     )
 
     assert message.startswith("本次請求未送出：")
-    assert "未送出通知" in message
+    assert "未送出動作" in message
+    assert "門市" not in message
     assert message.endswith("模型回覆。")
 
 
@@ -215,31 +309,64 @@ def test_builder_choices_map_to_runtime_modules():
     assert "action" in reachable_workflow_roles(interactive)
 
 
-def test_key_vault_model_endpoint_is_auto_bound_without_environment_discovery(monkeypatch):
-    monkeypatch.setenv("PLAYGROUND_FAST_MODEL", "gpt-test")
-    monkeypatch.setenv("PLAYGROUND_FAST_BASE_URL", "https://models.example")
-    monkeypatch.setenv("PLAYGROUND_FAST_API_KEY", "test-key")
-    settings = key_vault_config.KeyVaultSettings(
-        ai_hub=key_vault_config.AiHubSettings("https://aihub.example", "https://playground.example"),
-        chat_endpoints=(key_vault_config.ChatEndpointSettings("gpt-54", "key-vault-key", "https://key-vault-models.example", "gpt-5.4"),),
-        embedding_endpoints=(),
-    )
-    monkeypatch.setattr(model_endpoints, "key_vault_settings", lambda: settings)
+def test_key_vault_model_endpoint_requires_explicit_deployment_selection():
 
-    assert model_endpoints.endpoint_params_for_role("action", {}) == {
-        "api_key": "key-vault-key",
-        "base_url": "https://key-vault-models.example",
-        "model": "gpt-5.4",
-    }
+    with __import__("pytest").raises(model_endpoints.MissingEndpointBinding):
+        model_endpoints.endpoint_params_for_role("action", {})
+
+    params = model_endpoints.endpoint_params_for_role("action", {"action": "gpt-54"})
+    assert params["api_key"]
+    assert params["base_url"].startswith("https://")
+    assert params["model"]
     assert model_endpoints.normalize_endpoint_selections(build_default_python_source(), {}) == {}
 
 
-def test_builder_model_status_is_key_vault_only():
+def test_deployment_options_follow_reachable_modules_and_require_selection():
+    source = build_python_source_from_builder_choice("input_type", "text", None)
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", source)
+    source = build_python_source_from_builder_choice("output_format", "free_text", source)
+    source = build_python_source_from_builder_choice("failure_policy", "retry", source)
+
+    state = model_endpoints.endpoint_state(source, {})
+
+    assert [requirement["role"] for requirement in state["requirements"]] == ["perceive", "retrieve", "action"]
+    assert state["selections"] == {"perceive": "", "retrieve": "", "action": ""}
+    assert state["binding_missing_roles"] == {"perceive": True, "retrieve": True, "action": True}
+    assert state["configured"] is True
+    assert {option["id"] for option in state["requirements"][1]["options"]} == {"embedded-large", "embedded-small"}
+
+    spec = default_spec()
+    spec["perceive"]["module"] = "TextPerceive"
+    spec["retrieve"]["module"] = "SemanticRetrieve"
+    spec["action"]["module"] = "GenerativeAction"
+    spec["reflect"]["module"] = "ResponseCheckReflect"
+    response_check_state = model_endpoints.endpoint_state(compile_python_source(spec), {})
+
+    assert [requirement["role"] for requirement in response_check_state["requirements"]] == ["perceive", "retrieve", "action", "reflect"]
+
+
+def test_builder_review_requires_each_reachable_deployment_option():
+    source = build_python_source_from_builder_choice("input_type", "text", None)
+    source = build_python_source_from_builder_choice("output_format", "free_text", source)
+    endpoint_state = model_endpoints.endpoint_state(source, {})
+    form_state = {"choices": {"input_type": "整理文字內容", "output_format": "純文字回覆"}, "values": {}}
+
+    errors = builder_routes._endpoint_requirements_by_step(endpoint_state)
+    review = builder_routes._builder_review_state(builder_routes.get_builder_steps(), form_state, endpoint_state)
+    review_by_step = {item["step_key"]: item for item in review}
+
+    assert errors == {"input_type": ["請選擇部署選項。"], "output_format": ["請選擇部署選項。"]}
+    assert review_by_step["input_type"]["completed"] is False
+    assert review_by_step["output_format"]["completed"] is False
+
+
+def test_builder_deployment_selectors_are_key_vault_backed():
     builder_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "builder" / "builder-page.js").read_text(encoding="utf-8")
 
     assert ".env" not in builder_source
-    assert "data-builder-endpoint-select" not in builder_source
-    assert "Key Vault 中沒有可用的模型端點" in builder_source
+    assert "data-builder-endpoint-select" in builder_source
+    assert "(請選擇部署選項)" in builder_source
+    assert 'postJson("/playground/builder/endpoints", { selections })' in builder_source
 
 
 def test_partial_key_vault_endpoint_family_is_rejected():
@@ -315,6 +442,20 @@ def test_runner_projects_generated_string_choices_without_submitting_platform_me
     assert fields[1]["value"] == 50000
     assert fields[0]["custom_label"] == "自訂開發方向"
     assert runner_service._without_tool_call_review(arguments) == {"開發方向": "Web 應用程式", "預算": 50000}
+
+
+def test_runner_does_not_surface_tool_arguments_outside_builder_schema():
+    schema = {
+        "parameters": {
+            "type": "object",
+            "properties": {"聯絡人": {"type": "string"}},
+            "required": ["聯絡人"],
+        }
+    }
+
+    fields = runner_service._tool_call_fields_from(schema, {"聯絡人": "陳小明", "電子郵件": "example@example.com"})
+
+    assert [field["name"] for field in fields] == ["聯絡人"]
 
 
 def test_interactive_panel_submission_releases_pending_state():

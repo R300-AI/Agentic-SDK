@@ -546,10 +546,10 @@ def _action_system_prompt_from_spec(module: str, params: dict) -> str | None:
     return raw_prompt
 
 
-def compile_python_source(spec: dict[str, Any], *, endpoint_bindings: dict | None = None) -> str:
+def compile_python_source(spec: dict[str, Any]) -> str:
     """Compile a Python source string from a v2 spec dict."""
     config = spec_to_config(spec)
-    return _build_source_for_config(config, endpoint_bindings=endpoint_bindings)
+    return _build_source_for_config(config)
 
 
 # ---------------------------------------------------------------------------

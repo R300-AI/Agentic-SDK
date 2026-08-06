@@ -142,12 +142,12 @@ def update_builder_state():
     _store_spec(spec)
     python_source = compile_python_source(spec)
     session["python_source"] = python_source
-    _normalize_builder_endpoint_selections(python_source)
+    endpoint_selections = _normalize_builder_endpoint_selections(python_source)
     session["builder_has_user_config"] = True
     session.pop("builder_form_state", None)  # spec is now the truth; invalidate cache
     workflow_summary = get_workflow_summary(python_source)
     builder_form_state = _builder_form_state_from_spec(spec)
-    builder_endpoint_state = endpoint_state(python_source, _normalize_builder_endpoint_selections(python_source))
+    builder_endpoint_state = endpoint_state(python_source, endpoint_selections)
     builder_review = _builder_review_payload(steps, builder_form_state, builder_endpoint_state)
     return jsonify(
         {
@@ -210,12 +210,12 @@ def upload_builder_files():
     _store_spec(spec)
     python_source = compile_python_source(spec)
     session["python_source"] = python_source
-    _normalize_builder_endpoint_selections(python_source)
+    endpoint_selections = _normalize_builder_endpoint_selections(python_source)
     session["builder_has_user_config"] = True
     session.pop("builder_form_state", None)
     workflow_summary = get_workflow_summary(python_source)
     builder_form_state = _builder_form_state_from_spec(spec)
-    builder_endpoint_state = endpoint_state(python_source, _normalize_builder_endpoint_selections(python_source))
+    builder_endpoint_state = endpoint_state(python_source, endpoint_selections)
     builder_review = _builder_review_payload(steps, builder_form_state, builder_endpoint_state)
     return jsonify(
         {
@@ -469,6 +469,7 @@ def _logical_required_errors(step_key: str, choice_label: str, step_values: dict
 
 def _endpoint_requirements_by_step(builder_endpoint_state: dict[str, object]) -> dict[str, list[str]]:
     requirements = builder_endpoint_state.get("requirements") if isinstance(builder_endpoint_state.get("requirements"), list) else []
+    binding_missing_roles = builder_endpoint_state.get("binding_missing_roles") if isinstance(builder_endpoint_state.get("binding_missing_roles"), dict) else {}
     configured_roles = builder_endpoint_state.get("configured_roles") if isinstance(builder_endpoint_state.get("configured_roles"), dict) else {}
     options_by_role = {
         str(requirement.get("role", "")): requirement.get("options")
@@ -482,6 +483,9 @@ def _endpoint_requirements_by_step(builder_endpoint_state: dict[str, object]) ->
         options = options_by_role.get(role)
         if not isinstance(options, list) or not options:
             errors.setdefault(step_key, []).append("Key Vault 中沒有可用的模型端點。")
+            continue
+        if binding_missing_roles.get(role) is True:
+            errors.setdefault(step_key, []).append("請選擇部署選項。")
             continue
         if configured_roles.get(role) is False:
             errors.setdefault(step_key, []).append("Key Vault 的模型設定不完整，請確認所需 secret。")

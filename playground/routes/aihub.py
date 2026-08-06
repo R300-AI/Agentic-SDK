@@ -3,13 +3,13 @@ from __future__ import annotations
 from flask import Blueprint, jsonify, request, session
 
 from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
-from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, refresh_playground_session, save_config, save_contract_v2, verify_credentials, verify_identity
+from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, refresh_playground_session, save_contract_v2, verify_credentials, verify_identity
 from playground.services.aihub_session import active_credentials, reauthentication_payload
 from playground.services.model_endpoints import normalize_endpoint_selections
 from playground.services.runner_service import prepare_semantic_runtime
 from playground.services.security import is_allowed_origin
 from playground.services.semantic_runtime import runtime_root, source_files_dir
-from playground.services.source_builder import config_from_source, get_workflow_summary, semantic_bundle_required_from_source
+from playground.services.source_builder import semantic_bundle_required_from_source
 from playground.services.workflow_spec import (
     compile_python_source,
     default_runner_presentation,
@@ -112,72 +112,22 @@ def save_aihub_config():
 
     agent_id = payload.get("agent_id") or session.get("agent_id")
 
-    # Prefer v2 contract save when spec is in session
     spec = session.get("workflow_spec")
-    if isinstance(spec, dict) and spec.get("version") == "2":
-        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
-        spec_hash = hash_spec(spec)
-        pres = session.get("runner_presentation")
-        semantic_ready = _prepare_semantic_runtime_for_save(python_source) if semantic_bundle_required(spec, builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None) else {"prepared": False}
-        if semantic_ready.get("error"):
-            return jsonify({"saved": False, "bundle_saved": False, "error": semantic_ready["error"], "error_code": "semantic_bundle_not_prepared"}), 409
-        result = save_contract_v2(
-            agent_id,
-            spec,
-            runner_presentation=pres if isinstance(pres, dict) else None,
-            generated_source=python_source,
-            contract_hash=spec_hash,
-            workflow_name=str(spec.get("workflow_name") or ""),
-            description=str(spec.get("description") or ""),
-            endpoint_bindings=session.get("endpoint_bindings") or {},
-            credentials=credentials,
-            origin=request.host_url,
-        )
-        if result.get("saved"):
-            if result.get("agent_id"):
-                session["agent_id"] = result["agent_id"]
-            if result.get("workflow_name"):
-                session["agent_name"] = result["workflow_name"]
-            session["endpoint_bindings"] = result.get("endpoint_bindings") or {}
-            session["source_origin"] = "aihub_loaded"
-            workflow_name = str(spec.get("workflow_name") or "")
-            description = str(spec.get("description") or "")
-            bundle_result = save_runtime_bundle(
-                agent_id=str(result.get("agent_id") or agent_id or ""),
-                credentials=credentials,
-                origin=request.host_url,
-                python_source=python_source,
-                workflow_name=workflow_name,
-                description=description,
-                builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None,
-            )
-            result = {**result, **bundle_result}
-            if semantic_bundle_required(spec) and not bundle_result.get("bundle_saved"):
-                result["config_saved"] = True
-                result["saved"] = False
-                result["error"] = bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not saved."
-                result["error_code"] = bundle_result.get("bundle_error_code") or "semantic_bundle_not_saved"
-            session["last_aihub_save"] = result
-        status_code = 200 if result.get("saved") else 502
-        return jsonify(result), status_code
+    if not isinstance(spec, dict) or spec.get("version") != "2":
+        return jsonify({"saved": False, "error": "Workflow v2 contract is required before saving to AI Hub."}), 409
 
-    # Legacy path: save python_source directly
-    python_source = payload.get("python_source") or session.get("python_source")
-    if not python_source:
-        return jsonify({"saved": False, "error": "No Python source is available to save."}), 400
-
-    workflow_summary = get_workflow_summary(python_source)
-    workflow_config = config_from_source(python_source)
-    workflow_name = workflow_summary.name
-    description = workflow_config.task_goal or ""
-    semantic_ready = _prepare_semantic_runtime_for_save(python_source) if _semantic_bundle_required_legacy(workflow_config) else {"prepared": False}
+    python_source = compile_python_source(spec)
+    semantic_ready = _prepare_semantic_runtime_for_save(python_source) if semantic_bundle_required(spec, builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None) else {"prepared": False}
     if semantic_ready.get("error"):
         return jsonify({"saved": False, "bundle_saved": False, "error": semantic_ready["error"], "error_code": "semantic_bundle_not_prepared"}), 409
-    result = save_config(
+    result = save_contract_v2(
         agent_id,
-        python_source,
-        workflow_name=workflow_name,
-        description=description,
+        spec,
+        runner_presentation=session.get("runner_presentation") if isinstance(session.get("runner_presentation"), dict) else None,
+        generated_source=python_source,
+        contract_hash=hash_spec(spec),
+        workflow_name=str(spec.get("workflow_name") or ""),
+        description=str(spec.get("description") or ""),
         endpoint_bindings=session.get("endpoint_bindings") or {},
         credentials=credentials,
         origin=request.host_url,
@@ -194,12 +144,12 @@ def save_aihub_config():
             credentials=credentials,
             origin=request.host_url,
             python_source=python_source,
-            workflow_name=workflow_name,
-            description=description,
+            workflow_name=str(spec.get("workflow_name") or ""),
+            description=str(spec.get("description") or ""),
             builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None,
         )
         result = {**result, **bundle_result}
-        if _semantic_bundle_required_legacy(workflow_config) and not bundle_result.get("bundle_saved"):
+        if semantic_bundle_required(spec) and not bundle_result.get("bundle_saved"):
             result["config_saved"] = True
             result["saved"] = False
             result["error"] = bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not saved."
@@ -280,10 +230,6 @@ def _clear_bundle_runtime_state() -> None:
 
 def _semantic_bundle_required(workflow_config) -> bool:
     return workflow_config.retrieve_module == "SemanticRetrieve" and semantic_bundle_required_from_source(session.get("python_source"), builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None)
-
-
-def _semantic_bundle_required_legacy(workflow_config) -> bool:
-    return _semantic_bundle_required(workflow_config)
 
 
 def _load_v2_contract_into_session(loaded: dict) -> None:

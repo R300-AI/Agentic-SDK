@@ -5,11 +5,11 @@ Run this checklist through the VS Code Browser before a Playground release. A ca
 ## Local Setup
 
 ```powershell
-$env:PLAYGROUND_SKIP_KEY_VAULT_LOAD = "true"
 $env:PLAYGROUND_ENABLE_TEST_SUPPORT_ROUTES = "true"
-# Provide approved local model and embedding endpoint environment variables.
 uv run python -m flask --app playground.app run --debug --port 5050
 ```
+
+Authenticate with Azure first. Browser FAE reads model configuration from the Azure `agentic-sdk-models` Key Vault; do not configure model endpoints in the local process environment.
 
 Use a fresh anonymous browser session for each case. Capture a screenshot after the Builder configuration, the Runner result, and the returned Builder state. Do not save FAE agents.
 

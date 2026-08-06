@@ -520,7 +520,7 @@ def _call_tool_api(api: dict[str, str], arguments: dict[str, object]) -> dict[st
             "ok": False,
             "skipped": True,
             "reason": "placeholder_endpoint",
-            "message": "這是示範 API 端點，尚未設定可執行的門市服務，因此未送出通知。",
+            "message": "這是示範 API 端點，尚未設定可執行的外部服務，因此未送出動作。",
         }
     try:
         if method == "GET":
@@ -1516,9 +1516,6 @@ def _tool_call_fields_from(schema: dict[str, object], arguments: dict[str, objec
     properties = properties if isinstance(properties, dict) else {}
     required_names = {str(name) for name in required} if isinstance(required, list) else set()
     names = [name for name in properties if name not in {_PLAYGROUND_REVIEW_FIELD, _PLAYGROUND_OPTIONS_FIELD}]
-    for name in arguments:
-        if name not in properties and name not in {_PLAYGROUND_REVIEW_FIELD, _PLAYGROUND_OPTIONS_FIELD}:
-            names.append(name)
     generated_options = _tool_call_options_from(arguments)
     fields = []
     for name in names:

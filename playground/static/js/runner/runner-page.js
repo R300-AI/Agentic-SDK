@@ -56,8 +56,8 @@ const initializationMessage = document.querySelector("[data-initialization-messa
 const initializationBar = document.querySelector("[data-initialization-bar]");
 const initializationCount = document.querySelector("[data-initialization-count]");
 let activeRunId = 0;
-let workflowName = sideWorkflowTitleInput?.value.trim() || sideWorkflowTitleDisplay?.textContent?.trim() || "";
-let workflowDescription = workflowDescriptionInput?.value.trim() || workflowDescriptionDisplay?.textContent?.trim() || "";
+let workflowName = sideWorkflowTitleInput?.value.trim() || sideWorkflowTitleDisplay?.textContent?.trim() || workflowNameTargets[0]?.textContent?.trim() || "";
+let workflowDescription = workflowDescriptionInput?.value.trim() || workflowDescriptionDisplay?.textContent?.trim() || workflowDescriptionTargets[0]?.textContent?.trim() || "";
 let workflowRenameRequest = null;
 let workflowDescriptionRequest = null;
 const workflowDescriptionPlaceholder = workflowDescriptionInput?.getAttribute("placeholder") || workflowDescriptionDisplay?.dataset.placeholder || "";
@@ -627,14 +627,14 @@ function setSurfaceBusy(surface, isBusy) {
 	}
 }
 
-function openSaveLoginModal() {
+function openSaveLoginModal({ sessionExpired = false } = {}) {
 	if (!saveLoginModal) {
 		return;
 	}
 	lastSaveTrigger = saveButton;
 	if (saveLoginError) {
-		saveLoginError.hidden = true;
-		saveLoginError.textContent = "";
+		saveLoginError.hidden = !sessionExpired;
+		saveLoginError.textContent = sessionExpired ? "登入工作階段已過期，請重新登入後儲存。" : "";
 	}
 	saveLoginModal.hidden = false;
 	saveLoginModal.classList.add("open");
@@ -910,7 +910,6 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 			setProcessEvents(assistant.processTrace, finalProcessEvents, {
 				collapsible: true,
 				latestOnly: true,
-				preserveOpen: true,
 				onUpdate: scrollResultThread,
 			});
 		} else {
@@ -1005,7 +1004,7 @@ saveButton?.addEventListener("click", async () => {
 		if (saveStatus) {
 			saveStatus.textContent = "尚未儲存";
 		}
-		openSaveLoginModal();
+		openSaveLoginModal({ sessionExpired: true });
 		return;
 	}
 	const message = saveResultMessage(result);

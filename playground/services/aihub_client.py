@@ -19,7 +19,6 @@ _SESSION_REFRESH_PATH = "/api/playground/session/refresh"
 _AGENTS_PATH = "/api/playground/agents"
 _CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/load"
 _PUBLIC_CONFIG_LOAD_PATH = "/api/playground/agents/{agent_id}/config/public/load"
-_CONFIG_SAVE_PATH = "/api/playground/config/save"
 _CONTRACT_SAVE_PATH = "/api/playground/contract/save"
 _BUNDLE_SAVE_PATH = "/api/playground/agents/{agent_id}/bundle/save"
 _BUNDLE_LOAD_PATH = "/api/playground/agents/{agent_id}/bundle/load"
@@ -358,76 +357,6 @@ def load_public_config(
         "contract_hash": response_payload.get("contract_hash") or "",
         "integration_status": "aihub",
         "access_mode": "public_readonly",
-        "requires_real_aihub_api": False,
-    }
-
-
-def save_config(
-    agent_id: str | None,
-    python_source: str | None,
-    *,
-    workflow_name: str | None = None,
-    description: str | None = None,
-    endpoint_bindings: dict[str, str] | None = None,
-    credentials: AiHubCredentials | None = None,
-    origin: str | None = None,
-) -> dict[str, object]:
-    if not python_source:
-        return _save_error("No Python source is available to save.", "missing_python_source", agent_id=agent_id)
-    if not _has_aihub_auth(credentials):
-        return _save_error("AI Hub login is required before saving.", "missing_credentials", agent_id=agent_id)
-
-    base_url = _base_url_for_credentials(credentials)
-    if not base_url:
-        return _save_error("AI Hub base URL is not configured.", "missing_base_url", agent_id=agent_id)
-
-    resolved_workflow_name = (workflow_name or "").strip()
-    resolved_description = (description or "").strip()
-    if not resolved_workflow_name:
-        return _save_error("Workflow name is required before saving to AI Hub.", "missing_workflow_name", agent_id=agent_id)
-
-    payload = {
-        "python_source": python_source,
-        "workflow_name": resolved_workflow_name,
-        "description": resolved_description,
-        "endpoint_bindings": endpoint_bindings or {},
-    }
-    payload.update(_credential_payload(credentials))
-    resolved_agent_id = (agent_id or "").strip()
-    if resolved_agent_id:
-        payload["agent_id"] = resolved_agent_id
-
-    try:
-        response = httpx.post(
-            f"{base_url}{_CONFIG_SAVE_PATH}",
-            json=payload,
-            headers=_auth_headers(credentials, origin),
-            timeout=_request_timeout_seconds(),
-        )
-        if response.status_code >= 400:
-            return _save_error(
-                _response_error_message(response),
-                "aihub_save_failed",
-                agent_id=resolved_agent_id or agent_id,
-                status_code=response.status_code,
-            )
-        payload = response.json()
-    except (httpx.HTTPError, ValueError) as error:
-        return _save_error(str(error) or "AI Hub save request failed.", "aihub_save_failed", agent_id=resolved_agent_id or agent_id)
-
-    saved = payload.get("saved")
-    if saved is None:
-        saved = payload.get("ok")
-    if saved is None:
-        saved = True
-    return {
-        "agent_id": payload.get("agent_id") or resolved_agent_id,
-        "workflow_name": payload.get("workflow_name") or payload.get("agent_name") or resolved_workflow_name,
-        "description": payload.get("description") or resolved_description,
-        "endpoint_bindings": _endpoint_bindings_from_payload(payload),
-        "saved": bool(saved),
-        "exported_at": payload.get("playground_exported_at") or payload.get("exported_at") or payload.get("saved_at") or datetime.now(timezone.utc).isoformat(),
-        "integration_status": "aihub",
         "requires_real_aihub_api": False,
     }
 

@@ -114,7 +114,7 @@ export function showLiveProcessEvent(element, event, { onUpdate } = {}) {
   const processEvents = mergeProcessVisits([...previousEvents, processEvent]);
   const root = element.querySelector(".process-trace-disclosure");
   if (!root) {
-    element.replaceChildren(createProcessTraceDisclosure(processEvents, { active: true, latestOnly: true, open: true }));
+    element.replaceChildren(createProcessTraceDisclosure(processEvents, { active: true, latestOnly: true }));
     element.hidden = false;
     element._processEvents = processEvents;
     onUpdate?.();
@@ -230,12 +230,27 @@ function normalizeProcessEvents(events) {
       phase: String(event?.phase || "").trim(),
       status: String(event?.status || "").trim(),
       title: String(event?.title || "").trim(),
-      description: String(event?.description || "").trim(),
+      description: processDisplayDescription(event),
       trackedFields: Array.isArray(event?.tracked_fields) ? event.tracked_fields.map((field) => String(field || "").trim()).filter(Boolean) : [],
-      details: normalizeProcessDetails(event?.details),
+      details: [],
     }))
     .filter((event) => event.title || event.description);
   return mergeProcessVisits(normalized);
+}
+
+function processDisplayDescription(event) {
+  const title = String(event?.title || "").trim();
+  const descriptions = {
+    "理解輸入": "已整理本次問題。",
+    "判斷工具順序": "正在決定需要的處理步驟。",
+    "整理相關來源": "正在查找相關知識庫內容。",
+    "準備輸出回覆": "正在整理回覆內容。",
+    "檢查回覆": "已檢查回覆內容，可交付。",
+  };
+  if (descriptions[title]) {
+    return descriptions[title];
+  }
+  return "正在處理這個步驟。";
 }
 
 function normalizeProcessDetails(details) {
@@ -702,10 +717,6 @@ function createProcessEvent(event, { active = false } = {}) {
     item.classList.add("is-active");
   }
 
-  const mark = document.createElement("span");
-  mark.className = "process-event-mark";
-  mark.setAttribute("aria-hidden", "true");
-
   const title = document.createElement("div");
   title.className = "process-event-title";
   const titleText = document.createElement("span");
@@ -720,7 +731,7 @@ function createProcessEvent(event, { active = false } = {}) {
   description.className = "process-event-detail";
   description.textContent = event.description || "正在整理這一步的處理結果。";
 
-  item.append(mark, title, description);
+  item.append(title, description);
   if (event.details.length) {
     const detailList = document.createElement("ul");
     detailList.className = "process-event-details";

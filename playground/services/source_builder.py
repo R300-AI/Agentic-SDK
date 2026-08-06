@@ -44,6 +44,7 @@ _INTERACTIVE_TOOL_POLICY = """互動元件使用原則：
 以下是內部決策規則，不要向使用者描述判斷、工具或元件流程。先在內部判斷使用者這一輪的意圖類型，而不是因為已配置互動元件就要求使用者選擇。
 當使用者只是詢問資訊、要求分析、要求解釋、比較原因、了解現況或追問依據時，只用自然語言回答，不要提出確認問題。
 只有當使用者明確進入決策、確認、提交、申請、送出表單、安排後續流程或選擇下一步，且該需求符合工具描述時，才提出互動確認。
+互動確認只能收集該工具 schema 中定義的欄位；不可自行要求、暗示或臆測未配置的業務欄位。若 required 欄位尚未齊全，只簡潔要求缺少的 schema 欄位；全部齊全後才呼叫工具。
 需要互動確認時，對使用者直接輸出建議、必要依據、限制與下一步，最後用自然語言提出清楚的確認問題；Playground 會依配置顯示互動元件並收集使用者選擇。
 不要把 API URL、component schema、欄位 JSON 或內部工具設定當成使用者可見文字輸出。"""
 _FREE_TEXT_OUTPUT_CHOICES = {"free_text", "natural", "bullets"}
@@ -489,8 +490,8 @@ def normalize_python_source(existing_source: str | None) -> str:
     return _build_source_for_config(_config_from_source(existing_source))
 
 
-def render_python_source(existing_source: str | None, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
-    return _build_source_for_config(_config_from_source(existing_source), endpoint_bindings=endpoint_bindings)
+def render_python_source(existing_source: str | None) -> str:
+    return _build_source_for_config(_config_from_source(existing_source))
 
 
 def get_builder_form_state(python_source: str, *, include_generated_defaults: bool = False) -> dict[str, object]:
@@ -1261,20 +1262,19 @@ def _call_name(func: ast.expr) -> str:
     return ""
 
 
-def _build_source_for_config(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _build_source_for_config(config: BuilderSourceConfig) -> str:
     if config.profile_hint == "Custom Action" or config.action_module == "CustomAction":
-        return _build_custom_action_source(config, endpoint_bindings=endpoint_bindings)
-    return _build_workflow_source(config, endpoint_bindings=endpoint_bindings)
+        return _build_custom_action_source(config)
+    return _build_workflow_source(config)
 
 
-def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _build_workflow_source(config: BuilderSourceConfig) -> str:
     workflow_name_literal = json.dumps(config.workflow_name, ensure_ascii=False)
     reachable_roles = reachable_workflow_roles(config)
     workflow_arguments = _workflow_argument_lines(
         config,
         reachable_roles,
-        action_expression=_action_expression(config, endpoint_bindings=endpoint_bindings),
-        endpoint_bindings=endpoint_bindings,
+        action_expression=_action_expression(config),
     )
     workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
     if config.task_goal:
@@ -1284,7 +1284,7 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
 {workflow_arguments}
 )"""
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
-    import_lines = [_core_import_line(endpoint_bindings)]
+    import_lines = [_core_import_line()]
     if import_block:
         import_lines.append(import_block)
     sections = ["\n".join(import_lines)]
@@ -1292,7 +1292,7 @@ def _build_workflow_source(config: BuilderSourceConfig, endpoint_bindings: dict[
     return "\n\n".join(sections) + "\n"
 
 
-def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _build_custom_action_source(config: BuilderSourceConfig) -> str:
     workflow_name_literal = json.dumps(config.workflow_name, ensure_ascii=False)
     custom_action_class = _clean_python_identifier(config.custom_action_class, "BusinessRule")
     memory_key_literal = json.dumps(config.custom_action_memory_key, ensure_ascii=False)
@@ -1305,7 +1305,6 @@ def _build_custom_action_source(config: BuilderSourceConfig, endpoint_bindings: 
         config,
         reachable_roles,
         action_expression=f"{custom_action_class}()",
-        endpoint_bindings=endpoint_bindings,
     )
     workflow_metadata_lines = [f"    workflow_name={workflow_name_literal},"]
     if config.task_goal:
@@ -1339,7 +1338,7 @@ workflow = Workflow(
 """
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
     import_lines = [
-        _core_import_line(endpoint_bindings),
+        _core_import_line(),
         "from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState",
     ]
     if import_block:
@@ -1349,7 +1348,7 @@ workflow = Workflow(
     return "\n\n".join(sections) + "\n"
 
 
-def _core_import_line(endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _core_import_line() -> str:
     return "from agentic_sdk import Workflow"
 
 
@@ -1358,17 +1357,16 @@ def _workflow_argument_lines(
     reachable_roles: set[str],
     *,
     action_expression: str,
-    endpoint_bindings: dict[str, dict[str, str]] | None = None,
 ) -> str:
     lines: list[str] = []
     if config.events_schema is not None:
         lines.append(f"    events_schema={_format_python_literal(config.events_schema, 4)},")
     if "perceive" in reachable_roles:
-        lines.append(f"    perceive={_perceive_expression(config, endpoint_bindings=endpoint_bindings)},")
+        lines.append(f"    perceive={_perceive_expression(config)},")
     if "plan" in reachable_roles and config.plan_strategy:
-        lines.append(_plan_line(config, reachable_roles, endpoint_bindings=endpoint_bindings).rstrip("\n"))
+        lines.append(_plan_line(config, reachable_roles).rstrip("\n"))
     if "retrieve" in reachable_roles:
-        retrieve_body = _retrieve_expression_body(config, endpoint_bindings=endpoint_bindings)
+        retrieve_body = _retrieve_expression_body(config)
         if retrieve_body:
             lines.append(f"    retrieve={config.retrieve_module}(")
             lines.append(retrieve_body)
@@ -1376,7 +1374,7 @@ def _workflow_argument_lines(
         else:
             lines.append(f"    retrieve={config.retrieve_module}(),")
     if "reflect" in reachable_roles and config.reflect_module:
-        lines.append(_reflect_line(config, endpoint_bindings=endpoint_bindings).rstrip("\n"))
+        lines.append(_reflect_line(config).rstrip("\n"))
     if "action" in reachable_roles:
         lines.append(f"    action={action_expression},")
     return "\n".join(lines)
@@ -1390,7 +1388,7 @@ def _action_class_for_config(config: BuilderSourceConfig) -> str:
     return "DirectAnswerAction"
 
 
-def _action_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _action_expression(config: BuilderSourceConfig) -> str:
     action_class = _action_class_for_config(config)
     if action_class == "DirectAnswerAction":
         arguments = []
@@ -1401,7 +1399,7 @@ def _action_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str,
         if config.direct_answer_prefix:
             arguments.append(f"prefix={json.dumps(config.direct_answer_prefix, ensure_ascii=False)}")
         return f"DirectAnswerAction({', '.join(arguments)})" if arguments else "DirectAnswerAction()"
-    arguments = _llm_arguments("ACTION", binding_role="action", endpoint_bindings=endpoint_bindings)
+    arguments = _llm_arguments(binding_role="action")
     action_prompt = _action_system_prompt_for_config(config, action_class)
     if action_prompt:
         arguments.append(f"system_prompt={json.dumps(action_prompt, ensure_ascii=False)}")
@@ -1420,12 +1418,12 @@ def _action_system_prompt_for_config(config: BuilderSourceConfig, action_class: 
     return _INTERACTIVE_TOOL_POLICY
 
 
-def _perceive_expression(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _perceive_expression(config: BuilderSourceConfig) -> str:
     if config.perceive_module == "PassThroughPerceive":
         if config.perceive_input_label:
             return f"PassThroughPerceive(input_label={json.dumps(config.perceive_input_label, ensure_ascii=False)})"
         return "PassThroughPerceive()"
-    arguments = _llm_arguments("PERCEIVE", binding_role="perceive", endpoint_bindings=endpoint_bindings)
+    arguments = _llm_arguments(binding_role="perceive")
     if config.perceive_welcome_message:
         arguments.append(f"welcome_message={json.dumps(config.perceive_welcome_message, ensure_ascii=False)}")
     if config.perceive_options:
@@ -1435,34 +1433,34 @@ def _perceive_expression(config: BuilderSourceConfig, endpoint_bindings: dict[st
     return f"{config.perceive_module}({', '.join(arguments)})"
 
 
-def _retrieve_expression_body(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
     if config.retrieve_module == "KeywordRetrieve":
         if config.retrieve_items:
             return f"        items={_format_python_literal(list(config.retrieve_items), 14)},"
         return ""
     if config.retrieve_module == "PassThroughRetrieve":
         return ""
-    arguments = [f"        {argument}," for argument in _llm_arguments("RETRIEVE", binding_role="retrieve", endpoint_bindings=endpoint_bindings)]
+    arguments = [f"        {argument}," for argument in _llm_arguments(binding_role="retrieve")]
     source_paths = _semantic_source_paths(config)
     if source_paths:
         arguments.append(f"        sources={_format_python_literal(source_paths, 16)},")
     return "\n".join(arguments)
 
 
-def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str], endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
     arguments = [
-        *_llm_arguments("PLAN", binding_role=plan_binding_role, endpoint_bindings=endpoint_bindings),
+        *_llm_arguments(binding_role=plan_binding_role),
     ]
     if description:
         arguments.append(f"retrieve_description={json.dumps(description, ensure_ascii=False)}")
     return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
 
 
-def _reflect_line(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict[str, str]] | None = None) -> str:
+def _reflect_line(config: BuilderSourceConfig) -> str:
     reflect_module = config.reflect_module or "ResponseCheckReflect"
-    arguments = _llm_arguments("REFLECT", binding_role="reflect", endpoint_bindings=endpoint_bindings) if reflect_module == "ResponseCheckReflect" else []
+    arguments = _llm_arguments(binding_role="reflect") if reflect_module == "ResponseCheckReflect" else []
     if config.reflect_on_failure and config.reflect_on_failure != "retry_plan":
         arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
     return (
@@ -1472,12 +1470,7 @@ def _reflect_line(config: BuilderSourceConfig, endpoint_bindings: dict[str, dict
     )
 
 
-def _llm_arguments(
-    prefix: str,
-    *,
-    binding_role: str | None = None,
-    endpoint_bindings: dict[str, dict[str, str]] | None = None,
-) -> list[str]:
+def _llm_arguments(*, binding_role: str | None = None) -> list[str]:
     model_argument = "embedding_model" if binding_role == "retrieve" else "model"
     return [
         'api_key="<API_KEY>"',

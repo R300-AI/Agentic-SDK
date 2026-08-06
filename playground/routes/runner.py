@@ -9,7 +9,6 @@ from playground.services.aihub_bridge import has_runner_bridge_query, start_runn
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, verify_handoff_token, verify_identity
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
-from playground.services.model_endpoints import normalize_endpoint_selections
 from playground.services.runner_conversation import RunnerConversationState
 from playground.services.runner_service import execute_python_source, get_runner_demo_result, get_scene_profile, stream_python_source_execution, stream_python_source_initialization
 from playground.services.semantic_runtime import runtime_root, source_files_dir
@@ -43,8 +42,6 @@ def runner():
     spec = session.get("workflow_spec")
     runner_presentation = session.get("runner_presentation")
     starter_questions = _starter_questions_from_runner_state(config, runner_presentation)
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
-    session["endpoint_bindings"] = endpoint_selections
     auto_save_after_login = bool(session.pop("pending_runner_auto_save", False)) and mode_context.can_save
 
     return render_template(
@@ -92,7 +89,7 @@ def execute_runner():
         return jsonify({"error": "No Python source is available for execution."}), 400
 
     payload = request.get_json(silent=True) or {}
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    endpoint_selections = _runner_endpoint_selections()
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
     conversation_state = _append_normal_user_turn(python_source, payload)
     execution = execute_python_source(
@@ -118,7 +115,7 @@ def execute_runner_stream():
         return jsonify({"error": "No Python source is available for execution."}), 400
 
     payload = request.get_json(silent=True) or {}
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    endpoint_selections = _runner_endpoint_selections()
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
     conversation_state = _append_normal_user_turn(python_source, payload)
 
@@ -177,7 +174,7 @@ def initialize_runner_stream():
     if not python_source:
         return jsonify({"error": "No Python source is available for initialization."}), 400
 
-    endpoint_selections = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
+    endpoint_selections = _runner_endpoint_selections()
     semantic_sources, semantic_saved_path = _semantic_runtime_paths()
 
     def generate():
@@ -205,11 +202,10 @@ def update_runner_name():
     if isinstance(spec, dict) and spec.get("version") == "2":
         spec = apply_builder_step(spec, "name", str(payload.get("name", "")))
         session["workflow_spec"] = spec
-        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+        python_source = compile_python_source(spec)
     else:
         python_source = build_python_source_from_builder_choice("name", str(payload.get("name", "")), python_source)
     session["python_source"] = python_source
-    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
     _store_builder_name(get_workflow_summary(python_source).name)
     workflow_summary = get_workflow_summary(python_source)
@@ -240,11 +236,10 @@ def update_runner_description():
     if isinstance(spec, dict) and spec.get("version") == "2":
         spec = apply_builder_step(spec, "description", str(payload.get("description", "")))
         session["workflow_spec"] = spec
-        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+        python_source = compile_python_source(spec)
     else:
         python_source = build_python_source_from_builder_choice("description", str(payload.get("description", "")), python_source)
     session["python_source"] = python_source
-    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
     return jsonify(
         {
@@ -268,12 +263,11 @@ def update_runner_metadata():
         spec = apply_builder_step(spec, "name", str(payload.get("name", "")))
         spec = apply_builder_step(spec, "description", str(payload.get("description", "")))
         session["workflow_spec"] = spec
-        python_source = compile_python_source(spec, endpoint_bindings=session.get("endpoint_bindings") or {})
+        python_source = compile_python_source(spec)
     else:
         python_source = build_python_source_from_builder_choice("name", str(payload.get("name", "")), python_source)
         python_source = build_python_source_from_builder_choice("description", str(payload.get("description", "")), python_source)
     session["python_source"] = python_source
-    session["endpoint_bindings"] = normalize_endpoint_selections(python_source, session.get("endpoint_bindings") or {})
     session["builder_has_user_config"] = True
     _store_builder_name(get_workflow_summary(python_source).name)
     workflow_summary = get_workflow_summary(python_source)
@@ -319,6 +313,11 @@ def _semantic_runtime_paths() -> tuple[list[str] | None, str | None]:
     source_path = source_files_dir(upload_id)
     saved_path = runtime_root(upload_id)
     return [str(source_path)], str(saved_path)
+
+
+def _runner_endpoint_selections() -> dict[str, str]:
+    selections = session.get("endpoint_bindings")
+    return selections if isinstance(selections, dict) else {}
 
 
 def _runner_conversation_state(python_source: str) -> RunnerConversationState:

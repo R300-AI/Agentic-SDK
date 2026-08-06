@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-import re
 import tempfile
 from typing import BinaryIO
 
@@ -66,6 +65,8 @@ def ingest_semantic_upload(*, filename: str, stream: BinaryIO, target_dir: Path)
         return SemanticIngestionResult(display_name=display_name, accepted=False, reason=rejection)
 
     target_dir.mkdir(parents=True, exist_ok=True)
+    canonical_name = _canonical_name(display_name)
+    target_path = _unique_target_path(target_dir, canonical_name)
     with tempfile.TemporaryDirectory(prefix="semantic-upload-") as temporary_dir:
         staged_path = Path(temporary_dir) / display_name
         try:
@@ -76,16 +77,13 @@ def ingest_semantic_upload(*, filename: str, stream: BinaryIO, target_dir: Path)
             content = _read_indexable_text(staged_path, suffix)
         except ValueError as exc:
             return SemanticIngestionResult(display_name=display_name, accepted=False, reason=str(exc))
+        normalized = _normalize_text(content)
+        if not normalized:
+            return SemanticIngestionResult(display_name=display_name, accepted=False, reason="檔案未包含可建立知識庫索引的文字內容。")
+        if len(normalized.encode("utf-8")) > _MAX_TEXT_BYTES:
+            return SemanticIngestionResult(display_name=display_name, accepted=False, reason="轉換後文字內容超過知識庫大小限制。")
+        target_path.write_bytes(staged_path.read_bytes())
 
-    normalized = _normalize_text(content)
-    if not normalized:
-        return SemanticIngestionResult(display_name=display_name, accepted=False, reason="檔案未包含可建立知識庫索引的文字內容。")
-    if len(normalized.encode("utf-8")) > _MAX_TEXT_BYTES:
-        return SemanticIngestionResult(display_name=display_name, accepted=False, reason="轉換後文字內容超過知識庫大小限制。")
-
-    canonical_name = _canonical_name(display_name)
-    target_path = _unique_target_path(target_dir, canonical_name)
-    target_path.write_text(normalized, encoding="utf-8")
     return SemanticIngestionResult(display_name=display_name, accepted=True, canonical_name=target_path.name)
 
 
@@ -130,14 +128,15 @@ def _normalize_text(content: str) -> str:
 
 
 def _canonical_name(display_name: str) -> str:
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "-", Path(display_name).stem).strip(".-") or "knowledge"
-    return f"{stem}.md"
+    safe_name = "".join(character for character in Path(display_name).name if character.isprintable())
+    stem = Path(safe_name).stem.strip() or "knowledge"
+    return f"{stem}{Path(safe_name).suffix.lower()}"
 
 
 def _unique_target_path(target_dir: Path, canonical_name: str) -> Path:
     target = target_dir / canonical_name
     index = 2
     while target.exists():
-        target = target_dir / f"{Path(canonical_name).stem}-{index}.md"
+        target = target_dir / f"{Path(canonical_name).stem}-{index}{Path(canonical_name).suffix}"
         index += 1
     return target

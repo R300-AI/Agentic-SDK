@@ -216,6 +216,18 @@ def test_generated_retrieve_source_omits_empty_default_parameters():
     assert "retrieve_description=" not in semantic_source
 
 
+def test_generated_semantic_source_preserves_original_pptx_filename():
+    source = build_python_source_from_builder_choice("retrieve_policy", "semantic", None)
+    source = build_python_source_from_builder_choice(
+        "retrieve",
+        {"semantic_support_files": "AI-Hub.pptx"},
+        source,
+    )
+
+    assert '"./AI-Hub.pptx"' in source
+    assert config_from_source(source).semantic_support_files == ("AI-Hub.pptx",)
+
+
 def test_generated_reflect_source_omits_default_retry_policy_but_roundtrips():
     source = build_python_source_from_builder_choice("failure_policy", "retry", None)
 
