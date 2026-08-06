@@ -344,6 +344,21 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         self.assertEqual("retrieve", output["next_module"])
 
+    def test_next_step_plan_retrieves_ai_hub_workshop_facts_before_action(self) -> None:
+        state = WorkflowState(user_message="AI Hub 支援哪些模型部署方式？")
+        state.append(
+            ContextEntry(
+                type=ContextEntryType.PERCEIVED,
+                content="intent=ai_hub_deployment",
+                metadata={"intent": "ai_hub_deployment"},
+            )
+        )
+
+        with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient(plan_sequence=["action"])):
+            output = NextStepPlan(retrieve_description="AI Hub workshop materials", **_llm_params())(state)
+
+        self.assertEqual("retrieve", output["next_module"])
+
     def test_keyword_retrieve_hits_expected_items(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
         state.payload["query"] = "tsip"

@@ -7,8 +7,15 @@ from agentic_sdk.memory.in_context import build_module_messages
 
 _ALLOWED_NEXT = {"retrieve", "action"}
 _DOCUMENT_FACT_TERMS = (
+    "agentic sdk",
     "catalog",
     "目錄",
+    "上架",
+    "工作流",
+    "工作流程",
+    "模型小卡",
+    "模型部署",
+    "部署",
     "產品編號",
     "商品編號",
     "sku",
@@ -26,6 +33,7 @@ _DOCUMENT_FACT_TERMS = (
     "調貨",
     "到貨",
     "門市",
+    "遊樂場",
 )
 _SYSTEM_PROMPT = (
     "PLAN. Decide whether the next module should be retrieve or action. "
