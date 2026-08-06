@@ -524,8 +524,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = module(state)
 
-        self.assertEqual("已產生工具呼叫。", output["payload"]["latest_final_message"])
-        self.assertEqual("已產生工具呼叫。", state.last_action_result["content"])
+        self.assertEqual("請確認下列選項。", output["payload"]["latest_final_message"])
+        self.assertEqual("請確認下列選項。", state.last_action_result["content"])
         self.assertEqual(tool_calls, output["payload"]["latest_tool_calls"])
 
     def test_llm_modules_send_explicit_model(self) -> None:

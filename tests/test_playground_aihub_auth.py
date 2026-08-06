@@ -91,10 +91,8 @@ def test_model_endpoints_use_typed_key_vault_settings_without_exposing_keys(monk
             "id": "gpt-54",
             "label": "gpt-5.4",
             "model": "gpt-5.4",
-            "model_env": "GPT_54_MODEL",
             "base_url": "https://chat.example",
-            "base_url_env": "GPT_54_BASE_URL",
-            "api_key_env": "GPT_54_API_KEY",
+            "secret_prefix": "GPT-54",
         }
     ]
     assert params == {"api_key": "chat-secret", "base_url": "https://chat.example", "model": "gpt-5.4"}

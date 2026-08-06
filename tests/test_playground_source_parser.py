@@ -83,11 +83,13 @@ def test_runner_process_event_uses_workflow_stage_label():
         },
     )
 
-    assert event == {
-        "role": "retrieve",
-        "title": "正在查詢產品資料",
-        "description": "正在整理這一步可用的參考內容。",
-    }
+    assert event["role"] == "retrieve"
+    assert event["module"] == "retrieve"
+    assert event["title"] == "正在查詢產品資料"
+    assert event["description"] == "正在整理這一步可用的參考內容。"
+    assert event["phase"] == "start"
+    assert event["status"] == "running"
+    assert event["tracked_fields"] == []
 
 
 def test_execute_python_source_streams_configured_stage_label():
@@ -339,7 +341,7 @@ def test_interactive_action_adds_generic_intent_gate_without_polluting_form_stat
         source,
     )
 
-    assert "請先判斷使用者這一輪的意圖類型" in source
+    assert "先在內部判斷使用者這一輪的意圖類型" in source
     assert "當使用者只是詢問資訊、要求分析、要求解釋" in source
     assert "Playground 會依配置顯示互動元件並收集使用者選擇" in source
     assert "顯示互動元件並收集使用者選擇" in source
