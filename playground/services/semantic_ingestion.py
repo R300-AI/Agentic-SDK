@@ -115,12 +115,23 @@ def _read_indexable_text(path: Path, suffix: str) -> str:
             raise ValueError("文字檔必須使用 UTF-8 編碼。") from exc
     try:
         from markitdown import MarkItDown
+        content = str(getattr(MarkItDown().convert(str(path)), "text_content", "") or "")
     except Exception as exc:
-        raise ValueError("文件轉換服務目前不可用，請稍後再試。") from exc
+        if suffix != ".pdf":
+            raise ValueError("文件格式無法驗證或轉換為知識庫文字。") from exc
+        return _read_pdf_text(path, exc)
+    if content or suffix != ".pdf":
+        return content
+    return _read_pdf_text(path)
+
+
+def _read_pdf_text(path: Path, cause: Exception | None = None) -> str:
     try:
-        return str(getattr(MarkItDown().convert(str(path)), "text_content", "") or "")
+        from pdfminer.high_level import extract_text
+
+        return str(extract_text(str(path)) or "")
     except Exception as exc:
-        raise ValueError("文件格式無法驗證或轉換為知識庫文字。") from exc
+        raise ValueError("PDF 文件格式無法驗證或轉換為知識庫文字。") from (cause or exc)
 
 
 def _normalize_text(content: str) -> str:

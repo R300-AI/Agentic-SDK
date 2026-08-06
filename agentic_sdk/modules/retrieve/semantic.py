@@ -257,6 +257,13 @@ class FaissKnowledgeBase:
         try:
             return str(getattr(MarkItDown().convert(str(file_path)), "text_content", "") or "")
         except Exception as exc:
+            if file_path.suffix.lower() == ".pdf":
+                try:
+                    from pdfminer.high_level import extract_text
+
+                    return str(extract_text(str(file_path)) or "")
+                except Exception:
+                    pass
             raise RuntimeError(f"無法讀取知識庫來源 {file_path.name}：文件格式無法轉換為文字。") from exc
 
     def _is_stale(self) -> bool:
