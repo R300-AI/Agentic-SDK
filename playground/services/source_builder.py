@@ -108,10 +108,9 @@ class BuilderSourceConfig:
     custom_action_prefix: str = "自訂處理結果："
     custom_rule_title: str = "處理規則"
     custom_rule_instruction: str | None = None
-    plan_strategy: str | None = None
+    plan_module: str | None = None
     plan_system_prompt: str | None = None
     reflect_module: str | None = None
-    reflect_on_failure: str | None = None
     entry_module: str = "perceive"
     events_schema: dict[str, dict[str, object]] | None = None
     max_node_hops: int = 50
@@ -727,7 +726,7 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     # Named even when nobody chose one, so a reader of the code sees that every
     # run passes through planning — see ADR-0005.
-    if not config.plan_strategy:
+    if config.plan_module != "NextStepPlan":
         return "    plan=PassThroughPlan(),\n"
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"

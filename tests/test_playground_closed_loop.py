@@ -6,12 +6,17 @@ Observed from Builder answers: the spec they produce, the Workflow
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
+import pytest
+
 from agentic_sdk import PassThroughPlan, PlanCheckReflect, WorkflowResult
+from agentic_sdk.core import ContextEntry, ContextEntryType
 from agentic_sdk.core.events import default_events_schema
 from playground.services import model_endpoints, runner_service
-from playground.services.workflow_spec import compile_python_source, default_spec, validate_spec
+from playground.services.workflow_spec import compile_python_source, default_spec, spec_to_form_state, validate_spec
 
-from support import build_spec
+from support import FoundryOpenAILikeClient, build_spec
 
 
 def _keyword_direct_agent(*extra):
@@ -134,3 +139,151 @@ def test_the_reflect_step_says_it_checks_the_plan_and_the_lookup():
         "正在檢查規劃與查詢結果，確認可以開始回答。",
         "已檢查規劃與查詢結果。",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Q5 installs planning and reflect by how the agent looks things up.
+# ---------------------------------------------------------------------------
+
+Q3_Q5_MAPPING = [
+    ("none", "retry", "NextStepPlan", "PlanCheckReflect"),
+    ("none", "handoff", "PassThroughPlan", None),
+    ("keyword", "retry", "NextStepPlan", "EvidenceCheckReflect"),
+    ("keyword", "handoff", "PassThroughPlan", "EvidenceCheckReflect"),
+    ("semantic", "retry", "NextStepPlan", "EvidenceCheckReflect"),
+    ("semantic", "handoff", "PassThroughPlan", "EvidenceCheckReflect"),
+]
+
+
+@pytest.mark.parametrize("lookup, answer, plan, reflect", Q3_Q5_MAPPING)
+def test_q5_installs_planning_and_reflect_by_how_the_agent_looks_things_up(lookup, answer, plan, reflect):
+    spec = build_spec(("retrieve_policy", lookup), ("failure_policy", answer))
+
+    assert spec["plan"]["module"] == plan
+    assert spec["reflect"]["module"] == reflect
+    assert spec_to_form_state(spec)["choices"]["failure_policy"] == answer
+
+
+@pytest.mark.parametrize("lookup, answer, plan, reflect", Q3_Q5_MAPPING)
+def test_answering_q3_after_q5_installs_the_same_modules(lookup, answer, plan, reflect):
+    other = "none" if lookup != "none" else "keyword"
+    spec = build_spec(("retrieve_policy", other), ("failure_policy", answer), ("retrieve_policy", lookup))
+
+    assert spec["plan"]["module"] == plan
+    assert spec["reflect"]["module"] == reflect
+    assert spec_to_form_state(spec)["choices"]["failure_policy"] == answer
+
+
+@pytest.mark.parametrize("lookup", ["none", "keyword", "semantic"])
+def test_q3_alone_installs_no_planning_module(lookup):
+    spec = build_spec(("retrieve_policy", lookup))
+
+    assert spec["plan"]["module"] is None
+    assert spec["reflect"]["module"] is None
+    assert spec_to_form_state(spec)["choices"]["failure_policy"] == ""
+
+
+def test_a_spec_stores_no_failure_route_and_no_plan_strategy():
+    spec = build_spec(("retrieve_policy", "keyword"), ("failure_policy", "retry"))
+
+    assert "on_failure" not in spec["reflect"]["params"]
+    assert "strategy" not in spec["plan"]["params"]
+    assert "on_failure" not in default_spec()["reflect"]["params"]
+    assert "strategy" not in default_spec()["plan"]["params"]
+
+
+@pytest.mark.parametrize("lookup, answer, plan, reflect", Q3_Q5_MAPPING)
+def test_exported_code_names_the_mapped_modules(lookup, answer, plan, reflect):
+    source = compile_python_source(build_spec(("retrieve_policy", lookup), ("failure_policy", answer)))
+
+    assert f"plan={plan}(" in source
+    if reflect is None:
+        assert "reflect=" not in source
+    else:
+        assert f"reflect={reflect}(" in source
+
+
+def test_an_agent_that_looks_nothing_up_and_stops_needs_no_checker_model():
+    spec = build_spec(("retrieve_policy", "none"), ("failure_policy", "handoff"))
+
+    assert "reflect" not in [r["role"] for r in model_endpoints.endpoint_state(spec, {})["requirements"]]
+
+
+def _retrying_keyword_agent():
+    return build_spec(
+        ("retrieve_policy", "keyword"),
+        ("retrieve", {"keyword_pairs": "保固 = 本產品保固十二個月。"}),
+        ("output_format", "direct"),
+        ("failure_policy", "retry"),
+    )
+
+
+def _run_with_planner(spec, plan_sequence, message="保固多久？"):
+    client = FoundryOpenAILikeClient(plan_sequence=plan_sequence)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = runner_service.build_workflow(spec, {"action": "gpt-54"})
+    events: list[dict] = []
+    result = workflow.run(message, event_callback=events.append)
+    stages = [event["stage"] for event in events if event.get("type") == "stage" and event["phase"] == "start"]
+    return result, stages
+
+
+def test_a_retrying_agent_looks_up_first_and_checks_the_lookup_before_answering():
+    result, stages = _run_with_planner(_retrying_keyword_agent(), ["action"])
+
+    assert stages == ["perceive", "plan", "retrieve", "plan", "reflect", "plan", "action"]
+    assert result.final_message == "本產品保固十二個月。"
+
+
+def test_a_retrying_agent_looks_again_at_most_once_and_checks_each_lookup():
+    result, stages = _run_with_planner(_retrying_keyword_agent(), ["retrieve"])
+
+    assert stages == [
+        "perceive", "plan", "retrieve", "plan", "reflect", "plan", "retrieve", "plan", "reflect", "plan", "action",
+    ]
+    assert result.aborted is False
+
+
+def _fake_run(monkeypatch, entries, final_message="沒有命中任何條目。"):
+    class FakeWorkflow:
+        def run(self, *_args, **_kwargs):
+            return WorkflowResult(workflow_id="workflow-1", final_message=final_message, entries=list(entries), entities={})
+
+    monkeypatch.setattr(runner_service, "build_workflow", lambda *_args, **_kwargs: FakeWorkflow())
+
+
+MISSED = ContextEntry(type=ContextEntryType.RETRIEVED, content="沒有命中任何條目。", metadata={"source": "keyword_retrieve", "hit_count": 0})
+PASSED = ContextEntry(type=ContextEntryType.REFLECTION, content="verdict=pass", metadata={"verdict": "pass", "reason": "ok", "strategy": "evidence_check"})
+FAILED = ContextEntry(type=ContextEntryType.REFLECTION, content="verdict=fail", metadata={"verdict": "fail", "reason": "no retrieved evidence", "strategy": "evidence_check"})
+
+
+def test_a_stopping_agent_hands_over_when_reflect_reports_a_failure(monkeypatch):
+    _fake_run(monkeypatch, [MISSED, FAILED])
+
+    result = runner_service.run_agent(_keyword_direct_agent(("failure_policy", "handoff")), message="退貨怎麼辦？", endpoint_selections={})
+
+    assert "已停止作答" in result["final_message"]
+    assert result["status"] == "aborted"
+
+
+def test_the_handoff_follows_what_reflect_reported_not_the_hit_count(monkeypatch):
+    _fake_run(monkeypatch, [MISSED, PASSED])
+
+    result = runner_service.run_agent(_keyword_direct_agent(("failure_policy", "handoff")), message="退貨怎麼辦？", endpoint_selections={})
+
+    assert result["final_message"] == "沒有命中任何條目。"
+
+
+def test_a_retrying_agent_never_hands_over(monkeypatch):
+    _fake_run(monkeypatch, [MISSED, FAILED])
+
+    result = runner_service.run_agent(_retrying_keyword_agent(), message="請推薦產品編號 X-UNKNOWN-999", endpoint_selections={})
+
+    assert "已停止作答" not in result["final_message"]
+    assert "人工確認" not in result["final_message"]
+
+
+def test_a_stopping_agent_really_runs_and_hands_over_on_an_empty_lookup():
+    result = runner_service.run_agent(_keyword_direct_agent(("failure_policy", "handoff")), message="退貨怎麼辦？", endpoint_selections={})
+
+    assert "已停止作答" in result["final_message"]

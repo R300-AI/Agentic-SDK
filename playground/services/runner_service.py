@@ -1102,12 +1102,15 @@ def _retrieve_missed(entries: list[ContextEntry]) -> bool:
 
 
 def _human_handoff_reason(config: BuilderSourceConfig, entries: list[ContextEntry], user_message: str) -> str | None:
-    if config.reflect_module != "EvidenceCheckReflect" or config.reflect_on_failure != "end":
+    # Only an agent whose Q5 answer is 先停下來 hands over, and it does so on
+    # what reflect reported rather than on which reflect module is mounted.
+    if config.plan_module != "PassThroughPlan":
         return None
-    retrieve_entries = [entry for entry in entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
-    if _retrieve_missed(retrieve_entries):
+    reflection = next((entry for entry in reversed(entries) if _entry_type(entry) == ContextEntryType.REFLECTION.value), None)
+    if reflection is not None and reflection.metadata.get("verdict") == "fail":
         reason = _documents_unavailable_reason(config) or "目前沒有在參考資料中找到可以支持這個回答的內容。"
         return f"{reason} 已停止作答，避免給出沒有依據的內容。"
+    retrieve_entries = [entry for entry in entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
     requested_identifiers = _requested_product_identifiers(user_message)
     if not requested_identifiers or not retrieve_entries:
         return None
@@ -1265,7 +1268,7 @@ def _initialization_steps(
         )
     if "perceive" in reachable_roles:
         steps.append(("perceive", "輸入解析器", lambda: _perceive_from_config(config, endpoint_selections, reachable_roles)))
-    if "plan" in reachable_roles and config.plan_strategy:
+    if "plan" in reachable_roles and config.plan_module == "NextStepPlan":
         steps.append(("plan", "流程判斷器", lambda: _plan_from_config(config, endpoint_selections, reachable_roles)))
     if "retrieve" in reachable_roles:
         retrieve_label = "知識庫索引" if semantic_retrieve_required else _retrieve_process_title(config)
@@ -1347,12 +1350,12 @@ def _perceive_from_config(
 def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
     from agentic_sdk.modules.plan import NextStepPlan, PassThroughPlan
 
-    if not config.plan_strategy:
+    if config.plan_module != "NextStepPlan":
         return PassThroughPlan()
     return NextStepPlan(
         system_prompt=config.plan_system_prompt,
         retrieve_description=config.retrieve_description,
-        route_policy=_consult_the_sources_first if _has_retrievable_content(config) else None,
+        route_policy=_retry_route_policy(has_retrievable_content=_has_retrievable_content(config)),
         **endpoint_params_for_role(_plan_endpoint_role(endpoint_selections, reachable_roles), endpoint_selections),
     )
 
@@ -1366,21 +1369,48 @@ def _has_retrievable_content(config: BuilderSourceConfig) -> bool:
     return False
 
 
-def _consult_the_sources_first(state: WorkflowState, chosen: str | None) -> str | None:
-    """Look in the agent's own documents before answering from anything else.
+# 再查一次再回答 allows one return to retrieval, so two lookups in all.
+_MAX_RETRIEVALS = 2
 
-    An agent built on uploaded documents promises answers grounded in them. The
-    planner decides per turn, and with only a vague description of the source it
-    would judge a question answerable on its own and skip the lookup — a kidney
-    education agent discussed diet limits with no document behind a word of it,
-    and the evidence check could not object because nothing had been retrieved.
 
-    So the first pass through plan always retrieves. After that the planner has
-    seen what the documents hold and its judgement is worth something.
+def _retry_route_policy(*, has_retrievable_content: bool) -> Callable[[WorkflowState, str | None], str | None]:
+    """Keep what 再查一次再回答 promises, whatever the planner's model says.
+
+    Look in the agent's own documents before answering from anything else. An
+    agent built on uploaded documents promises answers grounded in them, and
+    with only a vague description of the source the planner would judge a
+    question answerable on its own and skip the lookup — a kidney education
+    agent discussed diet limits with no document behind a word of it.
+
+    Check every lookup before acting on it. Reflect used to run after every
+    answer; now it runs only when planning sends work there, and a model that
+    skipped it would answer from an empty lookup without anyone noticing.
+
+    Look again at most once. Retrying means trying again, not trying until a
+    run limit stops the agent.
     """
-    if state.latest_of(ContextEntryType.RETRIEVED) is not None:
+
+    def policy(state: WorkflowState, chosen: str | None) -> str | None:
+        retrievals = state.visit_counts.get("retrieve", 0)
+        if has_retrievable_content and retrievals == 0:
+            return "retrieve"
+        if "reflect" in state.plan_options and _latest_lookup_is_unchecked(state):
+            return "reflect"
+        if chosen == "retrieve" and retrievals >= _MAX_RETRIEVALS:
+            return "action"
         return chosen
-    return "retrieve"
+
+    return policy
+
+
+def _latest_lookup_is_unchecked(state: WorkflowState) -> bool:
+    for entry in reversed(state.entries):
+        entry_type = _entry_type(entry)
+        if entry_type == ContextEntryType.REFLECTION.value:
+            return False
+        if entry_type == ContextEntryType.RETRIEVED.value:
+            return True
+    return False
 
 
 def _execution_status(workflow_result, handoff_reason: str) -> str:
