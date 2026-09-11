@@ -1,6 +1,6 @@
 ﻿"""Clean core package for Agentic SDK v2."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from agentic_sdk.config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
 from agentic_sdk.core.events import ALL_STRUCTURED_FIELDS, DEFAULT_EVENTS_SCHEMA, default_events_schema

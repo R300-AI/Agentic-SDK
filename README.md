@@ -24,11 +24,11 @@ Agentic SDK 的目的是為了讓各類 AI 晶片上的模型都能變成落地�
 
 ## 安裝
 
-需要 Python 3.11 以上、3.13 以下，開發環境建議 3.12；下面第一行的 `@v0.2.0` 是版本標籤，
+需要 Python 3.11 以上、3.13 以下，開發環境建議 3.12；下面第一行的 `@v0.3.0` 是版本標籤，
 指定它才會固定在該版的行為，省略時裝到 `main` 的最新內容，而 `main` 改變行為時程式不會報錯、只是結果不一樣。
 
 ```bash
-python -m pip install "git+https://github.com/R300-AI/Agentic-SDK.git@v0.2.0"
+python -m pip install "git+https://github.com/R300-AI/Agentic-SDK.git@v0.3.0"
 python -c "import agentic_sdk; print('Agentic SDK import ok')"
 ```
 
