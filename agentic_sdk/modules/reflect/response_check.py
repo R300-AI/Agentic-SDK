@@ -13,6 +13,7 @@ _SYSTEM_PROMPT = (
 
 class ResponseCheckReflect:
     name = "reflect"
+    description = "uses a model to confirm the planned step can be carried out and the lookup completed normally"
     gen_ai_system = "openai_compatible"
 
     def __init__(

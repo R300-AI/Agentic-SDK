@@ -6,6 +6,7 @@ from agentic_sdk.modules.reflect.retry_policy import ON_FAILURE_TO_NEXT, next_af
 
 class EvidenceCheckReflect:
     name = "reflect"
+    description = "reports whether the latest lookup found anything; send a lookup here before acting on it"
 
     def __init__(self, on_failure: str = "retry_plan") -> None:
         if on_failure not in ON_FAILURE_TO_NEXT:

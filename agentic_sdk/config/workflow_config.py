@@ -12,6 +12,7 @@ class GateConfig:
     max_node_hops: int = 50
     max_revisit: int = 5
     timeout_sec: float = 300.0
+    max_reflect_rounds: int = 5
 
 
 @dataclass
@@ -38,7 +39,7 @@ _MODULE_CONFIG_PARAMS: dict[str, set[str]] = {
     "evidence_check": {"on_failure"},
     "generative": {"api_key", "base_url", "model", "temperature", "system_prompt"},
     "keyword": {"items", "fallback"},
-    "next_step": {"api_key", "base_url", "model", "system_prompt", "retrieve_description"},
+    "next_step": {"api_key", "base_url", "model", "system_prompt", "retrieve_description", "reflect_description"},
     "pass_through": {"input_label"},
     "pass_through_plan": set(),
     "pass_through_retrieve": set(),
@@ -112,6 +113,7 @@ def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module
             max_node_hops=config.gates.max_node_hops,
             max_revisit=config.gates.max_revisit,
             timeout_sec=config.gates.timeout_sec,
+            max_reflect_rounds=config.gates.max_reflect_rounds,
         ),
         workflow_name=config.name,
         description=config.description,

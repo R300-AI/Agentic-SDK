@@ -11,6 +11,10 @@ class Gates:
     max_node_hops: int = 50
     max_revisit: int = 5
     timeout_sec: float = 300.0
+    # How many times planning may send work to reflect in one run. Unlike the
+    # other limits, reaching it does not abort: reflect simply stops being one
+    # of planning's choices, and the run carries on to retrieve or act.
+    max_reflect_rounds: int = 5
 
     def before_visit(self, module_name: str, state: WorkflowState, total_hops: int) -> None:
         if total_hops > self.max_node_hops:

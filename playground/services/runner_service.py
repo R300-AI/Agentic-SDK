@@ -899,7 +899,7 @@ def _structured_field_process_event(
     if module == "plan" and field == "thought":
         return _process_event("plan", title, f"判斷依據：{value_text}", workflow_event=workflow_event)
     if module == "plan" and field == "next_module":
-        next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+        next_label = _plan_next_label(value_text)
         return _process_event("plan", title, f"目前決定：{next_label}。", workflow_event=workflow_event)
     if not _is_user_visible_trace_detail(field, value, workflow_event):
         return None
@@ -910,6 +910,10 @@ def _structured_field_process_event(
         workflow_event=workflow_event,
         details=[{"field": field, "description": f"{field}：{value_text}"}],
     )
+
+
+def _plan_next_label(next_module: str) -> str:
+    return {"retrieve": "先整理相關來源", "reflect": "先檢查"}.get(next_module, "直接準備回覆")
 
 
 def _structured_details_for_finish(workflow_event: dict[str, Any]) -> list[dict[str, str]]:
@@ -931,7 +935,7 @@ def _structured_finish_summary(module: str, fields: object) -> str:
         if isinstance(next_module, dict):
             value_text = _preview_text(_structured_field_value_text(_require_standard_field_value(next_module)))
             if _is_displayable_trace_value(value_text):
-                next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+                next_label = _plan_next_label(value_text)
                 return f"目前決定：{next_label}。"
     for item in fields:
         if not isinstance(item, dict):
@@ -947,7 +951,7 @@ def _structured_finish_summary(module: str, fields: object) -> str:
         if module == "plan" and field == "thought":
             return f"判斷依據：{value_text}"
         if module == "plan" and field == "next_module":
-            next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+            next_label = _plan_next_label(value_text)
             return f"目前決定：{next_label}。"
     return ""
 
@@ -1202,6 +1206,7 @@ def _gates_from_spec(spec: dict[str, Any]) -> Gates:
         max_node_hops=int(raw.get("max_node_hops") or defaults.max_node_hops),
         max_revisit=int(raw.get("max_revisit") or defaults.max_revisit),
         timeout_sec=float(raw.get("timeout_sec") or defaults.timeout_sec),
+        max_reflect_rounds=int(raw.get("max_reflect_rounds") or defaults.max_reflect_rounds),
     )
 
 

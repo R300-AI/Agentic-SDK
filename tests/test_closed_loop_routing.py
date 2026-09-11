@@ -252,3 +252,200 @@ def test_pass_through_plan_is_a_canonical_module():
     assert PassThroughPlan is FromModules
     assert isinstance(workflow.modules["plan"], PassThroughPlan)
     assert workflow.run("保固多久？").final_message == "本產品保固十二個月。"
+
+
+# ---------------------------------------------------------------------------
+# Planning and reflect exchange a bounded number of times, and planning reads
+# what reflect reported.
+# ---------------------------------------------------------------------------
+
+
+class ReportingReflect:
+    name = "reflect"
+
+    def __call__(self, state):
+        return ModuleOutput(
+            next_module=None,
+            payload={"reflect_verdict": "fail"},
+            context_updates=[
+                ContextEntry(
+                    type=ContextEntryType.REFLECTION,
+                    content="verdict=fail",
+                    metadata={"verdict": "fail", "reason": "查到的是舊版條文", "suggestion": "改查新版條文"},
+                )
+            ],
+        )
+
+
+def _recording(client: FoundryOpenAILikeClient) -> list[dict]:
+    requests: list[dict] = []
+    original = client.chat.completions.create
+
+    def create(**kwargs):
+        requests.append(kwargs)
+        return original(**kwargs)
+
+    client.chat.completions.create = create
+    return requests
+
+
+def _system(request: dict) -> str:
+    return request["messages"][0]["content"]
+
+
+def _offered(request: dict) -> set[str]:
+    line = next(line for line in _system(request).splitlines() if line.startswith("Choose next_module from:"))
+    return {name.strip() for name in line.split(":", 1)[1].rstrip(".").split(",")}
+
+
+def test_planning_and_reflect_exchange_at_most_five_times():
+    plan = ScriptedPlan(["retrieve"] + ["reflect"] * 7)
+    workflow = Workflow(
+        perceive=PassThroughPerceive(),
+        plan=plan,
+        retrieve=KeywordRetrieve(items=ITEMS),
+        action=DirectAnswerAction(),
+        reflect=RecordingReflect(),
+    )
+
+    result = workflow.run("保固多久？")
+
+    assert result.aborted is False
+    assert result.visit_counts["reflect"] == 5
+    assert result.final_message == "本產品保固十二個月。"
+    assert plan.offered[-1] == ["retrieve", "action"]
+
+
+def test_the_reflect_round_limit_can_be_changed():
+    workflow = Workflow(
+        perceive=PassThroughPerceive(),
+        plan=ScriptedPlan(["reflect"] * 4),
+        retrieve=KeywordRetrieve(items=ITEMS),
+        action=DirectAnswerAction(),
+        reflect=RecordingReflect(),
+        gates=Gates(max_reflect_rounds=2),
+    )
+
+    result = workflow.run("保固多久？")
+
+    assert result.aborted is False
+    assert result.visit_counts["reflect"] == 2
+
+
+def test_workflow_config_carries_the_reflect_round_limit():
+    workflow = build_workflow(WorkflowConfig(gates=GateConfig(max_reflect_rounds=3)))
+
+    assert workflow.gates.max_reflect_rounds == 3
+    assert Gates().max_reflect_rounds == 5
+
+
+def test_next_step_plan_is_offered_only_the_steps_available_now():
+    client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "reflect", "action"])
+    requests = _recording(client)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepPlan(**LLM_PARAMS),
+            retrieve=KeywordRetrieve(items=ITEMS),
+            action=DirectAnswerAction(),
+            reflect=EvidenceCheckReflect(),
+            gates=Gates(max_reflect_rounds=1),
+        )
+
+    workflow.run("保固多久？")
+
+    assert [_offered(request) for request in requests] == [
+        {"retrieve", "reflect", "action"},
+        {"retrieve", "reflect", "action"},
+        {"retrieve", "action"},
+    ]
+
+
+def test_next_step_plan_without_a_reflect_module_is_never_offered_reflect():
+    client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "action"])
+    requests = _recording(client)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepPlan(**LLM_PARAMS),
+            retrieve=KeywordRetrieve(items=ITEMS),
+            action=DirectAnswerAction(),
+        )
+
+    workflow.run("保固多久？")
+
+    assert [_offered(request) for request in requests] == [{"retrieve", "action"}, {"retrieve", "action"}]
+    assert all("reflect" not in _system(request) for request in requests)
+
+
+def test_next_step_plan_is_told_what_the_mounted_reflect_module_is_for():
+    client = FoundryOpenAILikeClient(plan_sequence=["action"])
+    requests = _recording(client)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepPlan(**LLM_PARAMS),
+            retrieve=KeywordRetrieve(items=ITEMS),
+            action=DirectAnswerAction(),
+            reflect=EvidenceCheckReflect(),
+        )
+
+    workflow.run("保固多久？")
+
+    assert EvidenceCheckReflect.description
+    assert EvidenceCheckReflect.description in _system(requests[0])
+
+
+def test_a_reflect_description_replaces_the_modules_own():
+    client = FoundryOpenAILikeClient(plan_sequence=["action"])
+    requests = _recording(client)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepPlan(reflect_description="確認查到的條文是最新版本", **LLM_PARAMS),
+            retrieve=KeywordRetrieve(items=ITEMS),
+            action=DirectAnswerAction(),
+            reflect=EvidenceCheckReflect(),
+        )
+
+    workflow.run("保固多久？")
+
+    assert "確認查到的條文是最新版本" in _system(requests[0])
+    assert EvidenceCheckReflect.description not in _system(requests[0])
+
+
+def test_next_step_plan_reads_what_reflect_reported():
+    client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
+    requests = _recording(client)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepPlan(**LLM_PARAMS),
+            retrieve=KeywordRetrieve(items=ITEMS),
+            action=DirectAnswerAction(),
+            reflect=ReportingReflect(),
+        )
+
+    workflow.run("保固多久？")
+
+    assert "查到的是舊版條文" not in _system(requests[1])
+    assert "查到的是舊版條文" in _system(requests[2])
+    assert "改查新版條文" in _system(requests[2])
+
+
+def test_workflow_config_passes_a_reflect_description_to_next_step_plan():
+    client = FoundryOpenAILikeClient(plan_sequence=["action"])
+    requests = _recording(client)
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
+        workflow = build_workflow(
+            WorkflowConfig(
+                modules={
+                    "plan": ModuleSpec(kind="next_step", params={**LLM_PARAMS, "reflect_description": "確認條文版本"}),
+                    "reflect": ModuleSpec(kind="evidence_check"),
+                }
+            )
+        )
+
+    workflow.run("保固多久？")
+
+    assert "確認條文版本" in _system(requests[0])

@@ -270,7 +270,7 @@ class Workflow:
                 if module is None:
                     raise WorkflowAborted(f"unknown module '{current}'")
                 if current == "plan":
-                    state.plan_options = _plan_options(self.modules)
+                    state.plan_options = _plan_options(self.modules, state, self.gates)
 
                 if self._should_emit_stage_event(current, event_callback, active_events_schema):
                     event_callback(
@@ -657,12 +657,17 @@ def _pending_input_from(module: Any) -> str:
     return str(pending() or "").strip()
 
 
-def _plan_options(modules: dict[str, Module]) -> dict[str, str | None]:
-    """The steps planning may choose from, each with its module's description."""
+def _plan_options(modules: dict[str, Module], state: WorkflowState, gates: Gates) -> dict[str, str | None]:
+    """The steps planning may choose from, each with its module's description.
+
+    Reflect drops out once planning has used up its rounds with it. The run is
+    not aborted: planning can still retrieve or act.
+    """
+    reflect_available = state.visit_counts.get("reflect", 0) < gates.max_reflect_rounds
     return {
         role: _module_description(modules[role])
         for role in _PLANNING_CHOICES
-        if role in modules
+        if role in modules and (role != "reflect" or reflect_available)
     }
 
 

@@ -114,7 +114,7 @@ def default_spec(*, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict[str, Any
             "module": None,
             "params": {"on_failure": None},
         },
-        "gates": {"max_node_hops": 50, "max_revisit": 5, "timeout_sec": 300.0},
+        "gates": {"max_node_hops": 50, "max_revisit": 5, "timeout_sec": 300.0, "max_reflect_rounds": 5},
         "events": None,
         "entry_module": "perceive",
     }
@@ -308,6 +308,8 @@ def _apply_gates(spec: dict, raw: object) -> None:
         gates["max_revisit"] = max(1, min(100, int(raw["max_revisit"] or 5)))
     if "timeout_sec" in raw:
         gates["timeout_sec"] = max(10.0, min(3600.0, float(raw["timeout_sec"] or 300.0)))
+    if "max_reflect_rounds" in raw:
+        gates["max_reflect_rounds"] = max(1, min(100, int(raw["max_reflect_rounds"] or 5)))
 
 
 # ---------------------------------------------------------------------------
