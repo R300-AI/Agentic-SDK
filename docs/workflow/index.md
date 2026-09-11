@@ -68,7 +68,7 @@ result = workflow.run("我要申請理賠，需要先準備什麼？")
 print(result.final_message)
 ```
 
-設定資料中的步驟種類使用固定名稱，SDK 會依名稱建立對應模組，並檢查參數是否適用。種類名稱包括 `pass_through`、`text`、`text_image`、`voice_text`、`pass_through_plan`、`next_step`、`keyword`、`pass_through_retrieve`、`semantic`、`direct_answer`、`generative`、`tool_call_action`、`voice_answer`、`response_check` 與 `evidence_check`。語音的兩個種類以物件承載音訊來源：`voice_text` 收 `transport`，`voice_answer` 收 `speech`，與 `semantic` 收 `embedder` 的方式相同。程式直接建立與設定資料建立，最後都會得到相同的 `Workflow` 物件和執行方式。
+設定資料中的步驟種類使用固定名稱，SDK 會依名稱建立對應模組，並檢查參數是否適用。種類名稱包括 `pass_through`、`text`、`text_image`、`voice_text`、`pass_through_plan`、`next_step`、`keyword`、`pass_through_retrieve`、`semantic`、`direct_answer`、`generative`、`tool_call_action`、`voice_answer`、`plan_check` 與 `evidence_check`。語音的兩個種類以物件承載音訊來源：`voice_text` 收 `transport`，`voice_answer` 收 `speech`，與 `semantic` 收 `embedder` 的方式相同。程式直接建立與設定資料建立，最後都會得到相同的 `Workflow` 物件和執行方式。
 
 執行期間有四層資料分工：
 

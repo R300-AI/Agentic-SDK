@@ -19,6 +19,7 @@ from agentic_sdk.modules import (
     KeywordRetrieve,
     NextStepPlan,
     PassThroughPerceive,
+    PassThroughRetrieve,
 )
 
 from support import FoundryOpenAILikeClient
@@ -449,3 +450,131 @@ def test_workflow_config_passes_a_reflect_description_to_next_step_plan():
     workflow.run("保固多久？")
 
     assert "確認條文版本" in _system(requests[0])
+
+
+# ---------------------------------------------------------------------------
+# Reflect modules report what they found; they no longer decide the route.
+# ---------------------------------------------------------------------------
+
+
+def _reflection(result) -> ContextEntry:
+    return [entry for entry in result.entries if entry.type == ContextEntryType.REFLECTION][-1]
+
+
+def _evidence_agent(retrieve) -> Workflow:
+    return Workflow(perceive=PassThroughPerceive(), retrieve=retrieve, action=DirectAnswerAction(), reflect=EvidenceCheckReflect())
+
+
+def _plan_check_agent(reflect_client: FoundryOpenAILikeClient) -> Workflow:
+    from agentic_sdk import PlanCheckReflect
+
+    plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=[plan_client, reflect_client]):
+        return Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepPlan(**LLM_PARAMS),
+            retrieve=KeywordRetrieve(items=ITEMS),
+            action=DirectAnswerAction(),
+            reflect=PlanCheckReflect(**LLM_PARAMS),
+        )
+
+
+def test_reflect_modules_no_longer_choose_where_a_failure_goes():
+    from agentic_sdk import PlanCheckReflect
+
+    with pytest.raises(TypeError):
+        EvidenceCheckReflect(on_failure="end")
+    with pytest.raises(TypeError):
+        PlanCheckReflect(on_failure="end", **LLM_PARAMS)
+
+
+def test_evidence_check_reports_a_lookup_that_found_nothing():
+    result = _evidence_agent(KeywordRetrieve(items=ITEMS)).run("退貨怎麼辦？")
+
+    report = _reflection(result)
+    assert result.entities["reflect_verdict"] == "fail"
+    assert report.metadata["verdict"] == "fail"
+    assert report.metadata["strategy"] == "evidence_check"
+    assert report.metadata["reason"]
+
+
+def test_evidence_check_passes_a_lookup_that_found_something():
+    result = _evidence_agent(KeywordRetrieve(items=ITEMS)).run("保固多久？")
+
+    assert result.entities["reflect_verdict"] == "pass"
+    assert _reflection(result).metadata["verdict"] == "pass"
+
+
+def test_evidence_check_passes_when_nothing_was_counted_and_says_why():
+    counted = _reflection(_evidence_agent(KeywordRetrieve(items=ITEMS)).run("保固多久？"))
+    uncounted = _reflection(_evidence_agent(PassThroughRetrieve()).run("用一句話說明什麼是保固。"))
+
+    assert uncounted.metadata["verdict"] == "pass"
+    assert uncounted.metadata["reason"]
+    assert uncounted.metadata["reason"] != counted.metadata["reason"]
+
+
+def test_plan_check_reads_the_plan_and_the_lookup_and_not_an_answer():
+    reflect_client = FoundryOpenAILikeClient(
+        reflect_verdict="fail",
+        reflect_reason="規劃選的技能不存在",
+        reflect_suggestion="先問使用者要用哪一套流程",
+    )
+    requests = _recording(reflect_client)
+
+    result = _plan_check_agent(reflect_client).run("保固多久？")
+
+    system = _system(requests[0])
+    assert system.startswith("REFLECT")
+    assert "route to reflect" in system
+    assert "本產品保固十二個月。" in system
+    assert "action_result" not in system
+    assert _reflection(result).metadata == {
+        "verdict": "fail",
+        "reason": "規劃選的技能不存在",
+        "suggestion": "先問使用者要用哪一套流程",
+        "strategy": "plan_check",
+    }
+    assert result.entities["reflect_verdict"] == "fail"
+
+
+def test_plan_check_lets_the_run_go_on_when_its_model_is_unavailable():
+    reflect_client = FoundryOpenAILikeClient()
+
+    def _refuse(**_kwargs):
+        raise RuntimeError("provider down")
+
+    reflect_client.chat.completions.create = _refuse
+
+    result = _plan_check_agent(reflect_client).run("保固多久？")
+
+    report = _reflection(result)
+    assert report.metadata["verdict"] == "pass"
+    assert "did not run" in report.metadata["reason"]
+    assert result.final_message == "本產品保固十二個月。"
+
+
+def test_plan_check_reflect_replaces_response_check_reflect():
+    import agentic_sdk
+    from agentic_sdk import PlanCheckReflect
+    from agentic_sdk.modules import PlanCheckReflect as FromModules
+
+    assert PlanCheckReflect is FromModules
+    assert not hasattr(agentic_sdk, "ResponseCheckReflect")
+    with pytest.raises(ImportError):
+        from agentic_sdk.modules.reflect import ResponseCheckReflect  # noqa: F401
+
+
+def test_workflow_config_builds_reflect_modules_by_their_new_kinds():
+    from agentic_sdk import PlanCheckReflect
+
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient()):
+        checked = build_workflow(WorkflowConfig(modules={"reflect": ModuleSpec(kind="plan_check", params=LLM_PARAMS)}))
+    counted = build_workflow(WorkflowConfig(modules={"reflect": ModuleSpec(kind="evidence_check")}))
+
+    assert isinstance(checked.modules["reflect"], PlanCheckReflect)
+    assert isinstance(counted.modules["reflect"], EvidenceCheckReflect)
+    with pytest.raises(ValueError, match="unsupported params"):
+        build_workflow(WorkflowConfig(modules={"reflect": ModuleSpec(kind="evidence_check", params={"on_failure": "end"})}))
+    with pytest.raises(ValueError, match="unknown module kind"):
+        build_workflow(WorkflowConfig(modules={"reflect": ModuleSpec(kind="response_check", params=LLM_PARAMS)}))

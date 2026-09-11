@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from agentic_sdk import Workflow
 from agentic_sdk.modules import GenerativeAction, NextStepPlan, PassThroughRetrieve, TextPerceive
-from agentic_sdk.modules.reflect import ResponseCheckReflect
+from agentic_sdk.modules.reflect import PlanCheckReflect
 from support import FoundryOpenAILikeClient
 
 
@@ -28,7 +28,7 @@ def test_workflow_emits_structured_and_action_token_deltas() -> None:
             plan=NextStepPlan(**LLM_PARAMS),
             retrieve=PassThroughRetrieve(),
             action=GenerativeAction(**LLM_PARAMS),
-            reflect=ResponseCheckReflect(**LLM_PARAMS),
+            reflect=PlanCheckReflect(**LLM_PARAMS),
         )
 
     events: list[dict[str, object]] = []
@@ -143,7 +143,7 @@ def test_workflow_stream_yields_only_action_text_and_exposes_final_result() -> N
             plan=NextStepPlan(**LLM_PARAMS),
             retrieve=PassThroughRetrieve(),
             action=GenerativeAction(**LLM_PARAMS),
-            reflect=ResponseCheckReflect(**LLM_PARAMS),
+            reflect=PlanCheckReflect(**LLM_PARAMS),
         )
 
     stream = workflow.stream("請協助測試直接串流")

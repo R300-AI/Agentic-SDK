@@ -147,7 +147,7 @@ def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirem
     if "action" in reachable_llm_roles:
         requirements.append(OpenAIRequirement("action", "模型回覆器", config.action_module, "Action"))
     if "reflect" in reachable_llm_roles:
-        requirements.append(OpenAIRequirement("reflect", "回覆檢核器", "ResponseCheckReflect", "Reflect"))
+        requirements.append(OpenAIRequirement("reflect", "規劃檢核器", "PlanCheckReflect", "Reflect"))
     # Listening and speaking are asked for separately because they are separate
     # agents: someone may want to talk and read, or type and listen.
     if config.perceive_module == "VoiceTextPerceive" and "perceive" in reachable_roles:
@@ -199,7 +199,7 @@ def _role_label(role: str) -> str:
         "plan": "步驟規劃器",
         "retrieve": "語意搜尋",
         "action": "模型回覆器",
-        "reflect": "回覆檢核器",
+        "reflect": "規劃檢核器",
         "transcribe": "語音聽寫",
         "tts": "語音合成",
     }.get(role, role)

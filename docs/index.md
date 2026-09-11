@@ -66,11 +66,17 @@
       <td>把說出來的話轉成這一輪的輸入，安靜時不上傳；偵測到使用者開口時中止進行中的回答。</td>
     </tr>
     <tr>
-      <td>Plan</td>
+      <td rowspan="2">Plan</td>
+      <td><a href="modules/plan-modules.md#passthroughplan">PassThroughPlan</a></td>
+      <td>no</td>
+      <td>--</td>
+      <td>不呼叫模型，先檢索一次、掛了反思模組時送反思一次，再行動。沒有指定規劃模組時使用。</td>
+    </tr>
+    <tr>
       <td><a href="modules/plan-modules.md#nextstepplan">NextStepPlan</a></td>
       <td>yes</td>
       <td>OpenAI</td>
-      <td>根據完整對話與目前中繼結果，決定下一步要 Retrieve 還是 Action。</td>
+      <td>根據完整對話、目前中繼結果與反思回報，決定下一步要 Retrieve、Reflect 還是 Action。</td>
     </tr>
     <tr>
       <td rowspan="3">Retrieve</td>
@@ -118,16 +124,16 @@
     </tr>
     <tr>
       <td rowspan="2">Reflect</td>
-      <td><a href="modules/reflect-modules.md#responsecheckreflect">ResponseCheckReflect</a></td>
+      <td><a href="modules/reflect-modules.md#plancheckreflect">PlanCheckReflect</a></td>
       <td>yes</td>
       <td>OpenAI</td>
-      <td>回頭檢查目前答案夠不夠好，若不夠就提出修正方向，讓下一輪流程可以繼續改進。</td>
+      <td>在行動前用模型確認規劃選的步驟能不能執行、檢索有沒有正常完成，回報交給規劃模組。</td>
     </tr>
     <tr>
       <td><a href="modules/reflect-modules.md#evidencecheckreflect">EvidenceCheckReflect</a></td>
       <td>no</td>
       <td>--</td>
-      <td>用規則檢查目前 action 結果是否有錯誤或缺少依據。</td>
+      <td>在行動前用規則確認最近一次檢索有沒有找到內容，回報交給規劃模組。</td>
     </tr>
   </tbody>
 </table>

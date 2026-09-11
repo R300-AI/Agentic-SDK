@@ -36,14 +36,14 @@ class WorkflowConfig:
 
 _MODULE_CONFIG_PARAMS: dict[str, set[str]] = {
     "direct_answer": {"memory_key", "fallback", "prefix"},
-    "evidence_check": {"on_failure"},
+    "evidence_check": set(),
     "generative": {"api_key", "base_url", "model", "temperature", "system_prompt"},
     "keyword": {"items", "fallback"},
     "next_step": {"api_key", "base_url", "model", "system_prompt", "retrieve_description", "reflect_description"},
     "pass_through": {"input_label"},
     "pass_through_plan": set(),
     "pass_through_retrieve": set(),
-    "response_check": {"on_failure", "api_key", "base_url", "model"},
+    "plan_check": {"api_key", "base_url", "model"},
     "semantic": {
         "top_k",
         "provider",
@@ -134,7 +134,7 @@ def build_module(spec: ModuleSpec) -> Module:
         "pass_through": modules.PassThroughPerceive,
         "pass_through_plan": modules.PassThroughPlan,
         "pass_through_retrieve": modules.PassThroughRetrieve,
-        "response_check": modules.ResponseCheckReflect,
+        "plan_check": modules.PlanCheckReflect,
         "semantic": modules.SemanticRetrieve,
         "text": modules.TextPerceive,
         "text_image": modules.TextImagePerceive,

@@ -1,4 +1,4 @@
 ﻿from agentic_sdk.modules.reflect.evidence_check import EvidenceCheckReflect
-from agentic_sdk.modules.reflect.response_check import ResponseCheckReflect
+from agentic_sdk.modules.reflect.plan_check import PlanCheckReflect
 
-__all__ = ["EvidenceCheckReflect", "ResponseCheckReflect"]
+__all__ = ["EvidenceCheckReflect", "PlanCheckReflect"]

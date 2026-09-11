@@ -54,7 +54,9 @@ _ALLOWED_MEMORY_KINDS = {"in_context"}
 _ALLOWED_PERCEIVE_MODULES = {"PassThroughPerceive", "TextPerceive", "TextImagePerceive", "VoiceTextPerceive"}
 _ALLOWED_RETRIEVE_MODULES = {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}
 _ALLOWED_ACTION_MODULES = {"DirectAnswerAction", "GenerativeAction", "ToolCallAction", "VoiceAnswerAction"}
-_ALLOWED_REFLECT_MODULES = {"EvidenceCheckReflect", "ResponseCheckReflect"}
+_ALLOWED_REFLECT_MODULES = {"EvidenceCheckReflect", "PlanCheckReflect"}
+# Agents saved before 0.3.0 name the model-checked reflect module by its old name.
+_RENAMED_REFLECT_MODULES = {"ResponseCheckReflect": "PlanCheckReflect"}
 _ALLOWED_REFLECT_ON_FAILURE = {"retry_plan", "end"}
 _ALLOWED_PLAN_STRATEGIES = {"RouteBySupport"}
 
@@ -286,7 +288,7 @@ def _apply_action(spec: dict, raw: object) -> None:
 def _apply_reflect(spec: dict, raw: object) -> None:
     if not isinstance(raw, dict):
         return
-    module = raw.get("module")
+    module = _RENAMED_REFLECT_MODULES.get(raw.get("module"), raw.get("module"))
     if module and module not in _ALLOWED_REFLECT_MODULES:
         module = None
     spec["reflect"]["module"] = module or None
@@ -422,7 +424,7 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
         if existing_retrieve_module in {"SemanticRetrieve", "KeywordRetrieve"}:
             reflect_module = "EvidenceCheckReflect"
         else:
-            reflect_module = "ResponseCheckReflect"
+            reflect_module = "PlanCheckReflect"
         existing_plan = spec.get("plan", {})
         current_strategy = existing_plan.get("params", {}).get("strategy")
 
@@ -530,7 +532,7 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
     perceive_module = perceive.get("module") or "PassThroughPerceive"
     retrieve_module = retrieve.get("module") or "PassThroughRetrieve"
     action_module = action.get("module") or ""
-    reflect_module = reflect.get("module") or None
+    reflect_module = _RENAMED_REFLECT_MODULES.get(reflect.get("module"), reflect.get("module")) or None
     plan_strategy = plan_params.get("strategy") or None
 
     config = BuilderSourceConfig(

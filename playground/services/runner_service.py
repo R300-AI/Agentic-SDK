@@ -999,7 +999,7 @@ def _module_start_process_event(
     if module == "action":
         return _process_event("action", label or _default_label("action"), f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。", workflow_event=workflow_event)
     if module == "reflect":
-        return _process_event("reflect", label or _default_label("reflect"), "正在檢查回覆是否可交付，必要時會回到前一步調整。", workflow_event=workflow_event)
+        return _process_event("reflect", label or _default_label("reflect"), "正在檢查規劃與查詢結果，確認可以開始回答。", workflow_event=workflow_event)
     return None
 
 
@@ -1013,7 +1013,7 @@ def _module_finish_process_summary(config: BuilderSourceConfig, module: str) -> 
     if module == "action":
         return f"{_action_process_name(config)}已完成回覆整理。"
     if module == "reflect":
-        return "已檢查回覆內容，可交付。"
+        return "已檢查規劃與查詢結果。"
     return "已完成這個階段。"
 
 
@@ -1273,7 +1273,7 @@ def _initialization_steps(
     if "action" in reachable_roles:
         steps.append(("action", _action_process_name(config), lambda: _action_from_config(config, endpoint_selections, reachable_roles)))
     if "reflect" in reachable_roles and config.reflect_module:
-        steps.append(("reflect", "回覆檢核器", lambda: _reflect_from_config(config, endpoint_selections, reachable_roles)))
+        steps.append(("reflect", "規劃檢核器", lambda: _reflect_from_config(config, endpoint_selections, reachable_roles)))
     return steps
 
 
@@ -1529,14 +1529,14 @@ def _action_from_config(
 
 
 def _reflect_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
-    from agentic_sdk.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
+    from agentic_sdk.modules.reflect import EvidenceCheckReflect, PlanCheckReflect
 
     if "reflect" not in reachable_roles:
         return None
-    if config.reflect_module == "ResponseCheckReflect":
-        return ResponseCheckReflect(on_failure=config.reflect_on_failure or "retry_plan", **endpoint_params_for_role("reflect", endpoint_selections))
+    if config.reflect_module == "PlanCheckReflect":
+        return PlanCheckReflect(**endpoint_params_for_role("reflect", endpoint_selections))
     if config.reflect_module == "EvidenceCheckReflect":
-        return EvidenceCheckReflect(on_failure=config.reflect_on_failure or "retry_plan")
+        return EvidenceCheckReflect()
     return None
 
 

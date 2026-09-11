@@ -13,7 +13,7 @@
 
 ## 直接使用標準事件
 
-沒有傳入 `events_schema` 時，SDK 對所有實際執行的 module 發送 `stage` 事件，標準 label 是「理解輸入」、「判斷工具順序」、「整理相關來源」、「準備輸出回覆」、「檢查回覆」。
+沒有傳入 `events_schema` 時，SDK 對所有實際執行的 module 發送 `stage` 事件，標準 label 是「理解輸入」、「判斷工具順序」、「整理相關來源」、「準備輸出回覆」、「檢查規劃與查詢」。
 
 ```python
 workflow = Workflow(

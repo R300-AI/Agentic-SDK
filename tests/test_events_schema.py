@@ -11,7 +11,7 @@ from agentic_sdk import (
     ModuleSpec,
     NextStepPlan,
     PassThroughRetrieve,
-    ResponseCheckReflect,
+    PlanCheckReflect,
     TextPerceive,
     Workflow,
     WorkflowConfig,
@@ -47,7 +47,7 @@ DEFAULT_LABELS = {
     "plan": "判斷工具順序",
     "retrieve": "整理相關來源",
     "action": "準備輸出回覆",
-    "reflect": "檢查回覆",
+    "reflect": "檢查規劃與查詢",
 }
 
 
@@ -162,7 +162,7 @@ def test_workflow_defaults_to_full_event_schema_and_emits_all_structured_fields(
             plan=NextStepPlan(**LLM_PARAMS),
             retrieve=PassThroughRetrieve(),
             action=GenerativeAction(**LLM_PARAMS),
-            reflect=ResponseCheckReflect(**LLM_PARAMS),
+            reflect=PlanCheckReflect(**LLM_PARAMS),
         )
 
     events: list[dict[str, object]] = []
@@ -314,7 +314,7 @@ def test_workflow_run_emits_configured_structured_fields_with_event_identity() -
             plan=NextStepPlan(**LLM_PARAMS),
             retrieve=PassThroughRetrieve(),
             action=GenerativeAction(**LLM_PARAMS),
-            reflect=ResponseCheckReflect(**LLM_PARAMS),
+            reflect=PlanCheckReflect(**LLM_PARAMS),
             events_schema=schema,
         )
 

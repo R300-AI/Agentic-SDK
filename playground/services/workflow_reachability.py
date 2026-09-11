@@ -33,7 +33,7 @@ def reachable_openai_roles(config: "BuilderSourceConfig") -> set[str]:
         roles.add("plan")
     if "action" in reachable and config.action_module in _MODEL_ACTION_MODULES:
         roles.add("action")
-    if "reflect" in reachable and config.reflect_module == "ResponseCheckReflect":
+    if "reflect" in reachable and config.reflect_module == "PlanCheckReflect":
         roles.add("reflect")
     return roles
 

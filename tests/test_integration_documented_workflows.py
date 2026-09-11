@@ -14,7 +14,7 @@ from agentic_sdk.modules import (
     NextStepPlan,
     PassThroughPerceive,
     PassThroughRetrieve,
-    ResponseCheckReflect,
+    PlanCheckReflect,
     SemanticRetrieve,
     TextImagePerceive,
     TextPerceive,
@@ -229,7 +229,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
                 plan=NextStepPlan(**_llm_params()),
                 retrieve=SemanticRetrieve(knowledge_base=kb),
                 action=GenerativeAction(**_llm_params()),
-                reflect=ResponseCheckReflect(**_llm_params()),
+                reflect=PlanCheckReflect(**_llm_params()),
             )
 
         result = workflow.run("TSiP 是什麼？")

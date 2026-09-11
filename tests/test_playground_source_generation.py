@@ -122,13 +122,12 @@ def test_generated_semantic_source_preserves_original_pptx_filename():
     assert spec_to_config(spec).semantic_support_files == ("AI-Hub.pptx",)
 
 
-def test_generated_reflect_source_omits_default_retry_policy_but_roundtrips():
+def test_generated_reflect_source_carries_no_failure_route():
     spec = build_spec(("failure_policy", "retry"))
     source = compile_python_source(spec)
 
-    assert "ResponseCheckReflect(" in source
-    assert 'on_failure="retry_plan"' not in source
-    assert spec_to_config(spec).reflect_on_failure == "retry_plan"
+    assert "PlanCheckReflect(" in source
+    assert "on_failure" not in source
 
 
 def test_generated_plan_source_keeps_user_configured_retrieve_description():

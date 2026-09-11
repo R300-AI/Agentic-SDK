@@ -6,9 +6,9 @@ Observed from Builder answers: the spec they produce, the Workflow
 
 from __future__ import annotations
 
-from agentic_sdk import PassThroughPlan, WorkflowResult
+from agentic_sdk import PassThroughPlan, PlanCheckReflect, WorkflowResult
 from agentic_sdk.core.events import default_events_schema
-from playground.services import runner_service
+from playground.services import model_endpoints, runner_service
 from playground.services.workflow_spec import compile_python_source, default_spec, validate_spec
 
 from support import build_spec
@@ -96,3 +96,41 @@ def test_a_plan_that_chooses_reflect_says_it_checks_first(monkeypatch):
     runner_service.run_agent(_keyword_direct_agent(), message="保固多久？", endpoint_selections={}, process_observer=process_events.append)
 
     assert "目前決定：先檢查。" in [event["description"] for event in process_events if event["role"] == "plan"]
+
+
+def test_an_agent_that_looks_nothing_up_checks_its_plan_with_a_model():
+    spec = build_spec(("failure_policy", "retry"))
+
+    workflow = runner_service.build_workflow(spec, {"action": "gpt-54", "reflect": "gpt-54"})
+    requirement = next(r for r in model_endpoints.endpoint_state(spec, {})["requirements"] if r["role"] == "reflect")
+
+    assert isinstance(workflow.modules["reflect"], PlanCheckReflect)
+    assert requirement["role_label"] == "規劃檢核器"
+    assert requirement["module_name"] == "PlanCheckReflect"
+
+
+def test_exported_reflect_modules_carry_no_failure_route():
+    retry = compile_python_source(build_spec(("failure_policy", "retry")))
+    handoff = compile_python_source(_keyword_direct_agent(("failure_policy", "handoff")))
+
+    assert "reflect=PlanCheckReflect(" in retry
+    assert "reflect=EvidenceCheckReflect()," in handoff
+    for source in (retry, handoff):
+        assert "on_failure" not in source
+        assert "ResponseCheckReflect" not in source
+
+
+def test_the_reflect_step_says_it_checks_the_plan_and_the_lookup():
+    process_events: list[dict] = []
+
+    runner_service.run_agent(
+        _keyword_direct_agent(("failure_policy", "handoff")),
+        message="保固多久？",
+        endpoint_selections={},
+        process_observer=process_events.append,
+    )
+
+    assert [event["description"] for event in process_events if event["role"] == "reflect"] == [
+        "正在檢查規劃與查詢結果，確認可以開始回答。",
+        "已檢查規劃與查詢結果。",
+    ]

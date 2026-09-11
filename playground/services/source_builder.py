@@ -67,7 +67,7 @@ _MODULE_IMPORT_ORDER = (
     "KeywordRetrieve",
     "SemanticRetrieve",
     "EvidenceCheckReflect",
-    "ResponseCheckReflect",
+    "PlanCheckReflect",
     "DirectAnswerAction",
     "GenerativeAction",
     "ToolCallAction",
@@ -740,10 +740,8 @@ def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
 
 
 def _reflect_line(config: BuilderSourceConfig) -> str:
-    reflect_module = config.reflect_module or "ResponseCheckReflect"
-    arguments = _llm_arguments(binding_role="reflect") if reflect_module == "ResponseCheckReflect" else []
-    if config.reflect_on_failure and config.reflect_on_failure != "retry_plan":
-        arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
+    reflect_module = config.reflect_module or "PlanCheckReflect"
+    arguments = _llm_arguments(binding_role="reflect") if reflect_module == "PlanCheckReflect" else []
     return (
         f"    reflect={reflect_module}("
         f"{', '.join(arguments)}"

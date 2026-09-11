@@ -1487,7 +1487,7 @@ def test_runner_uses_module_specific_process_completion_summaries():
 
     assert runner_service._module_finish_process_summary(config, "retrieve") == "已整理相關來源，交給回覆階段使用。"
     assert runner_service._module_finish_process_summary(config, "action") == "工具呼叫回覆器已完成回覆整理。"
-    assert runner_service._module_finish_process_summary(config, "reflect") == "已檢查回覆內容，可交付。"
+    assert runner_service._module_finish_process_summary(config, "reflect") == "已檢查規劃與查詢結果。"
 
 
 def test_runner_process_event_rejects_legacy_stage_event_without_schema():
