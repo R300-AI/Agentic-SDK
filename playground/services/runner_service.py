@@ -713,11 +713,12 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
         messages.append(f"執行路徑：{' → '.join(visited)}。")
 
     plan_entry = _latest_entry(workflow_result.entries, ContextEntryType.PLAN_DECISION)
-    if plan_entry is not None and plan_entry.metadata.get("strategy") != "pass_through":
+    if plan_entry is not None:
         next_module = plan_entry.metadata.get("next_module")
         fallback = "；模型輸出不合法，已 fallback 到 action" if plan_entry.metadata.get("fallback") else ""
+        planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else "NextStepPlan "
         if next_module:
-            messages.append(f"Plan：NextStepPlan 選擇下一步 {next_module}{fallback}。")
+            messages.append(f"Plan：{planner}選擇下一步 {next_module}{fallback}。")
 
     retrieve_entries = [entry for entry in workflow_result.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
     retrieve_missed = _retrieve_missed(retrieve_entries)
@@ -761,8 +762,8 @@ def _workflow_event_observer(
     def emit(workflow_event: dict[str, Any]) -> None:
         _validate_standard_workflow_event(workflow_event)
         module = workflow_event["module"]
-        # A fixed rule decides nothing a person could read a reason into, and
-        # every agent now passes through it two or three times a turn.
+        # A fixed rule decides nothing a person could read a reason into, and an
+        # agent planning by it passes through planning two or three times a turn.
         if module == "plan" and workflow_event.get("module_class") == "PassThroughPlan":
             return
         if workflow_event.get("type") == "structured_field":
@@ -1102,12 +1103,14 @@ def _retrieve_missed(entries: list[ContextEntry]) -> bool:
 
 
 def _human_handoff_reason(config: BuilderSourceConfig, entries: list[ContextEntry], user_message: str) -> str | None:
-    # Only an agent whose Q5 answer is 先停下來 hands over, and it does so on
-    # what reflect reported rather than on which reflect module is mounted.
+    # Only an agent whose Q5 answer is 先停下來 hands over. An agent that has not
+    # answered Q5 also plans by the fixed rule when it runs, but nobody asked it
+    # to stop. It hands over on what reflect reported — the lookup found
+    # nothing — rather than on which reflect module is mounted.
     if config.plan_module != "PassThroughPlan":
         return None
     reflection = next((entry for entry in reversed(entries) if _entry_type(entry) == ContextEntryType.REFLECTION.value), None)
-    if reflection is not None and reflection.metadata.get("verdict") == "fail":
+    if reflection is not None and reflection.metadata.get("verdict") == "fail" and reflection.metadata.get("strategy") == "evidence_check":
         reason = _documents_unavailable_reason(config) or "目前沒有在參考資料中找到可以支持這個回答的內容。"
         return f"{reason} 已停止作答，避免給出沒有依據的內容。"
     retrieve_entries = [entry for entry in entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]

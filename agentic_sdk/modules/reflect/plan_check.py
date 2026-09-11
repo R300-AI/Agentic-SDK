@@ -50,7 +50,10 @@ class PlanCheckReflect:
             system_prompt=_SYSTEM_PROMPT,
             extra_context={
                 "plan_thought": decision.metadata.get("thought") if decision else None,
-                "plan_next_module": decision.metadata.get("next_module") if decision else None,
+                # The decision that sent work here always chose reflect. What
+                # can be checked is whether the step planning means to take is
+                # among the steps it can take.
+                "planning_can_choose": ", ".join(state.plan_options) or None,
                 "retrieved_content": _excerpt(retrieved),
                 "retrieved_hit_count": retrieved.metadata.get("hit_count") if retrieved else None,
                 "perceived_input": _excerpt(perceived),
@@ -89,7 +92,7 @@ class PlanCheckReflect:
             # A check that could not run is not a reason to stop the person
             # getting an answer. Say so plainly and let planning carry on.
             verdict = "pass"
-            reason = f"plan check did not run: {type(exc).__name__}"
+            reason = f"plan check did not run: {type(exc).__name__}: {exc}"
             suggestion = ""
             usage = None
         if verdict not in {"pass", "fail"}:

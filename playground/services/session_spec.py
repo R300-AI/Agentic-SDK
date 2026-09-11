@@ -11,7 +11,7 @@ from typing import Any
 
 from flask import session
 
-from playground.services.workflow_spec import default_spec
+from playground.services.workflow_spec import default_spec, saved_before_0_3_0, validate_spec
 
 
 def current_spec() -> dict[str, Any]:
@@ -33,7 +33,14 @@ def current_spec() -> dict[str, Any]:
 def _stored_spec() -> dict[str, Any] | None:
     """The session's draft, or None. One definition of "this session has one"."""
     stored = session.get("workflow_spec")
-    return stored if isinstance(stored, dict) and stored.get("version") == "2" else None
+    if not (isinstance(stored, dict) and stored.get("version") == "2"):
+        return None
+    if saved_before_0_3_0(stored):
+        # A draft held since before 0.3.0 reads back in the new format, the same
+        # way an agent loaded from AI Hub does — see ADR-0005.
+        stored = validate_spec(stored)
+        session["workflow_spec"] = stored
+    return stored
 
 
 def has_spec() -> bool:

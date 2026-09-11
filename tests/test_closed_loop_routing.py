@@ -34,6 +34,10 @@ LLM_PARAMS = {
 ITEMS = [{"keywords": ["保固"], "content": "本產品保固十二個月。"}]
 
 
+def _refuse(**_kwargs):
+    raise RuntimeError("provider down")
+
+
 def _stages(events: list[dict]) -> list[str]:
     return [event["stage"] for event in events if event.get("type") == "stage" and event["phase"] == "start"]
 
@@ -133,10 +137,6 @@ def test_the_route_ignores_where_other_modules_say_to_go():
 
 def test_a_failed_action_ends_the_run_without_a_check_after_it():
     client = FoundryOpenAILikeClient()
-
-    def _refuse(**_kwargs):
-        raise RuntimeError("provider down")
-
     client.chat.completions.create = _refuse
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
         workflow = Workflow(
@@ -331,6 +331,22 @@ def test_the_reflect_round_limit_can_be_changed():
 
     assert result.aborted is False
     assert result.visit_counts["reflect"] == 2
+
+
+def test_a_raised_reflect_round_limit_is_not_cut_short_by_the_revisit_limit():
+    workflow = Workflow(
+        perceive=PassThroughPerceive(),
+        plan=ScriptedPlan(["reflect"] * 9),
+        retrieve=KeywordRetrieve(items=ITEMS),
+        action=DirectAnswerAction(),
+        reflect=RecordingReflect(),
+        gates=Gates(max_reflect_rounds=7),
+    )
+
+    result = workflow.run("保固多久？")
+
+    assert result.aborted is False
+    assert result.visit_counts["reflect"] == 7
 
 
 def test_workflow_config_carries_the_reflect_round_limit():
@@ -529,6 +545,11 @@ def test_plan_check_reads_the_plan_and_the_lookup_and_not_an_answer():
     assert "route to reflect" in system
     assert "本產品保固十二個月。" in system
     assert "action_result" not in system
+    # The check is about the step planning takes next, so it reads the steps
+    # planning can choose from — not the decision that sent it here, which is
+    # always "reflect".
+    assert "retrieve, reflect, action" in system
+    assert "plan_next_module: reflect" not in system
     assert _reflection(result).metadata == {
         "verdict": "fail",
         "reason": "規劃選的技能不存在",
@@ -540,10 +561,6 @@ def test_plan_check_reads_the_plan_and_the_lookup_and_not_an_answer():
 
 def test_plan_check_lets_the_run_go_on_when_its_model_is_unavailable():
     reflect_client = FoundryOpenAILikeClient()
-
-    def _refuse(**_kwargs):
-        raise RuntimeError("provider down")
-
     reflect_client.chat.completions.create = _refuse
 
     result = _plan_check_agent(reflect_client).run("保固多久？")
@@ -551,6 +568,7 @@ def test_plan_check_lets_the_run_go_on_when_its_model_is_unavailable():
     report = _reflection(result)
     assert report.metadata["verdict"] == "pass"
     assert "did not run" in report.metadata["reason"]
+    assert "provider down" in report.metadata["reason"]
     assert result.final_message == "本產品保固十二個月。"
 
 
@@ -565,7 +583,7 @@ def test_plan_check_reflect_replaces_response_check_reflect():
         from agentic_sdk.modules.reflect import ResponseCheckReflect  # noqa: F401
 
 
-def test_workflow_config_builds_reflect_modules_by_their_new_kinds():
+def test_workflow_config_builds_reflect_modules_by_their_kind_names():
     from agentic_sdk import PlanCheckReflect
 
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient()):

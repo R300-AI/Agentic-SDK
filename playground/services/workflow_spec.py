@@ -286,10 +286,14 @@ def _apply_action(spec: dict, raw: object) -> None:
         params["prefix"] = clean_short_text(str(p["prefix"] or ""), "")
 
 
+def _current_reflect_module_name(module: object) -> object:
+    return _RENAMED_REFLECT_MODULES.get(module, module) if isinstance(module, str) else module
+
+
 def _apply_reflect(spec: dict, raw: object) -> None:
     if not isinstance(raw, dict):
         return
-    module = _RENAMED_REFLECT_MODULES.get(raw.get("module"), raw.get("module"))
+    module = _current_reflect_module_name(raw.get("module"))
     if module and module not in _ALLOWED_REFLECT_MODULES:
         module = None
     spec["reflect"]["module"] = module or None
@@ -469,6 +473,11 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
 _ON_FAILURE_ANSWERS = {"retry_plan": "retry", "end": "handoff"}
 
 
+def saved_before_0_3_0(spec: dict[str, Any]) -> bool:
+    """Whether a stored spec was written before 0.3.0 and needs reading anew."""
+    return _q5_answer_saved_before_0_3_0(spec) is not None
+
+
 def _q5_answer_saved_before_0_3_0(raw: dict) -> str | None:
     """Q5's answer in a spec saved before 0.3.0, or None for a spec saved since.
 
@@ -494,7 +503,7 @@ def _params_of(section: object) -> dict[str, Any]:
 
 
 def _without_failure_policy(spec: dict[str, Any]) -> dict[str, Any]:
-    system_prompt = ((spec.get("plan") or {}).get("params") or {}).get("system_prompt")
+    system_prompt = _params_of(spec.get("plan")).get("system_prompt")
     return {
         **spec,
         "plan": {"module": None, "params": {"system_prompt": system_prompt}},
@@ -533,7 +542,7 @@ def _with_failure_policy(spec: dict[str, Any], answer: str) -> dict[str, Any]:
         reflect_module = "PlanCheckReflect"
     else:
         reflect_module = None
-    system_prompt = ((spec.get("plan") or {}).get("params") or {}).get("system_prompt")
+    system_prompt = _params_of(spec.get("plan")).get("system_prompt")
     return {
         **spec,
         "plan": {"module": "NextStepPlan" if retrying else "PassThroughPlan", "params": {"system_prompt": system_prompt}},
@@ -562,7 +571,7 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
     perceive_module = perceive.get("module") or "PassThroughPerceive"
     retrieve_module = retrieve.get("module") or "PassThroughRetrieve"
     action_module = action.get("module") or ""
-    reflect_module = _RENAMED_REFLECT_MODULES.get(reflect.get("module"), reflect.get("module")) or None
+    reflect_module = _current_reflect_module_name(reflect.get("module")) or None
     plan_module = plan.get("module") or None
 
     config = BuilderSourceConfig(

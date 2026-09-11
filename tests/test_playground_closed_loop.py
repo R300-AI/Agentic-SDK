@@ -18,6 +18,7 @@ from agentic_sdk.core.events import default_events_schema
 from playground.app import create_app
 from playground.services import model_endpoints, runner_service
 from playground.services.aihub_bridge import store_loaded_agent
+from playground.services.session_spec import current_spec
 from playground.services.workflow_spec import compile_python_source, default_spec, spec_to_form_state, validate_spec
 
 from support import FoundryOpenAILikeClient, build_spec
@@ -51,6 +52,13 @@ def test_the_fixed_planning_rule_stays_out_of_the_process_panel():
     assert result["final_message"] == "本產品保固十二個月。"
     assert process_events
     assert [event for event in process_events if event["role"] == "plan"] == []
+
+
+def test_the_debug_messages_name_the_fixed_planning_rule():
+    result = runner_service.run_agent(_keyword_direct_agent(), message="保固多久？", endpoint_selections={})
+
+    assert "Plan：PassThroughPlan 依固定規則選擇下一步 action。" in result["debug_messages"]
+    assert not any("NextStepPlan" in message for message in result["debug_messages"])
 
 
 def test_exported_code_always_names_its_planning_module():
@@ -278,6 +286,21 @@ def test_the_handoff_follows_what_reflect_reported_not_the_hit_count(monkeypatch
     assert result["final_message"] == "沒有命中任何條目。"
 
 
+PLAN_CHECK_FAILED = ContextEntry(
+    type=ContextEntryType.REFLECTION,
+    content="verdict=fail",
+    metadata={"verdict": "fail", "reason": "規劃選的步驟不存在", "strategy": "plan_check"},
+)
+
+
+def test_a_stopping_agent_hands_over_only_when_the_lookup_found_nothing(monkeypatch):
+    _fake_run(monkeypatch, [PLAN_CHECK_FAILED], final_message="保固十二個月。")
+
+    result = runner_service.run_agent(_keyword_direct_agent(("failure_policy", "handoff")), message="保固多久？", endpoint_selections={})
+
+    assert result["final_message"] == "保固十二個月。"
+
+
 def test_a_retrying_agent_never_hands_over(monkeypatch):
     _fake_run(monkeypatch, [MISSED, FAILED])
 
@@ -369,6 +392,27 @@ def test_an_agent_loaded_from_ai_hub_is_held_in_the_new_format():
 
     assert held["plan"] == {"module": "PassThroughPlan", "params": {"system_prompt": None}}
     assert held["reflect"] == {"module": "EvidenceCheckReflect", "params": {}}
+
+
+def test_a_draft_held_in_a_session_since_0_2_0_reads_back_in_the_new_format():
+    saved = _as_saved_by_0_2_0(
+        _keyword_direct_agent(),
+        plan_module=None,
+        strategy=None,
+        reflect_module="EvidenceCheckReflect",
+        on_failure="end",
+    )
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.test_request_context():
+        session["workflow_spec"] = saved
+        spec = current_spec()
+        held = session["workflow_spec"]
+
+    assert spec_to_form_state(spec)["choices"]["failure_policy"] == "handoff"
+    assert held["plan"] == {"module": "PassThroughPlan", "params": {"system_prompt": None}}
+    assert "已停止作答" in runner_service.run_agent(spec, message="退貨怎麼辦？", endpoint_selections={})["final_message"]
 
 
 @pytest.mark.parametrize("lookup, answer, plan, reflect", Q3_Q5_MAPPING)
