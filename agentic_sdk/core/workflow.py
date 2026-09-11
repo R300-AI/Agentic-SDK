@@ -18,6 +18,7 @@ from agentic_sdk.memory.protocol import PersistentMemory
 
 
 _STREAM_COMPLETED = object()
+_PLANNING_CHOICES = ("retrieve", "reflect", "action")
 
 
 class WorkflowStream(Iterator[str]):
@@ -136,19 +137,22 @@ class Workflow:
     def __post_init__(self) -> None:
         from agentic_sdk.modules.action import DirectAnswerAction
         from agentic_sdk.modules.perceive import PassThroughPerceive
+        from agentic_sdk.modules.plan import PassThroughPlan
         from agentic_sdk.modules.retrieve import KeywordRetrieve
 
         self.gates = self.gates or Gates()
         self._memory_factory = _memory_factory_from(self.memory_type)
         if _is_memory_store(self.memory_type):
             self.memory = self.memory_type
+        # Every run passes through planning, so there is always a planning
+        # module. Nobody choosing one means planning by a fixed rule, not
+        # skipping the step — see ADR-0005.
         self.modules = {
             "perceive": self.perceive or PassThroughPerceive(),
+            "plan": self.plan or PassThroughPlan(),
             "retrieve": self.retrieve or KeywordRetrieve(),
             "action": self.action or DirectAnswerAction(),
         }
-        if self.plan is not None:
-            self.modules["plan"] = self.plan
         if self.reflect is not None:
             self.modules["reflect"] = self.reflect
         self.events_schema = resolve_events_schema(self.events_schema)
@@ -265,6 +269,8 @@ class Workflow:
                 module = self.modules.get(current)
                 if module is None:
                     raise WorkflowAborted(f"unknown module '{current}'")
+                if current == "plan":
+                    state.plan_options = _plan_options(self.modules)
 
                 if self._should_emit_stage_event(current, event_callback, active_events_schema):
                     event_callback(
@@ -281,7 +287,7 @@ class Workflow:
                 raw_output = module(state)
                 output = _normalize_output(current, raw_output, state)
                 state.apply(output)
-                next_module = _next_module_after(current, output, self.modules)
+                next_module = _next_module_after(current, output, state)
                 if self._should_emit_stage_event(current, event_callback, active_events_schema):
                     finish_event = self._stage_event(
                         phase="finish",
@@ -651,15 +657,33 @@ def _pending_input_from(module: Any) -> str:
     return str(pending() or "").strip()
 
 
-def _next_module_after(current: str, output: ModuleOutput, modules: dict[str, Module]) -> str | None:
-    next_module = output.get("next_module")
-    if current == "perceive" and "plan" in modules and next_module in {None, "retrieve"}:
-        return "plan"
-    if current == "perceive" and next_module == "plan" and "plan" not in modules:
-        return "retrieve" if "retrieve" in modules else "action" if "action" in modules else None
-    if current == "action" and "reflect" in modules and next_module is None:
-        return "reflect"
-    return next_module
+def _plan_options(modules: dict[str, Module]) -> dict[str, str | None]:
+    """The steps planning may choose from, each with its module's description."""
+    return {
+        role: _module_description(modules[role])
+        for role in _PLANNING_CHOICES
+        if role in modules
+    }
+
+
+def _module_description(module: Module) -> str | None:
+    description = getattr(module, "description", None)
+    return str(description) if isinstance(description, str) and description else None
+
+
+def _next_module_after(current: str, output: ModuleOutput, state: WorkflowState) -> str | None:
+    """Where the run goes next. The workflow decides this, not the module.
+
+    Planning is the only step that chooses. Everything it can send work to
+    hands back to it, and the action ends the run: whatever the action changed
+    is observed by whoever starts the next turn — see ADR-0005.
+    """
+    if current == "plan":
+        choice = output.get("next_module")
+        return choice if isinstance(choice, str) and choice in state.plan_options else "action"
+    if current == "action":
+        return None
+    return "plan"
 
 
 def _final_message_from(state: WorkflowState) -> str:

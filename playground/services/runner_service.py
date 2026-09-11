@@ -713,7 +713,7 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
         messages.append(f"執行路徑：{' → '.join(visited)}。")
 
     plan_entry = _latest_entry(workflow_result.entries, ContextEntryType.PLAN_DECISION)
-    if plan_entry is not None:
+    if plan_entry is not None and plan_entry.metadata.get("strategy") != "pass_through":
         next_module = plan_entry.metadata.get("next_module")
         fallback = "；模型輸出不合法，已 fallback 到 action" if plan_entry.metadata.get("fallback") else ""
         if next_module:
@@ -761,6 +761,10 @@ def _workflow_event_observer(
     def emit(workflow_event: dict[str, Any]) -> None:
         _validate_standard_workflow_event(workflow_event)
         module = workflow_event["module"]
+        # A fixed rule decides nothing a person could read a reason into, and
+        # every agent now passes through it two or three times a turn.
+        if module == "plan" and workflow_event.get("module_class") == "PassThroughPlan":
+            return
         if workflow_event.get("type") == "structured_field":
             process_event = _structured_field_process_event(
                 module,
@@ -1336,10 +1340,10 @@ def _perceive_from_config(
 
 
 def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
-    from agentic_sdk.modules.plan import NextStepPlan
+    from agentic_sdk.modules.plan import NextStepPlan, PassThroughPlan
 
-    if "plan" not in reachable_roles or not config.plan_strategy:
-        return None
+    if not config.plan_strategy:
+        return PassThroughPlan()
     return NextStepPlan(
         system_prompt=config.plan_system_prompt,
         retrieve_description=config.retrieve_description,

@@ -22,7 +22,6 @@ workflow = Workflow(
     retrieve=KeywordRetrieve(items=[{'keywords': ['sdk'], 'content': 'Agentic SDK 可以把工作流階段交給畫面顯示。'}]),
     action=DirectAnswerAction(),
 )
-```
 
 def on_event(event):
     if event['type'] == 'stage' and event['phase'] == 'start':
@@ -30,6 +29,8 @@ def on_event(event):
 
 result = workflow.run('請介紹 SDK 的階段提示方式', event_callback=on_event)
 ```
+
+這個流程沒有指定規劃模組，所以由 `PassThroughPlan` 規劃，印出的順序是「理解輸入」、「判斷工具順序」、「整理相關來源」、「判斷工具順序」、「準備輸出回覆」。規劃這一步在檢索前後各出現一次，因為每次執行都經過規劃模組，檢索做完也交回規劃模組。
 
 應用程式收到 `type == "stage"` 且 `phase == "start"` 的事件時，可使用 `event["label"]` 顯示目前步驟。`label` 由 SDK 的 `events_schema` 提供。如何設定步驟名稱與欄位，以及如何讀取 `stage.finish["fields"]`，可接著閱讀 [設定工作流程的畫面事件](configure-workflow-events.md)。
 

@@ -62,6 +62,7 @@ _MODULE_IMPORT_ORDER = (
     "TextImagePerceive",
     "VoiceTextPerceive",
     "NextStepPlan",
+    "PassThroughPlan",
     "PassThroughRetrieve",
     "KeywordRetrieve",
     "SemanticRetrieve",
@@ -631,7 +632,7 @@ def _workflow_argument_lines(
         lines.append(f"    events_schema={_format_python_literal(config.events_schema, 4)},")
     if "perceive" in reachable_roles:
         lines.append(f"    perceive={_perceive_expression(config)},")
-    if "plan" in reachable_roles and config.plan_strategy:
+    if "plan" in reachable_roles:
         lines.append(_plan_line(config, reachable_roles).rstrip("\n"))
     if "retrieve" in reachable_roles:
         retrieve_body = _retrieve_expression_body(config)
@@ -724,6 +725,10 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 
 
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
+    # Named even when nobody chose one, so a reader of the code sees that every
+    # run passes through planning — see ADR-0005.
+    if not config.plan_strategy:
+        return "    plan=PassThroughPlan(),\n"
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
     arguments = [

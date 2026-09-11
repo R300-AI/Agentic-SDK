@@ -18,7 +18,7 @@ LLM_PARAMS = {
 def test_workflow_emits_structured_and_action_token_deltas() -> None:
     clients = [
         FoundryOpenAILikeClient(),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="這是最終回覆。"),
         FoundryOpenAILikeClient(),
     ]
@@ -76,7 +76,7 @@ def test_tool_call_action_keeps_streamed_tool_calls() -> None:
 def test_workflow_stream_forwards_events_while_yielding_only_action_text() -> None:
     clients = [
         FoundryOpenAILikeClient(),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="串流 Action 回覆。"),
     ]
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=clients):
@@ -98,22 +98,13 @@ def test_workflow_stream_forwards_events_while_yielding_only_action_text() -> No
     assert "".join(stream) == ""
     assert stream.result.final_message == "串流 Action 回覆。"
     assert {event["module"] for event in events if event["type"] == "token_delta"} == {"perceive", "plan", "action"}
-    assert [event["phase"] for event in events if event["type"] == "stage"] == [
-        "start",
-        "finish",
-        "start",
-        "finish",
-        "start",
-        "finish",
-        "start",
-        "finish",
-    ]
+    assert [event["phase"] for event in events if event["type"] == "stage"] == ["start", "finish"] * 5
 
 
 def test_workflow_stream_can_explicitly_yield_action_deltas_with_event_callback() -> None:
     clients = [
         FoundryOpenAILikeClient(),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="雙通道回覆。"),
     ]
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=clients):
@@ -142,7 +133,7 @@ def test_workflow_stream_can_explicitly_yield_action_deltas_with_event_callback(
 def test_workflow_stream_yields_only_action_text_and_exposes_final_result() -> None:
     clients = [
         FoundryOpenAILikeClient(),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="這是直接串流回覆。"),
         FoundryOpenAILikeClient(),
     ]
@@ -162,7 +153,7 @@ def test_workflow_stream_yields_only_action_text_and_exposes_final_result() -> N
     assert "".join(deltas) == "這是直接串流回覆。"
     assert all(not delta.startswith("{") for delta in deltas)
     assert stream.result.final_message == "這是直接串流回覆。"
-    assert stream.result.visit_counts == {"perceive": 1, "plan": 1, "retrieve": 1, "action": 1, "reflect": 1}
+    assert stream.result.visit_counts == {"perceive": 1, "plan": 3, "retrieve": 1, "reflect": 1, "action": 1}
 
 
 def test_workflow_stream_result_requires_completed_iteration() -> None:

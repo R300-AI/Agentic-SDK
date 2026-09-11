@@ -12,7 +12,7 @@ RoutePolicy = Callable[[WorkflowState, str | None], str | None]
 """Decides the next module, given the state and the module the model chose."""
 
 
-_ALLOWED_NEXT = {"retrieve", "action"}
+_ALLOWED_NEXT = {"retrieve", "reflect", "action"}
 _SYSTEM_PROMPT = (
     "PLAN. Decide whether the next module should be retrieve or action. "
     "Return JSON with fields thought and next_module."

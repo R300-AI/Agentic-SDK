@@ -114,11 +114,12 @@ workflow = Workflow(
 )
 
 print(workflow.run("特休有幾天？").final_message)
-# 依序經過 perceive、plan、retrieve、action
+# 依序經過 perceive、plan、retrieve、plan、action
 ```
 
 自訂模組不必繼承任何基底類別，只要有 `name` 說明它屬於哪一類、有 `__call__` 收下當前狀態並回傳
-下一站是誰；`ModuleOutput(next_module=None)` 表示這一輪結束。完整合約見[五大模組的共同寫法](https://r300-ai.github.io/Agentic-SDK/tutorials/module-writing-basics/)。
+`ModuleOutput`。下一站由規劃模組選：感知、檢索與反思做完都回到規劃模組，行動做完這一輪結束；
+沒有指定規劃模組時，流程用不呼叫模型的 `PassThroughPlan` 先查一次再回答。完整合約見[五大模組的共同寫法](https://r300-ai.github.io/Agentic-SDK/tutorials/module-writing-basics/)。
 
 ## 延伸閱讀
 

@@ -149,7 +149,7 @@ def test_workflow_defaults_to_full_event_schema_and_emits_all_structured_fields(
                 "source": {"kind": "memory"},
             },
         ),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="最終回覆"),
         FoundryOpenAILikeClient(
             reflect_reason="looks good",
@@ -219,7 +219,7 @@ def test_workflow_defaults_to_full_event_schema_and_emits_all_structured_fields(
 def test_explicit_events_schema_restricts_stages_and_structured_fields() -> None:
     clients = [
         FoundryOpenAILikeClient(perceive_details={"next_step": "retrieve"}),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="最終回覆"),
     ]
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=clients):
@@ -267,7 +267,7 @@ def test_default_schema_emits_an_abort_stage_event() -> None:
 def test_workflow_stream_uses_the_same_default_event_schema() -> None:
     clients = [
         FoundryOpenAILikeClient(perceive_details={"next_step": "retrieve"}),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="串流回覆"),
     ]
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=clients):
@@ -300,7 +300,7 @@ def test_workflow_stream_uses_the_same_default_event_schema() -> None:
 def test_workflow_run_emits_configured_structured_fields_with_event_identity() -> None:
     clients = [
         FoundryOpenAILikeClient(),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="最終回覆"),
         FoundryOpenAILikeClient(reflect_reason="looks good"),
     ]
@@ -334,7 +334,9 @@ def test_workflow_run_emits_configured_structured_fields_with_event_identity() -
         ("plan", "next_module"),
         ("reflect", "reason"),
     }
-    assert len(field_events) == 4
+    # Planning is visited three times — before retrieval, before reflect and
+    # before the action — and reports both of its fields each time.
+    assert len(field_events) == 1 + 2 * 3 + 1
     assert all(event["phase"] == "field" and event["status"] == "completed" for event in field_events)
     assert all(event["workflow_id"] == "workflow-1" for event in field_events)
     assert all(event["session_id"] == "session-1" for event in field_events)
@@ -352,7 +354,7 @@ def test_workflow_run_emits_configured_structured_fields_with_event_identity() -
 def test_workflow_stream_forwards_structured_events_without_yielding_them() -> None:
     clients = [
         FoundryOpenAILikeClient(),
-        FoundryOpenAILikeClient(plan_sequence=["retrieve"]),
+        FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"]),
         FoundryOpenAILikeClient(action_text="串流回覆"),
     ]
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=clients):

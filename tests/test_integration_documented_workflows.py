@@ -20,7 +20,7 @@ from agentic_sdk.modules import (
     TextPerceive,
 )
 
-from support import ActionToReflectWrapper, FoundryOpenAILikeClient, StaticVisionQueryBuilder
+from support import FoundryOpenAILikeClient, StaticVisionQueryBuilder
 
 
 TEST_MODEL = "foundry-openai-like"
@@ -103,7 +103,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         result = workflow.run("TSiP 是什麼？")
 
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
-        self.assertEqual({"perceive": 1, "retrieve": 1, "action": 1}, result.visit_counts)
+        self.assertEqual({"perceive": 1, "plan": 2, "retrieve": 1, "action": 1}, result.visit_counts)
 
     def test_workflow_stage_events_include_labels_for_web_ui(self) -> None:
         workflow = Workflow(
@@ -146,8 +146,12 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             [
                 ("start", "perceive", "理解輸入"),
                 ("finish", "perceive", "理解輸入"),
+                ("start", "plan", "判斷工具順序"),
+                ("finish", "plan", "判斷工具順序"),
                 ("start", "retrieve", "整理相關來源"),
                 ("finish", "retrieve", "整理相關來源"),
+                ("start", "plan", "判斷工具順序"),
+                ("finish", "plan", "判斷工具順序"),
                 ("start", "action", "準備輸出回覆"),
                 ("finish", "action", "準備輸出回覆"),
             ],
@@ -191,7 +195,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual("正在查詢設定資料", retrieve_start["label"])
 
     def test_plan_and_reflect_slots_are_reachable_without_action_wrapper(self) -> None:
-        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])
+        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
         with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=plan_client):
             workflow = Workflow(
                 perceive=PassThroughPerceive(),
@@ -206,14 +210,14 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         result = workflow.run("TSiP 是什麼？")
 
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
-        self.assertEqual({"perceive": 1, "plan": 1, "retrieve": 1, "action": 1, "reflect": 1}, result.visit_counts)
+        self.assertEqual({"perceive": 1, "plan": 3, "retrieve": 1, "reflect": 1, "action": 1}, result.visit_counts)
 
     def test_text_perceive_semantic_retrieve_generative_reflect_workflow_runs(self) -> None:
         kb = KnowledgeBase(
             entries=[KnowledgeEntry(id="1", title="TSiP", content="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")]
         )
         perceive_client = FoundryOpenAILikeClient()
-        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])
+        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
         action_client = FoundryOpenAILikeClient(action_text="TSiP 是工研院主導的國產 AI 晶片落地藍圖。")
         reflect_client = FoundryOpenAILikeClient(reflect_verdict="pass")
         with patch(
@@ -224,7 +228,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
                 perceive=TextPerceive(**_llm_params()),
                 plan=NextStepPlan(**_llm_params()),
                 retrieve=SemanticRetrieve(knowledge_base=kb),
-                action=ActionToReflectWrapper(GenerativeAction(**_llm_params())),
+                action=GenerativeAction(**_llm_params()),
                 reflect=ResponseCheckReflect(**_llm_params()),
             )
 
@@ -232,7 +236,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
 
         self.assertEqual("TSiP 是工研院主導的國產 AI 晶片落地藍圖。", result.final_message)
         self.assertEqual(1, result.visit_counts["perceive"])
-        self.assertEqual(1, result.visit_counts["plan"])
+        self.assertEqual(3, result.visit_counts["plan"])
         self.assertEqual(1, result.visit_counts["retrieve"])
         self.assertEqual(1, result.visit_counts["action"])
         self.assertEqual(1, result.visit_counts["reflect"])
@@ -242,7 +246,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             entries=[KnowledgeEntry(id="1", title="支撐鞋", content="建議優先考慮支撐型慢跑鞋。")]
         )
         perceive_client = FoundryOpenAILikeClient()
-        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])
+        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
         action_client = FoundryOpenAILikeClient(action_text="建議優先考慮支撐型慢跑鞋。")
         with patch(
             "agentic_sdk.llm.openai_compatible.OpenAI",
@@ -252,7 +256,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
                 perceive=TextPerceive(**_llm_params()),
                 plan=NextStepPlan(**_llm_params()),
                 retrieve=SemanticRetrieve(knowledge_base=kb),
-                action=ActionToReflectWrapper(GenerativeAction(**_llm_params())),
+                action=GenerativeAction(**_llm_params()),
                 reflect=EvidenceCheckReflect(),
             )
 
@@ -266,7 +270,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
             entries=[KnowledgeEntry(id="1", title="足測推薦", content="支撐型慢跑鞋適合足弓支撐需求。")]
         )
         perceive_client = FoundryOpenAILikeClient()
-        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])
+        plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
         action_client = FoundryOpenAILikeClient(action_text="支撐型慢跑鞋適合足弓支撐需求。")
         with patch(
             "agentic_sdk.llm.openai_compatible.OpenAI",
@@ -279,7 +283,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
                     knowledge_base=kb,
                     vision_query=StaticVisionQueryBuilder("足測推薦 足弓 支撐鞋"),
                 ),
-                action=ActionToReflectWrapper(GenerativeAction(**_llm_params())),
+                action=GenerativeAction(**_llm_params()),
                 reflect=EvidenceCheckReflect(),
             )
 

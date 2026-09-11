@@ -15,7 +15,7 @@ class PassThroughPerceive:
         if self._input_label:
             metadata["input_label"] = self._input_label
         return ModuleOutput(
-            next_module="retrieve",
+            next_module="plan",
             payload={"perceived_input": content, "query": content},
             context_updates=[ContextEntry(type=ContextEntryType.PERCEIVED, content=content, metadata=metadata)],
         )

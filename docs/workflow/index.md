@@ -1,6 +1,6 @@
 # 工作流程
 
-`Workflow` 是 Agentic SDK 的公開組裝入口。它負責把可用節點接成一條可執行流程，並在執行期間承接節點之間的狀態流轉。單次執行實際會走到哪些節點，取決於各節點回傳的 `next_module`。
+`Workflow` 是 Agentic SDK 的公開組裝入口。它負責把可用節點接成一條可執行流程，並在執行期間承接節點之間的狀態流轉。單次執行實際會走到哪些節點，取決於規劃模組每一步的選擇。
 
 這一頁先說明 `Workflow` 的公開組裝方式、執行時如何保存中間資料，以及一條流程在執行期間如何推進。
 
@@ -33,7 +33,7 @@ Workflow(
 )
 ```
 
-`workflow_name` 用來標示這條流程的名稱；未指定時使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState`，供呼叫端或自訂模組讀取。省略 `events_schema` 時，SDK 會送出每個實際執行步驟的開始、完成與中止事件，並提供模型輸出文字與完整結構化欄位。傳入 `events_schema` 後，可指定要觀察的步驟、中文名稱與欄位。`Workflow` 會為未指定的步驟補上內建實作；每次執行實際經過哪些步驟，由前一步回傳的 `next_module` 決定。
+`workflow_name` 用來標示這條流程的名稱；未指定時使用 `default`。`description` 是流程說明文字，會保存在 `Workflow` 與 `WorkflowState`，供呼叫端或自訂模組讀取。省略 `events_schema` 時，SDK 會送出每個實際執行步驟的開始、完成與中止事件，並提供模型輸出文字與完整結構化欄位。傳入 `events_schema` 後，可指定要觀察的步驟、中文名稱與欄位。`Workflow` 會為未指定的步驟補上內建實作；沒有指定 `plan` 時，規劃模組是不呼叫模型的 `PassThroughPlan`。每次執行實際經過哪些步驟，由規劃模組決定，規則見下方「執行流程」一節。
 
 ### 用程式直接建立
 
@@ -68,7 +68,7 @@ result = workflow.run("我要申請理賠，需要先準備什麼？")
 print(result.final_message)
 ```
 
-設定資料中的步驟種類使用固定名稱，SDK 會依名稱建立對應模組，並檢查參數是否適用。種類名稱包括 `pass_through`、`text`、`text_image`、`voice_text`、`next_step`、`keyword`、`pass_through_retrieve`、`semantic`、`direct_answer`、`generative`、`tool_call_action`、`voice_answer`、`response_check` 與 `evidence_check`。語音的兩個種類以物件承載音訊來源：`voice_text` 收 `transport`，`voice_answer` 收 `speech`，與 `semantic` 收 `embedder` 的方式相同。程式直接建立與設定資料建立，最後都會得到相同的 `Workflow` 物件和執行方式。
+設定資料中的步驟種類使用固定名稱，SDK 會依名稱建立對應模組，並檢查參數是否適用。種類名稱包括 `pass_through`、`text`、`text_image`、`voice_text`、`pass_through_plan`、`next_step`、`keyword`、`pass_through_retrieve`、`semantic`、`direct_answer`、`generative`、`tool_call_action`、`voice_answer`、`response_check` 與 `evidence_check`。語音的兩個種類以物件承載音訊來源：`voice_text` 收 `transport`，`voice_answer` 收 `speech`，與 `semantic` 收 `embedder` 的方式相同。程式直接建立與設定資料建立，最後都會得到相同的 `Workflow` 物件和執行方式。
 
 執行期間有四層資料分工：
 
@@ -94,9 +94,21 @@ print(result.final_message)
 
 ## 執行流程
 
-一條 workflow 啟動後，會從起始節點開始執行。每個節點都會讀取目前的 `WorkflowState`，完成自己的處理，再回傳包含 `next_module` 的 `ModuleOutput`。`Workflow` 會根據這個結果決定下一個要執行的節點，直到某個節點回傳結束條件為止。
+每次執行都照同一條規則推進，規則由 `Workflow` 執行，依據是 [ADR 0005](https://github.com/R300-AI/Agentic-SDK/blob/main/docs/adr/0005-every-run-closes-the-loop-through-planning.md)：
 
-這種設計讓節點在執行期間決定下一步要交給誰。同一個 `Workflow` 物件因此可以支援不同長度、不同分支的執行路徑。
+| 做完的步驟 | 下一步 |
+| --- | --- |
+| 感知（Perceive） | 規劃 |
+| 規劃（Plan） | 規劃模組選的檢索、反思或行動 |
+| 檢索（Retrieve） | 規劃 |
+| 反思（Reflect） | 規劃 |
+| 行動（Action） | 結束這次執行 |
+
+規劃模組是唯一選擇下一步的角色，其他模組回傳的 `next_module` 不影響路由。每次造訪規劃模組之前，`Workflow` 把這一次可以選的步驟寫進 `WorkflowState.plan_options`：檢索與行動一律可選，反思只在掛了反思模組時可選。規劃模組選了不在其中的步驟，下一步改為行動。
+
+行動是一次執行的最後一步，行動出錯也一樣。行動造成的結果由下一輪的感知觀測，下一輪由使用者或呼叫端的程式啟動。
+
+沒有指定規劃模組時，`PassThroughPlan` 依固定規則選擇：這次執行還沒檢索就檢索；掛了反思模組、且還沒反思就反思；其他情況行動。只有感知、檢索與行動的流程因此依序經過感知、規劃、檢索、規劃、行動。
 
 ## 執行上限
 

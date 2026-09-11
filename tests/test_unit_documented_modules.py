@@ -218,7 +218,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = PassThroughPerceive()(state)
 
-        self.assertEqual("retrieve", output["next_module"])
+        self.assertEqual("plan", output["next_module"])
         self.assertEqual("請介紹 TSiP", output["payload"]["query"])
 
     def test_text_perceive_family_returns_plan_and_metadata(self) -> None:
@@ -367,7 +367,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = module(state)
 
-        self.assertEqual("action", output["next_module"])
+        self.assertEqual("plan", output["next_module"])
         self.assertEqual("TSiP 介紹", output["payload"]["retrieved_snippet"])
 
     def test_semantic_retrieve_hits_knowledge_base(self) -> None:
@@ -376,7 +376,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = SemanticRetrieve(knowledge_base=kb)(state)
 
-        self.assertEqual("action", output["next_module"])
+        self.assertEqual("plan", output["next_module"])
         self.assertIn("TSiP 是 AI 晶片藍圖", output["payload"]["retrieved_snippet"])
 
     def test_semantic_retrieve_formats_knowledge_hits_readably(self) -> None:

@@ -30,7 +30,7 @@ def _raise_connection_error(**_kwargs):
 )
 def test_provider_failure_in_non_action_stage_returns_controlled_aborted_result(failed_stage, expected_message):
     perceive_client = FoundryOpenAILikeClient()
-    plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve"])
+    plan_client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "reflect", "action"])
     action_client = FoundryOpenAILikeClient(action_text="not reached")
     with patch(
         "agentic_sdk.llm.openai_compatible.OpenAI",

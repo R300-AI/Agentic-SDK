@@ -15,7 +15,10 @@ class Gates:
     def before_visit(self, module_name: str, state: WorkflowState, total_hops: int) -> None:
         if total_hops > self.max_node_hops:
             raise WorkflowAborted(f"total module hops {total_hops} exceeded {self.max_node_hops}")
-        if state.visit_counts.get(module_name, 0) >= self.max_revisit:
+        # Planning is visited once more after every retrieval and every
+        # reflect, so its count is already bounded by theirs. Holding it to the
+        # same limit would abort a run before either of them reached theirs.
+        if module_name != "plan" and state.visit_counts.get(module_name, 0) >= self.max_revisit:
             raise WorkflowAborted(f"module '{module_name}' exceeded revisit limit {self.max_revisit}")
         elapsed = time.monotonic() - state.started_monotonic
         if elapsed > self.timeout_sec:

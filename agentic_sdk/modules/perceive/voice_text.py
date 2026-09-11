@@ -66,7 +66,7 @@ class VoiceTextPerceive:
         spoken, self._spoken = self._spoken, False
         self._heard.clear()
         return ModuleOutput(
-            next_module="retrieve",
+            next_module="plan",
             payload={"perceived_input": content, "query": content},
             context_updates=[
                 ContextEntry(

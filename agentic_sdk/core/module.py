@@ -39,6 +39,11 @@ class WorkflowState:
     entities: Entities = field(default_factory=Entities)
     entries: list[ContextEntry] = field(default_factory=list)
     visit_counts: dict[str, int] = field(default_factory=dict)
+    # What the planning module may choose from on this visit, each with the
+    # mounted module's own description when it has one. Set by the workflow
+    # before every visit to planning, because only the workflow knows which
+    # modules are mounted — see ADR-0005.
+    plan_options: dict[str, str | None] = field(default_factory=dict)
     last_action_result: dict[str, Any] | None = None
     last_action_error: dict[str, Any] | None = None
     last_workflow_error: dict[str, str] | None = None

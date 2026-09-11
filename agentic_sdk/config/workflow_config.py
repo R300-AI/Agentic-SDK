@@ -40,6 +40,7 @@ _MODULE_CONFIG_PARAMS: dict[str, set[str]] = {
     "keyword": {"items", "fallback"},
     "next_step": {"api_key", "base_url", "model", "system_prompt", "retrieve_description"},
     "pass_through": {"input_label"},
+    "pass_through_plan": set(),
     "pass_through_retrieve": set(),
     "response_check": {"on_failure", "api_key", "base_url", "model"},
     "semantic": {
@@ -129,6 +130,7 @@ def build_module(spec: ModuleSpec) -> Module:
         "keyword": modules.KeywordRetrieve,
         "next_step": modules.NextStepPlan,
         "pass_through": modules.PassThroughPerceive,
+        "pass_through_plan": modules.PassThroughPlan,
         "pass_through_retrieve": modules.PassThroughRetrieve,
         "response_check": modules.ResponseCheckReflect,
         "semantic": modules.SemanticRetrieve,
