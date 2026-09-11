@@ -6,14 +6,18 @@ Observed from Builder answers: the spec they produce, the Workflow
 
 from __future__ import annotations
 
+import copy
 from unittest.mock import patch
 
 import pytest
+from flask import session
 
 from agentic_sdk import PassThroughPlan, PlanCheckReflect, WorkflowResult
 from agentic_sdk.core import ContextEntry, ContextEntryType
 from agentic_sdk.core.events import default_events_schema
+from playground.app import create_app
 from playground.services import model_endpoints, runner_service
+from playground.services.aihub_bridge import store_loaded_agent
 from playground.services.workflow_spec import compile_python_source, default_spec, spec_to_form_state, validate_spec
 
 from support import FoundryOpenAILikeClient, build_spec
@@ -287,3 +291,90 @@ def test_a_stopping_agent_really_runs_and_hands_over_on_an_empty_lookup():
     result = runner_service.run_agent(_keyword_direct_agent(("failure_policy", "handoff")), message="退貨怎麼辦？", endpoint_selections={})
 
     assert "已停止作答" in result["final_message"]
+
+
+# ---------------------------------------------------------------------------
+# Agents saved by 0.2.0 read back in the new format.
+# ---------------------------------------------------------------------------
+
+
+def _as_saved_by_0_2_0(spec, *, plan_module, strategy, reflect_module, on_failure):
+    saved = copy.deepcopy(spec)
+    saved["plan"] = {"module": plan_module, "params": {"strategy": strategy, "system_prompt": None}}
+    saved["reflect"] = {"module": reflect_module, "params": {"on_failure": on_failure}}
+    return saved
+
+
+SAVED_BY_0_2_0 = [
+    # lookup, saved plan, strategy, saved reflect, on_failure → Q5 answer, plan, reflect
+    ("keyword", None, None, "EvidenceCheckReflect", "end", "handoff", "PassThroughPlan", "EvidenceCheckReflect"),
+    ("keyword", "NextStepPlan", "RouteBySupport", "EvidenceCheckReflect", "retry_plan", "retry", "NextStepPlan", "EvidenceCheckReflect"),
+    ("semantic", "NextStepPlan", "RouteBySupport", "EvidenceCheckReflect", "end", "handoff", "PassThroughPlan", "EvidenceCheckReflect"),
+    ("none", "NextStepPlan", "RouteBySupport", "ResponseCheckReflect", "retry_plan", "retry", "NextStepPlan", "PlanCheckReflect"),
+    ("none", None, None, "ResponseCheckReflect", "end", "handoff", "PassThroughPlan", None),
+    ("semantic", "NextStepPlan", "RouteBySupport", None, None, "", None, None),
+]
+
+
+@pytest.mark.parametrize("lookup, saved_plan, strategy, saved_reflect, on_failure, answer, plan, reflect", SAVED_BY_0_2_0)
+def test_an_agent_saved_by_0_2_0_reads_back_its_q5_answer(lookup, saved_plan, strategy, saved_reflect, on_failure, answer, plan, reflect):
+    saved = _as_saved_by_0_2_0(
+        build_spec(("retrieve_policy", lookup)),
+        plan_module=saved_plan,
+        strategy=strategy,
+        reflect_module=saved_reflect,
+        on_failure=on_failure,
+    )
+
+    spec = validate_spec(saved)
+
+    assert spec["plan"]["module"] == plan
+    assert spec["reflect"]["module"] == reflect
+    assert spec_to_form_state(spec)["choices"]["failure_policy"] == answer
+    assert "strategy" not in spec["plan"]["params"]
+    assert "on_failure" not in spec["reflect"]["params"]
+
+
+def test_an_agent_saved_by_0_2_0_still_answers_and_still_hands_over():
+    saved = _as_saved_by_0_2_0(
+        _keyword_direct_agent(),
+        plan_module=None,
+        strategy=None,
+        reflect_module="EvidenceCheckReflect",
+        on_failure="end",
+    )
+    spec = validate_spec(saved)
+
+    answered = runner_service.run_agent(spec, message="保固多久？", endpoint_selections={})
+    handed_over = runner_service.run_agent(spec, message="退貨怎麼辦？", endpoint_selections={})
+
+    assert answered["final_message"] == "本產品保固十二個月。"
+    assert "已停止作答" in handed_over["final_message"]
+
+
+def test_an_agent_loaded_from_ai_hub_is_held_in_the_new_format():
+    saved = _as_saved_by_0_2_0(
+        _keyword_direct_agent(),
+        plan_module=None,
+        strategy=None,
+        reflect_module="EvidenceCheckReflect",
+        on_failure="end",
+    )
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.test_request_context():
+        store_loaded_agent({"agent_id": "agent-1", "agent_name": "舊版 agent", "endpoint_bindings": {}, "workflow_spec": saved, "runner_presentation": {}})
+        held = session["workflow_spec"]
+
+    assert held["plan"] == {"module": "PassThroughPlan", "params": {"system_prompt": None}}
+    assert held["reflect"] == {"module": "EvidenceCheckReflect", "params": {}}
+
+
+@pytest.mark.parametrize("lookup, answer, plan, reflect", Q3_Q5_MAPPING)
+def test_a_spec_in_the_new_format_reads_back_unchanged(lookup, answer, plan, reflect):
+    spec = validate_spec(build_spec(("retrieve_policy", lookup), ("failure_policy", answer)))
+
+    assert spec["plan"]["module"] == plan
+    assert spec["reflect"]["module"] == reflect
+    assert spec_to_form_state(spec)["choices"]["failure_policy"] == answer

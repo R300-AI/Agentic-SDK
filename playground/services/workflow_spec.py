@@ -145,6 +145,9 @@ def validate_spec(raw: object) -> dict[str, Any]:
     _apply_action(spec, raw.get("action"))
     _apply_reflect(spec, raw.get("reflect"))
     _apply_gates(spec, raw.get("gates"))
+    saved_answer = _q5_answer_saved_before_0_3_0(raw)
+    if saved_answer is not None:
+        spec = _with_failure_policy(spec, saved_answer) if saved_answer else _without_failure_policy(spec)
     if "events" in raw and isinstance(raw["events"], (dict, type(None))):
         spec["events"] = raw["events"]
     if "entry_module" in raw:
@@ -460,6 +463,43 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
         return {**spec, "action": {"module": action_module, "params": new_params}}
 
     return spec
+
+
+# 0.2.0 recorded Q5's answer as the reflect module's on_failure.
+_ON_FAILURE_ANSWERS = {"retry_plan": "retry", "end": "handoff"}
+
+
+def _q5_answer_saved_before_0_3_0(raw: dict) -> str | None:
+    """Q5's answer in a spec saved before 0.3.0, or None for a spec saved since.
+
+    Every spec 0.2.0 wrote carried the planner's ``strategy`` and the reflect
+    module's ``on_failure``, set or not, and nothing since writes either. The
+    answer lived in ``on_failure``. A spec with no reflect module had not
+    answered Q5, whatever planning module Q3 had put there. Agents in the
+    gallery keep working without anyone saving them again.
+    """
+    reflect = raw.get("reflect") if isinstance(raw.get("reflect"), dict) else {}
+    plan_params = _params_of(raw.get("plan"))
+    reflect_params = _params_of(reflect)
+    if "strategy" not in plan_params and "on_failure" not in reflect_params:
+        return None
+    if not reflect.get("module"):
+        return ""
+    return _ON_FAILURE_ANSWERS.get(reflect_params.get("on_failure"), "")
+
+
+def _params_of(section: object) -> dict[str, Any]:
+    params = section.get("params") if isinstance(section, dict) else None
+    return params if isinstance(params, dict) else {}
+
+
+def _without_failure_policy(spec: dict[str, Any]) -> dict[str, Any]:
+    system_prompt = ((spec.get("plan") or {}).get("params") or {}).get("system_prompt")
+    return {
+        **spec,
+        "plan": {"module": None, "params": {"system_prompt": system_prompt}},
+        "reflect": {"module": None, "params": {}},
+    }
 
 
 def _failure_policy_of(spec: dict[str, Any]) -> str:
