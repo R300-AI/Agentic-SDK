@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from unittest.mock import patch
+
 from agentic_sdk.modules import NextStepWithSkills, PassThroughPlan
 from playground.app import create_app
 from playground.routes import builder as builder_routes
@@ -20,7 +22,7 @@ from playground.services import runner_service, skill_store
 from playground.services.source_builder import get_builder_steps
 from playground.services.workflow_spec import compile_python_source, default_spec, spec_to_config, validate_spec
 
-from support import build_spec, write_skill_package
+from support import FoundryOpenAILikeClient, build_spec, write_skill_package
 
 
 @pytest.fixture()
@@ -342,3 +344,21 @@ def test_the_builder_reads_public_addresses_only(client) -> None:
 
     assert refused.status_code == 422
     assert refused.json["refused"]["rule"] == "unsupported_url"
+
+
+def test_the_trace_names_the_skill_even_when_planning_runs_more_than_once(store) -> None:
+    """Planning is visited several times a run; the skill is taken up on one of them."""
+    spec = _agent_with_skills(
+        store,
+        ("retrieve_policy", "keyword"),
+        ("retrieve", {"keyword_pairs": "場地 = 週六晚上 A 場可訂。"}),
+        ("output_format", "free_text"),
+        ("action", {"response_instruction": "用繁體中文回答。"}),
+    )
+    client = FoundryOpenAILikeClient(plan_sequence=["retrieve", "action"], plan_skill="minutes", action_text="好的。")
+
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=lambda *args, **kwargs: client):
+        result = runner_service.run_agent(spec, message="整理這段逐字稿", endpoint_selections={"action": "gpt-54", "plan": "gpt-54"})
+
+    plan_line = next(line for line in result["debug_messages"] if line.startswith("Plan："))
+    assert "取用技能 /minutes" in plan_line
