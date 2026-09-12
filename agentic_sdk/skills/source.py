@@ -13,6 +13,7 @@ import io
 import os
 import re
 import shutil
+import stat
 import subprocess
 import zipfile
 from pathlib import Path, PurePosixPath
@@ -142,7 +143,7 @@ def fetch_git_package(url: str, version: str, target: Path) -> Path:
             raise SkillSourceRefused(rule="fetch_failed", source=url, detail=str(exc)) from exc
         if completed.returncode != 0:
             raise SkillSourceRefused(rule="fetch_failed", source=url, detail=(completed.stderr or completed.stdout).strip()[-500:])
-    shutil.rmtree(target / ".git", ignore_errors=True)
+    _remove_tree(target / ".git")
     _within_the_ceiling(_size_of(target), url)
     return target
 
@@ -178,16 +179,32 @@ def unpack_archive(data: bytes, target: Path, *, source: str = "") -> Path:
     return _single_directory_in(target) or target
 
 
+def _remove_tree(path: Path) -> None:
+    """Delete a directory, including the files git leaves read-only.
+
+    A read-only file is deletable on Linux because its directory is writable;
+    on Windows it is not, so the read-only bit is cleared as each one is met.
+    """
+    if not path.exists():
+        return
+
+    def unlock(function, name, _exception):
+        os.chmod(name, stat.S_IWRITE)
+        function(name)
+
+    shutil.rmtree(path, onexc=unlock)
+
+
 def _fetched(url: str, version: str) -> Path:
     package = cache_root() / _key(f"{url}@{version}") / repository_name(url)
     if package.is_dir():
         return package
     while_fetching = package.with_name(package.name + ".partial")
-    shutil.rmtree(while_fetching, ignore_errors=True)
+    _remove_tree(while_fetching)
     try:
         fetch_git_package(url, version, while_fetching)
     except SkillSourceRefused:
-        shutil.rmtree(while_fetching, ignore_errors=True)
+        _remove_tree(while_fetching)
         raise
     while_fetching.rename(package)
     return package
@@ -201,7 +218,7 @@ def _unpacked(archive: Path) -> Path:
     try:
         return unpack_archive(data, target, source=str(archive))
     except SkillSourceRefused:
-        shutil.rmtree(target.parent, ignore_errors=True)
+        _remove_tree(target.parent)
         raise
 
 
