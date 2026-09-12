@@ -4344,3 +4344,65 @@ pre.code-block-with-controls {
   }
   .builder-page .rail-step { width: 2.15rem; height: 2.15rem; min-width: 2.15rem; }
 }
+
+/* ── 技能包與 / 選單 ──────────────────────────────────── */
+.skill-package-panel {
+  margin-top: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid var(--playground-line);
+  border-radius: var(--playground-radius);
+  background: var(--playground-surface);
+  display: grid;
+  gap: 1rem;
+}
+.skill-package-header h2 { margin: 0; font-size: 1.1rem; color: var(--playground-ink); }
+.skill-package-header p, .skill-package-note { margin: 0.35rem 0 0; color: var(--playground-muted); font-size: 0.9rem; line-height: 1.6; }
+.skill-package-header kbd { padding: 0 0.35rem; border: 1px solid var(--playground-line); border-radius: 0.3rem; background: #fff; font-size: 0.85em; }
+.skill-package-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.skill-package-item { border: 1px solid var(--playground-line); border-radius: var(--playground-radius); padding: 0.85rem 1rem; display: grid; grid-template-columns: 1fr auto; align-items: start; gap: 0.5rem 1rem; background: #fff; }
+.skill-package-summary { display: grid; gap: 0.4rem; min-width: 0; }
+.skill-package-item-head { display: flex; align-items: baseline; gap: 0.6rem; flex-wrap: wrap; }
+.skill-package-item-head strong { font-size: 1rem; color: var(--playground-ink); }
+.skill-package-version { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.78rem; padding: 0.1rem 0.5rem; border-radius: 999px; background: var(--playground-primary-soft); color: var(--playground-primary-strong); }
+.skill-package-meta { color: var(--playground-muted); font-size: 0.85rem; margin: 0; overflow-wrap: anywhere; }
+.skill-package-skills { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.3rem; font-size: 0.9rem; color: var(--playground-ink); }
+.skill-package-skills code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; color: var(--playground-primary-strong); }
+.skill-package-empty { margin: 0; color: var(--playground-muted); font-size: 0.9rem; }
+.skill-package-sources { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: 0.75rem; }
+.skill-package-source { display: grid; gap: 0.4rem; align-content: start; padding: 0.85rem 1rem; border: 1px dashed var(--playground-line); border-radius: var(--playground-radius); }
+.skill-package-source label { font-size: 0.85rem; font-weight: 600; color: var(--playground-ink); }
+.skill-package-source input { min-width: 0; padding: 0.45rem 0.6rem; border: 1px solid var(--playground-line); border-radius: 0.5rem; font: inherit; background: #fff; }
+.skill-package-source input:focus-visible { outline: none; box-shadow: var(--playground-focus); border-color: var(--playground-line-strong); }
+.skill-package-source .button { justify-self: start; }
+.skill-package-preview { border-radius: var(--playground-radius); padding: 1rem; display: grid; gap: 0.6rem; }
+.skill-package-preview.is-passed { border: 1px solid var(--playground-line-strong); background: var(--playground-primary-soft); }
+.skill-package-preview.is-refused { border: 1px solid rgba(179, 38, 30, 0.45); background: #fdf1f0; }
+.skill-package-preview h3 { margin: 0; font-size: 0.98rem; color: var(--playground-ink); }
+.skill-package-preview p { margin: 0; }
+.skill-package-refusal-rule { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; color: #8a1c14; overflow-wrap: anywhere; }
+.skill-package-item-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
+.skill-package-missing { margin: 0; color: #8a1c14; font-size: 0.85rem; }
+.skill-package-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+/* ── Choosing a skill with / in the Runner ─────────────────────────── */
+.skill-menu {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0 0 0.5rem;
+  padding: 0.35rem;
+  border: 1px solid var(--playground-line);
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(30, 42, 58, 0.12);
+  max-height: 14rem;
+  overflow-y: auto;
+}
+.skill-menu-option { display: grid; gap: 0.1rem; padding: 0.45rem 0.7rem; border-radius: 0.55rem; cursor: pointer; }
+.skill-menu-option strong { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.9rem; color: var(--playground-ink); }
+.skill-menu-option span { font-size: 0.82rem; color: var(--playground-muted); }
+.skill-menu-option.is-active, .skill-menu-option:hover { background: var(--playground-primary-soft); }
+.skill-chip-row { display: flex; gap: 0.4rem; margin: 0 0 0.4rem; }
+.skill-chip { display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.2rem 0.25rem 0.2rem 0.65rem; border-radius: 999px; background: var(--playground-primary-soft); color: var(--playground-primary-strong); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.85rem; }
+.skill-chip button { border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 1rem; line-height: 1; padding: 0.1rem 0.35rem; border-radius: 999px; }
+.skill-chip button:hover { background: rgba(11, 107, 211, 0.12); }
+.skill-chip button:focus-visible { outline: 2px solid var(--playground-primary); outline-offset: 1px; }

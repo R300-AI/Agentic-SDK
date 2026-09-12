@@ -13,7 +13,10 @@ from pathlib import Path
 import pytest
 
 from agentic_sdk.modules import NextStepWithSkills, PassThroughPlan
+from playground.app import create_app
+from playground.routes import builder as builder_routes
 from playground.services import runner_service, skill_store
+from playground.services.source_builder import get_builder_steps
 from playground.services.workflow_spec import compile_python_source, default_spec, spec_to_config, validate_spec
 
 from support import build_spec, write_skill_package
@@ -126,7 +129,7 @@ def test_a_stored_spec_keeps_only_entries_that_could_name_a_package(store) -> No
     kept = validate_spec(raw)["skills"]["packages"]
 
     assert [item["name"] for item in kept] == ["meeting-notes"]
-    assert validate_spec(default_spec())["skills"] == {"packages": []}
+    assert validate_spec(default_spec())["skills"] == {"packages": [], "declared": False}
 
 
 def test_exported_code_mounts_the_packages_on_the_planning_module(store) -> None:
@@ -136,3 +139,139 @@ def test_exported_code_mounts_the_packages_on_the_planning_module(store) -> None
 
     assert "plan=NextStepWithSkills(" in source
     assert '"skill_packages/meeting-notes"' in source
+
+
+@pytest.fixture()
+def client(store):
+    """A Playground served by the app itself, so the routes are what is observed."""
+    app = create_app()
+    app.config.update(TESTING=True)
+    with app.test_client() as test_client:
+        yield test_client
+
+
+def _answer_standard_procedure(client, choice: str):
+    return client.post("/playground/builder/state", json={"step": "standard_procedure", "choice": choice})
+
+
+def test_the_builder_asks_about_standard_procedure_before_the_last_step(client) -> None:
+    page = client.get("/playground/builder").get_data(as_text=True)
+
+    assert "固定的標準作業流程" in page
+    assert "data-skill-package-panel" in page
+    steps = [step.key for step in get_builder_steps()]
+    assert steps[steps.index("failure_policy") + 1 :] == ["standard_procedure", "readiness"]
+
+
+def test_answering_no_standard_procedure_counts_as_answered(client) -> None:
+    before = _review_item(client, "standard_procedure")
+    assert before["completed"] is False
+
+    _answer_standard_procedure(client, "none")
+
+    after = _review_item(client, "standard_procedure")
+    assert after["completed"] is True
+    assert "沒有" in after["answer"]
+
+
+def _review_item(client, step_key: str) -> dict:
+    page = client.get("/playground/builder")
+    items = builder_routes._builder_review_payload(
+        get_builder_steps(),
+        builder_routes._builder_form_state_from_spec(_spec_in(client)),
+        {},
+    )["items"]
+    assert page.status_code == 200
+    return next(item for item in items if item["step_key"] == step_key)
+
+
+def _spec_in(client) -> dict:
+    with client.session_transaction() as session:
+        return session.get("workflow_spec") or default_spec()
+
+
+def test_a_package_is_inspected_before_it_is_mounted(client, store) -> None:
+    package = _meeting_package(store / "packages")
+
+    preview = client.post(
+        "/playground/builder/skills/inspect",
+        data={"package": (io.BytesIO(_zip_of(package)), "meeting-notes.zip")},
+        content_type="multipart/form-data",
+    )
+
+    assert preview.status_code == 200
+    described = preview.json["package"]
+    assert [skill["name"] for skill in described["skills"]] == ["minutes", "action-items"]
+    assert described["skills"][0]["description"] == "把逐字稿整理成會議紀錄"
+    assert described["version"]
+    # Inspecting shows what would be added; nothing is mounted yet.
+    assert client.get("/playground/builder/skills").json["packages"] == []
+
+
+def test_a_package_that_breaks_a_rule_says_which_rule_and_which_file(client, store) -> None:
+    broken = write_skill_package(
+        store / "broken",
+        "broken-package",
+        skills={"lonely": {"description": "說明", "body": "內容", "prompts": ["missing.md"]}},
+    )
+
+    refusal = client.post(
+        "/playground/builder/skills/inspect",
+        data={"package": (io.BytesIO(_zip_of(broken)), "broken-package.zip")},
+        content_type="multipart/form-data",
+    )
+
+    assert refusal.status_code == 422
+    assert refusal.json["refused"]["rule"] == "missing_file"
+    assert "missing.md" in refusal.json["refused"]["path"]
+
+
+def test_mounting_then_removing_a_package_through_the_builder(client, store) -> None:
+    package = _meeting_package(store / "packages")
+    preview = client.post(
+        "/playground/builder/skills/inspect",
+        data={"package": (io.BytesIO(_zip_of(package)), "meeting-notes.zip")},
+        content_type="multipart/form-data",
+    )
+
+    mounted = client.post("/playground/builder/skills/mount", json={"staging_id": preview.json["staging_id"]})
+
+    assert [item["name"] for item in mounted.json["packages"]] == ["meeting-notes"]
+    assert _review_item(client, "standard_procedure")["completed"] is True
+    assert client.get("/playground/run/skills").json["skills"][0]["name"] == "minutes"
+
+    removed = client.post("/playground/builder/skills/remove", json={"name": "meeting-notes"})
+
+    assert removed.json["packages"] == []
+    assert client.get("/playground/run/skills").json["skills"] == []
+
+
+def test_the_slash_menu_is_empty_for_an_agent_with_no_packages(client) -> None:
+    assert client.get("/playground/run/skills").json == {"skills": []}
+
+
+def test_the_code_preview_carries_the_packages_the_code_names(client, store) -> None:
+    package = _meeting_package(store / "packages")
+    preview = client.post(
+        "/playground/builder/skills/inspect",
+        data={"package": (io.BytesIO(_zip_of(package)), "meeting-notes.zip")},
+        content_type="multipart/form-data",
+    )
+    client.post("/playground/builder/skills/mount", json={"staging_id": preview.json["staging_id"]})
+
+    markdown = client.get("/playground/source/preview").get_data(as_text=True)
+    download = client.get("/playground/source/skill-packages.zip")
+
+    assert "skill_packages/meeting-notes" in markdown
+    assert "meeting-notes" in markdown and "minutes" in markdown
+    assert "/playground/source/skill-packages.zip" in markdown
+    assert download.status_code == 200
+    with zipfile.ZipFile(io.BytesIO(download.data)) as archive:
+        assert "skill_packages/meeting-notes/skills/minutes/SKILL.md" in archive.namelist()
+
+
+def test_an_agent_with_no_packages_has_nothing_to_download(client) -> None:
+    markdown = client.get("/playground/source/preview").get_data(as_text=True)
+
+    assert "技能包" not in markdown
+    assert client.get("/playground/source/skill-packages.zip").status_code == 404

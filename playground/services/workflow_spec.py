@@ -120,7 +120,7 @@ def default_spec(*, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict[str, Any
         },
         # Which skill packages are mounted, and at which version. The packages
         # themselves live in the Playground's skill store, not in the spec.
-        "skills": {"packages": []},
+        "skills": {"packages": [], "declared": False},
         "gates": {"max_node_hops": 50, "max_revisit": 5, "timeout_sec": 300.0, "max_reflect_rounds": 5},
         "events": None,
         "entry_module": "perceive",
@@ -320,7 +320,9 @@ def _apply_skills(spec: dict, raw: object) -> None:
         source = "git" if entry.get("source") == "git" else "upload"
         url = str(entry.get("url") or "").strip() or None
         packages.append({"name": name, "source": source, "url": url, "version": version, "digest": digest})
-    spec["skills"] = {"packages": packages}
+    # A spec written before this question existed answers it by what it holds.
+    declared = bool(raw.get("declared")) or bool(packages)
+    spec["skills"] = {"packages": packages, "declared": declared}
 
 
 def _apply_gates(spec: dict, raw: object) -> None:
@@ -420,6 +422,15 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
                 },
             },
         }
+
+    if step_key == "standard_procedure":
+        choice = str(choice_label)
+        if choice not in {"none", "sop"}:
+            return spec
+        # Answering 沒有 puts the agent back to no skills at all; the packages
+        # are in the store either way, so mounting again costs nothing.
+        packages = [] if choice == "none" else list((spec.get("skills") or {}).get("packages") or [])
+        return {**spec, "skills": {"packages": packages, "declared": True}}
 
     if step_key == "failure_policy":
         choice = str(choice_label)
@@ -730,12 +741,23 @@ def spec_to_form_state(spec: dict[str, Any], runner_presentation: dict[str, Any]
     # Q5 choices, read back from the modules the answer installed.
     failure_policy_choice = _failure_policy_of(spec)
 
+    # Q6 choices. Mounted packages answer it; so does having answered it.
+    skills = spec.get("skills") if isinstance(spec.get("skills"), dict) else {}
+    mounted_packages = skills.get("packages") or []
+    if mounted_packages:
+        standard_procedure_choice = "sop"
+    elif skills.get("declared"):
+        standard_procedure_choice = "none"
+    else:
+        standard_procedure_choice = ""
+
     choices: dict[str, str] = {
         "memory_type": memory_type_choice,
         "input_type": input_type_choice,
         "retrieve_policy": retrieve_policy_choice,
         "output_format": output_format,
         "failure_policy": failure_policy_choice,
+        "standard_procedure": standard_procedure_choice,
     }
     workflow_name = str(spec.get("workflow_name") or "")
     if workflow_name and workflow_name not in GENERATED_WORKFLOW_NAMES and workflow_name != "Untitled Agent":

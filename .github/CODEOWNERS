@@ -16,3 +16,13 @@
 # /playground/static/js/runner/voice-conversation.js @帳號
 # /docs/adr/0001-where-voice-lives.md          @帳號
 # /docs/adr/0003-how-a-voice-endpoint-is-defined.md @帳號
+
+# 技能包格式與技能規劃模組 — 機械所 機器人技術組（Q 組）
+# 與語音同一組，因此同樣先留註解，日後由不同帳號接手時解除註解並填入該帳號。
+# /agentic_sdk/skills/                         @帳號
+# /agentic_sdk/modules/plan/next_step_with_skills.py @帳號
+# /playground/services/skill_store.py          @帳號
+# /playground/static/js/builder/skill-packages.js @帳號
+# /playground/static/js/runner/skill-menu.js   @帳號
+# /docs/adr/0004-what-a-skill-package-is-made-of.md @帳號
+# /docs/adr/0006-skills-belong-to-the-planning-module.md @帳號

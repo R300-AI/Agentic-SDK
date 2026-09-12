@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from flask import Blueprint, jsonify, request, session
 
+from playground.services import skill_store
 from playground.services.aihub_bundle_flow import restore_runtime_bundle, save_runtime_bundle
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, list_agents, load_config, refresh_playground_session, save_contract_v2, verify_credentials, verify_identity
 from playground.services.aihub_session import active_credentials, reauthentication_payload
@@ -145,6 +146,7 @@ def save_aihub_config():
             workflow_name=str(spec.get("workflow_name") or ""),
             description=str(spec.get("description") or ""),
             builder_upload_id=session.get("builder_upload_id") if isinstance(session.get("builder_upload_id"), str) else None,
+            skill_packages=skill_store.mounted_entries(spec),
         )
         result = {**result, **bundle_result}
         if semantic_bundle_required(spec) and not bundle_result.get("bundle_saved"):
@@ -152,6 +154,11 @@ def save_aihub_config():
             result["saved"] = False
             result["error"] = bundle_result.get("bundle_error") or "SemanticRetrieve knowledge bundle was not saved."
             result["error_code"] = bundle_result.get("bundle_error_code") or "semantic_bundle_not_saved"
+        elif skill_store.mounted_entries(spec) and not bundle_result.get("bundle_saved"):
+            result["config_saved"] = True
+            result["saved"] = False
+            result["error"] = bundle_result.get("bundle_error") or "Skill packages were not saved."
+            result["error_code"] = bundle_result.get("bundle_error_code") or "skill_bundle_not_saved"
         session["last_aihub_save"] = result
     status_code = 200 if result.get("saved") else 502
     return jsonify(result), status_code

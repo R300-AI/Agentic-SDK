@@ -128,6 +128,33 @@
           </button>
           {% endfor %}
         </div>
+        {% if step.key == "standard_procedure" %}
+        <section class="skill-package-panel" data-skill-package-panel data-visible-choices="sop" aria-labelledby="skill-package-title">
+          <header class="skill-package-header">
+            <h2 id="skill-package-title">技能包</h2>
+            <p>技能包是一組作業步驟與固定輸出格式。掛上之後，使用者在對話框打 <kbd>/</kbd> 就能指定；沒有指定時，規劃模組會依技能的說明自己挑。掛了技能包的 Agent 由會呼叫模型的規劃模組執行，所以最後一步要為它選一個模型。</p>
+            <p class="skill-package-note" data-skill-package-note hidden></p>
+          </header>
+          <ul class="skill-package-list" data-skill-package-list aria-live="polite"></ul>
+          <p class="skill-package-empty" data-skill-package-empty>這個 Agent 還沒有掛任何技能包。</p>
+          <div class="skill-package-sources">
+            <form class="skill-package-source" data-skill-upload-form>
+              <label for="skill-package-file">上傳技能包壓縮檔</label>
+              <input id="skill-package-file" name="package" type="file" accept="{{ skill_package_accept }}" data-skill-upload-input>
+              <button class="button button-secondary" type="submit">檢查</button>
+            </form>
+            <form class="skill-package-source" data-skill-git-form>
+              <label for="skill-package-git-url">公開 git repo 網址</label>
+              <input id="skill-package-git-url" name="git_url" type="url" inputmode="url" placeholder="https://github.com/組織/repo.git" autocomplete="off">
+              <label for="skill-package-git-version">鎖定的版本標籤或 commit</label>
+              <input id="skill-package-git-version" name="version" type="text" placeholder="例如 v1.2.0" autocomplete="off">
+              <button class="button button-secondary" type="submit">檢查</button>
+            </form>
+          </div>
+          <div class="skill-package-preview" data-skill-package-preview hidden aria-live="polite"></div>
+        </section>
+        {% endif %}
+
         {% if step.key == "memory_type" %}
         <details class="advanced-disclosure step-advanced" data-visible-choices="in_context" open>
           <summary>進階設定</summary>

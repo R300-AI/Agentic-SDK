@@ -102,3 +102,14 @@ starts.
 - Three alternatives were rejected: keeping skills on the workflow (the context
   above), summarising the skill with a model (the prototype), and giving the
   skill's text the system role (it would outrank the agent's own configuration).
+
+## The branch this replaces
+
+The first skill implementation lives on `skill-system`, last at `70c675f`
+(preceded by `7d9bcd7`). There skills were mounted on the workflow: `Workflow`
+took `skill_packages`, `run()` took a `skill` argument, and the skill's text
+rewrote the latest user turn. That branch is superseded by this ADR and is kept
+only as a record of how the question was first answered; nothing should be
+developed from it. What is still in use — the package format of ADR-0004, the
+package store, and the Builder and Runner controls — has been carried onto the
+main line, so the branch holds no unique working code.

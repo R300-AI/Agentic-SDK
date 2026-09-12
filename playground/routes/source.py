@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import ast
+import io
+import zipfile
+from pathlib import PurePosixPath
 
 from flask import Blueprint, Response, abort
 
+from playground.services import skill_store
 from playground.services.mode_context import get_mode_context
 from playground.services.session_spec import current_spec
 from playground.services.workflow_spec import compile_python_source
@@ -22,6 +26,26 @@ def require_source_view_permission():
 def preview_source():
     python_source = _current_python_source()
     return Response(_source_preview_markdown(python_source), mimetype="text/markdown")
+
+
+@source_bp.get("/skill-packages.zip")
+def download_skill_packages():
+    """The mounted packages, laid out the way the exported code expects to find them."""
+    entries = skill_store.mounted_entries(current_spec())
+    if not entries:
+        abort(404)
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        for entry in entries:
+            root = skill_store.path_for(entry)
+            for file in sorted(root.rglob("*")):
+                if file.is_file():
+                    archive.write(file, PurePosixPath("skill_packages", str(entry["name"]), file.relative_to(root).as_posix()).as_posix())
+    return Response(
+        buffer.getvalue(),
+        mimetype="application/zip",
+        headers={"Content-Disposition": "attachment; filename=skill_packages.zip"},
+    )
 
 
 def _current_python_source() -> str:
@@ -56,6 +80,31 @@ def _source_preview_markdown(python_source: str) -> str:
 {python_workflow}
 ```"""
     return f"""{source_steps}
+{_skill_package_section()}"""
+
+
+def _skill_package_section() -> str:
+    """What the exported code needs beside it: the skill packages themselves.
+
+    The code names each package by a path, and the files sit in this server's
+    store, so taking the agent elsewhere means taking them along.
+    """
+    packages = [skill_store.describe(entry) for entry in skill_store.mounted_entries(current_spec())]
+    if not packages:
+        return ""
+    lines = []
+    for package in packages:
+        skills = "、".join(skill["name"] for skill in package["skills"])
+        lines.append(f"- **{package['name']}**（版本 {package['version']}）：{skills}")
+    listed = "\n".join(lines)
+    return f"""
+## 技能包
+
+規劃模組的 `skill_packages` 指向執行目錄下的 `skill_packages/<名稱>/`。把壓縮檔解開在與程式碼同一層，這幾個技能就跟著走：
+
+{listed}
+
+[下載技能包壓縮檔](/playground/source/skill-packages.zip)
 """
 
 

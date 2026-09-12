@@ -36,6 +36,7 @@ nav:
     - 輸入理解: modules/perceive-modules.md
     - 參考資料: modules/retrieve-modules.md
     - 規劃與推理: modules/plan-modules.md
+    - 技能包: modules/skill-packages.md
     - 回覆與動作: modules/action-modules.md
     - 安全控制: modules/reflect-modules.md
   - Notebook 教材:

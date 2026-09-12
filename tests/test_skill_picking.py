@@ -38,6 +38,12 @@ def _package(root):
     )
 
 
+def _listing_shown(client: FoundryOpenAILikeClient) -> str:
+    """The skill listing as the planning module put it in its system prompt."""
+    system = next(message for message in client.last_create_kwargs["messages"] if message["role"] == "system")
+    return str(system["content"]).split("available_skills:\n")[1].split("\n\nmodule_context")[0]
+
+
 def _request_text(client: FoundryOpenAILikeClient) -> str:
     return "\n".join(str(message["content"]) for message in client.last_create_kwargs["messages"])
 
@@ -189,3 +195,94 @@ def test_the_workflow_itself_knows_nothing_about_skills(tmp_path) -> None:
     workflow, _, _ = _agent(_package(tmp_path))
     with pytest.raises(TypeError):
         workflow.run("寫第三章", skill="write")
+
+
+def test_a_long_listing_is_cut_to_a_budget_and_says_how_many_it_left_out(tmp_path) -> None:
+    """Many skills must not eat the model's input: the listing has a ceiling."""
+    package = write_skill_package(
+        tmp_path,
+        skills={f"skill-{index:02d}": {"description": "說明 " * 200, "body": "內容"} for index in range(40)},
+    )
+    plan_client = FoundryOpenAILikeClient(plan_sequence=["action"], plan_skill="")
+    action_client = FoundryOpenAILikeClient(action_text="好的。")
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=[plan_client, action_client]):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepWithSkills(skill_packages=[package], **LLM_PARAMS),
+            retrieve=PassThroughRetrieve(),
+            action=GenerativeAction(**LLM_PARAMS),
+        )
+
+    result = workflow.run("幫我做一件事")
+
+    listing = _listing_shown(plan_client)
+    assert len(listing) <= 8_000
+    assert "skill-00" in listing
+    decision = [entry for entry in result.entries if entry.type.value == "plan_decision"][-1]
+    assert decision.metadata["skills_left_out"] > 0
+
+
+def test_a_single_description_cannot_fill_the_listing_on_its_own(tmp_path) -> None:
+    package = write_skill_package(
+        tmp_path,
+        skills={
+            "long": {"description": "說" * 1_000, "body": "內容"},
+            "short": {"description": "一句話說明", "body": "內容"},
+        },
+    )
+    plan_client = FoundryOpenAILikeClient(plan_sequence=["action"], plan_skill="")
+    action_client = FoundryOpenAILikeClient(action_text="好的。")
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=[plan_client, action_client]):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepWithSkills(skill_packages=[package], max_listing_description_characters=50, **LLM_PARAMS),
+            retrieve=PassThroughRetrieve(),
+            action=GenerativeAction(**LLM_PARAMS),
+        )
+
+    workflow.run("幫我做一件事")
+
+    listing = _listing_shown(plan_client)
+    long_line = next(line for line in listing.splitlines() if line.startswith("long:"))
+    assert len(long_line) <= 60
+    # Cutting the long one leaves room for the rest, rather than dropping them.
+    assert "short: 一句話說明" in listing
+
+
+def test_a_short_listing_is_shown_whole(tmp_path) -> None:
+    workflow, plan_client, _ = _agent(_package(tmp_path))
+
+    result = workflow.run("幫我處理這份計畫書")
+
+    listing = _listing_shown(plan_client)
+    assert "…" not in listing
+    decision = [entry for entry in result.entries if entry.type.value == "plan_decision"][-1]
+    assert decision.metadata["skills_left_out"] == 0
+
+
+def test_both_ceilings_can_be_set_when_the_planning_module_is_built(tmp_path) -> None:
+    package = write_skill_package(
+        tmp_path,
+        skills={name: {"description": "說明" * 40, "body": "內容"} for name in ("alpha", "beta", "gamma")},
+    )
+    plan_client = FoundryOpenAILikeClient(plan_sequence=["action"], plan_skill="")
+    action_client = FoundryOpenAILikeClient(action_text="好的。")
+    with patch("agentic_sdk.llm.openai_compatible.OpenAI", side_effect=[plan_client, action_client]):
+        workflow = Workflow(
+            perceive=PassThroughPerceive(),
+            plan=NextStepWithSkills(
+                skill_packages=[package],
+                max_listing_characters=40,
+                max_listing_description_characters=10,
+                **LLM_PARAMS,
+            ),
+            retrieve=PassThroughRetrieve(),
+            action=GenerativeAction(**LLM_PARAMS),
+        )
+
+    result = workflow.run("幫我做一件事")
+
+    listing = _listing_shown(plan_client)
+    assert len(listing) <= 40
+    decision = [entry for entry in result.entries if entry.type.value == "plan_decision"][-1]
+    assert decision.metadata["skills_left_out"] >= 1

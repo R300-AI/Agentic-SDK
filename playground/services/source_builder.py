@@ -189,8 +189,23 @@ def get_builder_steps() -> list[BuilderStep]:
             ),
         ),
         BuilderStep(
+            "standard_procedure",
+            "Q6: 這個 Agent 有沒有固定的標準作業流程要照著做？",
+            "",
+            "標準作業流程",
+            "",
+            (
+                BuilderChoice("none", "沒有，照設定的回覆方式就好", "Agent 依前面幾題的設定回答，不另外照一套既定流程。"),
+                BuilderChoice(
+                    "sop",
+                    "有，我要掛上技能包",
+                    "技能包是一組作業步驟與固定輸出格式。掛上之後使用者可以用 / 指定，Agent 也會自己判斷要不要用；掛了技能包的 Agent 會需要一個模型來規劃。",
+                ),
+            ),
+        ),
+        BuilderStep(
             "readiness",
-            "Q6: 最後確認，準備開始使用",
+            "Q7: 最後確認，準備開始使用",
             "",
             "最後確認",
             "",

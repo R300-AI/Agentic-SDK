@@ -8,6 +8,12 @@ from agentic_sdk.modules.plan.next_step import NextStepPlan
 from agentic_sdk.skills import DEFAULT_MAX_SKILL_CHARACTERS, Skill, mount_packages
 
 
+DEFAULT_MAX_LISTING_CHARACTERS = 8_000
+"""How much of the model's input the whole skill listing may take."""
+
+DEFAULT_MAX_LISTING_DESCRIPTION_CHARACTERS = 1_536
+"""How much of the listing one skill's description may take."""
+
 SKILL_TURN_METADATA_KEY = "skill"
 """Marks the conversation turn a skill was taken up in, by the skill's name."""
 
@@ -36,30 +42,58 @@ class NextStepWithSkills(NextStepPlan):
         *,
         skill_packages: Iterable[str | Path] = (),
         max_skill_characters: int = DEFAULT_MAX_SKILL_CHARACTERS,
+        max_listing_characters: int = DEFAULT_MAX_LISTING_CHARACTERS,
+        max_listing_description_characters: int = DEFAULT_MAX_LISTING_DESCRIPTION_CHARACTERS,
         **kwargs: Any,
     ) -> None:
         super().__init__(**kwargs)
+        self._max_listing_characters = max_listing_characters
+        self._max_listing_description_characters = max_listing_description_characters
         self.packages = mount_packages(list(skill_packages), max_skill_characters=max_skill_characters)
         self.skills = tuple(skill for package in self.packages for skill in package.skills)
         self._by_name = {skill.name: skill for skill in self.skills}
 
     def _system_prompt_for(self, options: dict[str, str | None]) -> str:
         prompt = super()._system_prompt_for(options)
-        listing = self._listing()
+        listing, _ = self._listing()
         if not listing:
             return prompt
         return f"{prompt}\n{_PICK_INSTRUCTION}\navailable_skills:\n{listing}"
 
-    def _listing(self) -> str:
-        """The skills the model may pick, as name and description, one per line."""
-        return "\n".join(f"{skill.name}: {skill.description}" for skill in self.skills if not skill.withheld_from_planning)
+    def _listing(self) -> tuple[str, int]:
+        """The skills the model may pick, and how many did not fit.
+
+        Name and description, one skill per line, within a character budget: an
+        agent with many skills would otherwise spend the model's whole input on
+        a catalogue. An over-long description is cut first, so the skills after
+        it keep their place; only when a whole line no longer fits does the
+        listing stop, and what it stopped at is counted. A skill left out of the
+        listing is still taken up when the person names it.
+        """
+        offered = [skill for skill in self.skills if not skill.withheld_from_planning]
+        lines: list[str] = []
+        used = 0
+        for position, skill in enumerate(offered):
+            line = f"{skill.name}: {self._cut(skill.description)}"
+            cost = len(line) + (1 if lines else 0)
+            if used + cost > self._max_listing_characters:
+                return "\n".join(lines), len(offered) - position
+            lines.append(line)
+            used += cost
+        return "\n".join(lines), 0
+
+    def _cut(self, description: str) -> str:
+        if len(description) <= self._max_listing_description_characters:
+            return description
+        return description[: self._max_listing_description_characters - 1] + "…"
 
     def _after_decision(self, state: WorkflowState, parsed: dict) -> tuple[dict, dict]:
+        _, left_out = self._listing()
         skill = self._named_by_the_person(state) or self._picked_by_the_model(parsed)
         if skill is None or self._already_taken_up(state, skill.name):
-            return {}, {}
+            return {}, {"skills_left_out": left_out}
         self._take_up(state, skill)
-        return {"picked_skill": skill.name}, {SKILL_TURN_METADATA_KEY: skill.name}
+        return {"picked_skill": skill.name}, {SKILL_TURN_METADATA_KEY: skill.name, "skills_left_out": left_out}
 
     def _named_by_the_person(self, state: WorkflowState) -> Skill | None:
         """The skill the person put at the start of their message, if it is mounted.

@@ -12,6 +12,7 @@ from pathlib import Path, PurePosixPath
 
 import httpx
 
+from playground.services import skill_store
 from playground.services.semantic_ingestion import ingest_semantic_upload
 from playground.services.semantic_runtime import new_upload_id
 
@@ -44,6 +45,7 @@ def create_agent_bundle_zip(
     workflow_name: str,
     description: str,
     builder_upload_id: str | None,
+    skill_packages: list[dict[str, object]] | tuple[dict[str, object], ...] = (),
 ) -> BundleBuildResult:
     bundle_id = uuid.uuid4().hex
     bundle_dir = _RUNTIME_ROOT / "bundles" / bundle_id
@@ -79,6 +81,12 @@ def create_agent_bundle_zip(
         archive.writestr("recipe/metadata.json", json.dumps(metadata, ensure_ascii=False, indent=2))
         _write_directory(archive, source_dir, "tmp/source-files", source_files)
         _write_directory(archive, vectorstore_dir, "tmp/vectorstore", vectorstore_files)
+        # The spec names packages by digest; the files live only in this
+        # server's store, so an agent opened anywhere else needs them carried.
+        for entry in skill_packages:
+            if skill_store.is_stored(entry):
+                package_root = skill_store.path_for(entry)
+                _write_directory(archive, package_root, f"skill-packages/{entry['digest']}/{entry['name']}", _relative_files(package_root))
 
     return BundleBuildResult(zip_path=zip_path, source_file_count=len(source_files), vectorstore_file_count=len(vectorstore_files))
 
@@ -158,6 +166,7 @@ def restore_agent_bundle_zip(zip_path: Path, *, upload_id: str | None = None) ->
     vectorstore_file_count = 0
     rejected_source_files: list[str] = []
     source_migrated = False
+    unpacking_packages: set[Path] = set()
 
     with zipfile.ZipFile(zip_path) as archive:
         for member in archive.infolist():
@@ -183,6 +192,10 @@ def restore_agent_bundle_zip(zip_path: Path, *, upload_id: str | None = None) ->
                     else:
                         rejected_source_files.append(f"{source_relative.name}: {result.reason}")
                 continue
+            package_relative = _bundle_relative_path(member_path, ("skill-packages",))
+            if package_relative is not None:
+                _restore_skill_package_member(archive, member, package_relative, unpacking_packages)
+                continue
             vectorstore_relative = _bundle_relative_path(member_path, ("tmp", "vectorstore"), ("vectorstore",))
             if vectorstore_relative is not None:
                 relative = vectorstore_relative
@@ -205,6 +218,24 @@ def restore_agent_bundle_zip(zip_path: Path, *, upload_id: str | None = None) ->
     )
     _mark_bundle_restored(result)
     return result
+
+
+def _restore_skill_package_member(archive: zipfile.ZipFile, member: zipfile.ZipInfo, relative: PurePosixPath, unpacking: set[Path]) -> None:
+    """Put one file of a carried skill package back in the store, unless the store already has that package.
+
+    Packages are stored by content digest, so one already present is the same
+    package and is left as it is.
+    """
+    if len(relative.parts) < 3 or _unsafe_zip_path(relative):
+        return
+    entry = {"digest": relative.parts[0], "name": relative.parts[1]}
+    if not skill_store.names_a_stored_package(entry):
+        return
+    package_root = skill_store.path_for(entry)
+    if package_root not in unpacking and package_root.exists():
+        return
+    unpacking.add(package_root)
+    _extract_member(archive, member, package_root / Path(*relative.parts[2:]))
 
 
 def upload_bundle_zip(upload_payload: dict[str, object], zip_path: Path) -> dict[str, object]:

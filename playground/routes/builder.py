@@ -7,6 +7,9 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
 
+from agentic_sdk.skills import SkillPackageRefused
+
+from playground.services import skill_store
 from playground.services.aihub_bridge import has_builder_bridge_query, start_builder_bridge_session
 from playground.services.mode_context import get_mode_context
 from playground.services.model_endpoints import endpoint_state, normalize_endpoint_selections
@@ -42,6 +45,7 @@ _ACTIVE_BUILDER_STATE_STEPS = {
     "output_format",
     "action",
     "failure_policy",
+    "standard_procedure",
 }
 _REVIEW_STEP_BY_ROLE = {
     "perceive": "input_type",
@@ -91,6 +95,7 @@ def builder():
         builder_review_state=builder_review["items"],
         builder_review_ready=builder_review["ready"],
         semantic_upload_accept=",".join(accepted_upload_extensions()),
+        skill_package_accept="application/zip,.zip",
     )
 
 
@@ -516,3 +521,58 @@ def _has_valid_interactive_contract(value: object) -> bool:
         if str(contract.get("api_url") or "").strip() and _has_pair_entries(contract.get("component_fields")):
             return True
     return False
+
+@builder_bp.get("/skills")
+def list_skill_packages():
+    """The packages mounted on the agent being edited, and whether saving is possible here."""
+    spec = current_spec()
+    return jsonify(
+        {
+            "packages": [skill_store.describe(entry) for entry in skill_store.mounted_entries(spec)],
+            "can_save": get_mode_context().can_save,
+        }
+    )
+
+
+@builder_bp.post("/skills/inspect")
+def inspect_skill_package():
+    """Stage a package and show what mounting it would add, without mounting it."""
+    spec = current_spec()
+    try:
+        upload = request.files.get("package")
+        if upload is not None and upload.filename:
+            # One byte past the limit is enough to know the archive is too large.
+            staging_id = skill_store.stage_upload(upload.stream.read(skill_store.MAX_PACKAGE_BYTES + 1), upload.filename)
+        else:
+            payload = request.get_json(silent=True) or {}
+            staging_id = skill_store.stage_git(str(payload.get("git_url") or ""), str(payload.get("version") or ""))
+        preview = skill_store.inspect(staging_id, skill_store.mounted_entries(spec))
+    except SkillPackageRefused as refusal:
+        return jsonify({"refused": skill_store.refusal_payload(refusal)}), 422
+    except skill_store.SkillSourceError as problem:
+        return jsonify({"refused": problem.payload()}), 422
+    return jsonify(preview)
+
+
+@builder_bp.post("/skills/mount")
+def mount_skill_package():
+    """Mount a package the person already inspected and confirmed."""
+    payload = request.get_json(silent=True) or {}
+    spec = current_spec()
+    try:
+        entry = skill_store.commit(str(payload.get("staging_id") or ""), skill_store.mounted_entries(spec))
+    except skill_store.StagingNotFound:
+        return jsonify({"error": "找不到這個技能包的檢查結果，請重新上傳。"}), 404
+    except SkillPackageRefused as refusal:
+        return jsonify({"refused": skill_store.refusal_payload(refusal)}), 422
+    spec = skill_store.with_entry(spec, entry)
+    store_spec({**spec, "skills": {**spec["skills"], "declared": True}})
+    return jsonify({"packages": [skill_store.describe(item) for item in skill_store.mounted_entries(current_spec())]})
+
+
+@builder_bp.post("/skills/remove")
+def remove_skill_package():
+    payload = request.get_json(silent=True) or {}
+    spec = skill_store.without_package(current_spec(), str(payload.get("name") or ""))
+    store_spec({**spec, "skills": {**spec["skills"], "declared": True}})
+    return jsonify({"packages": [skill_store.describe(item) for item in skill_store.mounted_entries(current_spec())]})

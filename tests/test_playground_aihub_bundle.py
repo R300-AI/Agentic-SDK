@@ -226,3 +226,30 @@ def test_runtime_bundle_retries_timeout_with_a_fresh_signed_url(tmp_path, monkey
     assert result["bundle_upload_attempts"] == 2
     assert requested_urls == [1, 2]
     assert uploaded_urls == ["https://storage.example/upload/1", "https://storage.example/upload/2"]
+    assert uploaded_urls == ["https://storage.example/upload/1", "https://storage.example/upload/2"]
+
+
+def test_agent_bundle_carries_mounted_skill_packages_back_into_an_empty_store(tmp_path, monkeypatch):
+    import shutil
+
+    from agentic_sdk.skills import SkillPackage
+    from playground.services import skill_store
+    from support import write_skill_package
+
+    monkeypatch.setattr(bundle_store, "_RUNTIME_ROOT", tmp_path / "agentic-sdk-playground")
+    monkeypatch.setenv("PLAYGROUND_SKILL_STORE_ROOT", str(tmp_path / "skill-store"))
+    entry = {"name": "proposal", "source": "upload", "url": None, "version": "abc123", "digest": "a" * 64}
+    authored = write_skill_package(tmp_path / "authoring", "proposal", skills={"write": {"description": "把計畫書的一章寫出來", "body": "技能本體"}})
+    shutil.copytree(authored, skill_store.path_for(entry))
+
+    built = bundle_store.create_agent_bundle_zip(
+        python_source="print('skills')",
+        workflow_name="Skill Agent",
+        description="",
+        builder_upload_id=None,
+        skill_packages=[entry],
+    )
+    shutil.rmtree(tmp_path / "skill-store")
+    bundle_store.restore_agent_bundle_zip(built.zip_path)
+
+    assert [skill.name for skill in SkillPackage.load(skill_store.path_for(entry)).skills] == ["write"]
