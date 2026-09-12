@@ -200,11 +200,11 @@ def _fetched(url: str, version: str) -> Path:
     if package.is_dir():
         return package
     while_fetching = package.with_name(package.name + ".partial")
-    shutil.rmtree(while_fetching, ignore_errors=True)
+    _remove_tree(while_fetching)
     try:
         fetch_git_package(url, version, while_fetching)
     except SkillSourceRefused:
-        shutil.rmtree(while_fetching, ignore_errors=True)
+        _remove_tree(while_fetching)
         raise
     while_fetching.rename(package)
     return package
@@ -218,7 +218,7 @@ def _unpacked(archive: Path) -> Path:
     try:
         return unpack_archive(data, target, source=str(archive))
     except SkillSourceRefused:
-        shutil.rmtree(target.parent, ignore_errors=True)
+        _remove_tree(target.parent)
         raise
 
 
