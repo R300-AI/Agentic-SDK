@@ -40,8 +40,7 @@ characters when that is unknown; Claude Code caps each entry at 1,536
 characters. Extra files in a skill folder are allowed everywhere.
 
 A prototype settled the remaining question — whether a model should summarise a
-skill before the action module sees it. Kept at tag
-`archive/skill-brief-prototype` (commit 57cf7de), five runs each of verbatim and
+skill before the action module sees it. Five runs each of verbatim and
 summarised, one transcript, one
 model: both kept the skill's format every time, and the "summary" came out
 longer than the source it replaced (266 characters against 260), because the
@@ -106,11 +105,9 @@ starts.
 
 ## The implementation this replaces
 
-The first skill implementation is kept at tag `archive/skill-system`, whose tip
-is `70c675f` (preceded by `7d9bcd7`); the branch of that name is gone. There
-skills were mounted on the workflow: `Workflow` took `skill_packages`, `run()`
-took a `skill` argument, and the skill's text rewrote the latest user turn. It
-is superseded by this ADR and is kept only as a record of how the question was
-first answered; nothing should be developed from it. What is still in use — the package format of ADR-0004, the
+The first skill implementation mounted skills on the workflow: `Workflow` took
+`skill_packages`, `run()` took a `skill` argument, and the skill's text rewrote
+the latest user turn. It was superseded by this ADR and is not kept: the branch
+that held it is deleted, so what it did is recorded here and nowhere else. What is still in use — the package format of ADR-0004, the
 package store, and the Builder and Runner controls — has been carried onto the
 main line, so the branch holds no unique working code.
