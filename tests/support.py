@@ -202,6 +202,69 @@ def build_spec(*steps: tuple[str, object]) -> dict:
     return spec
 
 
+def write_skill_package(
+    root,
+    name: str = "proposal",
+    *,
+    skills: dict[str, dict],
+    instructions: dict[str, str] | None = None,
+    prompts: dict[str, str] | None = None,
+    maintainer: dict[str, str] | None = None,
+    mapping: dict | None = None,
+    extra_files: dict[str, bytes | str] | None = None,
+):
+    """Write a skill package directory the way an author would lay one out.
+
+    ``skills`` maps a skill directory name to ``description``, ``body``, and the
+    ``instructions`` and ``prompts`` file names it uses, in order. Give
+    ``frontmatter_name`` to write a ``SKILL.md`` whose name disagrees with its
+    directory, and ``keep_from_the_agent`` to write the mapping declaration that
+    withholds a skill from the planning module's own choosing. ``mapping``
+    replaces the generated mapping file outright, and ``extra_files`` adds
+    anything else, text or bytes, by relative path.
+    """
+    import yaml
+    from pathlib import Path
+
+    package = Path(root) / name
+    for skill_name, skill in skills.items():
+        skill_dir = package / "skills" / skill_name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        frontmatter = {"name": skill.get("frontmatter_name", skill_name), "description": skill.get("description", "")}
+        (skill_dir / "SKILL.md").write_text(
+            f"---\n{yaml.safe_dump(frontmatter, allow_unicode=True)}---\n\n{skill.get('body', '')}\n",
+            encoding="utf-8",
+        )
+    for folder, files in (("instructions", instructions or {}), ("prompts", prompts or {})):
+        for file_name, text in files.items():
+            path = package / folder / file_name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+    generated_skills: dict[str, dict] = {}
+    for skill_name, skill in skills.items():
+        entry: dict = {
+            "instructions": list(skill.get("instructions", [])),
+            "prompts": list(skill.get("prompts", [])),
+        }
+        if "keep_from_the_agent" in skill:
+            entry["disable-model-invocation"] = skill["keep_from_the_agent"]
+        generated_skills[skill_name] = entry
+    generated = {
+        "maintainer": maintainer or {"name": "王小明", "contact": "ming@example.test"},
+        "skills": generated_skills,
+    }
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "package.yaml").write_text(yaml.safe_dump(mapping if mapping is not None else generated, allow_unicode=True), encoding="utf-8")
+    for relative, content in (extra_files or {}).items():
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
+    return package
+
+
 # ── 語音測試共用的音訊 ───────────────────────────────────────────────
 
 def pcm(*samples: int) -> bytes:
