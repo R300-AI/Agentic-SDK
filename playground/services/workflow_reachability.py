@@ -29,7 +29,7 @@ def reachable_openai_roles(config: "BuilderSourceConfig") -> set[str]:
     roles: set[str] = set()
     if "perceive" in reachable and config.perceive_module in _MODEL_PERCEIVE_MODULES:
         roles.add("perceive")
-    if "plan" in reachable and config.plan_module == "NextStepPlan":
+    if "plan" in reachable and config.plan_module in {"NextStepPlan", "NextStepWithSkills"}:
         roles.add("plan")
     if "action" in reachable and config.action_module in _MODEL_ACTION_MODULES:
         roles.add("action")

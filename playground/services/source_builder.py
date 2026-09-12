@@ -56,12 +56,15 @@ _PLAYGROUND_OPTIONS_FIELD = "__playground_options"
 AUDIO_TRANSPORT_NAME = "transcription"
 SPEECH_OUTPUT_NAME = "speech"
 
+_MODEL_PLANNING_MODULES = {"NextStepPlan", "NextStepWithSkills"}
+
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
     "TextPerceive",
     "TextImagePerceive",
     "VoiceTextPerceive",
     "NextStepPlan",
+    "NextStepWithSkills",
     "PassThroughPlan",
     "PassThroughRetrieve",
     "KeywordRetrieve",
@@ -109,6 +112,7 @@ class BuilderSourceConfig:
     custom_rule_title: str = "處理規則"
     custom_rule_instruction: str | None = None
     plan_module: str | None = None
+    skill_package_names: tuple[str, ...] = ()
     plan_system_prompt: str | None = None
     reflect_module: str | None = None
     entry_module: str = "perceive"
@@ -726,7 +730,7 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     # Named even when nobody chose one, so a reader of the code sees that every
     # run passes through planning — see ADR-0005.
-    if config.plan_module != "NextStepPlan":
+    if config.plan_module not in _MODEL_PLANNING_MODULES:
         return "    plan=PassThroughPlan(),\n"
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
@@ -735,7 +739,10 @@ def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     ]
     if description:
         arguments.append(f"retrieve_description={json.dumps(description, ensure_ascii=False)}")
-    return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
+    if config.plan_module == "NextStepWithSkills":
+        package_paths = ", ".join(json.dumps(f"skill_packages/{name}", ensure_ascii=False) for name in config.skill_package_names)
+        arguments.append(f"skill_packages=[{package_paths}]")
+    return f"    plan={config.plan_module}({', '.join(arguments)}),\n"
 
 
 def _reflect_line(config: BuilderSourceConfig) -> str:
