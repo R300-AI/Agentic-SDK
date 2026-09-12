@@ -1487,7 +1487,7 @@ def test_runner_uses_module_specific_process_completion_summaries():
 
     assert runner_service._module_finish_process_summary(config, "retrieve") == "已整理相關來源，交給回覆階段使用。"
     assert runner_service._module_finish_process_summary(config, "action") == "工具呼叫回覆器已完成回覆整理。"
-    assert runner_service._module_finish_process_summary(config, "reflect") == "已檢查回覆內容，可交付。"
+    assert runner_service._module_finish_process_summary(config, "reflect") == "已檢查規劃與查詢結果。"
 
 
 def test_runner_process_event_rejects_legacy_stage_event_without_schema():
@@ -2225,7 +2225,7 @@ def test_a_lookup_agent_can_run_without_a_model_at_all():
         ("failure_policy", "handoff"),
     )
 
-    assert (spec.get("plan") or {}).get("module") is None
+    assert (spec.get("plan") or {}).get("module") == "PassThroughPlan"
     assert spec["action"]["module"] == "DirectAnswerAction"
     assert spec["reflect"]["module"] == "EvidenceCheckReflect"
     assert model_endpoints.endpoint_state(spec, {})["requirements"] == []
@@ -2287,7 +2287,7 @@ def test_an_agent_saved_before_the_planner_binding_still_runs():
     borrowing the action endpoint until someone binds the planner.
     """
     # Mirrors the saved agents: a planner in the spec, no binding for it.
-    spec = build_spec(("retrieve_policy", "semantic"), ("output_format", "free_text"))
+    spec = build_spec(("retrieve_policy", "semantic"), ("output_format", "free_text"), ("failure_policy", "retry"))
     saved_bindings = {"perceive": "gpt-54", "retrieve": "embedded-large", "action": "gpt-55"}
 
     borrowed = runner_service.build_workflow(spec, saved_bindings)
@@ -2337,11 +2337,18 @@ def test_a_shared_agent_says_its_documents_are_missing(monkeypatch):
             return WorkflowResult(
                 workflow_id="w",
                 final_message="換藥前先洗手。",
-                entries=[ContextEntry(
-                    type=ContextEntryType.RETRIEVED,
-                    content="",
-                    metadata={"source": "semantic_retrieve", "hit_count": 0, "kb_hit_count": 0, "memory_hit_count": 0},
-                )],
+                entries=[
+                    ContextEntry(
+                        type=ContextEntryType.RETRIEVED,
+                        content="",
+                        metadata={"source": "semantic_retrieve", "hit_count": 0, "kb_hit_count": 0, "memory_hit_count": 0},
+                    ),
+                    ContextEntry(
+                        type=ContextEntryType.REFLECTION,
+                        content="verdict=fail reason=no retrieved evidence",
+                        metadata={"verdict": "fail", "reason": "no retrieved evidence", "strategy": "evidence_check"},
+                    ),
+                ],
                 entities={},
             )
 
@@ -2366,17 +2373,22 @@ def test_an_agent_with_documents_consults_them_before_answering():
         ("retrieve_policy", "semantic"),
         ("retrieve", {"semantic_support_files": "guide.pdf"}),
         ("output_format", "free_text"),
+        ("failure_policy", "retry"),
     )
     config = spec_to_config(spec)
 
     assert runner_service._has_retrievable_content(config) is True
+    policy = runner_service._retry_route_policy(has_retrievable_content=True)
 
     fresh = WorkflowState(workflow_name="w", user_message="hi")
-    assert runner_service._consult_the_sources_first(fresh, "action") == "retrieve"
+    assert policy(fresh, "action") == "retrieve"
 
+    # Once the lookup has been checked, the planner's judgement stands.
     after = WorkflowState(workflow_name="w", user_message="hi")
+    after.visit_counts["retrieve"] = 1
     after.entries.append(ContextEntry(type=ContextEntryType.RETRIEVED, content="…", metadata={"hit_count": 2}))
-    assert runner_service._consult_the_sources_first(after, "action") == "action"
+    after.entries.append(ContextEntry(type=ContextEntryType.REFLECTION, content="verdict=pass", metadata={"verdict": "pass"}))
+    assert policy(after, "action") == "action"
 
 
 def test_an_agent_with_nothing_to_look_up_keeps_the_planners_judgement():

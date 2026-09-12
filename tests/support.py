@@ -146,18 +146,6 @@ class _FoundryModelNamespace:
         return SimpleNamespace(data=[SimpleNamespace(id=self._owner._model_id)])
 
 
-class ActionToReflectWrapper:
-    name = "action"
-
-    def __init__(self, action_module) -> None:
-        self._action_module = action_module
-
-    def __call__(self, state):
-        output = dict(self._action_module(state))
-        output["next_module"] = "reflect"
-        return output
-
-
 @dataclass
 class StaticVisionQueryBuilder:
     rewritten_query: str

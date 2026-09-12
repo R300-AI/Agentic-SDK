@@ -3,7 +3,7 @@ import { bindAttachmentPicker } from "./artifact-panel.js";
 import { bindCodePreview } from "./code-preview.js?v=delegated-trigger-v1";
 import { bindInputComposer } from "./input-composer.js";
 import { bindVoiceConversation } from "./voice-conversation.js";
-import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js?v=generated-choice-stepper-v1";
+import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js?v=closed-loop-v1";
 import { showSavePanel } from "./save-panel.js";
 
 const form = document.querySelector("[data-input-composer]");

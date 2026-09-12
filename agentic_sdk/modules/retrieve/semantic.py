@@ -410,7 +410,7 @@ class SemanticRetrieve:
         metadata["hit_count"] = int(metadata.get("kb_hit_count", 0)) + int(metadata.get("memory_hit_count", 0))
         metadata["source"] = "semantic_retrieve"
         return ModuleOutput(
-            next_module="action",
+            next_module="plan",
             payload={"retrieved_snippet": snippet, "latest_retrieved_content": snippet},
             context_updates=[ContextEntry(type=ContextEntryType.RETRIEVED, content=snippet, metadata=metadata)],
         )

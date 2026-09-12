@@ -716,8 +716,9 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
     if plan_entry is not None:
         next_module = plan_entry.metadata.get("next_module")
         fallback = "；模型輸出不合法，已 fallback 到 action" if plan_entry.metadata.get("fallback") else ""
+        planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else "NextStepPlan "
         if next_module:
-            messages.append(f"Plan：NextStepPlan 選擇下一步 {next_module}{fallback}。")
+            messages.append(f"Plan：{planner}選擇下一步 {next_module}{fallback}。")
 
     retrieve_entries = [entry for entry in workflow_result.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
     retrieve_missed = _retrieve_missed(retrieve_entries)
@@ -761,6 +762,10 @@ def _workflow_event_observer(
     def emit(workflow_event: dict[str, Any]) -> None:
         _validate_standard_workflow_event(workflow_event)
         module = workflow_event["module"]
+        # A fixed rule decides nothing a person could read a reason into, and an
+        # agent planning by it passes through planning two or three times a turn.
+        if module == "plan" and workflow_event.get("module_class") == "PassThroughPlan":
+            return
         if workflow_event.get("type") == "structured_field":
             process_event = _structured_field_process_event(
                 module,
@@ -895,7 +900,7 @@ def _structured_field_process_event(
     if module == "plan" and field == "thought":
         return _process_event("plan", title, f"判斷依據：{value_text}", workflow_event=workflow_event)
     if module == "plan" and field == "next_module":
-        next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+        next_label = _plan_next_label(value_text)
         return _process_event("plan", title, f"目前決定：{next_label}。", workflow_event=workflow_event)
     if not _is_user_visible_trace_detail(field, value, workflow_event):
         return None
@@ -906,6 +911,10 @@ def _structured_field_process_event(
         workflow_event=workflow_event,
         details=[{"field": field, "description": f"{field}：{value_text}"}],
     )
+
+
+def _plan_next_label(next_module: str) -> str:
+    return {"retrieve": "先整理相關來源", "reflect": "先檢查"}.get(next_module, "直接準備回覆")
 
 
 def _structured_details_for_finish(workflow_event: dict[str, Any]) -> list[dict[str, str]]:
@@ -927,7 +936,7 @@ def _structured_finish_summary(module: str, fields: object) -> str:
         if isinstance(next_module, dict):
             value_text = _preview_text(_structured_field_value_text(_require_standard_field_value(next_module)))
             if _is_displayable_trace_value(value_text):
-                next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+                next_label = _plan_next_label(value_text)
                 return f"目前決定：{next_label}。"
     for item in fields:
         if not isinstance(item, dict):
@@ -943,7 +952,7 @@ def _structured_finish_summary(module: str, fields: object) -> str:
         if module == "plan" and field == "thought":
             return f"判斷依據：{value_text}"
         if module == "plan" and field == "next_module":
-            next_label = "先整理相關來源" if value_text == "retrieve" else "直接準備回覆"
+            next_label = _plan_next_label(value_text)
             return f"目前決定：{next_label}。"
     return ""
 
@@ -991,7 +1000,7 @@ def _module_start_process_event(
     if module == "action":
         return _process_event("action", label or _default_label("action"), f"正在把目前資訊交給{_action_process_name(config)}，準備產生最終回覆。", workflow_event=workflow_event)
     if module == "reflect":
-        return _process_event("reflect", label or _default_label("reflect"), "正在檢查回覆是否可交付，必要時會回到前一步調整。", workflow_event=workflow_event)
+        return _process_event("reflect", label or _default_label("reflect"), "正在檢查規劃與查詢結果，確認可以開始回答。", workflow_event=workflow_event)
     return None
 
 
@@ -1005,7 +1014,7 @@ def _module_finish_process_summary(config: BuilderSourceConfig, module: str) -> 
     if module == "action":
         return f"{_action_process_name(config)}已完成回覆整理。"
     if module == "reflect":
-        return "已檢查回覆內容，可交付。"
+        return "已檢查規劃與查詢結果。"
     return "已完成這個階段。"
 
 
@@ -1094,12 +1103,17 @@ def _retrieve_missed(entries: list[ContextEntry]) -> bool:
 
 
 def _human_handoff_reason(config: BuilderSourceConfig, entries: list[ContextEntry], user_message: str) -> str | None:
-    if config.reflect_module != "EvidenceCheckReflect" or config.reflect_on_failure != "end":
+    # Only an agent whose Q5 answer is 先停下來 hands over. An agent that has not
+    # answered Q5 also plans by the fixed rule when it runs, but nobody asked it
+    # to stop. It hands over on what reflect reported — the lookup found
+    # nothing — rather than on which reflect module is mounted.
+    if config.plan_module != "PassThroughPlan":
         return None
-    retrieve_entries = [entry for entry in entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
-    if _retrieve_missed(retrieve_entries):
+    reflection = next((entry for entry in reversed(entries) if _entry_type(entry) == ContextEntryType.REFLECTION.value), None)
+    if reflection is not None and reflection.metadata.get("verdict") == "fail" and reflection.metadata.get("strategy") == "evidence_check":
         reason = _documents_unavailable_reason(config) or "目前沒有在參考資料中找到可以支持這個回答的內容。"
         return f"{reason} 已停止作答，避免給出沒有依據的內容。"
+    retrieve_entries = [entry for entry in entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
     requested_identifiers = _requested_product_identifiers(user_message)
     if not requested_identifiers or not retrieve_entries:
         return None
@@ -1198,6 +1212,7 @@ def _gates_from_spec(spec: dict[str, Any]) -> Gates:
         max_node_hops=int(raw.get("max_node_hops") or defaults.max_node_hops),
         max_revisit=int(raw.get("max_revisit") or defaults.max_revisit),
         timeout_sec=float(raw.get("timeout_sec") or defaults.timeout_sec),
+        max_reflect_rounds=int(raw.get("max_reflect_rounds") or defaults.max_reflect_rounds),
     )
 
 
@@ -1256,7 +1271,7 @@ def _initialization_steps(
         )
     if "perceive" in reachable_roles:
         steps.append(("perceive", "輸入解析器", lambda: _perceive_from_config(config, endpoint_selections, reachable_roles)))
-    if "plan" in reachable_roles and config.plan_strategy:
+    if "plan" in reachable_roles and config.plan_module == "NextStepPlan":
         steps.append(("plan", "流程判斷器", lambda: _plan_from_config(config, endpoint_selections, reachable_roles)))
     if "retrieve" in reachable_roles:
         retrieve_label = "知識庫索引" if semantic_retrieve_required else _retrieve_process_title(config)
@@ -1264,7 +1279,7 @@ def _initialization_steps(
     if "action" in reachable_roles:
         steps.append(("action", _action_process_name(config), lambda: _action_from_config(config, endpoint_selections, reachable_roles)))
     if "reflect" in reachable_roles and config.reflect_module:
-        steps.append(("reflect", "回覆檢核器", lambda: _reflect_from_config(config, endpoint_selections, reachable_roles)))
+        steps.append(("reflect", "規劃檢核器", lambda: _reflect_from_config(config, endpoint_selections, reachable_roles)))
     return steps
 
 
@@ -1336,14 +1351,14 @@ def _perceive_from_config(
 
 
 def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
-    from agentic_sdk.modules.plan import NextStepPlan
+    from agentic_sdk.modules.plan import NextStepPlan, PassThroughPlan
 
-    if "plan" not in reachable_roles or not config.plan_strategy:
-        return None
+    if config.plan_module != "NextStepPlan":
+        return PassThroughPlan()
     return NextStepPlan(
         system_prompt=config.plan_system_prompt,
         retrieve_description=config.retrieve_description,
-        route_policy=_consult_the_sources_first if _has_retrievable_content(config) else None,
+        route_policy=_retry_route_policy(has_retrievable_content=_has_retrievable_content(config)),
         **endpoint_params_for_role(_plan_endpoint_role(endpoint_selections, reachable_roles), endpoint_selections),
     )
 
@@ -1357,21 +1372,48 @@ def _has_retrievable_content(config: BuilderSourceConfig) -> bool:
     return False
 
 
-def _consult_the_sources_first(state: WorkflowState, chosen: str | None) -> str | None:
-    """Look in the agent's own documents before answering from anything else.
+# 再查一次再回答 allows one return to retrieval, so two lookups in all.
+_MAX_RETRIEVALS = 2
 
-    An agent built on uploaded documents promises answers grounded in them. The
-    planner decides per turn, and with only a vague description of the source it
-    would judge a question answerable on its own and skip the lookup — a kidney
-    education agent discussed diet limits with no document behind a word of it,
-    and the evidence check could not object because nothing had been retrieved.
 
-    So the first pass through plan always retrieves. After that the planner has
-    seen what the documents hold and its judgement is worth something.
+def _retry_route_policy(*, has_retrievable_content: bool) -> Callable[[WorkflowState, str | None], str | None]:
+    """Keep what 再查一次再回答 promises, whatever the planner's model says.
+
+    Look in the agent's own documents before answering from anything else. An
+    agent built on uploaded documents promises answers grounded in them, and
+    with only a vague description of the source the planner would judge a
+    question answerable on its own and skip the lookup — a kidney education
+    agent discussed diet limits with no document behind a word of it.
+
+    Check every lookup before acting on it. Reflect used to run after every
+    answer; now it runs only when planning sends work there, and a model that
+    skipped it would answer from an empty lookup without anyone noticing.
+
+    Look again at most once. Retrying means trying again, not trying until a
+    run limit stops the agent.
     """
-    if state.latest_of(ContextEntryType.RETRIEVED) is not None:
+
+    def policy(state: WorkflowState, chosen: str | None) -> str | None:
+        retrievals = state.visit_counts.get("retrieve", 0)
+        if has_retrievable_content and retrievals == 0:
+            return "retrieve"
+        if "reflect" in state.plan_options and _latest_lookup_is_unchecked(state):
+            return "reflect"
+        if chosen == "retrieve" and retrievals >= _MAX_RETRIEVALS:
+            return "action"
         return chosen
-    return "retrieve"
+
+    return policy
+
+
+def _latest_lookup_is_unchecked(state: WorkflowState) -> bool:
+    for entry in reversed(state.entries):
+        entry_type = _entry_type(entry)
+        if entry_type == ContextEntryType.REFLECTION.value:
+            return False
+        if entry_type == ContextEntryType.RETRIEVED.value:
+            return True
+    return False
 
 
 def _execution_status(workflow_result, handoff_reason: str) -> str:
@@ -1520,14 +1562,14 @@ def _action_from_config(
 
 
 def _reflect_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
-    from agentic_sdk.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
+    from agentic_sdk.modules.reflect import EvidenceCheckReflect, PlanCheckReflect
 
     if "reflect" not in reachable_roles:
         return None
-    if config.reflect_module == "ResponseCheckReflect":
-        return ResponseCheckReflect(on_failure=config.reflect_on_failure or "retry_plan", **endpoint_params_for_role("reflect", endpoint_selections))
+    if config.reflect_module == "PlanCheckReflect":
+        return PlanCheckReflect(**endpoint_params_for_role("reflect", endpoint_selections))
     if config.reflect_module == "EvidenceCheckReflect":
-        return EvidenceCheckReflect(on_failure=config.reflect_on_failure or "retry_plan")
+        return EvidenceCheckReflect()
     return None
 
 

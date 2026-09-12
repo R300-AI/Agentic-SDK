@@ -62,11 +62,12 @@ _MODULE_IMPORT_ORDER = (
     "TextImagePerceive",
     "VoiceTextPerceive",
     "NextStepPlan",
+    "PassThroughPlan",
     "PassThroughRetrieve",
     "KeywordRetrieve",
     "SemanticRetrieve",
     "EvidenceCheckReflect",
-    "ResponseCheckReflect",
+    "PlanCheckReflect",
     "DirectAnswerAction",
     "GenerativeAction",
     "ToolCallAction",
@@ -107,10 +108,9 @@ class BuilderSourceConfig:
     custom_action_prefix: str = "自訂處理結果："
     custom_rule_title: str = "處理規則"
     custom_rule_instruction: str | None = None
-    plan_strategy: str | None = None
+    plan_module: str | None = None
     plan_system_prompt: str | None = None
     reflect_module: str | None = None
-    reflect_on_failure: str | None = None
     entry_module: str = "perceive"
     events_schema: dict[str, dict[str, object]] | None = None
     max_node_hops: int = 50
@@ -631,7 +631,7 @@ def _workflow_argument_lines(
         lines.append(f"    events_schema={_format_python_literal(config.events_schema, 4)},")
     if "perceive" in reachable_roles:
         lines.append(f"    perceive={_perceive_expression(config)},")
-    if "plan" in reachable_roles and config.plan_strategy:
+    if "plan" in reachable_roles:
         lines.append(_plan_line(config, reachable_roles).rstrip("\n"))
     if "retrieve" in reachable_roles:
         retrieve_body = _retrieve_expression_body(config)
@@ -724,6 +724,10 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 
 
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
+    # Named even when nobody chose one, so a reader of the code sees that every
+    # run passes through planning — see ADR-0005.
+    if config.plan_module != "NextStepPlan":
+        return "    plan=PassThroughPlan(),\n"
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
     arguments = [
@@ -735,10 +739,8 @@ def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
 
 
 def _reflect_line(config: BuilderSourceConfig) -> str:
-    reflect_module = config.reflect_module or "ResponseCheckReflect"
-    arguments = _llm_arguments(binding_role="reflect") if reflect_module == "ResponseCheckReflect" else []
-    if config.reflect_on_failure and config.reflect_on_failure != "retry_plan":
-        arguments.append(f"on_failure={json.dumps(config.reflect_on_failure, ensure_ascii=False)}")
+    reflect_module = config.reflect_module or "PlanCheckReflect"
+    arguments = _llm_arguments(binding_role="reflect") if reflect_module == "PlanCheckReflect" else []
     return (
         f"    reflect={reflect_module}("
         f"{', '.join(arguments)}"

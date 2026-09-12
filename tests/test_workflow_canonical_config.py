@@ -12,7 +12,7 @@ from agentic_sdk import (
     ModuleSpec,
     NextStepPlan,
     PassThroughPerceive,
-    ResponseCheckReflect,
+    PlanCheckReflect,
     SemanticRetrieve,
     TextPerceive,
     WorkflowConfig,
@@ -40,7 +40,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
                 "plan": ModuleSpec(kind="next_step"),
                 "retrieve": ModuleSpec(kind="semantic"),
                 "action": ModuleSpec(kind="generative"),
-                "reflect": ModuleSpec(kind="response_check"),
+                "reflect": ModuleSpec(kind="plan_check"),
             }
         )
 
@@ -59,7 +59,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
                     "perceive": TextPerceive(**_llm_params()),
                     "plan": NextStepPlan(**_llm_params()),
                     "action": GenerativeAction(**_llm_params()),
-                    "reflect": ResponseCheckReflect(**_llm_params()),
+                    "reflect": PlanCheckReflect(**_llm_params()),
                 },
             )
 
@@ -67,7 +67,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
         self.assertIsInstance(workflow.modules["plan"], NextStepPlan)
         self.assertIsInstance(workflow.modules["retrieve"], SemanticRetrieve)
         self.assertIsInstance(workflow.modules["action"], GenerativeAction)
-        self.assertIsInstance(workflow.modules["reflect"], ResponseCheckReflect)
+        self.assertIsInstance(workflow.modules["reflect"], PlanCheckReflect)
         self.assertEqual("從標準 config 建立 workflow。", workflow.description)
 
     def test_workflow_config_with_llm_modules_requires_explicit_model_configuration(self) -> None:
@@ -104,7 +104,7 @@ class WorkflowCanonicalConfigTests(unittest.TestCase):
         self.assertTrue(issubclass(NextStepPlan, object))
         self.assertTrue(issubclass(SemanticRetrieve, object))
         self.assertTrue(issubclass(GenerativeAction, object))
-        self.assertTrue(issubclass(ResponseCheckReflect, object))
+        self.assertTrue(issubclass(PlanCheckReflect, object))
         self.assertTrue(issubclass(EvidenceCheckReflect, object))
 
 

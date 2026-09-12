@@ -54,9 +54,12 @@ _ALLOWED_MEMORY_KINDS = {"in_context"}
 _ALLOWED_PERCEIVE_MODULES = {"PassThroughPerceive", "TextPerceive", "TextImagePerceive", "VoiceTextPerceive"}
 _ALLOWED_RETRIEVE_MODULES = {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}
 _ALLOWED_ACTION_MODULES = {"DirectAnswerAction", "GenerativeAction", "ToolCallAction", "VoiceAnswerAction"}
-_ALLOWED_REFLECT_MODULES = {"EvidenceCheckReflect", "ResponseCheckReflect"}
-_ALLOWED_REFLECT_ON_FAILURE = {"retry_plan", "end"}
-_ALLOWED_PLAN_STRATEGIES = {"RouteBySupport"}
+_ALLOWED_REFLECT_MODULES = {"EvidenceCheckReflect", "PlanCheckReflect"}
+# Agents saved before 0.3.0 name the model-checked reflect module by its old name.
+_RENAMED_REFLECT_MODULES = {"ResponseCheckReflect": "PlanCheckReflect"}
+_ALLOWED_PLAN_MODULES = {"PassThroughPlan", "NextStepPlan"}
+# Retrieve modules that look something up and report how much they found.
+_LOOKUP_RETRIEVE_MODULES = {"SemanticRetrieve", "KeywordRetrieve"}
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +95,7 @@ def default_spec(*, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict[str, Any
         },
         "plan": {
             "module": None,
-            "params": {"strategy": None, "system_prompt": None},
+            "params": {"system_prompt": None},
         },
         "action": {
             # No module until Q4 is answered. A default that names a real module
@@ -112,9 +115,9 @@ def default_spec(*, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict[str, Any
         },
         "reflect": {
             "module": None,
-            "params": {"on_failure": None},
+            "params": {},
         },
-        "gates": {"max_node_hops": 50, "max_revisit": 5, "timeout_sec": 300.0},
+        "gates": {"max_node_hops": 50, "max_revisit": 5, "timeout_sec": 300.0, "max_reflect_rounds": 5},
         "events": None,
         "entry_module": "perceive",
     }
@@ -142,6 +145,9 @@ def validate_spec(raw: object) -> dict[str, Any]:
     _apply_action(spec, raw.get("action"))
     _apply_reflect(spec, raw.get("reflect"))
     _apply_gates(spec, raw.get("gates"))
+    saved_answer = _q5_answer_saved_before_0_3_0(raw)
+    if saved_answer is not None:
+        spec = _with_failure_policy(spec, saved_answer) if saved_answer else _without_failure_policy(spec)
     if "events" in raw and isinstance(raw["events"], (dict, type(None))):
         spec["events"] = raw["events"]
     if "entry_module" in raw:
@@ -236,14 +242,11 @@ def _apply_plan(spec: dict, raw: object) -> None:
     if not isinstance(raw, dict):
         return
     module = raw.get("module")
-    spec["plan"]["module"] = "NextStepPlan" if module else None
+    spec["plan"]["module"] = module if module in _ALLOWED_PLAN_MODULES else None
     p = raw.get("params") or {}
     if not isinstance(p, dict):
         return
     params = spec["plan"]["params"]
-    if "strategy" in p:
-        strategy = str(p["strategy"] or "")
-        params["strategy"] = strategy if strategy in _ALLOWED_PLAN_STRATEGIES else None
     if "system_prompt" in p:
         params["system_prompt"] = clean_prompt(str(p["system_prompt"] or "")) or None
 
@@ -283,19 +286,17 @@ def _apply_action(spec: dict, raw: object) -> None:
         params["prefix"] = clean_short_text(str(p["prefix"] or ""), "")
 
 
+def _current_reflect_module_name(module: object) -> object:
+    return _RENAMED_REFLECT_MODULES.get(module, module) if isinstance(module, str) else module
+
+
 def _apply_reflect(spec: dict, raw: object) -> None:
     if not isinstance(raw, dict):
         return
-    module = raw.get("module")
+    module = _current_reflect_module_name(raw.get("module"))
     if module and module not in _ALLOWED_REFLECT_MODULES:
         module = None
     spec["reflect"]["module"] = module or None
-    p = raw.get("params") or {}
-    if not isinstance(p, dict):
-        return
-    if "on_failure" in p:
-        on_failure = str(p["on_failure"] or "")
-        spec["reflect"]["params"]["on_failure"] = on_failure if on_failure in _ALLOWED_REFLECT_ON_FAILURE else None
 
 
 def _apply_gates(spec: dict, raw: object) -> None:
@@ -308,6 +309,8 @@ def _apply_gates(spec: dict, raw: object) -> None:
         gates["max_revisit"] = max(1, min(100, int(raw["max_revisit"] or 5)))
     if "timeout_sec" in raw:
         gates["timeout_sec"] = max(10.0, min(3600.0, float(raw["timeout_sec"] or 300.0)))
+    if "max_reflect_rounds" in raw:
+        gates["max_reflect_rounds"] = max(1, min(100, int(raw["max_reflect_rounds"] or 5)))
 
 
 # ---------------------------------------------------------------------------
@@ -358,31 +361,15 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
         return spec
 
     if step_key == "retrieve_policy":
-        choice = str(choice_label)
-        existing_plan = spec.get("plan", {})
-        if choice == "none":
-            return {
-                **spec,
-                "retrieve": {**spec.get("retrieve", {}), "module": "PassThroughRetrieve"},
-                "plan": {"module": None, "params": {"strategy": None, "system_prompt": existing_plan.get("params", {}).get("system_prompt")}},
-            }
-        elif choice == "semantic":
-            # A planner earns its model call by deciding whether to search, and
-            # searching here costs an embedding call. Keyword lookup is a
-            # dictionary read, so deciding whether to do it costs more than
-            # doing it — that flow goes straight to retrieve.
-            current_strategy = existing_plan.get("params", {}).get("strategy")
-            return {
-                **spec,
-                "retrieve": {**spec.get("retrieve", {}), "module": "SemanticRetrieve"},
-                "plan": {
-                    "module": "NextStepPlan",
-                    "params": {"strategy": current_strategy or "RouteBySupport", "system_prompt": existing_plan.get("params", {}).get("system_prompt")},
-                },
-            }
-        elif choice == "keyword":
-            return {**spec, "retrieve": {**spec.get("retrieve", {}), "module": "KeywordRetrieve"}}
-        return spec
+        module = {"none": "PassThroughRetrieve", "keyword": "KeywordRetrieve", "semantic": "SemanticRetrieve"}.get(str(choice_label))
+        if module is None:
+            return spec
+        # Q3 only chooses how the agent looks things up. The planning and
+        # reflect modules that implies belong to Q5's mapping, so an agent that
+        # has already answered Q5 gets that mapping again for its new lookup.
+        answer = _failure_policy_of(spec)
+        updated = {**spec, "retrieve": {**spec.get("retrieve", {}), "module": module}}
+        return _with_failure_policy(updated, answer) if answer else updated
 
     if step_key == "output_format":
         choice = str(choice_label)
@@ -412,33 +399,9 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
 
     if step_key == "failure_policy":
         choice = str(choice_label)
-        existing_retrieve_module = spec.get("retrieve", {}).get("module", "PassThroughRetrieve")
-        # Check the evidence when there is evidence to check. Keyword and
-        # semantic retrieval both report how many entries they matched, and
-        # reading that number costs nothing. Only an agent that looks nothing up
-        # has to pay a model to judge its own answer.
-        if existing_retrieve_module in {"SemanticRetrieve", "KeywordRetrieve"}:
-            reflect_module = "EvidenceCheckReflect"
-        else:
-            reflect_module = "ResponseCheckReflect"
-        existing_plan = spec.get("plan", {})
-        current_strategy = existing_plan.get("params", {}).get("strategy")
-
-        if choice == "retry":
-            return {
-                **spec,
-                "reflect": {"module": reflect_module, "params": {"on_failure": "retry_plan"}},
-                "plan": {
-                    "module": "NextStepPlan",
-                    "params": {"strategy": current_strategy or "RouteBySupport", "system_prompt": existing_plan.get("params", {}).get("system_prompt")},
-                },
-            }
-        elif choice == "handoff":
-            return {
-                **spec,
-                "reflect": {"module": reflect_module, "params": {"on_failure": "end"}},
-            }
-        return spec
+        if choice not in {"retry", "handoff"}:
+            return spec
+        return _with_failure_policy(spec, choice)
 
     if step_key == "perceive" and isinstance(choice_label, dict):
         existing_params = spec.get("perceive", {}).get("params", {})
@@ -506,6 +469,87 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
     return spec
 
 
+# 0.2.0 recorded Q5's answer as the reflect module's on_failure.
+_ON_FAILURE_ANSWERS = {"retry_plan": "retry", "end": "handoff"}
+
+
+def saved_before_0_3_0(spec: dict[str, Any]) -> bool:
+    """Whether a stored spec was written before 0.3.0 and needs reading anew."""
+    return _q5_answer_saved_before_0_3_0(spec) is not None
+
+
+def _q5_answer_saved_before_0_3_0(raw: dict) -> str | None:
+    """Q5's answer in a spec saved before 0.3.0, or None for a spec saved since.
+
+    Every spec 0.2.0 wrote carried the planner's ``strategy`` and the reflect
+    module's ``on_failure``, set or not, and nothing since writes either. The
+    answer lived in ``on_failure``. A spec with no reflect module had not
+    answered Q5, whatever planning module Q3 had put there. Agents in the
+    gallery keep working without anyone saving them again.
+    """
+    reflect = raw.get("reflect") if isinstance(raw.get("reflect"), dict) else {}
+    plan_params = _params_of(raw.get("plan"))
+    reflect_params = _params_of(reflect)
+    if "strategy" not in plan_params and "on_failure" not in reflect_params:
+        return None
+    if not reflect.get("module"):
+        return ""
+    return _ON_FAILURE_ANSWERS.get(reflect_params.get("on_failure"), "")
+
+
+def _params_of(section: object) -> dict[str, Any]:
+    params = section.get("params") if isinstance(section, dict) else None
+    return params if isinstance(params, dict) else {}
+
+
+def _without_failure_policy(spec: dict[str, Any]) -> dict[str, Any]:
+    system_prompt = _params_of(spec.get("plan")).get("system_prompt")
+    return {
+        **spec,
+        "plan": {"module": None, "params": {"system_prompt": system_prompt}},
+        "reflect": {"module": None, "params": {}},
+    }
+
+
+def _failure_policy_of(spec: dict[str, Any]) -> str:
+    """Q5's answer, read back from the modules it installed.
+
+    再查一次再回答 installs NextStepPlan together with a reflect module, and
+    先停下來，交給人確認 installs PassThroughPlan. Nothing else puts either
+    combination in a spec, so a spec with neither has not answered Q5.
+    """
+    plan_module = (spec.get("plan") or {}).get("module")
+    if plan_module == "PassThroughPlan":
+        return "handoff"
+    if plan_module == "NextStepPlan" and (spec.get("reflect") or {}).get("module"):
+        return "retry"
+    return ""
+
+
+def _with_failure_policy(spec: dict[str, Any], answer: str) -> dict[str, Any]:
+    """Install the planning and reflect modules Q5's answer implies — ADR-0005.
+
+    Retrying needs a planner that can choose to look again; stopping needs
+    only the fixed rule. The lookup is checked whenever there is one, and
+    reading its hit count costs nothing. Without a lookup, only a planner's
+    model makes a decision worth confirming: a fixed rule cannot choose wrong,
+    so an agent that looks nothing up and stops gets no reflect module at all.
+    """
+    retrying = answer == "retry"
+    if (spec.get("retrieve") or {}).get("module") in _LOOKUP_RETRIEVE_MODULES:
+        reflect_module = "EvidenceCheckReflect"
+    elif retrying:
+        reflect_module = "PlanCheckReflect"
+    else:
+        reflect_module = None
+    system_prompt = _params_of(spec.get("plan")).get("system_prompt")
+    return {
+        **spec,
+        "plan": {"module": "NextStepPlan" if retrying else "PassThroughPlan", "params": {"system_prompt": system_prompt}},
+        "reflect": {"module": reflect_module, "params": {}},
+    }
+
+
 # ---------------------------------------------------------------------------
 # Spec → BuilderSourceConfig → Python source
 # ---------------------------------------------------------------------------
@@ -522,14 +566,13 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
     action = spec.get("action") or {}
     action_params = action.get("params") or {}
     reflect = spec.get("reflect") or {}
-    reflect_params = reflect.get("params") or {}
     gates = spec.get("gates") or {}
 
     perceive_module = perceive.get("module") or "PassThroughPerceive"
     retrieve_module = retrieve.get("module") or "PassThroughRetrieve"
     action_module = action.get("module") or ""
-    reflect_module = reflect.get("module") or None
-    plan_strategy = plan_params.get("strategy") or None
+    reflect_module = _current_reflect_module_name(reflect.get("module")) or None
+    plan_module = plan.get("module") or None
 
     config = BuilderSourceConfig(
         workflow_name=str(spec.get("workflow_name") or DEFAULT_WORKFLOW_NAME),
@@ -563,10 +606,9 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
         custom_action_prefix="自訂處理結果：",
         custom_rule_title="處理規則",
         custom_rule_instruction=None,
-        plan_strategy=plan_strategy,
+        plan_module=plan_module,
         plan_system_prompt=plan_params.get("system_prompt") or None,
         reflect_module=reflect_module,
-        reflect_on_failure=reflect_params.get("on_failure") or None,
         entry_module=str(spec.get("entry_module") or "perceive"),
         events_schema=spec.get("events") if isinstance(spec.get("events"), dict) else None,
         max_node_hops=int(gates.get("max_node_hops") or 50),
@@ -621,16 +663,9 @@ def spec_to_form_state(spec: dict[str, Any], runner_presentation: dict[str, Any]
     retrieve_module = retrieve.get("module") or "PassThroughRetrieve"
     retrieve_params = retrieve.get("params") or {}
 
-    plan = spec.get("plan") or {}
-    plan_params = plan.get("params") or {}
-
     action = spec.get("action") or {}
     action_module = action.get("module") or ""
     action_params = action.get("params") or {}
-
-    reflect = spec.get("reflect") or {}
-    reflect_module = reflect.get("module") or None
-    reflect_params = reflect.get("params") or {}
 
     # Q1 choices
     memory_kind = (spec.get("memory") or {}).get("kind") or "in_context"
@@ -661,14 +696,8 @@ def spec_to_form_state(spec: dict[str, Any], runner_presentation: dict[str, Any]
     else:
         output_format = ""
 
-    # Q5 choices. Both answers install a reflect module, so a spec without one
-    # has not answered this question.
-    if not reflect_module:
-        failure_policy_choice = ""
-    elif reflect_params.get("on_failure") == "retry_plan":
-        failure_policy_choice = "retry"
-    else:
-        failure_policy_choice = "handoff"
+    # Q5 choices, read back from the modules the answer installed.
+    failure_policy_choice = _failure_policy_of(spec)
 
     choices: dict[str, str] = {
         "memory_type": memory_type_choice,

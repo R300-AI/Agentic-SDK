@@ -12,21 +12,21 @@
 
 目前這份定義處理多輪對話流程。節點之間以 JSON 物件交換結構化資料；需要模型的模組共用 `MemoryStore` 這個記憶抽象，實際型別可以是 `InContextMemory` 或 `PersistentMemory`。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。使用者介面對接 `Perceive` 的輸入與 `Action` 的輸出；`Plan`、`Retrieve`、`Reflect` 共用 `WorkflowState` 裡的 `Entities` 與 `ContextEntry`。先看下面這張表，可以快速掌握五個家族各自的模組與主要工作。
 
-五大模組共用同一個執行規範。模組物件需要有 `name`，並提供 `__call__(state)` 作為 workflow 的執行入口；執行時讀取 `WorkflowState`，完成處理後回傳 `ModuleOutput`。`ModuleOutput.next_module` 決定下一站，`payload` 寫回 `state.entities`，`context_updates` 留下可追蹤紀錄。五個家族的差異不是五套不同 API，而是每個階段要讀什麼、寫什麼，以及下一站要交給誰。
+五大模組共用同一個執行規範。模組物件需要有 `name`，並提供 `__call__(state)` 作為 workflow 的執行入口；執行時讀取 `WorkflowState`，完成處理後回傳 `ModuleOutput`。規劃模組回傳的 `ModuleOutput.next_module` 決定下一站，其他家族做完一律交回規劃模組，行動做完這次執行結束；`payload` 寫回 `state.entities`，`context_updates` 留下可追蹤紀錄。五個家族的差異不是五套不同 API，而是每個階段要讀什麼、寫什麼。
 
 | 家族 | 標準模組列表 | 主要工作 |
 | --- | --- | --- |
 | Perceive | PassThroughPerceive、TextPerceive、TextImagePerceive、VoiceTextPerceive | 把原始輸入整理成查詢、標籤與摘要。 |
-| Plan | NextStepPlan | 決定下一步交給 `Retrieve` 還是 `Action`。 |
+| Plan | PassThroughPlan、NextStepPlan | 在 `Retrieve`、`Reflect`、`Action` 中選下一步；`PassThroughPlan` 用固定規則，`NextStepPlan` 用模型。 |
 | Retrieve | PassThroughRetrieve、KeywordRetrieve、SemanticRetrieve | 查回條目、歷史紀錄或知識內容，或不查直接往下走。 |
 | Action | DirectAnswerAction、GenerativeAction、ToolCallAction、VoiceAnswerAction | 組成自然語言回應、固定格式文字輸出、OpenAI 標準工具呼叫，或同時說出口與顯示在畫面上的雙頻道回覆。 |
-| Reflect | ResponseCheckReflect、EvidenceCheckReflect | 檢查回應完整性與證據是否足夠。 |
+| Reflect | EvidenceCheckReflect、PlanCheckReflect | 在行動前確認檢索有沒有找到內容、規劃的決定能不能執行，回報交給規劃模組。 |
 
 表 1：五個模組家族的模組名與主要工作對照表。
 
 讀完這張表之後，接著看家族之間共用哪些資料。下一節會整理共用的 `Entities` 物件；各家族頁則列出模組參數與輸入輸出格式，方便把家族分工對回實際程式。
 
-需要模型的模組會各自持有 OpenAI-compatible 連線設定。`TextPerceive`、`NextStepPlan`、`GenerativeAction`、`ToolCallAction`、`ResponseCheckReflect` 等模組都要明確提供 `api_key`、`base_url` 與 `model`，模型選擇由建立模組時的設定決定。語音模組不同：音訊來源以**物件**注入而不是三個設定。`VoiceTextPerceive` 收一個 `transport`，`VoiceAnswerAction` 收一個 `speech`，兩者都是必填；生成模型仍然是三件式。原因是聊天端點同構而音訊來源不同構，詳見 ADR-0003。
+需要模型的模組會各自持有 OpenAI-compatible 連線設定。`TextPerceive`、`NextStepPlan`、`GenerativeAction`、`ToolCallAction`、`PlanCheckReflect` 等模組都要明確提供 `api_key`、`base_url` 與 `model`，模型選擇由建立模組時的設定決定。語音模組不同：音訊來源以**物件**注入而不是三個設定。`VoiceTextPerceive` 收一個 `transport`，`VoiceAnswerAction` 收一個 `speech`，兩者都是必填；生成模型仍然是三件式。原因是聊天端點同構而音訊來源不同構，詳見 ADR-0003。
 
 ## 推論服務要提供哪些端點
 
@@ -35,7 +35,7 @@
 
 | 模組 | 需要的端點 | 用到的參數 |
 | --- | --- | --- |
-| `TextPerceive`、`TextImagePerceive`、`NextStepPlan`、`GenerativeAction`、`ToolCallAction`、`ResponseCheckReflect`、`EvidenceCheckReflect` | `/v1/chat/completions` | `stream: true`；部分模組要求 `response_format: {"type":"json_object"}`；`ToolCallAction` 另需 `tools` |
+| `TextPerceive`、`TextImagePerceive`、`NextStepPlan`、`GenerativeAction`、`ToolCallAction`、`PlanCheckReflect` | `/v1/chat/completions` | `stream: true`；部分模組要求 `response_format: {"type":"json_object"}`；`ToolCallAction` 另需 `tools` |
 | `SemanticRetrieve` | `/v1/embeddings` | 無 |
 | `VoiceAnswerAction` 使用的 `SpeechOutput` | `/v1/audio/speech` | 串流回應 |
 | `VoiceTextPerceive` 使用的 `RealtimeTranscription` | Realtime WebSocket，`intent=transcription` | 非 REST |

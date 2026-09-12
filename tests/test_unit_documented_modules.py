@@ -17,7 +17,7 @@ from agentic_sdk.modules import (
     KeywordRetrieve,
     NextStepPlan,
     PassThroughPerceive,
-    ResponseCheckReflect,
+    PlanCheckReflect,
     SemanticRetrieve,
     TextImagePerceive,
     TextPerceive,
@@ -218,7 +218,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = PassThroughPerceive()(state)
 
-        self.assertEqual("retrieve", output["next_module"])
+        self.assertEqual("plan", output["next_module"])
         self.assertEqual("請介紹 TSiP", output["payload"]["query"])
 
     def test_text_perceive_family_returns_plan_and_metadata(self) -> None:
@@ -367,7 +367,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = module(state)
 
-        self.assertEqual("action", output["next_module"])
+        self.assertEqual("plan", output["next_module"])
         self.assertEqual("TSiP 介紹", output["payload"]["retrieved_snippet"])
 
     def test_semantic_retrieve_hits_knowledge_base(self) -> None:
@@ -376,7 +376,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
         output = SemanticRetrieve(knowledge_base=kb)(state)
 
-        self.assertEqual("action", output["next_module"])
+        self.assertEqual("plan", output["next_module"])
         self.assertIn("TSiP 是 AI 晶片藍圖", output["payload"]["retrieved_snippet"])
 
     def test_semantic_retrieve_formats_knowledge_hits_readably(self) -> None:
@@ -600,11 +600,11 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         reflect_state = WorkflowState(user_message="hello")
         reflect_state.last_action_result = {"content": "ok"}
         with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=reflect_client):
-            ResponseCheckReflect(**_llm_params("reflect-model"))(reflect_state)
+            PlanCheckReflect(**_llm_params("reflect-model"))(reflect_state)
         self.assertEqual("reflect-model", reflect_client.last_create_kwargs["model"])
 
     def test_llm_module_constructors_require_model_parameter(self) -> None:
-        for module_cls in (TextPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, ToolCallAction, ResponseCheckReflect):
+        for module_cls in (TextPerceive, TextImagePerceive, NextStepPlan, GenerativeAction, ToolCallAction, PlanCheckReflect):
             with self.subTest(module=module_cls.__name__):
                 with self.assertRaisesRegex(ValueError, "explicit model"):
                     module_cls(api_key=TEST_API_KEY, base_url=TEST_BASE_URL)
@@ -628,17 +628,16 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertIsNone(importlib.util.find_spec("agentic_sdk.gateway"))
         self.assertIsNone(importlib.util.find_spec("agentic_sdk.knowledge"))
 
-    def test_response_check_reflect_and_evidence_check_reflect_can_pass(self) -> None:
+    def test_plan_check_reflect_and_evidence_check_reflect_can_pass(self) -> None:
         state = WorkflowState(user_message="TSiP 是什麼？")
-        state.last_action_result = {"content": "TSiP 是工研院主導的國產 AI 晶片落地藍圖。"}
 
         with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=FoundryOpenAILikeClient()):
-            response_output = ResponseCheckReflect(**_llm_params())(state)
+            plan_check_output = PlanCheckReflect(**_llm_params())(state)
         evidence_output = EvidenceCheckReflect()(state)
 
-        self.assertIsNone(response_output["next_module"])
-        self.assertEqual("pass", response_output["payload"]["reflect_verdict"])
-        self.assertIsNone(evidence_output["next_module"])
+        self.assertEqual("plan", plan_check_output["next_module"])
+        self.assertEqual("pass", plan_check_output["payload"]["reflect_verdict"])
+        self.assertEqual("plan", evidence_output["next_module"])
         self.assertEqual("pass", evidence_output["payload"]["reflect_verdict"])
 
     def test_evidence_check_reflect_fails_after_a_real_retrieve_finds_nothing(self) -> None:
@@ -658,11 +657,8 @@ class DocumentedModuleUnitTests(unittest.TestCase):
                 state = WorkflowState(user_message="未知問題")
                 for entry in retrieve(state).get("context_updates") or []:
                     state.append(entry)
-                state.last_action_result = {"content": "目前沒有找到相關參考資料。"}
+                output = EvidenceCheckReflect()(state)
 
-                output = EvidenceCheckReflect(on_failure="end")(state)
-
-                self.assertIsNone(output["next_module"])
                 self.assertEqual("fail", output["payload"]["reflect_verdict"])
 
     def test_evidence_check_reflect_passes_when_a_real_retrieve_finds_something(self) -> None:
@@ -670,7 +666,9 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         retrieve = KeywordRetrieve(items=[{"keywords": ["保固"], "content": "保固十二個月。"}])
         for entry in retrieve(state).get("context_updates") or []:
             state.append(entry)
-        state.last_action_result = {"content": "保固十二個月。"}
+        # The check is about the lookup. An action error left on the state says
+        # nothing about what was found.
+        state.last_action_error = {"message": "action failed"}
 
         self.assertEqual("pass", EvidenceCheckReflect()(state)["payload"]["reflect_verdict"])
 
@@ -679,7 +677,6 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         state = WorkflowState(user_message="用一句話說明什麼是保固。")
         for entry in PassThroughRetrieve()(state).get("context_updates") or []:
             state.append(entry)
-        state.last_action_result = {"content": "保固是一種售後承諾。"}
 
         self.assertEqual("pass", EvidenceCheckReflect()(state)["payload"]["reflect_verdict"])
 
@@ -711,36 +708,6 @@ class DocumentedModuleUnitTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-def test_both_reflect_modules_retry_once_then_stop():
-    """One Builder answer installs either module, so both must keep its promise.
-
-    Q5's "再查一次再回答" was made true for EvidenceCheckReflect only. A keyword
-    agent gets ResponseCheckReflect from the same answer, and there the retry
-    still looped back to plan every time, until the hop limit aborted the run.
-    """
-    from agentic_sdk.modules.reflect import EvidenceCheckReflect, ResponseCheckReflect
-
-    def build(module):
-        if module is ResponseCheckReflect:
-            # The model call fails and the module falls back to the action
-            # error, which is the failing path this test is about.
-            return module(on_failure="retry_plan", api_key="k", base_url="http://localhost:1", model="m")
-        return module(on_failure="retry_plan")
-
-    def verdict_after(module, reflect_visits):
-        state = WorkflowState(workflow_name="w", user_message="hi")
-        state.last_action_error = {"message": "action failed"}
-        state.visit_counts["reflect"] = reflect_visits
-        return build(module)(state)
-
-    for module in (EvidenceCheckReflect, ResponseCheckReflect):
-        first = verdict_after(module, 1)
-        second = verdict_after(module, 2)
-        assert first["payload"]["reflect_verdict"] == "fail", module.__name__
-        assert first["next_module"] == "plan", module.__name__
-        assert second["next_module"] is None, module.__name__
 
 
 def test_a_cancelled_run_reports_being_stopped_not_broken():

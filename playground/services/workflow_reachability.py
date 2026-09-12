@@ -29,24 +29,20 @@ def reachable_openai_roles(config: "BuilderSourceConfig") -> set[str]:
     roles: set[str] = set()
     if "perceive" in reachable and config.perceive_module in _MODEL_PERCEIVE_MODULES:
         roles.add("perceive")
-    if "plan" in reachable and config.plan_strategy:
+    if "plan" in reachable and config.plan_module == "NextStepPlan":
         roles.add("plan")
     if "action" in reachable and config.action_module in _MODEL_ACTION_MODULES:
         roles.add("action")
-    if "reflect" in reachable and config.reflect_module == "ResponseCheckReflect":
+    if "reflect" in reachable and config.reflect_module == "PlanCheckReflect":
         roles.add("reflect")
     return roles
 
 
 def _next_roles(config: "BuilderSourceConfig", role: str) -> tuple[str, ...]:
-    if role == "perceive":
-        return ("plan",) if config.plan_strategy else ("retrieve",)
+    # Planning chooses; everything it sends work to hands back to it, and the
+    # action ends the run — see ADR-0005.
     if role == "plan":
-        return ("retrieve", "action") if config.plan_strategy else ()
-    if role == "retrieve":
-        return ("action",)
-    if role == "action":
-        return ("reflect",) if config.reflect_module else ()
-    if role == "reflect" and config.reflect_on_failure == "retry_plan" and config.plan_strategy:
+        return ("retrieve", "reflect", "action") if config.reflect_module else ("retrieve", "action")
+    if role in {"perceive", "retrieve", "reflect"}:
         return ("plan",)
     return ()

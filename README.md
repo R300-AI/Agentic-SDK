@@ -1,14 +1,14 @@
 # Agentic SDK
 
-Agentic SDK 是一個 Python 程式庫，用來建立一個完整從AI Agent接收輸入到輸出的完整過程。這個過程是依照　Park 等人 2023 年發表的 [Generative Agents](https://arxiv.org/abs/2304.03442)作為核心概念，將人類的各種決策行為視為一種可以持續循環的**流程**（Ｗorkflow），這個流程會由**功能模組**（Module）與**記憶單元**（Memory）所組成：**感知**（Perceive）負責把進來的東西變成看得懂的內容，**規劃**（Plan）負責決定接下來要做什麼，**查找**（Retrieve）負責去找手上沒有的資料，**行動**（Action）負責實際動手做，**反思**（Reflect）負責判斷結果行不行；中間過程的內容都交給記憶單元保存，需要時再取回來用。每一類功能目前內建的模組如下：
+Agentic SDK 是一個 Python 程式庫，用來建立一個完整從AI Agent接收輸入到輸出的完整過程。這個過程是依照　Park 等人 2023 年發表的 [Generative Agents](https://arxiv.org/abs/2304.03442)作為核心概念，將人類的各種決策行為視為一種可以持續循環的**流程**（Ｗorkflow），這個流程會由**功能模組**（Module）與**記憶單元**（Memory）所組成：**感知**（Perceive）負責把進來的東西變成看得懂的內容，**規劃**（Plan）負責決定接下來要做什麼，**查找**（Retrieve）負責去找手上沒有的資料，**行動**（Action）負責實際動手做，**反思**（Reflect）負責在行動前確認規劃與查找有沒有正常完成；中間過程的內容都交給記憶單元保存，需要時再取回來用。每一類功能目前內建的模組如下：
 
 | 功能模組 | 內建的模組 |
 | --- | --- |
 | 感知（Perceive） | 原樣帶過、純文字、文字加圖片、即時語音 |
-| 規劃（Plan） | 判斷下一步該做什麼 |
+| 規劃（Plan） | 固定規則（先查再回答）、判斷下一步該做什麼 |
 | 查找（Retrieve） | 不查直接過、關鍵字比對、語意相似 |
 | 行動（Action） | 直接作答、模型生成、呼叫工具、語音輸出 |
-| 反思（Reflect） | 檢查回應答不答得上、檢查行動結果有沒有出錯 |
+| 反思（Reflect） | 確認查找有沒有找到內容、用模型確認規劃的決定能不能執行 |
 
 上表每一類選一個模組就組成一條完整的流程，不需要自己實作。要換掉其中一個就依照同一組介面寫一個放進來，其他模組不受影響。
 
@@ -24,18 +24,18 @@ Agentic SDK 的目的是為了讓各類 AI 晶片上的模型都能變成落地�
 
 ## 安裝
 
-需要 Python 3.11 以上、3.13 以下，開發環境建議 3.12；下面第一行的 `@v0.2.0` 是版本標籤，
+需要 Python 3.11 以上、3.13 以下，開發環境建議 3.12；下面第一行的 `@v0.3.0` 是版本標籤，
 指定它才會固定在該版的行為，省略時裝到 `main` 的最新內容，而 `main` 改變行為時程式不會報錯、只是結果不一樣。
 
 ```bash
-python -m pip install "git+https://github.com/R300-AI/Agentic-SDK.git@v0.2.0"
+python -m pip install "git+https://github.com/R300-AI/Agentic-SDK.git@v0.3.0"
 python -c "import agentic_sdk; print('Agentic SDK import ok')"
 ```
 
 ## 三個例子
 
 第一個用三類模組組出一條可執行的流程，不需要任何模型服務；第二個把 Action 換成模型生成；
-第三個把 Plan 換成自訂物件。沒有指定的類別不會出現在這一輪，所以第一個例子只跑 Perceive、Retrieve、Action 三類。
+第三個把 Plan 換成自訂物件。沒有指定 Plan 時由不呼叫模型的 `PassThroughPlan` 規劃，沒有指定 Reflect 時不送反思，所以第一個例子依序經過 Perceive、Plan、Retrieve、Plan、Action。
 
 ### 用現成模組組一條流程
 
@@ -114,11 +114,12 @@ workflow = Workflow(
 )
 
 print(workflow.run("特休有幾天？").final_message)
-# 依序經過 perceive、plan、retrieve、action
+# 依序經過 perceive、plan、retrieve、plan、action
 ```
 
 自訂模組不必繼承任何基底類別，只要有 `name` 說明它屬於哪一類、有 `__call__` 收下當前狀態並回傳
-下一站是誰；`ModuleOutput(next_module=None)` 表示這一輪結束。完整合約見[五大模組的共同寫法](https://r300-ai.github.io/Agentic-SDK/tutorials/module-writing-basics/)。
+`ModuleOutput`。下一站由規劃模組選：感知、檢索與反思做完都回到規劃模組，行動做完這一輪結束；
+沒有指定規劃模組時，流程用不呼叫模型的 `PassThroughPlan` 先查一次再回答。完整合約見[五大模組的共同寫法](https://r300-ai.github.io/Agentic-SDK/tutorials/module-writing-basics/)。
 
 ## 延伸閱讀
 

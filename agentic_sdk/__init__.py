@@ -1,6 +1,6 @@
 ﻿"""Clean core package for Agentic SDK v2."""
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 from agentic_sdk.config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
 from agentic_sdk.core.events import ALL_STRUCTURED_FIELDS, DEFAULT_EVENTS_SCHEMA, default_events_schema
@@ -40,8 +40,9 @@ _LAZY_MODULE_EXPORTS = {
     "KeywordRetrieve": "agentic_sdk.modules.retrieve",
     "NextStepPlan": "agentic_sdk.modules.plan",
     "PassThroughPerceive": "agentic_sdk.modules.perceive",
+    "PassThroughPlan": "agentic_sdk.modules.plan",
     "PassThroughRetrieve": "agentic_sdk.modules.retrieve",
-    "ResponseCheckReflect": "agentic_sdk.modules.reflect",
+    "PlanCheckReflect": "agentic_sdk.modules.reflect",
     "SemanticRetrieve": "agentic_sdk.modules.retrieve",
     "TextImagePerceive": "agentic_sdk.modules.perceive",
     "TextPerceive": "agentic_sdk.modules.perceive",
@@ -91,8 +92,9 @@ __all__ = [
     "ModuleSpec",
     "NextStepPlan",
     "PassThroughPerceive",
+    "PassThroughPlan",
     "PassThroughRetrieve",
-    "ResponseCheckReflect",
+    "PlanCheckReflect",
     "SEMANTIC_RETRIEVE_DEFAULT_INDEX_DIRNAME",
     "SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH",
     "SEMANTIC_RETRIEVE_DEFAULT_SOURCE_DIRNAME",

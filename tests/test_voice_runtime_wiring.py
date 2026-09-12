@@ -118,7 +118,7 @@ def test_a_spec_naming_a_module_with_no_parameter_table_says_so():
     from agentic_sdk.config.workflow_config import _MODULE_CONFIG_PARAMS
 
     registry_kinds = {"direct_answer", "evidence_check", "generative", "keyword", "next_step",
-                      "pass_through", "pass_through_retrieve", "response_check", "semantic",
+                      "pass_through", "pass_through_plan", "pass_through_retrieve", "plan_check", "semantic",
                       "text", "text_image", "tool_call_action", "voice_answer", "voice_text"}
 
     assert registry_kinds - set(_MODULE_CONFIG_PARAMS) == set()

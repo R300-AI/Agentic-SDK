@@ -12,9 +12,11 @@ RoutePolicy = Callable[[WorkflowState, str | None], str | None]
 """Decides the next module, given the state and the module the model chose."""
 
 
-_ALLOWED_NEXT = {"retrieve", "action"}
+# Retrieve and action are always mounted. A module called outside a workflow
+# has nobody to tell it more than that.
+_ALWAYS_AVAILABLE = ("retrieve", "action")
 _SYSTEM_PROMPT = (
-    "PLAN. Decide whether the next module should be retrieve or action. "
+    "PLAN. Decide which module should run next. "
     "Return JSON with fields thought and next_module."
 )
 
@@ -31,12 +33,21 @@ class NextStepPlan:
         model: str | None = None,
         system_prompt: str | None = None,
         retrieve_description: str | None = None,
+        reflect_description: str | None = None,
         route_policy: "RoutePolicy | None" = None,
     ) -> None:
-        """Decide whether the next module is retrieve or action.
+        """Decide whether the next module is retrieve, reflect or action.
 
         ``retrieve_description`` describes what the workflow can look up, and is
         given to the model so it can judge whether looking up would help.
+
+        ``reflect_description`` does the same for the mounted reflect module, so
+        the model knows what sending work there is for. Without it, the model
+        reads the reflect module's own description, if it has one.
+
+        The model is only offered the steps available on this visit, and reads
+        what reflect last reported, so it can decide whether to look again or
+        act on what it has.
 
         ``route_policy`` lets the caller have the last word. It receives the
         state and the module the model chose, and returns the module to use.
@@ -47,24 +58,28 @@ class NextStepPlan:
         self._model = require_model(model, self.__class__.__name__)
         self._client = resolve_openai_client(self.__class__.__name__, api_key=api_key, base_url=base_url)
         self._route_policy = route_policy
-        retrieve_hint = f"\nAvailable retrieve source: {retrieve_description}." if retrieve_description else ""
-        self._system_prompt = (system_prompt or _SYSTEM_PROMPT) + retrieve_hint
+        self._base_prompt = system_prompt or _SYSTEM_PROMPT
+        self._retrieve_description = retrieve_description
+        self._reflect_description = reflect_description
 
     @property
     def gen_ai_request_model(self) -> str:
         return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
+        options = dict(state.plan_options) or dict.fromkeys(_ALWAYS_AVAILABLE)
         perceived = state.latest_of(ContextEntryType.PERCEIVED)
         retrieved = state.latest_of(ContextEntryType.RETRIEVED)
+        reflection = state.latest_of(ContextEntryType.REFLECTION)
         intent = perceived.metadata.get("intent") if perceived else "general"
         messages = build_module_messages(
             state.memory,
-            system_prompt=self._system_prompt,
+            system_prompt=self._system_prompt_for(options),
             extra_context={
                 "perceived_intent": intent,
                 "has_retrieved_context": retrieved is not None,
                 "has_attachment": len(state.attachments) > 0,
+                "latest_reflect_report": _reflect_report(reflection),
             },
             latest_user_message=state.latest_user_message(),
         )
@@ -100,7 +115,7 @@ class NextStepPlan:
         next_module = parsed.get("next_module")
         if self._route_policy is not None:
             next_module = self._route_policy(state, next_module)
-        fallback = next_module not in _ALLOWED_NEXT
+        fallback = next_module not in options
         if fallback:
             next_module = "action"
         return ModuleOutput(
@@ -121,6 +136,25 @@ class NextStepPlan:
                 )
             ],
         )
+
+    def _system_prompt_for(self, options: dict[str, str | None]) -> str:
+        lines = [self._base_prompt]
+        if self._retrieve_description:
+            lines.append(f"Available retrieve source: {self._retrieve_description}.")
+        if "reflect" in options:
+            reflect_description = self._reflect_description or options["reflect"]
+            if reflect_description:
+                lines.append(f"Available reflect check: {reflect_description}.")
+        lines.append(f"Choose next_module from: {', '.join(options)}.")
+        return "\n".join(lines)
+
+
+def _reflect_report(entry: ContextEntry | None) -> str | None:
+    if entry is None:
+        return None
+    parts = [f"{key}={entry.metadata[key]}" for key in ("verdict", "reason", "suggestion") if entry.metadata.get(key)]
+    return "; ".join(parts) or str(entry.content or "") or None
+
 
 def _abort_for_provider_failure(state: WorkflowState, stage: str, exc: Exception) -> None:
     message = "Unable to plan the next step right now."

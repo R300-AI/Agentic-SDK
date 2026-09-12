@@ -24,7 +24,7 @@ DEFAULT_EVENTS_SCHEMA = {
         "fields": [],
     },
     "reflect": {
-        "label": "檢查回覆",
+        "label": "檢查規劃與查詢",
         "fields": [ALL_STRUCTURED_FIELDS],
     },
 }

@@ -245,7 +245,7 @@ function processDisplayDescription(event) {
     "判斷工具順序": "正在決定需要的處理步驟。",
     "整理相關來源": "正在查找相關知識庫內容。",
     "準備輸出回覆": "正在整理回覆內容。",
-    "檢查回覆": "已檢查回覆內容，可交付。",
+    "檢查規劃與查詢": "已檢查規劃與查詢結果。",
   };
   if (descriptions[title]) {
     return descriptions[title];

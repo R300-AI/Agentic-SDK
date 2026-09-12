@@ -21,7 +21,7 @@ class KeywordRetrieve:
         contents = [str(item.get("content", "")) for item in hits if item.get("content")]
         snippet = "\n".join(contents) if contents else self._fallback
         return ModuleOutput(
-            next_module="action",
+            next_module="plan",
             payload={
                 "query": query,
                 "retrieved_items": hits,

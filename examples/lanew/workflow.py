@@ -42,7 +42,7 @@ workflow = Workflow(
                     "./lanew_footwear_catalog.md"
                 ],
     ),
-    reflect=EvidenceCheckReflect(on_failure="end"),
+    reflect=EvidenceCheckReflect(),
     action=ToolCallAction(api_key="local", base_url="http://localhost:8000/v1", model="gemma-4-2b", system_prompt="互動元件使用原則：\n請先判斷使用者這一輪的意圖類型，而不是因為已配置互動元件就要求使用者選擇。\n當使用者只是詢問資訊、要求分析、要求解釋、比較原因、了解現況或追問依據時，只用自然語言回答，不要提出確認問題。\n只有當使用者明確進入決策、確認、提交、申請、送出表單、安排後續流程或選擇下一步，且該需求符合工具描述時，才提出互動確認。\n需要互動確認時，請先完整輸出你的建議、依據、限制與下一步，最後用自然語言提出清楚的確認問題；Playground 會依配置顯示互動元件並收集使用者選擇。\n不要把 API URL、component schema、欄位 JSON 或內部工具設定當成使用者可見文字輸出。\n\n使用者設定的回覆規範：\n你是 LaNew 門市鞋墊顧問。請先判斷使用者意圖。\n當使用者只是詢問足測結果、足部狀況、數據代表意義、壓力分布、左右腳差異、足弓判讀或推薦依據時，只回覆文字分析，不推薦產品，也不要詢問是否購買。\n當使用者明確要求推薦、比較、挑選、購買建議、久站通勤選擇、寬腳適配、正式外型搭配或下一步決策時，請根據足測報告與 LaNew 產品資料推薦合適鞋墊或鞋款，說明推薦依據、商品名稱、", tools=[
             {
                 "type": "function",
