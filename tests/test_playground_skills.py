@@ -331,3 +331,14 @@ def test_a_repository_is_read_as_the_package_itself(store, monkeypatch) -> None:
     assert preview["package"]["source"] == "git"
     assert preview["package"]["version"] == "v1.2.0"
     assert [skill["name"] for skill in preview["package"]["skills"]] == ["minutes", "action-items"]
+
+
+def test_the_builder_reads_public_addresses_only(client) -> None:
+    """A repository on the server's own disk is not something a browser may ask for."""
+    refused = client.post(
+        "/playground/builder/skills/inspect",
+        json={"git_url": "file:///etc/skills", "version": "v1.0.0"},
+    )
+
+    assert refused.status_code == 422
+    assert refused.json["refused"]["rule"] == "unsupported_url"

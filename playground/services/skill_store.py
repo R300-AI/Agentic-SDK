@@ -88,7 +88,7 @@ def stage_upload(data: bytes, filename: str) -> str:
     staging_id = uuid.uuid4().hex
     unpacked = _staging_dir(staging_id) / "unpacked" / (Path(filename).stem or "package")
     try:
-        package_dir = unpack_archive(data, unpacked)
+        package_dir = unpack_archive(data, unpacked, source=filename)
     except SkillSourceRefused:
         shutil.rmtree(_staging_dir(staging_id), ignore_errors=True)
         raise
@@ -105,6 +105,9 @@ def stage_git(url: str, version: str) -> str:
     """
     url = url.strip()
     version = version.strip()
+    # The form asks for the address and the version separately, so an empty one
+    # of each is answered here; joined into a source, both would read as the
+    # same complaint about the address.
     if not url:
         raise SkillSourceRefused(rule="missing_source", source="", detail="an address and a version are needed")
     if not version:
@@ -237,7 +240,6 @@ def _describe(package: SkillPackage, *, source: str, url: Any, version: str) -> 
     }
 
 
-
 def _staging_dir(staging_id: str) -> Path:
     return store_root() / "staging" / staging_id
 
@@ -253,9 +255,6 @@ def _read_meta(staging_id: str) -> dict[str, Any]:
     if not meta_path.is_file():
         raise StagingNotFound(staging_id)
     return json.loads(meta_path.read_text(encoding="utf-8"))
-
-
-
 
 
 def _digest(root: Path) -> str:

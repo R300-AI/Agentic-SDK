@@ -6,6 +6,7 @@ sources: what a source resolves to, and what it is refused for.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import zipfile
 from pathlib import Path
@@ -168,3 +169,120 @@ def test_the_planning_module_takes_addresses_and_paths_in_one_parameter(tmp_path
         )
 
     assert [package.name for package in plan.packages] == ["meeting-notes", "proposal"]
+
+
+def test_an_archive_resolves_to_the_same_directory_every_time(tmp_path, cache) -> None:
+    """A package mounted once must mount again from the cache, not from a wrapper around it."""
+    archive = _zip_of(_package(tmp_path / "authored"), tmp_path / "proposal.zip")
+    first = mount_packages([archive])
+
+    second = mount_packages([archive])
+
+    assert [package.name for package in second] == [package.name for package in first] == ["proposal"]
+    assert [skill.name for skill in second[0].skills] == ["write"]
+
+
+def test_a_refused_archive_names_the_archive_the_caller_gave(tmp_path, cache) -> None:
+    package = _package(tmp_path / "authored")
+    (package / "prompts").mkdir(parents=True, exist_ok=True)
+    (package / "prompts" / "huge.md").write_text("x" * (5 * 1024 * 1024 + 1), encoding="utf-8")
+    archive = _zip_of(package, tmp_path / "proposal.zip")
+
+    with pytest.raises(SkillSourceRefused) as refusal:
+        mount_packages([archive])
+
+    assert refusal.value.source == str(archive)
+
+
+def test_a_fetch_that_failed_leaves_nothing_to_mount(tmp_path, cache) -> None:
+    with pytest.raises(SkillSourceRefused):
+        mount_packages([f"file://{tmp_path / 'nothing'}@v1.0.0"])
+
+    assert not any(path.is_dir() for path in cache.rglob("nothing"))
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "https:///org/skills.git@v1.0.0",
+        "https://github.com@v1.0.0",
+        "https://github.com/org/skills.git@v1@v2",
+    ],
+)
+def test_an_address_that_names_no_repository_is_refused(source, cache) -> None:
+    """An address is a host, a repository and one version — not two of any of them."""
+    with pytest.raises(SkillSourceRefused) as refusal:
+        mount_packages([source])
+
+    assert refusal.value.rule == "unsupported_url"
+
+
+def test_a_repository_over_the_ceiling_is_refused(tmp_path, cache) -> None:
+    package = _package(tmp_path / "authored", "meeting-notes")
+    (package / "prompts").mkdir(parents=True, exist_ok=True)
+    (package / "prompts" / "huge.md").write_text("x" * (5 * 1024 * 1024 + 1), encoding="utf-8")
+    url = _repository(tmp_path / "remote", package, "v1.0.0")
+
+    with pytest.raises(SkillSourceRefused) as refusal:
+        mount_packages([f"{url}@v1.0.0"])
+
+    assert refusal.value.rule == "package_too_large"
+
+
+def test_a_repository_is_fetched_without_the_machines_own_git_settings(tmp_path, cache, monkeypatch) -> None:
+    """A login stored for another purpose is never offered to a skill package's repository."""
+    seen: dict = {}
+    url = _repository(tmp_path / "remote", _package(tmp_path / "authored", "meeting-notes"), "v1.0.0")
+    original = subprocess.run
+
+    def remember(command, **kwargs):
+        # Building the repository above used git too; only the fetch passes an
+        # environment, and that is the one this test is about.
+        if kwargs.get("env"):
+            seen.setdefault("environment", kwargs["env"])
+            seen.setdefault("commands", []).append(command)
+        return original(command, **kwargs)
+
+    monkeypatch.setattr("agentic_sdk.skills.source.subprocess.run", remember)
+
+    mount_packages([f"{url}@v1.0.0"])
+
+    assert seen["environment"]["GIT_TERMINAL_PROMPT"] == "0"
+    assert seen["environment"]["GIT_CONFIG_NOSYSTEM"] == "1"
+    assert seen["environment"]["GIT_CONFIG_GLOBAL"] == os.devnull
+    assert ["git", "-c", "credential.helper=", "fetch", "--depth", "1", "--quiet", "origin", "v1.0.0"] in seen["commands"]
+    # The history is how the files arrived, not part of the package.
+    assert not any(path.name == ".git" for path in cache.rglob("*"))
+
+
+def test_an_archive_of_loose_files_is_the_package_itself(tmp_path, cache) -> None:
+    package = _package(tmp_path / "authored")
+    archive = tmp_path / "meeting-notes.zip"
+    with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as written:
+        for file in sorted(package.rglob("*")):
+            if file.is_file():
+                written.write(file, file.relative_to(package).as_posix())
+
+    mounted = mount_packages([archive])
+
+    assert [package.name for package in mounted] == ["meeting-notes"]
+
+
+def test_an_archive_that_writes_outside_itself_is_refused(tmp_path, cache) -> None:
+    archive = tmp_path / "escaping.zip"
+    with zipfile.ZipFile(archive, "w") as written:
+        written.writestr("../escaped.md", "不該落在技能包外面")
+
+    with pytest.raises(SkillSourceRefused) as refusal:
+        mount_packages([archive])
+
+    assert refusal.value.rule == "unreadable_archive"
+    assert not (tmp_path / "escaped.md").exists()
+
+
+def test_without_a_setting_packages_are_kept_in_the_users_cache(monkeypatch) -> None:
+    from agentic_sdk.skills.source import cache_root
+
+    monkeypatch.delenv("AGENTIC_SDK_SKILL_PACKAGES", raising=False)
+
+    assert cache_root() == Path.home() / ".cache" / "agentic-sdk" / "skill-packages"

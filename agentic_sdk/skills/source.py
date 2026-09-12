@@ -77,11 +77,19 @@ def address_of(source: str | Path) -> tuple[str, str] | None:
     if scheme not in _FETCHABLE_SCHEMES:
         raise SkillSourceRefused(rule="unsupported_url", source=text, detail=f"only {' and '.join(_FETCHABLE_SCHEMES)} addresses are read")
     rest = text[len(scheme) + len("://") :]
-    netloc, _, path = rest.partition("/")
+    netloc, separator, path = rest.partition("/")
     if "@" in netloc:
         # The address is kept with the agent and shown to everyone who opens it,
         # so a login written into it would be handed out with the agent.
         raise SkillSourceRefused(rule="unsupported_url", source=text, detail="the address carries a login; only public repositories are read")
+    if scheme != "file" and not netloc:
+        raise SkillSourceRefused(rule="unsupported_url", source=text, detail="the address names no host")
+    if not separator or not path:
+        raise SkillSourceRefused(rule="unsupported_url", source=text, detail="the address names no repository")
+    if path.count("@") > 1:
+        # Two version marks mean the version was written twice, and reading the
+        # last one would quietly fetch an address nobody wrote.
+        raise SkillSourceRefused(rule="unsupported_url", source=text, detail="the address carries more than one version")
     if "@" not in path:
         # A package that follows its author's latest commit changes an agent's
         # behaviour without anyone mounting anything.
@@ -139,13 +147,16 @@ def fetch_git_package(url: str, version: str, target: Path) -> Path:
     return target
 
 
-def unpack_archive(data: bytes, target: Path) -> Path:
+def unpack_archive(data: bytes, target: Path, *, source: str = "") -> Path:
     """Unpack a zip archive into ``target`` and return the package directory inside it.
 
     An archive that holds one folder is that package; an archive of loose files
-    is the package itself, and takes the name it is given.
+    is the package itself, and takes the name it is given. ``source`` is what the
+    caller called this archive, so a refusal names what they handed over rather
+    than where it was being unpacked to.
     """
-    _within_the_ceiling(len(data), target.name)
+    named = source or target.name
+    _within_the_ceiling(len(data), named)
     target.mkdir(parents=True, exist_ok=True)
     try:
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -155,15 +166,15 @@ def unpack_archive(data: bytes, target: Path) -> Path:
                     continue
                 relative = PurePosixPath(member.filename)
                 if relative.is_absolute() or ".." in relative.parts:
-                    raise SkillSourceRefused(rule="unreadable_archive", source=member.filename, detail="the archive holds a path that leaves it")
+                    raise SkillSourceRefused(rule="unreadable_archive", source=named, detail=f"the archive holds a path that leaves it: {member.filename}")
                 written = target / Path(*relative.parts)
                 written.parent.mkdir(parents=True, exist_ok=True)
                 # Counted as it is written: the sizes an archive declares are
                 # the archive's own claim, and a small upload can unpack to gigabytes.
-                with archive.open(member) as source, written.open("wb") as destination:
-                    budget -= _copy_within(source, destination, budget, member.filename)
+                with archive.open(member) as unpacking, written.open("wb") as destination:
+                    budget -= _copy_within(unpacking, destination, budget, named)
     except zipfile.BadZipFile as exc:
-        raise SkillSourceRefused(rule="unreadable_archive", source=target.name, detail=str(exc)) from exc
+        raise SkillSourceRefused(rule="unreadable_archive", source=named, detail=str(exc)) from exc
     return _single_directory_in(target) or target
 
 
@@ -171,25 +182,26 @@ def _fetched(url: str, version: str) -> Path:
     package = cache_root() / _key(f"{url}@{version}") / repository_name(url)
     if package.is_dir():
         return package
-    if package.exists():
-        package.unlink()
+    while_fetching = package.with_name(package.name + ".partial")
+    shutil.rmtree(while_fetching, ignore_errors=True)
     try:
-        fetch_git_package(url, version, package)
+        fetch_git_package(url, version, while_fetching)
     except SkillSourceRefused:
-        shutil.rmtree(package, ignore_errors=True)
+        shutil.rmtree(while_fetching, ignore_errors=True)
         raise
+    while_fetching.rename(package)
     return package
 
 
 def _unpacked(archive: Path) -> Path:
     data = archive.read_bytes()
-    unpacked = cache_root() / _key(hashlib.sha256(data).hexdigest())
-    if unpacked.is_dir():
-        return _single_directory_in(unpacked) or unpacked
+    target = cache_root() / _key(hashlib.sha256(data).hexdigest()) / (archive.stem or "package")
+    if target.is_dir():
+        return _single_directory_in(target) or target
     try:
-        return unpack_archive(data, unpacked / (archive.stem or "package"))
+        return unpack_archive(data, target, source=str(archive))
     except SkillSourceRefused:
-        shutil.rmtree(unpacked, ignore_errors=True)
+        shutil.rmtree(target.parent, ignore_errors=True)
         raise
 
 

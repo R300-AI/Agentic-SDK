@@ -71,8 +71,10 @@ because a repository moved.
   for reasons that have nothing to do with the package. The refusal says which
   of the two it was: `fetch_failed` names the address, and the package rules of
   ADR-0004 name a file.
-- The Playground's own source checks are gone: it reports what the SDK refuses,
-  translated into the wording a person reads.
+- The Playground's own source rules are gone: it reports what the SDK refuses,
+  translated into the wording a person reads. What it keeps is its own form —
+  an address and a version are asked for separately, so an empty one of each is
+  answered before they are joined into a source.
 - The Playground narrows the address rule to `https`, because its addresses are
   typed into a browser by someone it does not know. The SDK also reads a
   `file://` repository, which is a path on the machine doing the mounting.
