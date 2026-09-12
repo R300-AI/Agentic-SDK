@@ -11,12 +11,12 @@ import yaml
 MAPPING_FILE_NAME = "package.yaml"
 """The one file in a package that records which skill uses which instructions and prompts."""
 
-KEEP_FROM_THE_AGENT_KEY = "disable-model-invocation"
-"""The mapping declaration that withholds a skill from the planning module's own choosing.
+WITHHELD_FROM_PLANNING_KEY = "disable-model-invocation"
+"""The mapping declaration that keeps a skill out of the planning module's own choosing.
 
-The name is the one Claude Code uses for the same thing. It lives here rather
-than in SKILL.md so that SKILL.md keeps only the fields the Agent Skills
-standard defines, and a skill written for another tool loads unchanged.
+The key is the name Claude Code uses for the same thing. It lives in the mapping
+file rather than in SKILL.md so that SKILL.md keeps only the fields the Agent
+Skills standard defines, and a skill written for another tool loads unchanged.
 """
 
 MAX_DESCRIPTION_CHARACTERS = 1024
@@ -52,7 +52,7 @@ class Skill:
     instructions: tuple[str, ...]
     prompts: tuple[str, ...]
     package: str
-    keep_from_the_agent: bool = False
+    withheld_from_planning: bool = False
 
     def sections(self) -> list[str]:
         """What a conversation that takes up this skill carries: body, then instructions, then prompts.
@@ -75,11 +75,13 @@ class SkillPackage:
     def load(cls, path: str | Path, *, max_skill_characters: int = DEFAULT_MAX_SKILL_CHARACTERS) -> "SkillPackage":
         """Read a package, refusing it on the first rule it breaks.
 
-        Every file is checked before any is trusted: a package is text only, and
-        every file the mapping names exists. Files no skill names are left alone —
-        a package cloned from a repository carries a README, and refusing it for
-        that stopped nothing the text-only rule does not already stop. See
-        ADR-0004 and ADR-0006.
+        Every refusal names one rule and one file, including the ones a broken
+        mapping file causes: whoever mounts a package has to be told what to fix,
+        and a parser error naming a line number is not that.
+
+        Files no skill names are left alone — a package cloned from a repository
+        carries a README, and refusing it for that stopped nothing the text-only
+        rule does not already stop. See ADR-0004 and ADR-0006.
         """
         root = Path(path)
         name = root.name
@@ -99,49 +101,78 @@ class SkillPackage:
         if not (root / MAPPING_FILE_NAME).is_file():
             raise refuse("missing_file", MAPPING_FILE_NAME, "a skill package needs a mapping file")
 
-        mapping = _read_mapping(root)
-        entries = mapping.get("skills") or {}
+        try:
+            loaded = yaml.safe_load((root / MAPPING_FILE_NAME).read_text(encoding="utf-8"))
+        except yaml.YAMLError as error:
+            raise refuse("invalid_mapping", MAPPING_FILE_NAME, f"the mapping file is not valid YAML: {error.__class__.__name__}") from error
+        if not isinstance(loaded, dict):
+            raise refuse("invalid_mapping", MAPPING_FILE_NAME, "the mapping file holds a name for the maintainer and one for the skills")
+        entries = loaded.get("skills") or {}
+        if not isinstance(entries, dict):
+            raise refuse("invalid_mapping", MAPPING_FILE_NAME, "skills is written as one entry per skill name, not as a list")
+
         skills_dir = root / "skills"
         for directory in sorted(child.name for child in skills_dir.iterdir() if child.is_dir()) if skills_dir.is_dir() else []:
             if directory not in entries:
                 raise refuse("name_mismatch", f"skills/{directory}/SKILL.md", "the mapping file has no entry for this skill")
 
         skills: list[Skill] = []
-        for skill_name, entry in entries.items():
+        for skill_name, raw_entry in entries.items():
             skill_name = str(skill_name)
-            entry = entry or {}
             skill_file = f"skills/{skill_name}/SKILL.md"
+            if raw_entry is not None and not isinstance(raw_entry, dict):
+                raise refuse("invalid_mapping", MAPPING_FILE_NAME, f"the entry for skill {skill_name!r} lists which files it uses, not a single value")
+            entry: dict[str, Any] = raw_entry or {}
             if _leaves_its_folder(skill_name):
                 raise refuse("outside_package", skill_file, "a skill name is one directory under skills/")
             if not (root / skill_file).is_file():
                 raise refuse("missing_file", skill_file, "the mapping file lists a skill that has no SKILL.md")
             for folder in ("instructions", "prompts"):
-                for file_name in entry.get(folder) or []:
+                named = entry.get(folder)
+                if named is not None and not isinstance(named, list):
+                    raise refuse("invalid_mapping", MAPPING_FILE_NAME, f"skill {skill_name!r} lists its {folder} as a list of file names")
+                for file_name in named or []:
                     referenced = f"{folder}/{file_name}"
                     if _leaves_its_folder(str(file_name)):
                         raise refuse("outside_package", referenced, f"skill {skill_name!r} names a file outside {folder}/")
                     if not (root / referenced).is_file():
                         raise refuse("missing_file", referenced, f"skill {skill_name!r} uses a file the package does not have")
-            kept = entry.get(KEEP_FROM_THE_AGENT_KEY, False)
-            if not isinstance(kept, bool):
+            withheld = entry.get(WITHHELD_FROM_PLANNING_KEY, False)
+            if not isinstance(withheld, bool):
                 raise refuse(
                     "invalid_declaration",
                     MAPPING_FILE_NAME,
-                    f"skill {skill_name!r} declares {KEEP_FROM_THE_AGENT_KEY} as {kept!r}; write true or false",
+                    f"skill {skill_name!r} declares {WITHHELD_FROM_PLANNING_KEY} as {withheld!r}; write true or false",
                 )
-            skill = _load_skill(root, package=name, skill_name=skill_name, entry=entry, keep_from_the_agent=kept)
-            if skill.name != skill_name:
+            frontmatter, body = _split_frontmatter((root / skill_file).read_text(encoding="utf-8"))
+            declared_name = str(frontmatter.get("name", "")).strip()
+            description = str(frontmatter.get("description", "")).strip()
+            # The name and description are recorded in SKILL.md and nowhere else
+            # (ADR-0004). Reading the directory name instead mounted a skill with
+            # an empty description and left the name check unable to fail.
+            if not declared_name or not description:
+                raise refuse("missing_frontmatter", skill_file, "SKILL.md needs a name and a description in its frontmatter")
+            if declared_name != skill_name:
                 raise refuse(
                     "name_mismatch",
                     skill_file,
-                    f"SKILL.md names the skill {skill.name!r}, but its directory and mapping entry say {skill_name!r}",
+                    f"SKILL.md names the skill {declared_name!r}, but its directory and mapping entry say {skill_name!r}",
                 )
-            if len(skill.description) > MAX_DESCRIPTION_CHARACTERS:
+            if len(description) > MAX_DESCRIPTION_CHARACTERS:
                 raise refuse(
                     "description_too_long",
                     skill_file,
-                    f"the description has {len(skill.description)} characters; the limit is {MAX_DESCRIPTION_CHARACTERS}",
+                    f"the description has {len(description)} characters; the limit is {MAX_DESCRIPTION_CHARACTERS}",
                 )
+            skill = Skill(
+                name=declared_name,
+                description=description,
+                body=body.strip(),
+                instructions=tuple(_read_text(root / "instructions" / str(file)) for file in entry.get("instructions") or []),
+                prompts=tuple(_read_text(root / "prompts" / str(file)) for file in entry.get("prompts") or []),
+                package=name,
+                withheld_from_planning=withheld,
+            )
             size = sum(len(section) for section in skill.sections())
             if size > max_skill_characters:
                 raise refuse(
@@ -151,12 +182,12 @@ class SkillPackage:
                 )
             skills.append(skill)
 
-        maintainer = {str(key): str(value) for key, value in (mapping.get("maintainer") or {}).items()}
+        maintainer = {str(key): str(value) for key, value in (loaded.get("maintainer") or {}).items()}
         return cls(name=name, path=root, maintainer=maintainer, skills=tuple(skills))
 
 
 def mount_packages(
-    packages: Iterable[str | Path | SkillPackage],
+    packages: Iterable[str | Path],
     *,
     max_skill_characters: int = DEFAULT_MAX_SKILL_CHARACTERS,
 ) -> tuple[SkillPackage, ...]:
@@ -168,7 +199,7 @@ def mount_packages(
     mounted: list[SkillPackage] = []
     owners: dict[str, str] = {}
     for candidate in packages:
-        package = candidate if isinstance(candidate, SkillPackage) else SkillPackage.load(candidate, max_skill_characters=max_skill_characters)
+        package = SkillPackage.load(candidate, max_skill_characters=max_skill_characters)
         for skill in package.skills:
             if skill.name in owners:
                 raise SkillPackageRefused(
@@ -207,31 +238,16 @@ def _relative(root: Path, file: Path) -> str:
     return file.relative_to(root).as_posix()
 
 
-def _read_mapping(root: Path) -> dict[str, Any]:
-    loaded = yaml.safe_load((root / MAPPING_FILE_NAME).read_text(encoding="utf-8"))
-    return loaded if isinstance(loaded, dict) else {}
-
-
-def _load_skill(root: Path, *, package: str, skill_name: str, entry: dict[str, Any], keep_from_the_agent: bool) -> Skill:
-    frontmatter, body = _split_frontmatter((root / "skills" / skill_name / "SKILL.md").read_text(encoding="utf-8"))
-    return Skill(
-        name=str(frontmatter.get("name", skill_name)),
-        description=str(frontmatter.get("description", "")),
-        body=body.strip(),
-        instructions=tuple(_read_text(root / "instructions" / str(file)) for file in entry.get("instructions") or []),
-        prompts=tuple(_read_text(root / "prompts" / str(file)) for file in entry.get("prompts") or []),
-        package=package,
-        keep_from_the_agent=keep_from_the_agent,
-    )
-
-
 def _split_frontmatter(text: str) -> tuple[dict[str, Any], str]:
     if not text.startswith("---"):
         return {}, text
     closing = text.find("\n---", 3)
     if closing == -1:
         return {}, text
-    loaded = yaml.safe_load(text[3:closing])
+    try:
+        loaded = yaml.safe_load(text[3:closing])
+    except yaml.YAMLError:
+        loaded = None
     body = text[closing + len("\n---"):]
     return (loaded if isinstance(loaded, dict) else {}), body
 

@@ -83,17 +83,17 @@ def test_a_skill_can_be_withheld_from_the_planning_modules_own_choosing(tmp_path
         tmp_path,
         skills={
             "write": {"description": "把計畫書的一章寫出來", "body": "先確認章節目標。"},
-            "submit": {"description": "送出申請並通知窗口", "body": "先確認收件人。", "keep_from_the_agent": True},
+            "submit": {"description": "送出申請並通知窗口", "body": "先確認收件人。", "withheld_from_planning": True},
         },
     )
 
-    kept = {skill.name: skill.keep_from_the_agent for skill in _skills_of(package)}
+    withheld = {skill.name: skill.withheld_from_planning for skill in _skills_of(package)}
 
-    assert kept == {"write": False, "submit": True}
+    assert withheld == {"write": False, "submit": True}
 
 
 def test_a_declaration_that_is_not_true_or_false_is_refused(tmp_path) -> None:
-    package = write_skill_package(tmp_path, skills=_write_skill(keep_from_the_agent="有時候"))
+    package = write_skill_package(tmp_path, skills=_write_skill(withheld_from_planning="有時候"))
 
     refusal = _refusal(package)
 
@@ -204,6 +204,102 @@ def test_a_file_that_links_to_somewhere_else_is_refused(tmp_path) -> None:
     refusal = _refusal(package)
 
     assert (refusal.rule, refusal.path) == ("linked_file", "prompts/format.md")
+
+
+def test_the_mapping_file_decides_the_order_of_skills_and_of_their_files(tmp_path) -> None:
+    """Not alphabetical: the author's order is what a conversation receives."""
+    package = write_skill_package(
+        tmp_path,
+        skills={
+            "write": {"description": "寫一章", "body": "本體 A", "instructions": ["second.md", "first.md"], "prompts": ["format.md"]},
+            "audit": {"description": "檢查一章", "body": "本體 B"},
+        },
+        instructions={"first.md": "步驟一", "second.md": "步驟二"},
+        prompts={"format.md": "格式"},
+    )
+
+    skills = _skills_of(package)
+
+    assert [skill.name for skill in skills] == ["write", "audit"]
+    assert skills[0].sections() == ["本體 A", "步驟二", "步驟一", "格式"]
+
+
+def test_a_skill_md_carrying_only_standard_fields_is_mounted(tmp_path) -> None:
+    """A skill written for another tool loads here without edits."""
+    package = write_skill_package(
+        tmp_path,
+        skills={
+            "write": {
+                "frontmatter": {
+                    "name": "write",
+                    "description": "把計畫書的一章寫出來",
+                    "license": "Apache-2.0",
+                    "compatibility": "Requires nothing in particular",
+                    "metadata": {"author": "example-org"},
+                    "allowed-tools": "Read",
+                },
+                "body": "先確認章節目標。",
+            }
+        },
+    )
+
+    assert [skill.description for skill in _skills_of(package)] == ["把計畫書的一章寫出來"]
+
+
+def test_a_skill_md_without_frontmatter_is_refused(tmp_path) -> None:
+    """The name and description live in SKILL.md and nowhere else — ADR-0004.
+
+    Falling back to the directory name mounted a nameless skill with an empty
+    description, and made the name check unable to fail.
+    """
+    package = write_skill_package(tmp_path, skills={"write": {"frontmatter": None, "body": "先確認章節目標。"}})
+
+    refusal = _refusal(package)
+
+    assert (refusal.rule, refusal.path) == ("missing_frontmatter", "skills/write/SKILL.md")
+
+
+def test_a_skill_md_without_a_description_is_refused(tmp_path) -> None:
+    package = write_skill_package(tmp_path, skills=_write_skill(description=""))
+
+    refusal = _refusal(package)
+
+    assert (refusal.rule, refusal.path) == ("missing_frontmatter", "skills/write/SKILL.md")
+
+
+def test_a_skill_larger_than_the_default_limit_is_refused_without_being_told_a_limit(tmp_path) -> None:
+    package = write_skill_package(tmp_path, skills=_write_skill(body="字" * 20_001))
+
+    refusal = _refusal(package)
+
+    assert (refusal.rule, refusal.path) == ("too_large", "skills/write/SKILL.md")
+    assert "20000" in refusal.detail
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        pytest.param({"maintainer": {}, "skills": ["write"]}, id="skills-as-a-list"),
+        pytest.param({"maintainer": {}, "skills": {"write": "steps.md"}}, id="entry-as-a-string"),
+        pytest.param({"maintainer": {}, "skills": {"write": {"instructions": "steps.md"}}}, id="files-as-a-string"),
+    ],
+)
+def test_a_mapping_file_of_the_wrong_shape_is_refused_with_a_rule_and_a_file(tmp_path, mapping) -> None:
+    """A broken mapping file must say so, not raise whatever Python raises."""
+    package = write_skill_package(tmp_path, skills=_write_skill(), mapping=mapping)
+
+    refusal = _refusal(package)
+
+    assert (refusal.rule, refusal.path) == ("invalid_mapping", "package.yaml")
+
+
+def test_a_mapping_file_that_is_not_valid_yaml_is_refused(tmp_path) -> None:
+    package = write_skill_package(tmp_path, skills=_write_skill())
+    (package / "package.yaml").write_text("skills:\n  write: [unclosed\n", encoding="utf-8")
+
+    refusal = _refusal(package)
+
+    assert (refusal.rule, refusal.path) == ("invalid_mapping", "package.yaml")
 
 
 def test_the_maintainer_comes_back_with_the_package(tmp_path) -> None:

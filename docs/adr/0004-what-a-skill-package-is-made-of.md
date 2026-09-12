@@ -4,8 +4,7 @@ Date: 2026-09-10
 
 ## Status
 
-Accepted. One rule below — refusing a package for a file no skill uses — was
-withdrawn by ADR-0006, which also moved skills onto the planning module.
+Accepted
 
 ## Context
 
