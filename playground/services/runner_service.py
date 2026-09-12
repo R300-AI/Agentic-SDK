@@ -17,10 +17,11 @@ from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, Gates, 
 from agentic_sdk.core.events import WORKFLOW_MODULE_NAMES, default_event_label
 
 from playground.models import RunnerSceneProfile
+from playground.services import skill_store
 from playground.services.model_endpoints import MissingEndpointBinding, MissingEndpointCredentials, endpoint_params_for_role
 from playground.services.runner_conversation import RunnerConversationState, RunnerConversationTurn
 from playground.services.source_builder import BuilderSourceConfig
-from playground.services.workflow_reachability import reachable_workflow_roles
+from playground.services.workflow_reachability import MODEL_PLANNING_MODULES, reachable_workflow_roles
 from playground.services.workflow_spec import spec_to_config
 
 
@@ -118,6 +119,24 @@ def run_agent(
             "error": "缺少輸入內容。",
             "debug_messages": ["Input：缺少輸入內容，Workflow 尚未執行 Action。"],
             "process_events": [_process_event("input", "等待輸入", "還沒有收到可執行的內容，因此尚未開始處理。")],
+            "result": fallback,
+            "scene_profile": asdict(scene_profile),
+            "source_execution": source_execution,
+        }
+
+    missing_packages = skill_store.missing_packages(spec)
+    if missing_packages:
+        # The agent names packages this server does not hold, so its skills
+        # cannot be taken up. Saying so beats answering as if it had none.
+        message = f"這個 Agent 掛的技能包不在這台伺服器上：{'、'.join(missing_packages)}。請回到編輯流程重新掛載，並儲存 Agent。"
+        fallback = get_runner_demo_result(scene_profile)
+        return {
+            "status": "configuration_error",
+            "final_message": message,
+            "error": message,
+            "detail": f"missing skill packages: {', '.join(missing_packages)}",
+            "debug_messages": [f"設定：技能包 {'、'.join(missing_packages)} 不在伺服器上，Workflow 尚未執行。"],
+            "process_events": [_process_event("builder", "檢查技能包", message)],
             "result": fallback,
             "scene_profile": asdict(scene_profile),
             "source_execution": source_execution,
@@ -716,9 +735,11 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
     if plan_entry is not None:
         next_module = plan_entry.metadata.get("next_module")
         fallback = "；模型輸出不合法，已 fallback 到 action" if plan_entry.metadata.get("fallback") else ""
-        planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else "NextStepPlan "
+        planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else f"{config.plan_module} "
+        picked_skill = plan_entry.metadata.get("skill")
+        took_up = f"；取用技能 /{picked_skill}" if picked_skill else ""
         if next_module:
-            messages.append(f"Plan：{planner}選擇下一步 {next_module}{fallback}。")
+            messages.append(f"Plan：{planner}選擇下一步 {next_module}{took_up}{fallback}。")
 
     retrieve_entries = [entry for entry in workflow_result.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
     retrieve_missed = _retrieve_missed(retrieve_entries)
@@ -1239,7 +1260,7 @@ def build_workflow(
         entry_module=config.entry_module,
         events_schema=config.events_schema,
         perceive=_perceive_from_config(config, endpoint_selections, reachable_roles, voice_session_id),
-        plan=_plan_from_config(config, endpoint_selections, reachable_roles),
+        plan=_plan_from_config(config, endpoint_selections, reachable_roles, skill_store.package_paths(spec)),
         retrieve=_retrieve_from_config(config, endpoint_selections, reachable_roles, runtime.source_list, runtime.saved_path),
         action=_action_from_config(config, endpoint_selections, reachable_roles, voice_session_id),
         reflect=_reflect_from_config(config, endpoint_selections, reachable_roles),
@@ -1271,7 +1292,7 @@ def _initialization_steps(
         )
     if "perceive" in reachable_roles:
         steps.append(("perceive", "輸入解析器", lambda: _perceive_from_config(config, endpoint_selections, reachable_roles)))
-    if "plan" in reachable_roles and config.plan_module == "NextStepPlan":
+    if "plan" in reachable_roles and config.plan_module in {"NextStepPlan", "NextStepWithSkills"}:
         steps.append(("plan", "流程判斷器", lambda: _plan_from_config(config, endpoint_selections, reachable_roles)))
     if "retrieve" in reachable_roles:
         retrieve_label = "知識庫索引" if semantic_retrieve_required else _retrieve_process_title(config)
@@ -1350,17 +1371,20 @@ def _perceive_from_config(
     return PassThroughPerceive(input_label=config.perceive_input_label or "")
 
 
-def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str]):
-    from agentic_sdk.modules.plan import NextStepPlan, PassThroughPlan
+def _plan_from_config(config: BuilderSourceConfig, endpoint_selections: dict[str, str], reachable_roles: set[str], skill_packages: list | None = None):
+    from agentic_sdk.modules.plan import NextStepPlan, NextStepWithSkills, PassThroughPlan
 
-    if config.plan_module != "NextStepPlan":
+    if config.plan_module not in {"NextStepPlan", "NextStepWithSkills"}:
         return PassThroughPlan()
-    return NextStepPlan(
+    arguments = dict(
         system_prompt=config.plan_system_prompt,
         retrieve_description=config.retrieve_description,
         route_policy=_retry_route_policy(has_retrievable_content=_has_retrievable_content(config)),
         **endpoint_params_for_role(_plan_endpoint_role(endpoint_selections, reachable_roles), endpoint_selections),
     )
+    if config.plan_module == "NextStepWithSkills":
+        return NextStepWithSkills(skill_packages=list(skill_packages or []), **arguments)
+    return NextStepPlan(**arguments)
 
 
 def _has_retrievable_content(config: BuilderSourceConfig) -> bool:

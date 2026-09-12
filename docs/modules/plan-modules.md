@@ -41,3 +41,51 @@ Plan 模組負責根據感知結果與目前上下文決定 workflow 的下一�
 | `retrieve_description` | `string|null` | 否 | `null` | 取回節點用途說明，會被放入 planner prompt；不應放入個案名稱或展示用標籤。傳入自訂 `system_prompt` 時仍然生效。 |
 | `reflect_description` | `string|null` | 否 | `null` | 反思模組用途說明，只在反思可選時放入 planner prompt。未提供時使用掛上的反思模組自帶的 `description`；兩者都沒有時，prompt 不描述反思。傳入自訂 `system_prompt` 時仍然生效。 |
 | `route_policy` | `callable|null` | 否 | `null` | 由呼叫方決定最終路由。收到 `(state, 模型選的模組)`，回傳要採用的模組；回傳模型的選擇即表示接受。SDK 不附預設政策——哪些問題需要查資料取決於題材，那是應用程式知道而通用 planner 不知道的事。 |
+
+## NextStepWithSkills
+
+`NextStepWithSkills` 是 `NextStepPlan` 加上技能。除了決定下一步，它還決定這一輪要不要取用某一個技能；其餘行為與 `NextStepPlan` 相同，流程與其他模組都不知道技能的存在。技能包的格式與檢查規則見[技能包](skill-packages.md)。
+
+建立時傳入技能包路徑，模組當場讀完並掛上；執行期不再讀檔案。
+
+```python
+plan = NextStepWithSkills(
+    api_key=api_key,
+    base_url=base_url,
+    model="gpt-4o-mini",
+    skill_packages=["skill_packages/meeting-notes"],
+)
+```
+
+### 技能怎麼被選中
+
+兩條路，使用者指名優先：
+
+1. **使用者指名**：訊息以 `/名稱` 開頭，且該名稱是已掛上的技能。開頭是別的路徑（例如 `/usr/local`）時當一般文字處理。
+2. **模型挑選**：系統提示附上 `available_skills:` 清單，一行一個技能，格式是 `名稱: 說明`。模型在回覆裡多填一個 `skill` 欄位；填的名稱沒掛上就當作沒挑。
+
+選中的技能，內容逐字加進對話，成為一則使用者角色的訊息——不摘要、不改寫、不覆蓋先前說過的話。後續各輪由對話本身帶著它，不重讀技能包。同一個技能在一段對話裡只加入一次，一段對話可以陸續取用多個技能。
+
+決策條目的 metadata 多兩個欄位：`skill` 是這一輪取用的技能名稱，`skills_left_out` 是因為清單預算而沒列給模型看的技能數。`payload` 的 `picked_skill` 同樣是取用的技能名稱。
+
+### 技能清單的預算
+
+技能多的 agent 不應該把模型的輸入花在目錄上。清單先切每一條說明，再從尾端整條省略：
+
+| 上限 | 預設值 | 作用 |
+| --- | --- | --- |
+| `max_listing_characters` | `8000` | 整份清單的字元上限。超過時後面的技能不列入，數量記在 `skills_left_out`。 |
+| `max_listing_description_characters` | `1536` | 單一技能在清單裡的說明長度。超過的部分以 `…` 截斷，後面的技能因此仍列得出來。 |
+
+沒列進清單的技能仍然掛著：使用者用 `/名稱` 指名時照樣取用。宣告 `disable-model-invocation: true` 的技能一律不列入清單，只能由使用者指名。
+
+### 初始化參數
+
+`NextStepPlan` 的參數全部適用，另有四個：
+
+| 參數 | 型態 | 必填 | 預設值 | 說明 |
+| --- | --- | --- | --- | --- |
+| `skill_packages` | `str|Path|Iterable` | 否 | `()` | 技能包來源：資料夾、zip 壓縮檔，或帶版本的 git 網址 `https://…/name.git@v1.2.0`。單一來源可以不寫成串列。建立時取回並檢查，來源有問題丟 `SkillSourceRefused`，技能包不合格丟 `SkillPackageRefused`。見[技能包](skill-packages.md#從-github-掛載)。 |
+| `max_skill_characters` | `int` | 否 | `20000` | 單一技能加進對話的內容上限，超過的技能包被拒絕。 |
+| `max_listing_characters` | `int` | 否 | `8000` | 給模型看的技能清單總字元上限。 |
+| `max_listing_description_characters` | `int` | 否 | `1536` | 清單裡單條說明的字元上限。 |

@@ -17,7 +17,7 @@
 | 家族 | 標準模組列表 | 主要工作 |
 | --- | --- | --- |
 | Perceive | PassThroughPerceive、TextPerceive、TextImagePerceive、VoiceTextPerceive | 把原始輸入整理成查詢、標籤與摘要。 |
-| Plan | PassThroughPlan、NextStepPlan | 在 `Retrieve`、`Reflect`、`Action` 中選下一步；`PassThroughPlan` 用固定規則，`NextStepPlan` 用模型。 |
+| Plan | PassThroughPlan、NextStepPlan、NextStepWithSkills | 在 `Retrieve`、`Reflect`、`Action` 中選下一步；`PassThroughPlan` 用固定規則，`NextStepPlan` 用模型，`NextStepWithSkills` 另外決定這一輪取不取用技能。 |
 | Retrieve | PassThroughRetrieve、KeywordRetrieve、SemanticRetrieve | 查回條目、歷史紀錄或知識內容，或不查直接往下走。 |
 | Action | DirectAnswerAction、GenerativeAction、ToolCallAction、VoiceAnswerAction | 組成自然語言回應、固定格式文字輸出、OpenAI 標準工具呼叫，或同時說出口與顯示在畫面上的雙頻道回覆。 |
 | Reflect | EvidenceCheckReflect、PlanCheckReflect | 在行動前確認檢索有沒有找到內容、規劃的決定能不能執行，回報交給規劃模組。 |

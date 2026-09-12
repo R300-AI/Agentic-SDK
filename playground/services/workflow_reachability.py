@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+MODEL_PLANNING_MODULES = {"NextStepPlan", "NextStepWithSkills"}
+"""The planning modules that ask a model, and so need an endpoint bound to plan."""
 
 if TYPE_CHECKING:
     from playground.services.source_builder import BuilderSourceConfig
@@ -29,7 +31,7 @@ def reachable_openai_roles(config: "BuilderSourceConfig") -> set[str]:
     roles: set[str] = set()
     if "perceive" in reachable and config.perceive_module in _MODEL_PERCEIVE_MODULES:
         roles.add("perceive")
-    if "plan" in reachable and config.plan_module == "NextStepPlan":
+    if "plan" in reachable and config.plan_module in MODEL_PLANNING_MODULES:
         roles.add("plan")
     if "action" in reachable and config.action_module in _MODEL_ACTION_MODULES:
         roles.add("action")

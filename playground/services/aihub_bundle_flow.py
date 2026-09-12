@@ -17,6 +17,7 @@ def save_runtime_bundle(
     workflow_name: str,
     description: str,
     builder_upload_id: str | None,
+    skill_packages: list[dict[str, object]] | tuple[dict[str, object], ...] = (),
 ) -> dict[str, object]:
     resolved_agent_id = (agent_id or "").strip()
     if not resolved_agent_id:
@@ -27,6 +28,7 @@ def save_runtime_bundle(
         workflow_name=workflow_name,
         description=description,
         builder_upload_id=builder_upload_id,
+        skill_packages=skill_packages,
     )
     attempts = _bundle_upload_attempts()
     upload_result: dict[str, object] = {}

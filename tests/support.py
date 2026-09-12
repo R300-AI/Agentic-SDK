@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from types import SimpleNamespace
+
+import yaml
 
 from agentic_sdk.core import Attachment
 from agentic_sdk.llm import OpenAIChatResponse
@@ -16,6 +19,7 @@ class FoundryOpenAILikeClient:
         perceive_summary: str = "測試用感知摘要。",
         perceive_details: dict | None = None,
         plan_sequence: list[str] | None = None,
+        plan_skill: str | None = None,
         reflect_verdict: str = "pass",
         reflect_reason: str = "test reflect ok",
         reflect_suggestion: str = "",
@@ -27,6 +31,7 @@ class FoundryOpenAILikeClient:
         self._perceive_summary = perceive_summary
         self._perceive_details = perceive_details
         self._plan_sequence = list(plan_sequence or ["retrieve", "action"])
+        self.plan_skill = plan_skill
         self._reflect_verdict = reflect_verdict
         self._reflect_reason = reflect_reason
         self._reflect_suggestion = reflect_suggestion
@@ -53,6 +58,8 @@ class FoundryOpenAILikeClient:
                 "thought": f"route to {next_module}",
                 "next_module": next_module,
             }
+            if self.plan_skill is not None:
+                payload["skill"] = self.plan_skill
         elif system.startswith("REFLECT"):
             payload = {
                 "verdict": self._reflect_verdict,
@@ -200,6 +207,68 @@ def build_spec(*steps: tuple[str, object]) -> dict:
     for step_key, choice in steps:
         spec = apply_builder_step(spec, step_key, choice)
     return spec
+
+
+def write_skill_package(
+    root: "Path | str",
+    name: str = "proposal",
+    *,
+    skills: dict[str, dict],
+    instructions: dict[str, str] | None = None,
+    prompts: dict[str, str] | None = None,
+    maintainer: dict[str, str] | None = None,
+    mapping: dict | None = None,
+    extra_files: dict[str, bytes | str] | None = None,
+):
+    """Write a skill package directory the way an author would lay one out.
+
+    ``skills`` maps a skill directory name to ``description``, ``body``, and the
+    ``instructions`` and ``prompts`` file names it uses, in order. Give
+    ``frontmatter_name`` to write a ``SKILL.md`` whose name disagrees with its
+    directory, ``frontmatter`` to replace the frontmatter outright, and
+    ``withheld_from_planning`` to write the mapping declaration that keeps a
+    skill out of the planning module's own choosing. ``mapping``
+    replaces the generated mapping file outright, and ``extra_files`` adds
+    anything else, text or bytes, by relative path.
+    """
+    package = Path(root) / name
+    for skill_name, skill in skills.items():
+        skill_dir = package / "skills" / skill_name
+        skill_dir.mkdir(parents=True, exist_ok=True)
+        frontmatter = skill.get(
+            "frontmatter",
+            {"name": skill.get("frontmatter_name", skill_name), "description": skill.get("description", "")},
+        )
+        front = f"---\n{yaml.safe_dump(frontmatter, allow_unicode=True, sort_keys=False)}---\n\n" if frontmatter is not None else ""
+        (skill_dir / "SKILL.md").write_text(f"{front}{skill.get('body', '')}\n", encoding="utf-8")
+    for folder, files in (("instructions", instructions or {}), ("prompts", prompts or {})):
+        for file_name, text in files.items():
+            path = package / folder / file_name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(text, encoding="utf-8")
+    generated_skills: dict[str, dict] = {}
+    for skill_name, skill in skills.items():
+        entry: dict = {
+            "instructions": list(skill.get("instructions", [])),
+            "prompts": list(skill.get("prompts", [])),
+        }
+        if "withheld_from_planning" in skill:
+            entry["disable-model-invocation"] = skill["withheld_from_planning"]
+        generated_skills[skill_name] = entry
+    generated = {
+        "maintainer": maintainer or {"name": "王小明", "contact": "ming@example.test"},
+        "skills": generated_skills,
+    }
+    package.mkdir(parents=True, exist_ok=True)
+    (package / "package.yaml").write_text(yaml.safe_dump(mapping if mapping is not None else generated, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    for relative, content in (extra_files or {}).items():
+        path = package / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        if isinstance(content, bytes):
+            path.write_bytes(content)
+        else:
+            path.write_text(content, encoding="utf-8")
+    return package
 
 
 # ── 語音測試共用的音訊 ───────────────────────────────────────────────

@@ -9,7 +9,7 @@ from typing import Any
 
 from agentic_sdk.defaults import DEFAULT_NO_MATCHING_ENTRIES_MESSAGE, DEFAULT_RETRIEVED_CONTENT_KEY, SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 from playground.models import BuilderChoice, BuilderStep, WorkflowSummary
-from playground.services.workflow_reachability import reachable_workflow_roles
+from playground.services.workflow_reachability import MODEL_PLANNING_MODULES, reachable_workflow_roles
 
 
 DEFAULT_WORKFLOW_NAME = "default"
@@ -56,12 +56,14 @@ _PLAYGROUND_OPTIONS_FIELD = "__playground_options"
 AUDIO_TRANSPORT_NAME = "transcription"
 SPEECH_OUTPUT_NAME = "speech"
 
+
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
     "TextPerceive",
     "TextImagePerceive",
     "VoiceTextPerceive",
     "NextStepPlan",
+    "NextStepWithSkills",
     "PassThroughPlan",
     "PassThroughRetrieve",
     "KeywordRetrieve",
@@ -109,6 +111,7 @@ class BuilderSourceConfig:
     custom_rule_title: str = "處理規則"
     custom_rule_instruction: str | None = None
     plan_module: str | None = None
+    skill_package_names: tuple[str, ...] = ()
     plan_system_prompt: str | None = None
     reflect_module: str | None = None
     entry_module: str = "perceive"
@@ -185,8 +188,23 @@ def get_builder_steps() -> list[BuilderStep]:
             ),
         ),
         BuilderStep(
+            "standard_procedure",
+            "Q6: 這個 Agent 有沒有固定的標準作業流程要照著做？",
+            "",
+            "標準作業流程",
+            "",
+            (
+                BuilderChoice("none", "沒有，照設定的回覆方式就好", "Agent 依前面幾題的設定回答，不另外照一套既定流程。"),
+                BuilderChoice(
+                    "sop",
+                    "有，我要掛上技能包",
+                    "技能包是一組作業步驟與固定輸出格式。掛上之後使用者可以用 / 指定，Agent 也會自己判斷要不要用；掛了技能包的 Agent 會需要一個模型來規劃。",
+                ),
+            ),
+        ),
+        BuilderStep(
             "readiness",
-            "Q6: 最後確認，準備開始使用",
+            "Q7: 最後確認，準備開始使用",
             "",
             "最後確認",
             "",
@@ -726,7 +744,7 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     # Named even when nobody chose one, so a reader of the code sees that every
     # run passes through planning — see ADR-0005.
-    if config.plan_module != "NextStepPlan":
+    if config.plan_module not in MODEL_PLANNING_MODULES:
         return "    plan=PassThroughPlan(),\n"
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"
@@ -735,7 +753,10 @@ def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     ]
     if description:
         arguments.append(f"retrieve_description={json.dumps(description, ensure_ascii=False)}")
-    return f"    plan=NextStepPlan({', '.join(arguments)}),\n"
+    if config.plan_module == "NextStepWithSkills":
+        package_paths = ", ".join(json.dumps(f"skill_packages/{name}", ensure_ascii=False) for name in config.skill_package_names)
+        arguments.append(f"skill_packages=[{package_paths}]")
+    return f"    plan={config.plan_module}({', '.join(arguments)}),\n"
 
 
 def _reflect_line(config: BuilderSourceConfig) -> str:

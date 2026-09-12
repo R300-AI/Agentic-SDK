@@ -11,6 +11,7 @@ import json
 from dataclasses import replace
 from typing import Any
 
+from playground.services import skill_store
 from playground.services.source_builder import (
     BuilderSourceConfig,
     build_source_for_config,
@@ -117,6 +118,9 @@ def default_spec(*, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict[str, Any
             "module": None,
             "params": {},
         },
+        # Which skill packages are mounted, and at which version. The packages
+        # themselves live in the Playground's skill store, not in the spec.
+        "skills": {"packages": [], "declared": False},
         "gates": {"max_node_hops": 50, "max_revisit": 5, "timeout_sec": 300.0, "max_reflect_rounds": 5},
         "events": None,
         "entry_module": "perceive",
@@ -144,6 +148,7 @@ def validate_spec(raw: object) -> dict[str, Any]:
     _apply_plan(spec, raw.get("plan"))
     _apply_action(spec, raw.get("action"))
     _apply_reflect(spec, raw.get("reflect"))
+    _apply_skills(spec, raw.get("skills"))
     _apply_gates(spec, raw.get("gates"))
     saved_answer = _q5_answer_saved_before_0_3_0(raw)
     if saved_answer is not None:
@@ -299,6 +304,35 @@ def _apply_reflect(spec: dict, raw: object) -> None:
     spec["reflect"]["module"] = module or None
 
 
+MAX_MOUNTED_PACKAGES = 20
+"""How many skill packages one agent may mount.
+
+A ceiling on what a stored spec can carry, so a spec arriving from elsewhere
+cannot make this server read an unbounded number of packages on every run.
+"""
+
+
+def _apply_skills(spec: dict, raw: object) -> None:
+    """Keep only entries that can name a package in this server's store."""
+    if not isinstance(raw, dict) or not isinstance(raw.get("packages"), list):
+        return
+    packages = []
+    for entry in raw["packages"][:MAX_MOUNTED_PACKAGES]:
+        if not isinstance(entry, dict):
+            continue
+        name = str(entry.get("name") or "").strip()
+        digest = str(entry.get("digest") or "").strip()
+        version = str(entry.get("version") or "").strip()
+        if not version or not skill_store.names_a_stored_package({"name": name, "digest": digest}):
+            continue
+        source = "git" if entry.get("source") == "git" else "upload"
+        url = str(entry.get("url") or "").strip() or None
+        packages.append({"name": name, "source": source, "url": url, "version": version, "digest": digest})
+    # A spec written before this question existed answers it by what it holds.
+    declared = bool(raw.get("declared")) or bool(packages)
+    spec["skills"] = {"packages": packages, "declared": declared}
+
+
 def _apply_gates(spec: dict, raw: object) -> None:
     if not isinstance(raw, dict):
         return
@@ -396,6 +430,15 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
                 },
             },
         }
+
+    if step_key == "standard_procedure":
+        choice = str(choice_label)
+        if choice not in {"none", "sop"}:
+            return spec
+        # Answering 沒有 puts the agent back to no skills at all; the packages
+        # are in the store either way, so mounting again costs nothing.
+        packages = [] if choice == "none" else list((spec.get("skills") or {}).get("packages") or [])
+        return {**spec, "skills": {"packages": packages, "declared": True}}
 
     if step_key == "failure_policy":
         choice = str(choice_label)
@@ -572,7 +615,13 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
     retrieve_module = retrieve.get("module") or "PassThroughRetrieve"
     action_module = action.get("module") or ""
     reflect_module = _current_reflect_module_name(reflect.get("module")) or None
+    skill_package_names = tuple(str(entry["name"]) for entry in skill_store.mounted_entries(spec))
     plan_module = plan.get("module") or None
+    # A skill is taken up by the planning module, and only the one that calls a
+    # model can pick one or write about it — see ADR-0006. Mounting a package
+    # therefore settles which planning module runs, whatever Q5 answered.
+    if skill_package_names:
+        plan_module = "NextStepWithSkills"
 
     config = BuilderSourceConfig(
         workflow_name=str(spec.get("workflow_name") or DEFAULT_WORKFLOW_NAME),
@@ -614,6 +663,7 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
         max_node_hops=int(gates.get("max_node_hops") or 50),
         max_revisit=int(gates.get("max_revisit") or 5),
         timeout_sec=float(gates.get("timeout_sec") or 300.0),
+        skill_package_names=skill_package_names,
     )
     if config.retrieve_description:
         return config
@@ -699,12 +749,23 @@ def spec_to_form_state(spec: dict[str, Any], runner_presentation: dict[str, Any]
     # Q5 choices, read back from the modules the answer installed.
     failure_policy_choice = _failure_policy_of(spec)
 
+    # Q6 choices. Mounted packages answer it; so does having answered it.
+    skills = spec.get("skills") if isinstance(spec.get("skills"), dict) else {}
+    mounted_packages = skills.get("packages") or []
+    if mounted_packages:
+        standard_procedure_choice = "sop"
+    elif skills.get("declared"):
+        standard_procedure_choice = "none"
+    else:
+        standard_procedure_choice = ""
+
     choices: dict[str, str] = {
         "memory_type": memory_type_choice,
         "input_type": input_type_choice,
         "retrieve_policy": retrieve_policy_choice,
         "output_format": output_format,
         "failure_policy": failure_policy_choice,
+        "standard_procedure": standard_procedure_choice,
     }
     workflow_name = str(spec.get("workflow_name") or "")
     if workflow_name and workflow_name not in GENERATED_WORKFLOW_NAMES and workflow_name != "Untitled Agent":

@@ -7,6 +7,7 @@ from flask import Blueprint, Response, jsonify, redirect, render_template, reque
 
 from playground.services.aihub_bridge import has_runner_bridge_query, restore_pending_public_bundle, start_runner_bridge_session
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, verify_handoff_token, verify_identity
+from playground.services import skill_store
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
 from playground.services.runner_conversation import RunnerConversationState
@@ -403,3 +404,14 @@ def _refresh_ai_hub_identity() -> None:
         api_base_url=credentials.api_base_url,
         display_name=display_name,
     )
+
+
+@runner_bp.get("/skills")
+def runner_skills():
+    """What `/` offers in the composer: the skills mounted on this agent."""
+    if not has_spec():
+        return jsonify({"skills": []})
+    skills: list[dict[str, str]] = []
+    for entry in skill_store.mounted_entries(current_spec()):
+        skills.extend(skill_store.describe(entry)["skills"])
+    return jsonify({"skills": skills})

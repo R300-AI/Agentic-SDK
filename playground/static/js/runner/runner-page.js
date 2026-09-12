@@ -2,6 +2,7 @@ import { postJson, postJsonStream } from "../shared/api-client.js";
 import { bindAttachmentPicker } from "./artifact-panel.js";
 import { bindCodePreview } from "./code-preview.js?v=delegated-trigger-v1";
 import { bindInputComposer } from "./input-composer.js";
+import { bindSkillMenu } from "./skill-menu.js";
 import { bindVoiceConversation } from "./voice-conversation.js";
 import { clearProcessEvents, setProcessEvents, setResultMessage, setToolCallPanels, showLiveProcessEvent, showResultSurface, streamResultMarkdown } from "./result-surface.js?v=closed-loop-v1";
 import { showSavePanel } from "./save-panel.js";
@@ -974,8 +975,15 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 	}
 }
 
+const skillMenu = bindSkillMenu(form);
+
 bindInputComposer(form, async (payload) => {
-	await runWorkflow({ ...payload, voice_session_id: voice?.sessionId || "" });
+	// A skill picked from the menu is sent the way a person would type it, so the
+	// planning module reads one thing and `run()` keeps its own parameters.
+	const picked = skillMenu.selectedSkill();
+	const message = picked ? `/${picked} ${payload.message}`.trim() : payload.message;
+	skillMenu.clear();
+	await runWorkflow({ ...payload, message, voice_session_id: voice?.sessionId || "" });
 }, { clearAttachments: () => attachmentPicker?.clear() });
 
 const voiceBar = document.querySelector("[data-voice-bar]");

@@ -74,7 +74,7 @@ class NextStepPlan:
         intent = perceived.metadata.get("intent") if perceived else "general"
         messages = build_module_messages(
             state.memory,
-            system_prompt=self._system_prompt_for(options),
+            system_prompt=self._system_prompt_for(state, options),
             extra_context={
                 "perceived_intent": intent,
                 "has_retrieved_context": retrieved is not None,
@@ -118,10 +118,12 @@ class NextStepPlan:
         fallback = next_module not in options
         if fallback:
             next_module = "action"
+        payload_from_decision, metadata_from_decision = self._after_decision(state, parsed)
         return ModuleOutput(
             next_module=next_module,
             payload={
                 "plan_thought": thought,
+                **payload_from_decision,
                 "_llm_usage": {
                     "model": response.model,
                     "input_tokens": response.input_tokens,
@@ -132,12 +134,27 @@ class NextStepPlan:
                 ContextEntry(
                     type=ContextEntryType.PLAN_DECISION,
                     content=f"thought={thought} next={next_module}",
-                    metadata={"thought": thought, "next_module": next_module, "fallback": fallback, "llm": response.model},
+                    metadata={
+                        "thought": thought,
+                        "next_module": next_module,
+                        "fallback": fallback,
+                        **metadata_from_decision,
+                        "llm": response.model,
+                    },
                 )
             ],
         )
 
-    def _system_prompt_for(self, options: dict[str, str | None]) -> str:
+    def _after_decision(self, state: WorkflowState, parsed: dict) -> tuple[dict, dict]:
+        """What else this planning module decided, as payload and as trace metadata.
+
+        A planning module that reads more out of the model's reply than the next
+        step — a skill to take up, for one — puts it here rather than repeating
+        the whole call. Nothing extra by default.
+        """
+        return {}, {}
+
+    def _system_prompt_for(self, state: WorkflowState, options: dict[str, str | None]) -> str:
         lines = [self._base_prompt]
         if self._retrieve_description:
             lines.append(f"Available retrieve source: {self._retrieve_description}.")
