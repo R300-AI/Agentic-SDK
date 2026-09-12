@@ -405,6 +405,7 @@ def _refresh_ai_hub_identity() -> None:
         display_name=display_name,
     )
 
+
 @runner_bp.get("/skills")
 def runner_skills():
     """What `/` offers in the composer: the skills mounted on this agent."""

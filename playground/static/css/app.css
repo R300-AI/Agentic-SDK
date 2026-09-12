@@ -2822,6 +2822,8 @@ a { color: inherit; text-decoration: none; }
   display: flex;
 }
 
+.runner-page.is-voice-live .skill-chip-row,
+.runner-page.is-voice-live .skill-menu,
 .runner-page.is-voice-live .composer-main-row,
 .runner-page.is-voice-live .composer-attachment-preview {
   display: none;

@@ -304,12 +304,20 @@ def _apply_reflect(spec: dict, raw: object) -> None:
     spec["reflect"]["module"] = module or None
 
 
+MAX_MOUNTED_PACKAGES = 20
+"""How many skill packages one agent may mount.
+
+A ceiling on what a stored spec can carry, so a spec arriving from elsewhere
+cannot make this server read an unbounded number of packages on every run.
+"""
+
+
 def _apply_skills(spec: dict, raw: object) -> None:
     """Keep only entries that can name a package in this server's store."""
     if not isinstance(raw, dict) or not isinstance(raw.get("packages"), list):
         return
     packages = []
-    for entry in raw["packages"][:20]:
+    for entry in raw["packages"][:MAX_MOUNTED_PACKAGES]:
         if not isinstance(entry, dict):
             continue
         name = str(entry.get("name") or "").strip()

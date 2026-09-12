@@ -275,3 +275,21 @@ def test_an_agent_with_no_packages_has_nothing_to_download(client) -> None:
 
     assert "技能包" not in markdown
     assert client.get("/playground/source/skill-packages.zip").status_code == 404
+
+
+def test_an_agent_is_told_when_it_has_mounted_as_many_packages_as_it_may(client, store) -> None:
+    """The ceiling refuses in the open, rather than dropping entries when the spec is stored."""
+    full = [{"name": f"package-{index:02d}", "source": "upload", "url": None, "version": "v1", "digest": str(index).zfill(64)} for index in range(20)]
+    with client.session_transaction() as session:
+        session["workflow_spec"] = {**default_spec(), "skills": {"packages": full, "declared": True}}
+    package = _meeting_package(store / "packages")
+    preview = client.post(
+        "/playground/builder/skills/inspect",
+        data={"package": (io.BytesIO(_zip_of(package)), "meeting-notes.zip")},
+        content_type="multipart/form-data",
+    )
+
+    refused = client.post("/playground/builder/skills/mount", json={"staging_id": preview.json["staging_id"]})
+
+    assert refused.status_code == 422
+    assert refused.json["refused"]["rule"] == "too_many_packages"

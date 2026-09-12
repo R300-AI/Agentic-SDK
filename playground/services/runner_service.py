@@ -21,7 +21,7 @@ from playground.services import skill_store
 from playground.services.model_endpoints import MissingEndpointBinding, MissingEndpointCredentials, endpoint_params_for_role
 from playground.services.runner_conversation import RunnerConversationState, RunnerConversationTurn
 from playground.services.source_builder import BuilderSourceConfig
-from playground.services.workflow_reachability import reachable_workflow_roles
+from playground.services.workflow_reachability import MODEL_PLANNING_MODULES, reachable_workflow_roles
 from playground.services.workflow_spec import spec_to_config
 
 
@@ -735,9 +735,11 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
     if plan_entry is not None:
         next_module = plan_entry.metadata.get("next_module")
         fallback = "；模型輸出不合法，已 fallback 到 action" if plan_entry.metadata.get("fallback") else ""
-        planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else "NextStepPlan "
+        planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else f"{config.plan_module} "
+        picked_skill = plan_entry.metadata.get("skill")
+        took_up = f"；取用技能 /{picked_skill}" if picked_skill else ""
         if next_module:
-            messages.append(f"Plan：{planner}選擇下一步 {next_module}{fallback}。")
+            messages.append(f"Plan：{planner}選擇下一步 {next_module}{took_up}{fallback}。")
 
     retrieve_entries = [entry for entry in workflow_result.entries if _entry_type(entry) == ContextEntryType.RETRIEVED.value]
     retrieve_missed = _retrieve_missed(retrieve_entries)

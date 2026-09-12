@@ -9,7 +9,7 @@ from typing import Any
 
 from agentic_sdk.defaults import DEFAULT_NO_MATCHING_ENTRIES_MESSAGE, DEFAULT_RETRIEVED_CONTENT_KEY, SEMANTIC_RETRIEVE_DEFAULT_SAVED_PATH
 from playground.models import BuilderChoice, BuilderStep, WorkflowSummary
-from playground.services.workflow_reachability import reachable_workflow_roles
+from playground.services.workflow_reachability import MODEL_PLANNING_MODULES, reachable_workflow_roles
 
 
 DEFAULT_WORKFLOW_NAME = "default"
@@ -56,7 +56,6 @@ _PLAYGROUND_OPTIONS_FIELD = "__playground_options"
 AUDIO_TRANSPORT_NAME = "transcription"
 SPEECH_OUTPUT_NAME = "speech"
 
-_MODEL_PLANNING_MODULES = {"NextStepPlan", "NextStepWithSkills"}
 
 _MODULE_IMPORT_ORDER = (
     "PassThroughPerceive",
@@ -745,7 +744,7 @@ def _retrieve_expression_body(config: BuilderSourceConfig) -> str:
 def _plan_line(config: BuilderSourceConfig, reachable_roles: set[str]) -> str:
     # Named even when nobody chose one, so a reader of the code sees that every
     # run passes through planning — see ADR-0005.
-    if config.plan_module not in _MODEL_PLANNING_MODULES:
+    if config.plan_module not in MODEL_PLANNING_MODULES:
         return "    plan=PassThroughPlan(),\n"
     description = _explicit_retrieve_description(config)
     plan_binding_role = "action" if "action" in reachable_roles else "perceive"

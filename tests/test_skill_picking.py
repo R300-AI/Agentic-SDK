@@ -286,3 +286,17 @@ def test_both_ceilings_can_be_set_when_the_planning_module_is_built(tmp_path) ->
     assert len(listing) <= 40
     decision = [entry for entry in result.entries if entry.type.value == "plan_decision"][-1]
     assert decision.metadata["skills_left_out"] >= 1
+
+
+def test_the_listing_marks_the_skills_the_conversation_already_carries(tmp_path) -> None:
+    """ADR-0006: every visit sees the full listing, with the ones already taken up marked."""
+    workflow, plan_client, _ = _agent(_package(tmp_path), plan_skill="write")
+
+    workflow.run("寫第三章", session_id="s1")
+    workflow.run("再看一次", session_id="s1")
+
+    listing = _listing_shown(plan_client)
+    write_line = next(line for line in listing.splitlines() if line.startswith("write:"))
+    review_line = next(line for line in listing.splitlines() if line.startswith("review:"))
+    assert "already taken up" in write_line
+    assert "already taken up" not in review_line

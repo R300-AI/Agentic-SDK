@@ -226,7 +226,6 @@ def test_runtime_bundle_retries_timeout_with_a_fresh_signed_url(tmp_path, monkey
     assert result["bundle_upload_attempts"] == 2
     assert requested_urls == [1, 2]
     assert uploaded_urls == ["https://storage.example/upload/1", "https://storage.example/upload/2"]
-    assert uploaded_urls == ["https://storage.example/upload/1", "https://storage.example/upload/2"]
 
 
 def test_agent_bundle_carries_mounted_skill_packages_back_into_an_empty_store(tmp_path, monkeypatch):

@@ -74,7 +74,7 @@ class NextStepPlan:
         intent = perceived.metadata.get("intent") if perceived else "general"
         messages = build_module_messages(
             state.memory,
-            system_prompt=self._system_prompt_for(options),
+            system_prompt=self._system_prompt_for(state, options),
             extra_context={
                 "perceived_intent": intent,
                 "has_retrieved_context": retrieved is not None,
@@ -154,7 +154,7 @@ class NextStepPlan:
         """
         return {}, {}
 
-    def _system_prompt_for(self, options: dict[str, str | None]) -> str:
+    def _system_prompt_for(self, state: WorkflowState, options: dict[str, str | None]) -> str:
         lines = [self._base_prompt]
         if self._retrieve_description:
             lines.append(f"Available retrieve source: {self._retrieve_description}.")

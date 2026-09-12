@@ -21,6 +21,7 @@ from playground.services.source_builder import (
     get_workflow_summary,
 )
 from playground.services.workflow_spec import (
+    MAX_MOUNTED_PACKAGES,
     apply_builder_step,
     compile_python_source,
     default_runner_presentation,
@@ -522,6 +523,7 @@ def _has_valid_interactive_contract(value: object) -> bool:
             return True
     return False
 
+
 @builder_bp.get("/skills")
 def list_skill_packages():
     """The packages mounted on the agent being edited, and whether saving is possible here."""
@@ -559,8 +561,12 @@ def mount_skill_package():
     """Mount a package the person already inspected and confirmed."""
     payload = request.get_json(silent=True) or {}
     spec = current_spec()
+    mounted = skill_store.mounted_entries(spec)
+    names = [entry.get("name") for entry in mounted]
+    if len(mounted) >= MAX_MOUNTED_PACKAGES and str(payload.get("name") or "") not in names:
+        return jsonify({"refused": {"rule": "too_many_packages", "path": "", "message": f"一個 Agent 最多掛 {MAX_MOUNTED_PACKAGES} 個技能包，請先移除不用的。", "detail": ""}}), 422
     try:
-        entry = skill_store.commit(str(payload.get("staging_id") or ""), skill_store.mounted_entries(spec))
+        entry = skill_store.commit(str(payload.get("staging_id") or ""), mounted)
     except skill_store.StagingNotFound:
         return jsonify({"error": "找不到這個技能包的檢查結果，請重新上傳。"}), 404
     except SkillPackageRefused as refusal:

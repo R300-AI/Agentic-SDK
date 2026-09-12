@@ -53,14 +53,18 @@ class NextStepWithSkills(NextStepPlan):
         self.skills = tuple(skill for package in self.packages for skill in package.skills)
         self._by_name = {skill.name: skill for skill in self.skills}
 
-    def _system_prompt_for(self, options: dict[str, str | None]) -> str:
-        prompt = super()._system_prompt_for(options)
-        listing, _ = self._listing()
+    def _system_prompt_for(self, state: WorkflowState, options: dict[str, str | None]) -> str:
+        prompt = super()._system_prompt_for(state, options)
+        if self._named_by_the_person(state) is not None:
+            # The person said which skill this turn uses. Asking the model to
+            # pick one as well only invites it to disagree with them.
+            return prompt
+        listing, _ = self._listing(state)
         if not listing:
             return prompt
         return f"{prompt}\n{_PICK_INSTRUCTION}\navailable_skills:\n{listing}"
 
-    def _listing(self) -> tuple[str, int]:
+    def _listing(self, state: WorkflowState) -> tuple[str, int]:
         """The skills the model may pick, and how many did not fit.
 
         Name and description, one skill per line, within a character budget: an
@@ -69,12 +73,16 @@ class NextStepWithSkills(NextStepPlan):
         it keep their place; only when a whole line no longer fits does the
         listing stop, and what it stopped at is counted. A skill left out of the
         listing is still taken up when the person names it.
+
+        A skill the conversation already carries stays on the list, marked, so
+        the model reads what it is working with instead of picking it again.
         """
         offered = [skill for skill in self.skills if not skill.withheld_from_planning]
         lines: list[str] = []
         used = 0
         for position, skill in enumerate(offered):
-            line = f"{skill.name}: {self._cut(skill.description)}"
+            mark = " [already taken up]" if self._already_taken_up(state, skill.name) else ""
+            line = f"{skill.name}: {self._cut(skill.description)}{mark}"
             cost = len(line) + (1 if lines else 0)
             if used + cost > self._max_listing_characters:
                 return "\n".join(lines), len(offered) - position
@@ -88,7 +96,7 @@ class NextStepWithSkills(NextStepPlan):
         return description[: self._max_listing_description_characters - 1] + "…"
 
     def _after_decision(self, state: WorkflowState, parsed: dict) -> tuple[dict, dict]:
-        _, left_out = self._listing()
+        _, left_out = self._listing(state)
         skill = self._named_by_the_person(state) or self._picked_by_the_model(parsed)
         if skill is None or self._already_taken_up(state, skill.name):
             return {}, {"skills_left_out": left_out}
