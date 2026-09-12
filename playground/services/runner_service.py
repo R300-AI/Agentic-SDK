@@ -736,8 +736,11 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
         next_module = plan_entry.metadata.get("next_module")
         fallback = "；模型輸出不合法，已 fallback 到 action" if plan_entry.metadata.get("fallback") else ""
         planner = "PassThroughPlan 依固定規則" if plan_entry.metadata.get("strategy") == "pass_through" else f"{config.plan_module} "
-        picked_skill = plan_entry.metadata.get("skill")
-        took_up = f"；取用技能 /{picked_skill}" if picked_skill else ""
+        # A run passes through planning several times and a skill is taken up
+        # once, on the visit that decided it: reading only the last decision
+        # loses the skill this turn is following.
+        taken_up = _skills_taken_up(workflow_result.entries)
+        took_up = f"；取用技能 {'、'.join('/' + name for name in taken_up)}" if taken_up else ""
         if next_module:
             messages.append(f"Plan：{planner}選擇下一步 {next_module}{took_up}{fallback}。")
 
@@ -1094,6 +1097,18 @@ def _preview_text(value: str, limit: int = 96) -> str:
     if len(text) <= limit:
         return text
     return f"{text[:limit].rstrip()}..."
+
+
+def _skills_taken_up(entries: list[ContextEntry]) -> list[str]:
+    """Every skill this run took up, in the order planning took them."""
+    names: list[str] = []
+    for entry in entries:
+        if _entry_type(entry) != ContextEntryType.PLAN_DECISION.value:
+            continue
+        name = str(entry.metadata.get("skill") or "")
+        if name and name not in names:
+            names.append(name)
+    return names
 
 
 def _latest_entry(entries: list[ContextEntry], entry_type: ContextEntryType) -> ContextEntry | None:
