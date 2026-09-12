@@ -19,6 +19,7 @@ class FoundryOpenAILikeClient:
         perceive_summary: str = "測試用感知摘要。",
         perceive_details: dict | None = None,
         plan_sequence: list[str] | None = None,
+        plan_skill: str | None = None,
         reflect_verdict: str = "pass",
         reflect_reason: str = "test reflect ok",
         reflect_suggestion: str = "",
@@ -30,6 +31,7 @@ class FoundryOpenAILikeClient:
         self._perceive_summary = perceive_summary
         self._perceive_details = perceive_details
         self._plan_sequence = list(plan_sequence or ["retrieve", "action"])
+        self.plan_skill = plan_skill
         self._reflect_verdict = reflect_verdict
         self._reflect_reason = reflect_reason
         self._reflect_suggestion = reflect_suggestion
@@ -56,6 +58,8 @@ class FoundryOpenAILikeClient:
                 "thought": f"route to {next_module}",
                 "next_module": next_module,
             }
+            if self.plan_skill is not None:
+                payload["skill"] = self.plan_skill
         elif system.startswith("REFLECT"):
             payload = {
                 "verdict": self._reflect_verdict,
