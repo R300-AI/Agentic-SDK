@@ -11,6 +11,14 @@ _MAX_TURN_CHARS = 6_000
 _MAX_EVIDENCE_CHARS = 4_000
 
 
+SESSION_KEY = "runner_conversation"
+"""Where the runner keeps the conversation it is in the middle of.
+
+Named here rather than in the route, because whoever starts a different
+conversation — picking another agent, say — has to be able to drop it.
+"""
+
+
 @dataclass(frozen=True)
 class RunnerConversationTurn:
     role: str

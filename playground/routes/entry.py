@@ -10,6 +10,7 @@ from playground.services.aihub_session import active_credentials
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.session_spec import clear_spec, has_spec, reset_spec
 from playground.services.workflow_spec import semantic_bundle_required, validate_spec
+from playground.services.runner_conversation import SESSION_KEY as CONVERSATION_SESSION_KEY
 
 
 entry_bp = Blueprint("entry", __name__)
@@ -198,6 +199,9 @@ def select_agent():
         ), 502
     session["source_origin"] = "aihub_loaded"
     session.pop("last_aihub_save", None)
+    # A different agent is a different conversation. Keeping the last one would
+    # hand this agent someone else's context as if it were its own.
+    session.pop(CONVERSATION_SESSION_KEY, None)
     return redirect(url_for("runner.runner"))
 
 
@@ -265,6 +269,7 @@ def _clear_selected_agent_state() -> None:
     session.pop("builder_has_user_config", None)
     session.pop("endpoint_bindings", None)
     session.pop("builder_upload_id", None)
+    session.pop(CONVERSATION_SESSION_KEY, None)
 
 
 def _restore_selected_agent_bundle(agent_id: str, credentials: AiHubCredentials | None, *, allow_public: bool = False) -> dict[str, object]:
