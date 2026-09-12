@@ -55,7 +55,7 @@ def _repository(root: Path, package: Path, version: str) -> str:
     )
     for command in commands:
         subprocess.run(command, cwd=work, check=True, capture_output=True)
-    return f"file://{work}"
+    return work.as_uri()
 
 
 def test_a_directory_is_mounted_as_it_is(tmp_path, cache) -> None:
