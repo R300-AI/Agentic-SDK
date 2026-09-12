@@ -7,6 +7,7 @@ Observed from the Builder's answers: the spec they produce, the workflow
 from __future__ import annotations
 
 import io
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -293,3 +294,40 @@ def test_an_agent_is_told_when_it_has_mounted_as_many_packages_as_it_may(client,
 
     assert refused.status_code == 422
     assert refused.json["refused"]["rule"] == "too_many_packages"
+
+
+def test_a_git_source_is_refused_before_anything_is_fetched(client, store) -> None:
+    """What the Builder says about an address it will not fetch — ticket 05."""
+    refusals = {
+        ("https://github.com/org/skills.git", ""): "missing_version",
+        ("", "v1.0.0"): "missing_source",
+        ("http://github.com/org/skills.git", "v1.0.0"): "unsupported_url",
+        ("https://user:token@github.com/org/skills.git", "v1.0.0"): "unsupported_url",
+        ("https://github.com/org/skills.git", "--upload-pack=touch /tmp/x"): "unsupported_version",
+        ("https://github.com/org/skills.git", "../../etc"): "unsupported_version",
+    }
+
+    for (url, version), rule in refusals.items():
+        response = client.post("/playground/builder/skills/inspect", json={"git_url": url, "version": version})
+
+        assert response.status_code == 422, (url, version)
+        assert response.json["refused"]["rule"] == rule, (url, version)
+        assert response.json["refused"]["message"]
+
+
+def test_a_repository_is_read_as_the_package_itself(store, monkeypatch) -> None:
+    """The repository root is the package root, named after the repository."""
+    authored = _meeting_package(store / "authored")
+
+    def fake_fetch(url, version, target):
+        shutil.copytree(authored, target, dirs_exist_ok=True)
+
+    monkeypatch.setattr(skill_store, "fetch_git_repository", fake_fetch)
+
+    staging_id = skill_store.stage_git("https://github.com/org/meeting-notes.git", "v1.2.0")
+    preview = skill_store.inspect(staging_id, [])
+
+    assert preview["package"]["name"] == "meeting-notes"
+    assert preview["package"]["source"] == "git"
+    assert preview["package"]["version"] == "v1.2.0"
+    assert [skill["name"] for skill in preview["package"]["skills"]] == ["minutes", "action-items"]
