@@ -7,7 +7,7 @@ from pathlib import Path
 
 from flask import Blueprint, abort, jsonify, render_template, request, session
 
-from agentic_sdk.skills import SkillPackageRefused
+from agentic_sdk.skills import SkillPackageRefused, SkillSourceRefused
 
 from playground.services import skill_store
 from playground.services.aihub_bridge import has_builder_bridge_query, start_builder_bridge_session
@@ -551,8 +551,8 @@ def inspect_skill_package():
         preview = skill_store.inspect(staging_id, skill_store.mounted_entries(spec))
     except SkillPackageRefused as refusal:
         return jsonify({"refused": skill_store.refusal_payload(refusal)}), 422
-    except skill_store.SkillSourceError as problem:
-        return jsonify({"refused": problem.payload()}), 422
+    except SkillSourceRefused as problem:
+        return jsonify({"refused": skill_store.source_refusal_payload(problem)}), 422
     return jsonify(preview)
 
 

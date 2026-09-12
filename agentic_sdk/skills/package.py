@@ -7,6 +7,8 @@ from typing import Any
 
 import yaml
 
+from agentic_sdk.skills.source import resolve_package
+
 
 MAPPING_FILE_NAME = "package.yaml"
 """The one file in a package that records which skill uses which instructions and prompts."""
@@ -187,19 +189,24 @@ class SkillPackage:
 
 
 def mount_packages(
-    packages: Iterable[str | Path],
+    packages: "str | Path | Iterable[str | Path]",
     *,
     max_skill_characters: int = DEFAULT_MAX_SKILL_CHARACTERS,
 ) -> tuple[SkillPackage, ...]:
     """Mount packages on one planning module, where every skill name must be unique.
+
+    Each source is a directory, a zip archive, or a repository address with its
+    version — ``https://host/org/name.git@v1.2.0`` — and one source may be given
+    on its own rather than in a list. Resolving a source is ADR-0007's business;
+    what arrives here is always a directory.
 
     A package bringing a name another package already brought is refused, and the
     refusal names the package that got there first.
     """
     mounted: list[SkillPackage] = []
     owners: dict[str, str] = {}
-    for candidate in packages:
-        package = SkillPackage.load(candidate, max_skill_characters=max_skill_characters)
+    for candidate in _sources(packages):
+        package = SkillPackage.load(resolve_package(candidate), max_skill_characters=max_skill_characters)
         for skill in package.skills:
             if skill.name in owners:
                 raise SkillPackageRefused(
@@ -211,6 +218,13 @@ def mount_packages(
             owners[skill.name] = package.name
         mounted.append(package)
     return tuple(mounted)
+
+
+def _sources(packages: "str | Path | Iterable[str | Path]") -> list[str | Path]:
+    """One source given on its own is one source, not a sequence of characters."""
+    if isinstance(packages, (str, Path)):
+        return [packages]
+    return list(packages)
 
 
 def _is_text(data: bytes) -> bool:

@@ -40,7 +40,7 @@ class NextStepWithSkills(NextStepPlan):
     def __init__(
         self,
         *,
-        skill_packages: Iterable[str | Path] = (),
+        skill_packages: str | Path | Iterable[str | Path] = (),
         max_skill_characters: int = DEFAULT_MAX_SKILL_CHARACTERS,
         max_listing_characters: int = DEFAULT_MAX_LISTING_CHARACTERS,
         max_listing_description_characters: int = DEFAULT_MAX_LISTING_DESCRIPTION_CHARACTERS,
@@ -49,7 +49,7 @@ class NextStepWithSkills(NextStepPlan):
         super().__init__(**kwargs)
         self._max_listing_characters = max_listing_characters
         self._max_listing_description_characters = max_listing_description_characters
-        self.packages = mount_packages(list(skill_packages), max_skill_characters=max_skill_characters)
+        self.packages = mount_packages(skill_packages, max_skill_characters=max_skill_characters)
         self.skills = tuple(skill for package in self.packages for skill in package.skills)
         self._by_name = {skill.name: skill for skill in self.skills}
 

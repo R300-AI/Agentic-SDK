@@ -322,7 +322,7 @@ def test_a_repository_is_read_as_the_package_itself(store, monkeypatch) -> None:
     def fake_fetch(url, version, target):
         shutil.copytree(authored, target, dirs_exist_ok=True)
 
-    monkeypatch.setattr(skill_store, "fetch_git_repository", fake_fetch)
+    monkeypatch.setattr(skill_store, "fetch_git_package", fake_fetch)
 
     staging_id = skill_store.stage_git("https://github.com/org/meeting-notes.git", "v1.2.0")
     preview = skill_store.inspect(staging_id, [])

@@ -85,7 +85,7 @@ plan = NextStepWithSkills(
 
 | 參數 | 型態 | 必填 | 預設值 | 說明 |
 | --- | --- | --- | --- | --- |
-| `skill_packages` | `Iterable[str|Path]` | 否 | `()` | 技能包資料夾路徑。建立時讀取並檢查，違反規則直接丟出 `SkillPackageRefused`。 |
+| `skill_packages` | `str|Path|Iterable` | 否 | `()` | 技能包來源：資料夾、zip 壓縮檔，或帶版本的 git 網址 `https://…/name.git@v1.2.0`。單一來源可以不寫成串列。建立時取回並檢查，來源有問題丟 `SkillSourceRefused`，技能包不合格丟 `SkillPackageRefused`。見[技能包](skill-packages.md#從-github-掛載)。 |
 | `max_skill_characters` | `int` | 否 | `20000` | 單一技能加進對話的內容上限，超過的技能包被拒絕。 |
 | `max_listing_characters` | `int` | 否 | `8000` | 給模型看的技能清單總字元上限。 |
 | `max_listing_description_characters` | `int` | 否 | `1536` | 清單裡單條說明的字元上限。 |

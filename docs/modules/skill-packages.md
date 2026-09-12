@@ -56,7 +56,22 @@ skills:
 
 ## 從 GitHub 掛載
 
-Playground 的建構器接受公開 git repo 網址，填入網址與要鎖定的版本後，伺服器取回那個版本的檔案當成技能包。Python SDK 不接網址：`skill_packages` 只收路徑，要用 repo 裡的技能包請自行 clone 之後指到那個資料夾。
+技能包的來源有三種：資料夾、zip 壓縮檔、指定版本的公開 git repo。三種都寫在同一個 `skill_packages` 參數裡，Playground 的建構器也是同一套規矩（ADR 0007）。
+
+```python
+plan = NextStepWithSkills(
+    api_key=api_key,
+    base_url=base_url,
+    model="gpt-4o-mini",
+    skill_packages=[
+        "https://github.com/org/meeting-notes.git@v1.2.0",  # repo，版本寫在網址裡
+        "skill_packages/local-one",                          # 本機資料夾
+        "downloads/another.zip",                             # 壓縮檔
+    ],
+)
+```
+
+只有一個來源時可以不寫成串列。取回的技能包會留在快取裡（預設在使用者的 cache 目錄，或由 `AGENTIC_SDK_SKILL_PACKAGES` 指定），同一個網址加同一個版本只會取回一次，所以跑過一次的流程在沒有網路或 repo 被刪掉時仍然起得來。取回發生在建立規劃模組的時候，不是在執行的時候。
 
 repo 本身就是技能包，沒有再往下一層，所以版面要求是：
 
@@ -74,12 +89,14 @@ your-org/meeting-notes/          ← repo 根目錄就是技能包根目錄
 
 | 限制 | 內容 |
 | --- | --- |
-| 只收 https 的公開 repo | 網址不能帶帳號密碼（`https://user:token@…` 會被拒絕），也不支援需要登入的 repo。 |
-| 版本必須填 | 標籤、分支或 commit 都可以，但一定要指定一個。跟著作者最新的 commit 走，等於 agent 的行為會在沒有人掛載任何東西的情況下改變。 |
+| 只收公開的 repo | 網址不能帶帳號密碼（`https://user:token@…` 會被拒絕），也不支援需要登入的 repo。SDK 另外接受本機的 `file://` repo；Playground 只收 `https`，因為網址是瀏覽器上打進來的。 |
+| 版本必須填 | 標籤、分支或 commit 都可以，但一定要指定一個，寫成 `網址@版本`。跟著作者最新的 commit 走，等於 agent 的行為會在沒有人掛載任何東西的情況下改變。 |
 | 整個 repo 5 MB 以內 | 取回時不帶歷史（淺層取回後移除 `.git`），計算的是工作目錄的檔案大小。 |
 | 每一個檔案都要是文字 | 這條規則對 repo 裡的**所有**檔案生效，不只技能引用到的那些。README 與 LICENSE 沒問題，但 README 裡附的圖片、字型或任何二進位檔會讓整個 repo 被拒絕，錯誤訊息會指出是哪一個檔案。 |
 
 沒有任何技能引用到的檔案不影響掛載：從 repo clone 下來的技能包本來就會帶著 README。
+
+來源被拒絕時丟出的是 `SkillSourceRefused`，帶著 `rule` 與 `source` 兩個欄位——指出是哪一條規矩、哪一個來源。技能包本身不合規則丟 `SkillPackageRefused`，指出的是規則與檔案。兩者分得開：前者是「東西拿不到」，後者是「拿到的東西不合格」。
 
 ## 檢查規則
 

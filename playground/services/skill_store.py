@@ -10,34 +10,32 @@ spec records only its name, source and version.
 from __future__ import annotations
 
 import hashlib
-import io
 import json
 import os
 import re
 import shutil
-import subprocess
 import tempfile
 import uuid
-import zipfile
-from pathlib import Path, PurePosixPath
+from pathlib import Path
 from typing import Any
-from urllib.parse import urlsplit
 
-from agentic_sdk.skills import SkillPackage, SkillPackageRefused, mount_packages
+from agentic_sdk.skills import (
+    MAX_PACKAGE_BYTES,
+    SkillPackage,
+    SkillPackageRefused,
+    SkillSourceRefused,
+    address_of,
+    fetch_git_package,
+    mount_packages,
+    repository_name,
+    unpack_archive,
+)
 
 
 _STAGED_META = "staged.json"
 
-MAX_PACKAGE_BYTES = 5 * 1024 * 1024
-"""How large a package may be once unpacked.
-
-A package is text, so a real one is far smaller; the limit keeps an upload or a
-repository from filling the disk before the package checks ever run.
-"""
-
 _DIGEST = re.compile(r"[0-9a-f]{64}")
 _PACKAGE_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
-_VERSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/+-]*")
 
 REFUSAL_MESSAGES = {
     "not_text": "技能包只收文字檔，這個檔案不是文字。",
@@ -61,18 +59,6 @@ REFUSAL_MESSAGES = {
 }
 
 
-class SkillSourceError(ValueError):
-    """A package that never became something to check: no source, or one that could not be read."""
-
-    def __init__(self, rule: str, detail: str = "") -> None:
-        self.rule = rule
-        self.detail = detail
-        super().__init__(f"{rule}: {detail}")
-
-    def payload(self) -> dict[str, str]:
-        return {"rule": self.rule, "path": "", "detail": self.detail, "message": REFUSAL_MESSAGES.get(self.rule, self.detail)}
-
-
 class StagingNotFound(LookupError):
     """A confirmation for a package that was never inspected, or already committed."""
 
@@ -80,6 +66,11 @@ class StagingNotFound(LookupError):
 def store_root() -> Path:
     configured = os.environ.get("PLAYGROUND_SKILL_STORE_ROOT", "").strip()
     return Path(configured) if configured else Path(tempfile.gettempdir()) / "agentic-sdk-playground" / "skill-packages"
+
+
+def source_refusal_payload(refusal: SkillSourceRefused) -> dict[str, str]:
+    """A refused source, in the wording a person reads. The rules themselves are the SDK's."""
+    return {"rule": refusal.rule, "path": "", "detail": refusal.detail, "message": REFUSAL_MESSAGES.get(refusal.rule, refusal.detail)}
 
 
 def refusal_payload(refusal: SkillPackageRefused) -> dict[str, str]:
@@ -94,32 +85,13 @@ def refusal_payload(refusal: SkillPackageRefused) -> dict[str, str]:
 
 def stage_upload(data: bytes, filename: str) -> str:
     """Unpack an uploaded archive into a fresh staging area and return its id."""
-    if len(data) > MAX_PACKAGE_BYTES:
-        raise SkillSourceError("package_too_large", f"the archive is {len(data)} bytes; the limit is {MAX_PACKAGE_BYTES}")
     staging_id = uuid.uuid4().hex
-    unpacked = _staging_dir(staging_id) / "unpacked"
-    unpacked.mkdir(parents=True, exist_ok=True)
+    unpacked = _staging_dir(staging_id) / "unpacked" / (Path(filename).stem or "package")
     try:
-        with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            members = [member for member in archive.infolist() if not member.is_dir()]
-            budget = MAX_PACKAGE_BYTES
-            for member in members:
-                relative = PurePosixPath(member.filename)
-                if relative.is_absolute() or ".." in relative.parts:
-                    raise SkillSourceError("unreadable_archive", f"unsafe path in archive: {member.filename}")
-                target = unpacked / Path(*relative.parts)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                # Counted as it is written: the sizes an archive declares are
-                # the archive's own claim, and a small upload can unpack to gigabytes.
-                with archive.open(member) as source, target.open("wb") as destination:
-                    budget -= _copy_within(source, destination, budget)
-    except zipfile.BadZipFile as exc:
-        shutil.rmtree(_staging_dir(staging_id), ignore_errors=True)
-        raise SkillSourceError("unreadable_archive", str(exc)) from exc
-    except SkillSourceError:
+        package_dir = unpack_archive(data, unpacked)
+    except SkillSourceRefused:
         shutil.rmtree(_staging_dir(staging_id), ignore_errors=True)
         raise
-    package_dir = _single_top_directory(unpacked) or _rename_to(unpacked, Path(filename).stem or "package")
     _write_meta(staging_id, {"source": "upload", "url": None, "version": None, "package_dir": str(package_dir)})
     return staging_id
 
@@ -127,64 +99,29 @@ def stage_upload(data: bytes, filename: str) -> str:
 def stage_git(url: str, version: str) -> str:
     """Fetch a public repository at a fixed version into a fresh staging area and return its id.
 
-    A version is required: a package that follows its author's latest commit
-    changes an agent's behaviour without anyone mounting anything.
+    Only ``https`` is accepted here, narrower than what the SDK reads: this
+    address was typed into a browser by someone this server does not know, so a
+    repository on the server's own disk is not something it may ask for.
     """
     url = url.strip()
     version = version.strip()
     if not url:
-        raise SkillSourceError("missing_source")
-    address = urlsplit(url)
-    if address.scheme != "https" or not address.hostname:
-        raise SkillSourceError("unsupported_url", url)
-    if "@" in address.netloc:
-        # The address is kept on the agent and shown to everyone who opens it,
-        # so a login written into it would be handed out with the agent.
-        raise SkillSourceError("unsupported_url", "the address carries a login; only public repositories are supported")
+        raise SkillSourceRefused(rule="missing_source", source="", detail="an address and a version are needed")
     if not version:
-        raise SkillSourceError("missing_version")
-    if not _VERSION.fullmatch(version) or ".." in version:
-        raise SkillSourceError("unsupported_version", version)
+        raise SkillSourceRefused(rule="missing_version", source=url, detail="pin a tag, a branch or a commit")
+    if not url.lower().startswith("https://"):
+        raise SkillSourceRefused(rule="unsupported_url", source=url, detail="only public https repositories are read here")
+    address, pinned = address_of(f"{url}@{version}")
     staging_id = uuid.uuid4().hex
-    repository = _staging_dir(staging_id) / "repository" / _repository_name(url)
+    repository = _staging_dir(staging_id) / "repository" / repository_name(address)
     repository.parent.mkdir(parents=True, exist_ok=True)
     try:
-        fetch_git_repository(url, version, repository)
-        # The history is how the files arrived, not part of the package.
-        shutil.rmtree(repository / ".git", ignore_errors=True)
-        size = sum(file.stat().st_size for file in repository.rglob("*") if file.is_file() and not file.is_symlink())
-        if size > MAX_PACKAGE_BYTES:
-            raise SkillSourceError("package_too_large", f"the repository holds {size} bytes; the limit is {MAX_PACKAGE_BYTES}")
-    except SkillSourceError:
+        fetch_git_package(address, pinned, repository)
+    except SkillSourceRefused:
         shutil.rmtree(_staging_dir(staging_id), ignore_errors=True)
         raise
     _write_meta(staging_id, {"source": "git", "url": url, "version": version, "package_dir": str(repository)})
     return staging_id
-
-
-def fetch_git_repository(url: str, version: str, target: Path) -> None:
-    """Check out one tag, branch or commit of a public repository into ``target``.
-
-    Credential prompts are switched off, so a repository that needs a login fails
-    at once instead of waiting on a terminal nobody is watching, and the server's
-    own git configuration is left out, so a login stored for another purpose is
-    never offered to the repository either.
-    """
-    target.mkdir(parents=True, exist_ok=True)
-    environment = {**os.environ, "GIT_TERMINAL_PROMPT": "0", "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": os.devnull}
-    commands = (
-        ["git", "init", "--quiet"],
-        ["git", "remote", "add", "origin", url],
-        ["git", "-c", "credential.helper=", "fetch", "--depth", "1", "--quiet", "origin", version],
-        ["git", "checkout", "--quiet", "FETCH_HEAD"],
-    )
-    for command in commands:
-        try:
-            completed = subprocess.run(command, cwd=target, env=environment, capture_output=True, text=True, timeout=120)
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            raise SkillSourceError("fetch_failed", str(exc)) from exc
-        if completed.returncode != 0:
-            raise SkillSourceError("fetch_failed", (completed.stderr or completed.stdout).strip()[-500:])
 
 
 def inspect(staging_id: str, mounted: list[dict[str, Any]]) -> dict[str, Any]:
@@ -300,11 +237,6 @@ def _describe(package: SkillPackage, *, source: str, url: Any, version: str) -> 
     }
 
 
-def _repository_name(url: str) -> str:
-    name = url.rstrip("/").rsplit("/", 1)[-1]
-    name = name[: -len(".git")] if name.endswith(".git") else name
-    return "".join(character for character in name if character.isalnum() or character in "-_.") or "package"
-
 
 def _staging_dir(staging_id: str) -> Path:
     return store_root() / "staging" / staging_id
@@ -323,28 +255,7 @@ def _read_meta(staging_id: str) -> dict[str, Any]:
     return json.loads(meta_path.read_text(encoding="utf-8"))
 
 
-def _single_top_directory(unpacked: Path) -> Path | None:
-    children = [child for child in unpacked.iterdir() if not child.name.startswith("__MACOSX")]
-    if len(children) == 1 and children[0].is_dir():
-        return children[0]
-    return None
 
-
-def _rename_to(unpacked: Path, name: str) -> Path:
-    target = unpacked.parent / "package" / name
-    target.parent.mkdir(parents=True, exist_ok=True)
-    unpacked.rename(target)
-    return target
-
-
-def _copy_within(source, destination, budget: int) -> int:
-    written = 0
-    while chunk := source.read(64 * 1024):
-        written += len(chunk)
-        if written > budget:
-            raise SkillSourceError("package_too_large", f"the archive unpacks to more than {MAX_PACKAGE_BYTES} bytes")
-        destination.write(chunk)
-    return written
 
 
 def _digest(root: Path) -> str:
