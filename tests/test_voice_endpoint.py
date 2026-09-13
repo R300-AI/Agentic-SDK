@@ -261,3 +261,42 @@ def test_the_playground_keeps_only_what_the_page_played():
     state = RunnerConversationState.start().update_from_result(interrupted)
 
     assert [turn.content for turn in state.turns] == ["保固期是十二個月"]
+
+
+class _VoiceThatWaitsOnTheService:
+    """Synthesis as it really arrives: each piece is a wait, not a value.
+
+    The service streams audio as it produces it, so pulling the next piece
+    blocks for as long as the service takes. A fake that returns instantly
+    hides the failure this test exists to catch.
+    """
+
+    def speak(self, text: str):
+        import time
+
+        for index in range(4):
+            time.sleep(0.6)
+            yield f"{text}:{index}".encode("utf-8")
+
+
+def test_the_microphone_is_read_while_the_answer_is_playing(monkeypatch, microphone):
+    """Barge-in is the whole point: talking over the answer has to reach the endpoint now.
+
+    Measured live against the deployment, someone speaking while the answer
+    played waited 3.8 seconds to be heard; speaking into the same session with
+    nothing playing was heard in 0.05.
+    """
+    monkeypatch.setattr(voice_session, "open_synthesis", lambda: _VoiceThatWaitsOnTheService())
+
+    with TestClient(app).websocket_connect("/playground/voice/session-barge") as socket:
+        socket.receive_json()
+        registry.say("session-barge", "一段要唸很久的回答")
+
+        while socket.receive().get("bytes") is None:
+            pass
+        socket.send_bytes(speech())
+        frame = socket.receive()
+
+    registry.close("session-barge")
+    assert frame.get("text") is not None, "麥克風被晾在一邊，先送出了下一塊聲音"
+    assert json.loads(frame["text"])["type"] == "listening"

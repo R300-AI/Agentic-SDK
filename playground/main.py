@@ -73,11 +73,21 @@ async def voice_session(socket: WebSocket, session_id: str) -> None:
             )
             return
         token = registry.token(session_id)
-        for piece in voice.speak(text):
+        pieces = voice.speak(text)
+        while True:
+            # Pulled on a thread, because each piece is a wait on the service —
+            # and waiting here would stop this socket reading its microphone.
+            # Measured against the deployment, someone speaking over the answer
+            # waited 3.8 seconds to be heard; speaking with nothing playing was
+            # heard in 0.05.
+            piece = await asyncio.to_thread(next, pieces, None)
+            if piece is None:
+                break
             if token is not None and token.cancelled:
                 # Abandoning the iterator stops the synthesis too: the rest of
                 # a sentence nobody will hear is not worth generating, let
                 # alone paying for.
+                pieces.close()
                 break
             await socket.send_bytes(piece)
         await socket.send_json({"type": "spoken"})
