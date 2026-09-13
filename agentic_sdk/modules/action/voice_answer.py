@@ -156,8 +156,8 @@ def _split_channels(content: str) -> tuple[str, str]:
         return text, text
     if not isinstance(parsed, dict):
         return text, text
-    displayed = str(parsed.get("displayed") or "").strip()
-    spoken = str(parsed.get("spoken") or "").strip()
+    displayed = _channel_text(parsed.get("displayed"))
+    spoken = _channel_text(parsed.get("spoken"))
     if not displayed and not spoken:
         # Answered in its own shape rather than the one that was asked for.
         # Showing the object raw puts braces and quotes on the screen and reads
@@ -167,8 +167,29 @@ def _split_channels(content: str) -> tuple[str, str]:
 
 
 def _flatten(parsed: dict) -> str:
-    lines = []
-    for key, value in parsed.items():
-        rendered = value if isinstance(value, (str, int, float)) else json.dumps(value, ensure_ascii=False)
-        lines.append(f"{key}：{rendered}")
-    return "\n".join(lines)
+    return "\n".join(f"{key}：{_as_text(value)}" for key, value in parsed.items())
+
+
+def _channel_text(value: object) -> str:
+    """One channel's content as something a person can read or hear.
+
+    A model often writes the screen half as a structure — a price table, a list
+    of slots — because that is what the half is for. Printed as it stands it
+    reaches the screen as braces and quotes, and the speaking half reads them
+    out. Flattening keeps every value and loses only the syntax.
+    """
+    if isinstance(value, dict):
+        return _flatten(value).strip()
+    return _as_text(value).strip()
+
+
+def _as_text(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        return "；".join(f"{key}：{_as_text(item)}" for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return "、".join(_as_text(item) for item in value)
+    return str(value)

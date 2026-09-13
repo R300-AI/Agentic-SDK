@@ -190,3 +190,26 @@ def test_a_speaking_module_will_not_invent_its_own_source():
 
     with pytest.raises(TypeError):
         VoiceAnswerAction(api_key="k", base_url="https://example.test/v1", model="m")
+
+
+def test_a_displayed_half_written_as_an_object_still_reads_as_text():
+    """A model that answers the screen half with a structure must not put braces on the screen."""
+    from agentic_sdk.modules.action.voice_answer import _split_channels
+
+    spoken, displayed = _split_channels(json.dumps({
+        "spoken": "這週六晚上還有場。",
+        "displayed": {"價格": {"費率": "尖峰", "每小時": "NT$400"}, "常見訂法": ["兩小時 NT$800"]},
+    }, ensure_ascii=False))
+
+    assert spoken == "這週六晚上還有場。"
+    assert "{" not in displayed and "'" not in displayed
+    assert "價格" in displayed and "NT$400" in displayed and "兩小時 NT$800" in displayed
+
+
+def test_a_spoken_half_written_as_a_list_is_still_said_as_a_sentence():
+    from agentic_sdk.modules.action.voice_answer import _split_channels
+
+    spoken, _ = _split_channels(json.dumps({"spoken": ["還有場", "要幫你留嗎"], "displayed": "A 場 20:00–22:00"}, ensure_ascii=False))
+
+    assert "[" not in spoken and "'" not in spoken
+    assert "還有場" in spoken and "要幫你留嗎" in spoken
