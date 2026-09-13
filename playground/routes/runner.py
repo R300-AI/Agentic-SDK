@@ -10,7 +10,7 @@ from playground.services.aihub_client import credentials_for_ticket, issue_crede
 from playground.services import skill_store
 from playground.services.deep_link import apply_aihub_deep_link
 from playground.services.mode_context import get_mode_context
-from playground.services.runner_conversation import RunnerConversationState
+from playground.services.runner_conversation import SESSION_KEY as CONVERSATION_SESSION_KEY, RunnerConversationState
 from playground.services.runner_service import SemanticRuntime, get_default_scene_profile, get_runner_demo_result, run_agent, stream_agent_initialization, stream_agent_run
 from playground.services.semantic_runtime import runtime_root, source_files_dir
 from playground.services.session_spec import current_spec, has_spec, store_spec
@@ -19,7 +19,6 @@ from playground.services.workflow_spec import apply_builder_step, semantic_bundl
 
 
 runner_bp = Blueprint("runner", __name__, url_prefix="/playground/run")
-_CONVERSATION_SESSION_KEY = "runner_conversation"
 
 
 @runner_bp.get("")
@@ -175,7 +174,7 @@ def commit_runner_conversation():
             }
         ), 409
 
-    session[_CONVERSATION_SESSION_KEY] = candidate.as_dict()
+    session[CONVERSATION_SESSION_KEY] = candidate.as_dict()
     return jsonify({"committed": True, "conversation": candidate.as_dict()})
 
 
@@ -328,14 +327,14 @@ def _runner_endpoint_selections() -> dict[str, str]:
 
 
 def _runner_conversation_state() -> RunnerConversationState:
-    return RunnerConversationState.from_dict(session.get(_CONVERSATION_SESSION_KEY))
+    return RunnerConversationState.from_dict(session.get(CONVERSATION_SESSION_KEY))
 
 
 def _ensure_runner_conversation_state() -> RunnerConversationState:
     current = _runner_conversation_state()
-    stored = session.get(_CONVERSATION_SESSION_KEY)
+    stored = session.get(CONVERSATION_SESSION_KEY)
     if not isinstance(stored, dict) or stored != current.as_dict():
-        session[_CONVERSATION_SESSION_KEY] = current.as_dict()
+        session[CONVERSATION_SESSION_KEY] = current.as_dict()
     return current
 
 
@@ -347,7 +346,7 @@ def _append_normal_user_turn(payload: dict[str, object]) -> RunnerConversationSt
     if not message:
         return current
     candidate = current.append_user(message)
-    session[_CONVERSATION_SESSION_KEY] = candidate.as_dict()
+    session[CONVERSATION_SESSION_KEY] = candidate.as_dict()
     return candidate
 
 

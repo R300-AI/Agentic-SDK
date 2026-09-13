@@ -1460,3 +1460,26 @@ def test_a_shared_agent_opens_even_when_its_documents_cannot_be_restored(monkeyp
             assert session["last_aihub_bundle_load"]["bundle_error"] == "Bundle object was not found."
 
     assert response.status_code == 200
+
+
+def test_selecting_another_agent_starts_that_agent_with_an_empty_conversation(monkeypatch):
+    """Switching agents in the gallery must not carry the last one's conversation into the next."""
+    monkeypatch.setattr(entry_routes, "verify_credentials", lambda *args, **kwargs: True)
+    monkeypatch.setattr(entry_routes, "list_agents", lambda *, credentials=None, origin=None: {"loaded": True, "items": [{"agent_id": "agent-2", "agent_name": "Agent Two"}]})
+    monkeypatch.setattr(entry_routes, "load_config", lambda agent_id, *, credentials=None, origin=None: {"loaded": True, "agent_id": agent_id, "agent_name": "Agent Two", "workflow_spec": apply_builder_step(default_spec(), "name", "Agent Two"), "python_source": "print('two')"})
+    app = create_app()
+    app.config.update(TESTING=True, SECRET_KEY="test-secret")
+
+    with app.test_client() as client:
+        client.post("/playground/auth/login", data={"username": "creator", "password": "secret"})
+        with client.session_transaction() as session:
+            session["runner_conversation"] = {
+                "conversation_id": "from-the-other-agent",
+                "revision": 3,
+                "turns": [{"role": "user", "content": "訂場人陳小姐"}],
+            }
+
+        client.post("/playground/agents/select", data={"agent_id": "agent-2"})
+
+        with client.session_transaction() as session:
+            assert "runner_conversation" not in session
