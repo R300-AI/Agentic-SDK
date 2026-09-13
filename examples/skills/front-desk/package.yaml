@@ -1,0 +1,12 @@
+maintainer:
+  name: 範例櫃檯
+  contact: front-desk@example.invalid
+skills:
+  booking:
+    instructions: [booking-steps.md]
+    prompts: [booking-confirmation.md]
+  refund:
+    instructions: [refund-steps.md]
+    prompts: [refund-sheet.md]
+    # 不讓模型自己挑這個技能，但使用者仍可用 /refund 指名。
+    disable-model-invocation: true
