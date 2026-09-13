@@ -3,7 +3,7 @@ from __future__ import annotations
 from agentic_sdk import Workflow
 from agentic_sdk.audio import FakeAudioInput
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput
-from agentic_sdk.core.cancellation import CancellationToken
+from agentic_sdk.core.cancellation import CancellationToken, WorkflowInterrupted
 from agentic_sdk.modules import PassThroughRetrieve, VoiceTextPerceive
 
 
@@ -144,3 +144,86 @@ def test_hearing_the_whole_answer_is_not_trimmed_by_rounding():
     from agentic_sdk.audio.speech_rate import heard_portion
 
     assert heard_portion("保固十二個月", 30.0) == "保固十二個月"
+
+
+def test_only_what_was_heard_survives_when_the_page_does_the_playing():
+    """The audio never passes through the module, and the trim has to happen anyway.
+
+    In a browser the page plays the spoken half, so the module's transport
+    yields nothing and hands the text over in an instant; the person talks over
+    it seconds later, while the module is long finished. Measured live, someone
+    who heard 2.4 seconds had all 144 characters written into the conversation
+    as if they had heard every word.
+    """
+    import json
+
+    from agentic_sdk.audio.transport import PlayedElsewhere
+    from agentic_sdk.modules import PassThroughPerceive, VoiceAnswerAction
+
+    from support import FoundryOpenAILikeClient
+
+    spoken = "這週六尖峰每面每小時四百元，週日也是尖峰價，平日白天兩百五，C 場整天停用。"
+    token = CancellationToken()
+
+    class PageThatGetsTalkedOver(PlayedElsewhere):
+        """Hands the words to the page, which reports being talked over 2s in."""
+
+        def speak(self, text):
+            pieces = super().speak(text)
+            token.cancel("interjection", heard_seconds=2.0)
+            return pieces
+
+    action = VoiceAnswerAction(
+        api_key="k", base_url="https://example.test/v1", model="m", speech=PageThatGetsTalkedOver()
+    )
+    action._client = FoundryOpenAILikeClient(
+        action_text=json.dumps({"spoken": spoken, "displayed": spoken}, ensure_ascii=False)
+    )
+    workflow = Workflow(
+        workflow_name="voice",
+        perceive=PassThroughPerceive(),
+        retrieve=PassThroughRetrieve(),
+        action=action,
+    )
+
+    workflow.run("這週六多少錢？", cancel=token)
+
+    assistant_turns = [t.content for t in workflow.memory.turns if t.role == "assistant"]
+    assert assistant_turns, "被打斷的那一輪什麼都沒留下"
+    heard = assistant_turns[-1]
+    assert spoken.startswith(heard), f"留下的不是說出口的開頭：{heard}"
+    assert len(heard) <= 12, f"兩秒只講得完約九個字，卻留下 {len(heard)} 字：{heard}"
+
+
+def test_the_stream_noticing_the_stop_does_not_erase_what_the_person_reported():
+    """Two accounts of one interruption, and only one of them was there.
+
+    A stream that sees the stop flag reports how much it had produced. The
+    person reports how long they had been listening. The second is the only one
+    that says what reached them, so it is the one that has to survive.
+    """
+    audio = FakeAudioInput()
+    token = CancellationToken()
+
+    class StreamThatNoticesTheStop:
+        name = "action"
+
+        def __call__(self, state):
+            state.report_delivered(HEARD + UNHEARD)
+            audio.start_speaking()
+            token.cancel("interjection", heard_seconds=2.0)
+            raise WorkflowInterrupted("cancelled", {"produced_characters": 51})
+
+    workflow = Workflow(
+        workflow_name="voice",
+        perceive=VoiceTextPerceive(transport=audio),
+        retrieve=PassThroughRetrieve(),
+        action=StreamThatNoticesTheStop(),
+    )
+
+    audio.transcribe("保固多久？")
+    result = workflow.run(cancel=token)
+
+    assert result.interrupt_payload["heard_seconds"] == 2.0
+    assert result.interrupt_payload["reason"] == "interjection"
+    assert result.interrupt_payload["produced_characters"] == 51

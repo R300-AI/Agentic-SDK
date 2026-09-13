@@ -310,6 +310,15 @@ class Workflow:
                     )
                     event_callback(finish_event)
                 current = next_module
+            if cancel is not None and cancel.cancelled:
+                # Someone spoke while the last module was running, and there is
+                # no next visit left to notice it. Falling out of the loop here
+                # would file the turn as finished and keep every word of it,
+                # including the ones that were cut off before anyone heard
+                # them. Where the audio plays somewhere else this is the
+                # ordinary case, not a corner of one: the words are handed over
+                # in an instant and talked over long afterwards.
+                raise WorkflowInterrupted(cancel.reason or "cancelled", cancel.payload)
         except WorkflowInterrupted as exc:
             # Not a failure. Someone asked for this to stop, and the result
             # says so plainly so the caller can pick up where it left off
@@ -319,13 +328,22 @@ class Workflow:
             # steering, and everything downstream reads the abort flag to
             # decide which of those to show.
             interrupted = True
-            # Already trimmed to what was played, by whichever module was
-            # doing the playing. The engine only knows that something was cut
-            # short, not that it was cut short mid-sentence out of a speaker.
+            # One interruption, two accounts of it. A stream that sees the stop
+            # flag reports how much it had produced by then; whoever asked for
+            # the stop reports what they had received. Only the second was
+            # there, so it stands where the two disagree, and the first is kept
+            # where they do not.
+            requested = cancel.payload if cancel is not None and cancel.cancelled else {}
+            account = {**exc.payload, **requested}
+            # Ask whoever delivered how much of it landed, and hand over that
+            # account of the interruption. Audio played somewhere else leaves
+            # the module whole and is cut off later, so this is the first
+            # moment the answer exists. The engine knows something was cut
+            # short, never that it was cut short mid-sentence out of a speaker.
             interrupt_payload = {
-                **exc.payload,
-                "reason": exc.reason,
-                "delivered": state.delivered_so_far,
+                **account,
+                "reason": (cancel.reason if requested and cancel.reason else exc.reason),
+                "delivered": state.delivered_when_cut_short(account),
             }
             # Say so on the trace, and say where. Whoever is tuning how eagerly
             # the agent gives way needs to know it was stopped while answering,

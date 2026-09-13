@@ -61,3 +61,21 @@ def test_opening_the_same_session_twice_replaces_the_first():
 
     assert second.cancelled is True
     assert first.cancelled is False
+
+
+def test_a_later_report_that_knows_nothing_does_not_erase_the_timing():
+    """One interruption, reported twice, by two things that know different amounts.
+
+    The page has been playing the audio and says how far it got. The
+    transcription service hears someone begin and can only say that it
+    happened. Both land within a tenth of a second and in either order. If the
+    one that knows nothing lands second and overwrites, the whole answer counts
+    as heard and the next turn talks as if the person sat through it.
+    """
+    registry = VoiceSessionRegistry()
+    token = registry.open("session-1")
+
+    registry.interject("session-1", heard_seconds=2.4)
+    registry.interject("session-1", heard_seconds=None)
+
+    assert token.payload["heard_seconds"] == 2.4

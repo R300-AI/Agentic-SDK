@@ -53,6 +53,11 @@ class WorkflowState:
     # having to reach inside the module to wire anything up.
     cancel: "CancellationToken | None" = None
     delivered_so_far: str = ""
+    _cut_short: Callable[[str, dict[str, Any]], str] | None = field(
+        default=None,
+        init=False,
+        repr=False,
+    )
     _token_delta_callback: Callable[[str, str, dict[str, Any]], None] | None = field(
         default=None,
         init=False,
@@ -147,7 +152,12 @@ class WorkflowState:
             return self.memory
         return None
 
-    def report_delivered(self, delivered_so_far: str) -> None:
+    def report_delivered(
+        self,
+        delivered_so_far: str,
+        *,
+        cut_short: Callable[[str, dict[str, Any]], str] | None = None,
+    ) -> None:
         """Record how much of the answer actually reached the person.
 
         Only whoever did the delivering knows this, and it is not the same as
@@ -155,10 +165,24 @@ class WorkflowState:
         that exists only on paper. Carrying that tail forward would let the next
         turn refer back to something nobody received.
 
+        Some deliveries cannot be measured as they happen. Words handed to a
+        player somewhere else leave here whole, and how much of them landed is
+        known only once someone talks over them — after this has returned.
+        ``cut_short`` is how the deliverer answers that question later, given
+        whatever the interruption reported about itself.
+
         Channel-neutral on purpose. A screen delivers and so does a speaker,
         and the core is not allowed to know which — see ADR-0001 and ADR-0002.
+        It holds the question and never the arithmetic.
         """
         self.delivered_so_far = str(delivered_so_far or "")
+        self._cut_short = cut_short
+
+    def delivered_when_cut_short(self, interruption: dict[str, Any] | None) -> str:
+        """How much of the delivery landed, given what stopped it."""
+        if self._cut_short is None:
+            return self.delivered_so_far
+        return str(self._cut_short(self.delivered_so_far, dict(interruption or {})) or "")
 
     def should_stop(self) -> bool:
         """Whether whoever started this run has asked for it to stop."""
