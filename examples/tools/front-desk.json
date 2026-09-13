@@ -1,0 +1,31 @@
+[
+  {
+    "type": "function",
+    "function": {
+      "name": "confirm_booking",
+      "description": "送出一筆預約。對方明確說要送出、且日期時段與聯絡方式都齊全時才呼叫。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "date": {"type": "string", "description": "預約日期，格式 YYYY-MM-DD"},
+          "start": {"type": "string", "description": "開始時間，格式 HH:MM"},
+          "hours": {"type": "integer", "description": "時數"},
+          "contact": {"type": "string", "description": "聯絡人姓名與電話"}
+        },
+        "required": ["date", "start", "hours", "contact"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "check_availability",
+      "description": "查某一天還有哪些時段可訂。",
+      "parameters": {
+        "type": "object",
+        "properties": {"date": {"type": "string", "description": "要查的日期，格式 YYYY-MM-DD"}},
+        "required": ["date"]
+      }
+    }
+  }
+]
