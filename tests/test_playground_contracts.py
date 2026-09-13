@@ -2632,5 +2632,6 @@ def test_the_voice_entry_says_what_voice_is_for():
     """語音的好處要寫在切換之前，而不是切換之後才說。"""
     template = (Path(__file__).parents[1] / "playground" / "templates" / "runner.html").read_text(encoding="utf-8")
 
-    assert "用說的，開口就能打斷" in template
     assert 'data-voice-state="ready"' in template
+    # 寫在畫面上，不是只寫在 tooltip：手機沒有滑鼠移上去這回事。
+    assert 'class="composer-voice-hint" data-voice-hint>用說的，開口就能打斷' in template

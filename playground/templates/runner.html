@@ -133,6 +133,9 @@
           <button class="composer-icon-button" type="button" data-voice-toggle="text" aria-label="改用打字" title="改用打字"><svg class="composer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 9.8h.01M10 9.8h.01M13.5 9.8h.01M17 9.8h.01"/><path d="M6.5 13.2h.01M10 13.2h.01M13.5 13.2h.01M17 13.2h.01"/><path d="M8.8 15.9h6.4"/></svg></button>
         </div>
         {% endif %}
+        {% if voice_input %}
+        <p class="composer-voice-hint" data-voice-hint>用說的，開口就能打斷</p>
+        {% endif %}
         <p class="inline-status" data-attachment-status>尚未選擇附件。</p>
       </form>
     </section>
