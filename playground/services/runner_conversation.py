@@ -147,24 +147,38 @@ class RunnerConversationState:
         """
         from agentic_sdk.audio import heard_portion
 
-        if heard_seconds is None or not self.turns or self.turns[-1].role != "assistant":
+        if heard_seconds is None:
             return self
-        last = self.turns[-1]
-        heard = heard_portion(last.content, heard_seconds)
-        if heard == last.content:
+        # The answer being played, not the last thing written down. Talking
+        # over an answer interrupts it and asks the next question in one go,
+        # and the question reaches the record first: a run registers what was
+        # said the moment it starts, while this takes a round trip through the
+        # page. Insisting on the last turn finds that question and corrects
+        # nothing.
+        spoken_at = next(
+            (index for index in range(len(self.turns) - 1, -1, -1) if self.turns[index].role == "assistant"),
+            None,
+        )
+        if spoken_at is None:
             return self
+        answer = self.turns[spoken_at]
+        heard = heard_portion(answer.content, heard_seconds)
+        if heard == answer.content:
+            return self
+        before, after = self.turns[:spoken_at], self.turns[spoken_at + 1 :]
         kept = (
-            (*self.turns[:-1],)
+            (*before, *after)
             if not heard
             # Nothing reached them, so nothing happened for them to refer back
             # to — the same rule the run itself applies.
             else (
-                *self.turns[:-1],
+                *before,
                 RunnerConversationTurn(
                     role="assistant",
                     content=heard,
-                    metadata={**last.metadata, "interrupted": True},
+                    metadata={**answer.metadata, "interrupted": True},
                 ),
+                *after,
             )
         )
         return RunnerConversationState(
