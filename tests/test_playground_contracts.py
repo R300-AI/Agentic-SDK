@@ -2612,3 +2612,25 @@ def test_a_finished_step_reads_as_finished():
 
     assert "FINISHED_DESCRIPTIONS" in surface_source
     assert '"準備輸出回覆": "回覆內容已整理完成。"' in surface_source
+
+
+def test_the_microphone_waits_to_be_asked():
+    """訪客是從畫廊點進來的，不會預期被要求說話——見 ADR-0009。
+
+    先前一載入就開麥克風，要打字得先找到輸入列右側那顆鍵盤圖示。
+    """
+    voice_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "voice-conversation.js").read_text(encoding="utf-8")
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    # 建立時不再自己開始聽；由頁面在使用者按下入口時呼叫。
+    assert "\tif (listens) {\n\t\t// No button" not in voice_source
+    assert "listen: start" in voice_source
+    assert "voice?.listen()" in runner_source
+
+
+def test_the_voice_entry_says_what_voice_is_for():
+    """語音的好處要寫在切換之前，而不是切換之後才說。"""
+    template = (Path(__file__).parents[1] / "playground" / "templates" / "runner.html").read_text(encoding="utf-8")
+
+    assert "用說的，開口就能打斷" in template
+    assert 'data-voice-state="ready"' in template
