@@ -139,3 +139,24 @@ def test_a_finished_utterance_is_reported():
 
     assert heard == ["保固多久？"]
     session.close()
+
+
+def test_it_can_be_told_which_chinese_to_write():
+    """「zh」 alone comes back simplified; a Taiwanese desk needs the other one."""
+    client, session = open_session(prompt="請以臺灣繁體中文輸出，例如「這週六」「兩小時」。")
+    settle()
+
+    opening = client.connection.sent[0]
+
+    assert opening["session"]["input_audio_transcription"]["prompt"] == "請以臺灣繁體中文輸出，例如「這週六」「兩小時」。"
+    session.close()
+
+
+def test_nothing_extra_is_sent_when_there_is_nothing_to_say():
+    client, session = open_session()
+    settle()
+
+    opening = client.connection.sent[0]
+
+    assert "prompt" not in opening["session"]["input_audio_transcription"]
+    session.close()
