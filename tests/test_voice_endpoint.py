@@ -586,3 +586,41 @@ def test_a_run_dropped_for_a_new_question_does_not_claim_someone_talked_over_it(
 
     assert "插話" not in note
     assert "新的問題" in note
+
+
+def test_an_answer_is_not_thrown_away_because_another_turn_landed_first():
+    """連著講兩句時，兩輪的寫回會交錯，後到的那一筆版本號已經過期。
+
+    線上實測：連續四次語音輸入之後，讀回對話紀錄只剩使用者發言——那一輪所有
+    助理回合都被丟掉了，畫面要使用者重新整理頁面。內容相容的寫回應該接到目前
+    狀態上，而不是整筆拒絕。
+    """
+    from playground.app import create_app
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from support import build_spec
+
+    app = create_app()
+    app.config.update(TESTING=True)
+    written = "這週六晚上 A 場 20:00-22:00 可訂，B 場 18:00-22:00 可訂。"
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["workflow_spec"] = build_spec()
+            started = RunnerConversationState.start().append_user("這週六晚上還有場地嗎？").append_assistant(written)
+            current_session["runner_conversation"] = started.as_dict()
+
+        # 第二輪在第一輪的紀錄上算出自己的更新⋯⋯
+        second = started.append_user("那費率呢？").append_assistant("尖峰每面每小時 400 元。").as_dict()
+        # ⋯⋯但送出之前，打斷的更正先落地了，第一則助理回合被截短。
+        client.post("/playground/run/conversation/interrupted", json={"heard_seconds": 2.0})
+
+        response = client.post("/playground/run/conversation/commit", json={"conversation_update": second})
+
+        assert response.status_code == 200, response.get_json()
+        with client.session_transaction() as current_session:
+            stored = RunnerConversationState.from_dict(current_session["runner_conversation"])
+
+    contents = [turn.content for turn in stored.turns]
+    assert "尖峰每面每小時 400 元。" in contents, "後到的那一輪回答被丟掉了"
+    assert written not in contents, "截短過的那一則又被寫回完整版"

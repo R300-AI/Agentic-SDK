@@ -164,6 +164,13 @@ def commit_runner_conversation():
     candidate = RunnerConversationState.from_dict(update)
     if candidate.as_dict() == current.as_dict():
         return jsonify({"committed": True, "conversation": current.as_dict()})
+    # 這一筆是在某個時點的紀錄上算出來的，而那份紀錄可能已經被動過——前一輪的
+    # 寫回，或打斷之後的截短。接得上就把新增的回合接到目前狀態上：整筆拒絕會讓
+    # 這一輪的回答消失，照單覆寫則會把截短過的那一則還原成完整版。
+    rebased = candidate.rebased_onto(current)
+    if rebased is not None:
+        session[CONVERSATION_SESSION_KEY] = rebased.as_dict()
+        return jsonify({"committed": True, "conversation": rebased.as_dict()})
     if candidate.conversation_id != current.conversation_id or candidate.revision != current.revision + 1:
         return jsonify(
             {
