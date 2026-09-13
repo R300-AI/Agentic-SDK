@@ -566,3 +566,23 @@ def test_being_interrupted_does_not_read_as_the_flow_breaking():
     assert "中止" not in str(event["title"])
     assert "cancelled" not in str(event["description"]).lower()
     assert "插話" in str(event["title"]) + str(event["description"])
+
+
+def test_a_run_dropped_for_a_new_question_does_not_claim_someone_talked_over_it():
+    """Two ways a turn ends early, and they are not the same event.
+
+    Someone talking over the answer heard part of it; someone asking a new
+    question was not necessarily listening at all. The trace said 「有人插話」
+    for both, which tells whoever is tuning the agent the wrong thing about
+    what just happened.
+    """
+    from types import SimpleNamespace
+
+    from playground.services import runner_service
+
+    superseded = SimpleNamespace(interrupted=True, interrupt_payload={"reason": "superseded"})
+
+    note = runner_service._interruption_note(superseded)
+
+    assert "插話" not in note
+    assert "新的問題" in note
