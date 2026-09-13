@@ -251,6 +251,16 @@ function processDisplayDescription(event) {
     "你插話了": "回答在這裡停住，下一輪從你聽到的部分接續。",
     "換了新問題": "你問了新的問題，這一輪就停在這裡。",
   };
+  // 同一個步驟在開始與完成時說的不是同一句話。兩者共用一句，回答已經顯示在
+  // 畫面上、泡泡頂端卻還寫著「正在整理回覆內容。」，看起來像它還在忙。
+  const FINISHED_DESCRIPTIONS = {
+    "判斷工具順序": "已決定要走的處理步驟。",
+    "整理相關來源": "已整理相關知識庫內容。",
+    "準備輸出回覆": "回覆內容已整理完成。",
+  };
+  if (String(event?.phase || "").trim() === "finish" && FINISHED_DESCRIPTIONS[title]) {
+    return FINISHED_DESCRIPTIONS[title];
+  }
   if (descriptions[title]) {
     return descriptions[title];
   }
@@ -547,7 +557,7 @@ function createToolCallControl(field, fieldId, label) {
 
 function createStringChoiceControl(field, fieldId, label) {
   const known = field.value == null ? "" : String(field.value).trim();
-  if (known && field.choices.length <= 1) {
+  if (known) {
     // 已經從對話裡問到的答案不是選項。把它跟「自行輸入」排成一組單選鈕，整張
     // 確認單就讀起來像問卷，而不是一張只差按確認的單子。
     return createKnownValueControl(field, fieldId, known);

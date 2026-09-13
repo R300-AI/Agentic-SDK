@@ -164,6 +164,23 @@ def commit_runner_conversation():
     candidate = RunnerConversationState.from_dict(update)
     if candidate.as_dict() == current.as_dict():
         return jsonify({"committed": True, "conversation": current.as_dict()})
+    # 這一筆是在某個時點的紀錄上算出來的，而那份紀錄可能已經被動過——前一輪的
+    # 寫回，或打斷之後的截短。屬於這一輪的只有它自己新增的那幾則，把那幾則接到
+    # 目前狀態上：整筆拒絕會讓這一輪的回答消失，照單覆寫則會把截短過的那一則
+    # 還原成完整版，或把沒人聽到、已經移除的那一則接回來。
+    appended = update.get("appended") if isinstance(update, dict) else None
+    if (
+        isinstance(appended, int)
+        and 0 < appended <= len(candidate.turns)
+        and candidate.conversation_id == current.conversation_id
+    ):
+        added = candidate.turns[-appended:]
+        if current.turns[-appended:] == added:
+            # 同一筆送了兩次（重試）。已經在裡面了，不要再接一次。
+            return jsonify({"committed": True, "conversation": current.as_dict()})
+        merged = current.append_turns(tuple(added), retrieval_evidence=candidate.retrieval_evidence)
+        session[CONVERSATION_SESSION_KEY] = merged.as_dict()
+        return jsonify({"committed": True, "conversation": merged.as_dict()})
     if candidate.conversation_id != current.conversation_id or candidate.revision != current.revision + 1:
         return jsonify(
             {

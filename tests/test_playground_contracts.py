@@ -2600,3 +2600,15 @@ def test_a_visitor_without_owner_actions_gets_the_width_back():
     runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
 
     assert ".runner-sidebar-actions" in runner_source
+
+
+def test_a_finished_step_reads_as_finished():
+    """描述是依標題查表的，start 與 finish 因此拿到同一句。
+
+    線上實測：回答已經顯示在畫面上，泡泡頂端仍寫著「正在整理回覆內容。」——
+    挑對事件還不夠，那一句本身就沒有完成式。
+    """
+    surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
+
+    assert "FINISHED_DESCRIPTIONS" in surface_source
+    assert '"準備輸出回覆": "回覆內容已整理完成。"' in surface_source
