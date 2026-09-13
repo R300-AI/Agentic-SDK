@@ -611,7 +611,7 @@ def test_an_answer_is_not_thrown_away_because_another_turn_landed_first():
             current_session["runner_conversation"] = started.as_dict()
 
         # 第二輪在第一輪的紀錄上算出自己的更新⋯⋯
-        second = started.append_user("那費率呢？").append_assistant("尖峰每面每小時 400 元。").as_dict()
+        second = {**started.append_user("那費率呢？").append_assistant("尖峰每面每小時 400 元。").as_dict(), "appended": 2}
         # ⋯⋯但送出之前，打斷的更正先落地了，第一則助理回合被截短。
         client.post("/playground/run/conversation/interrupted", json={"heard_seconds": 2.0})
 
@@ -624,3 +624,71 @@ def test_an_answer_is_not_thrown_away_because_another_turn_landed_first():
     contents = [turn.content for turn in stored.turns]
     assert "尖峰每面每小時 400 元。" in contents, "後到的那一輪回答被丟掉了"
     assert written not in contents, "截短過的那一則又被寫回完整版"
+
+
+def test_an_answer_nobody_heard_is_not_resurrected_by_the_next_commit():
+    """打斷得夠早，那一則就整則不存在——下一筆寫回不該把它接回來。
+
+    它是在舊紀錄上算出來的，裡面還帶著那一則。用內容前綴去對齊時，長度對不上
+    就只比對到較短的一邊，被移除的那一則於是混進「新增的回合」裡。
+    """
+    from playground.app import create_app
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from support import build_spec
+
+    app = create_app()
+    app.config.update(TESTING=True)
+    unheard = "這週六晚上 A 場 20:00-22:00 可訂，B 場 18:00-22:00 可訂。"
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["workflow_spec"] = build_spec()
+            started = RunnerConversationState.start().append_user("這週六晚上還有場地嗎？").append_assistant(unheard)
+            current_session["runner_conversation"] = started.as_dict()
+
+        second = {**started.append_user("那費率呢？").append_assistant("尖峰每面每小時 400 元。").as_dict(), "appended": 2}
+        # 一個字都沒聽到：那一則整則移除。
+        client.post("/playground/run/conversation/interrupted", json={"heard_seconds": 0.0})
+
+        response = client.post("/playground/run/conversation/commit", json={"conversation_update": second})
+
+        assert response.status_code == 200, response.get_json()
+        with client.session_transaction() as current_session:
+            stored = RunnerConversationState.from_dict(current_session["runner_conversation"])
+
+    contents = [turn.content for turn in stored.turns]
+    assert unheard not in contents, "沒人聽到的那一則被下一筆寫回接了回來"
+    assert "尖峰每面每小時 400 元。" in contents, "後到的那一輪回答被丟掉了"
+
+
+def test_two_different_questions_are_not_merged_because_one_starts_the_other():
+    """「好」與「好的，謝謝」是兩句話，不是同一句被截短。
+
+    截短只會發生在助理回合；對使用者發言套用前綴規則，等於把兩段不同的對話
+    當成同一段接起來。
+    """
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from playground.app import create_app
+
+    from support import build_spec
+
+    app = create_app()
+    app.config.update(TESTING=True)
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["workflow_spec"] = build_spec()
+            current = RunnerConversationState.start().append_user("好")
+            current_session["runner_conversation"] = current.as_dict()
+
+        # 沒有聲明自己新增了幾則，版本也對不上：這是另一段對話，不是延伸。
+        stale = {
+            **current.as_dict(),
+            "revision": current.revision + 5,
+            "turns": [{"role": "user", "content": "好的，謝謝"}, {"role": "assistant", "content": "不客氣。"}],
+        }
+        response = client.post("/playground/run/conversation/commit", json={"conversation_update": stale})
+
+    assert response.status_code == 409

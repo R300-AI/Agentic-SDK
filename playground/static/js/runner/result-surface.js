@@ -557,7 +557,7 @@ function createToolCallControl(field, fieldId, label) {
 
 function createStringChoiceControl(field, fieldId, label) {
   const known = field.value == null ? "" : String(field.value).trim();
-  if (known && field.choices.length <= 1) {
+  if (known) {
     // 已經從對話裡問到的答案不是選項。把它跟「自行輸入」排成一組單選鈕，整張
     // 確認單就讀起來像問卷，而不是一張只差按確認的單子。
     return createKnownValueControl(field, fieldId, known);

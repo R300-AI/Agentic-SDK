@@ -132,33 +132,6 @@ class RunnerConversationState:
             retrieval_evidence=self.retrieval_evidence,
         )
 
-    def rebased_onto(self, current: "RunnerConversationState") -> "RunnerConversationState | None":
-        """這一筆寫回是在舊狀態上算出來的；把新增的回合接到目前狀態上。
-
-        連著講兩句時兩輪的寫回會交錯，後到的那一筆版本號已經過期。整筆拒絕的
-        代價是那一輪的回答就此消失，而畫面只能叫使用者重新整理頁面。
-
-        只有「內容相容」才接得上：目前狀態的每一則，在這一筆裡都要是同一個角色
-        且內容相同或更長——更長的情形就是打斷之後的截短先落地了，那一則要以
-        目前狀態為準。對不上就不是同一段對話的延伸，維持衝突。
-        """
-        if self.conversation_id != current.conversation_id:
-            return None
-        if len(self.turns) < len(current.turns):
-            return None
-        for mine, theirs in zip(self.turns, current.turns):
-            if mine.role != theirs.role or not mine.content.startswith(theirs.content):
-                return None
-        added = self.turns[len(current.turns):]
-        if not added:
-            return None
-        return RunnerConversationState(
-            conversation_id=current.conversation_id,
-            revision=current.revision + 1,
-            turns=(*current.turns, *added),
-            retrieval_evidence=self.retrieval_evidence or current.retrieval_evidence,
-        )
-
     def cut_off_after_the_run(self, *, heard_seconds: float | None) -> "RunnerConversationState":
         """The record as the person heard it, corrected once playback stopped.
 

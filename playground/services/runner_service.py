@@ -538,7 +538,11 @@ def _conversation_update(
             metadata={"interrupted": True} if interrupted else {},
         )
     )
-    return conversation_state.append_turns(tuple(turns), retrieval_evidence=retrieval_evidence).as_dict()
+    update = conversation_state.append_turns(tuple(turns), retrieval_evidence=retrieval_evidence).as_dict()
+    # 這一輪自己新增了幾則。寫回時只有這幾則屬於它；其餘部分是它開始那一刻看到
+    # 的紀錄，而那份紀錄同時可能被別的東西動過——前一輪的寫回，或打斷後的截短。
+    update["appended"] = len(turns)
+    return update
 
 
 def _tool_submission_outcome_message(context: dict[str, object]) -> str:
