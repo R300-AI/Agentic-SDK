@@ -136,10 +136,10 @@ class VoiceAnswerAction(GenerativeAction):
         for _piece in self._speech.speak(text):
             if state.should_stop():
                 break
-        state.report_delivered(text, cut_short=_heard_of)
+        state.report_delivered(text, cut_short=_what_was_heard)
 
 
-def _heard_of(spoken: str, interruption: dict[str, Any]) -> str:
+def _what_was_heard(spoken: str, interruption: dict[str, Any]) -> str:
     """How much of what was said had been heard when it was cut off.
 
     Speaking takes time and writing does not, which is why the two differ at
