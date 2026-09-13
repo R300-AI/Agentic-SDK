@@ -488,3 +488,32 @@ def _completed_run(monkeypatch, *, voice_session_id: str):
         conversation_state=RunnerConversationState.start(),
         voice_session_id=voice_session_id,
     )
+
+
+def test_the_correction_finds_the_answer_even_after_the_next_question_lands():
+    """Talking over an answer does two things at once: interrupts, and asks.
+
+    The new question reaches the record first, because a run registers what
+    was said as soon as it starts, while the correction takes a round trip
+    through the page. A correction that insists on the last turn finds a
+    question sitting there and does nothing, and the answer nobody finished
+    hearing stays in the record whole.
+    """
+    from playground.services.runner_conversation import RunnerConversationState
+
+    written = "保固期是十二個月，延長保固可以再加兩年，另外配件另計"
+    state = (
+        RunnerConversationState.start()
+        .append_user("保固多久？")
+        .append_assistant(written)
+        .append_user("那延長保固呢？")
+    )
+
+    corrected = state.cut_off_after_the_run(heard_seconds=2.0)
+
+    assert [turn.content for turn in corrected.turns] == [
+        "保固多久？",
+        "保固期是十二個月",
+        "那延長保固呢？",
+    ]
+    assert corrected.turns[1].metadata.get("interrupted") is True
