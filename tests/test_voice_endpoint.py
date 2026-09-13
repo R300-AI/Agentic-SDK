@@ -83,22 +83,34 @@ def test_leaving_the_page_forgets_the_session():
     assert registry.token("session-d") is None
 
 
-def test_a_run_registers_itself_so_it_can_be_stopped():
-    """Without this the endpoint has a name but nothing answering to it."""
-    import sys
-    from pathlib import Path
+def test_a_run_registers_itself_so_it_can_be_stopped(monkeypatch):
+    """Without this the endpoint has a name but nothing answering to it.
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "playground"))
+    Asked while the answer is being produced, because that is the only time
+    stopping it means anything. Once it has finished there is nothing left to
+    stop, and the session says so rather than pretending otherwise.
+    """
+    from agentic_sdk.core import WorkflowResult
     from playground.services import runner_service
-    from support import build_spec, pcm, silence, speech
 
-    spec = build_spec(("retrieve_policy", "keyword"), ("output_format", "direct"))
-    spec = runner_service.apply_builder_step(spec, "retrieve", {"keyword_pairs": "保固 = 十二個月"}) \
-        if hasattr(runner_service, "apply_builder_step") else spec
+    from support import build_spec
 
-    runner_service.run_agent(spec, message="保固多久？", endpoint_selections={}, voice_session_id="session-e")
+    stoppable = {}
 
-    assert registry.token("session-e") is not None
+    class FakeWorkflow:
+        def run(self, *, user_message=None, **kwargs):
+            stoppable["while answering"] = registry.token("session-e") is not None
+            return WorkflowResult(
+                workflow_id="workflow", final_message="十二個月。", memory=kwargs.get("memory")
+            )
+
+    monkeypatch.setattr(runner_service, "build_workflow", lambda *_a, **_k: FakeWorkflow())
+    runner_service.run_agent(
+        build_spec(), message="保固多久？", endpoint_selections={}, voice_session_id="session-e"
+    )
+
+    assert stoppable["while answering"] is True
+    assert registry.token("session-e") is None
 
 
 def test_the_microphone_reaches_the_transcription_service(microphone):
@@ -411,3 +423,68 @@ def test_an_answer_nobody_heard_is_not_replaced_by_something_it_never_said(monke
 
     assert execution["final_message"] == ""
     assert [turn["role"] for turn in execution["conversation_update"]["turns"]] == []
+
+
+def test_an_answer_that_has_finished_cannot_be_interrupted():
+    """A finished run is not something the person can still stop.
+
+    Speaking outlives the run, so someone talking over the tail of an answer
+    arrives here long after it ended. Saying the interruption stopped something
+    leaves the page believing the record was corrected for it, when nothing
+    was: the turn is already stored whole.
+    """
+    from playground.services.voice_session import VoiceSessionRegistry
+
+    registry = VoiceSessionRegistry()
+    registry.open("session-1")
+    registry.settled("session-1")
+
+    assert registry.interject("session-1", heard_seconds=2.4) is False
+
+
+def test_the_session_stays_open_for_the_next_question(monkeypatch):
+    """Settling one answer must not close the microphone behind it."""
+    from playground.services.voice_session import VoiceSessionRegistry
+
+    registry = VoiceSessionRegistry()
+    registry.open("session-1")
+    registry.settled("session-1")
+    token = registry.open("session-1")
+
+    assert registry.interject("session-1", heard_seconds=1.0) is True
+    assert token.cancelled is True
+
+
+def test_a_run_lets_go_of_its_voice_session_when_it_ends(monkeypatch):
+    """The runner has to say when the answer is over; nothing else knows."""
+    from playground.services import runner_service
+    from playground.services.voice_session import registry
+
+    session_id = "session-finished"
+    _completed_run(monkeypatch, voice_session_id=session_id)
+
+    assert registry.interject(session_id, heard_seconds=2.4) is False
+
+
+def _completed_run(monkeypatch, *, voice_session_id: str):
+    from agentic_sdk.core import WorkflowResult
+    from playground.services import runner_service
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from support import build_spec
+
+    class FakeWorkflow:
+        def run(self, *, user_message=None, **kwargs):
+            return WorkflowResult(
+                workflow_id="workflow",
+                final_message="這週六 B 場整天都還可以訂。",
+                memory=kwargs["memory"],
+            )
+
+    monkeypatch.setattr(runner_service, "build_workflow", lambda *_a, **_k: FakeWorkflow())
+    return runner_service.run_agent(
+        build_spec(),
+        message="這週六下午還有場地嗎？",
+        conversation_state=RunnerConversationState.start(),
+        voice_session_id=voice_session_id,
+    )

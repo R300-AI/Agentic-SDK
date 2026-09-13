@@ -120,6 +120,19 @@ class VoiceSessionRegistry:
         )
         return True
 
+    def settled(self, session_id: str) -> None:
+        """This answer is over, so there is no longer a run to interrupt.
+
+        The session itself stays open: the microphone is still on and the next
+        question travels the same socket. What ends is this answer's claim on
+        being stoppable. Speaking outlives the run — an answer is produced in
+        seconds and takes far longer to say — so someone talking over the tail
+        of it has nothing left to stop, and saying otherwise leaves the page
+        believing a record was corrected that never was. See ADR-0008.
+        """
+        with self._lock:
+            self._tokens.pop(str(session_id), None)
+
     def close(self, session_id: str) -> None:
         with self._lock:
             self._tokens.pop(str(session_id), None)

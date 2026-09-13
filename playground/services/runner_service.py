@@ -235,6 +235,11 @@ def run_agent(
             "scene_profile": asdict(scene_profile),
             "source_execution": source_execution,
         }
+    finally:
+        # Registered for the length of the answer and no longer. Playback
+        # outlives it, so an interruption arriving after this point has nothing
+        # left to stop and the page corrects the stored turn instead.
+        _settle_voice_session(voice_session_id)
 
     final_message = workflow_result.final_message or get_runner_demo_result(scene_profile)["message"]
     if final_message == "No matching entries.":
@@ -1506,6 +1511,21 @@ def _register_voice_session(voice_session_id: str | None):
     from playground.services.voice_session import registry
 
     return registry.open(str(voice_session_id))
+
+
+def _settle_voice_session(voice_session_id: str | None) -> None:
+    """Say the answer is over. Nothing else on the server knows.
+
+    Playback carries on afterwards, so an interruption that arrives from here
+    on has no run to stop and the stored turn has to be corrected instead.
+    Leaving the answer registered made every late interruption look like it
+    had stopped something, and the record kept the half nobody heard.
+    """
+    if not voice_session_id:
+        return
+    from playground.services.voice_session import registry
+
+    registry.settled(str(voice_session_id))
 
 
 def _plan_endpoint_role(endpoint_selections: dict[str, str], reachable_roles: set[str]) -> str:
