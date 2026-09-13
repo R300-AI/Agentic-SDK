@@ -122,14 +122,14 @@
           </div>
           <textarea id="runner-message" name="message" rows="1" placeholder="問問 Agent"></textarea>
           {% if voice_input %}
-          <button class="composer-icon-button" type="button" data-voice-toggle="voice" aria-label="改用語音" title="改用語音"><svg class="composer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="10" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
+          <button class="composer-icon-button" type="button" data-voice-toggle="voice" aria-label="用說的，開口就能打斷" title="用說的，開口就能打斷"><svg class="composer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="10" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg></button>
           {% endif %}
           <button class="composer-submit-button" type="submit" aria-label="送出訊息"><span aria-hidden="true">›</span><span class="visually-hidden">產生回覆</span></button>
         </div>
         {% if voice_input %}
-        <div class="composer-voice-row" data-voice-bar data-voice-state="starting">
+        <div class="composer-voice-row" data-voice-bar data-voice-state="ready">
           <span class="voice-spectrum" data-voice-spectrum aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-          <span class="voice-state" data-voice-state-text role="status" aria-live="polite">正在開啟麥克風…</span>
+          <span class="voice-state" data-voice-state-text role="status" aria-live="polite">用說的，開口就能打斷</span>
           <button class="composer-icon-button" type="button" data-voice-toggle="text" aria-label="改用打字" title="改用打字"><svg class="composer-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6.5 9.8h.01M10 9.8h.01M13.5 9.8h.01M17 9.8h.01"/><path d="M6.5 13.2h.01M10 13.2h.01M13.5 13.2h.01M17 13.2h.01"/><path d="M8.8 15.9h6.4"/></svg></button>
         </div>
         {% endif %}

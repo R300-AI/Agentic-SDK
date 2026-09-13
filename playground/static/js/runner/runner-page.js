@@ -1028,6 +1028,7 @@ const voiceBars = document.querySelectorAll("[data-voice-spectrum] i");
 const voiceToggles = document.querySelectorAll("[data-voice-toggle]");
 
 const VOICE_STATES = {
+	ready: "用說的，開口就能打斷",
 	starting: "正在開啟麥克風…",
 	listening: "聆聽中，直接開口就好",
 	heard: "聽到了",
@@ -1051,7 +1052,8 @@ function showVoiceState(state, detail) {
 	// Exactly one input exists at a time: in voice mode the typing row is not
 	// dimmed, it is not there. Two inputs racing produce two turns for one
 	// question, and the agent answers something the person was still saying.
-	const typing = state === "paused" || state === "denied" || state === "unavailable" || state === "closed";
+	// 還沒開麥克風也算在打字：輸入列要能用，否則訪客只剩一顆圖示可按。
+	const typing = state === "ready" || state === "paused" || state === "denied" || state === "unavailable" || state === "closed";
 	runnerPage?.classList.toggle("is-voice-live", !typing);
 	if (messageInput) {
 		messageInput.disabled = !typing;
@@ -1087,7 +1089,7 @@ const voice = bindVoiceConversation(runnerPage, {
 voiceToggles.forEach((toggle) => {
 	toggle.addEventListener("click", () => {
 		if (toggle.dataset.voiceToggle === "voice") {
-			voice?.resume();
+			voice?.listen();
 			return;
 		}
 		voice?.pause();

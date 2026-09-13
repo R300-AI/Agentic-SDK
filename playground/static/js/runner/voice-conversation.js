@@ -276,15 +276,25 @@ export function bindVoiceConversation(page, { onTranscript, onStatus, onState, o
 		session.socket?.send(JSON.stringify({ type: "interject", heard_seconds: heard }));
 	}
 
-	if (listens) {
-		// No button: a voice agent that has to be switched on is a form with a
-		// microphone attached.
+	let started = false;
+
+	function start() {
+		// 訪客是從別處點進來的，不會預期被要求說話——所以麥克風等人來開，
+		// 而不是一載入就開著（ADR-0009）。開過之後再按就是解除暫停。
+		if (started) {
+			resume();
+			return;
+		}
+		started = true;
 		listen();
-	} else {
+	}
+
+	if (!listens) {
+		// 只會說話的 Agent 沒有麥克風可開，但仍要有連線才聽得到它的聲音。
 		open();
 	}
 
-	return { sessionId: session.id, pause, resume, enter };
+	return { sessionId: session.id, listen: start, pause, resume, enter };
 }
 
 function analyserFor(context) {
