@@ -300,3 +300,21 @@ def test_the_listing_marks_the_skills_the_conversation_already_carries(tmp_path)
     review_line = next(line for line in listing.splitlines() if line.startswith("review:"))
     assert "already taken up" in write_line
     assert "already taken up" not in review_line
+
+
+def test_which_skill_a_turn_used_is_readable_without_reaching_inside(tmp_path) -> None:
+    """An application that shows 「這一輪用了哪個技能」 needs the key by name.
+
+    It was written on the turn already, but only a private module said what the
+    key is called, so reading it meant importing from inside the planning
+    module.
+    """
+    from agentic_sdk.modules import SKILL_TURN_METADATA_KEY
+
+    workflow, _, _ = _agent(_package(tmp_path), plan_skill="write")
+
+    result = workflow.run("幫我寫第三章")
+
+    used = [turn.metadata[SKILL_TURN_METADATA_KEY] for turn in result.memory.turns
+            if (turn.metadata or {}).get(SKILL_TURN_METADATA_KEY)]
+    assert used == ["write"]
