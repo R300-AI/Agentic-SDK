@@ -91,11 +91,15 @@ function initializeSidebar() {
 	if (!runnerPage || !runnerSidebar || !sidebarToggle) {
 		return;
 	}
-	let collapsed = false;
+	// 訪客的側欄只剩一顆徽章，卻仍佔掉四分之一的寬度。沒有擁有者操作時就把寬度
+	// 讓給對話；自己動過收合的人，尊重他的選擇。
+	const nothingToDoHere = !runnerSidebar.querySelector(".runner-sidebar-actions");
+	let collapsed = nothingToDoHere;
 	try {
-		collapsed = window.localStorage.getItem("runnerSidebarCollapsed") === "true";
+		const stored = window.localStorage.getItem("runnerSidebarCollapsed");
+		collapsed = stored === null ? nothingToDoHere : stored === "true";
 	} catch {
-		collapsed = false;
+		collapsed = nothingToDoHere;
 	}
 	setSidebarCollapsed(collapsed);
 	sidebarToggle.addEventListener("click", () => {
