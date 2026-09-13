@@ -292,6 +292,7 @@ def run_agent(
             final_message,
             retrieval_evidence=_retrieval_evidence_from_result(workflow_result),
             tool_submission_context=tool_submission_context,
+            interrupted=bool(getattr(workflow_result, "interrupted", False)),
         ),
     }
 
@@ -507,6 +508,7 @@ def _conversation_update(
     *,
     retrieval_evidence: str,
     tool_submission_context: dict[str, object] | None,
+    interrupted: bool = False,
 ) -> dict[str, object] | None:
     if conversation_state is None:
         return None
@@ -521,7 +523,16 @@ def _conversation_update(
         outcome = _tool_submission_outcome_message(tool_submission_context)
         if outcome:
             turns.append(RunnerConversationTurn(role="assistant", content=outcome, metadata=internal_metadata))
-    turns.append(RunnerConversationTurn(role="assistant", content=final_message))
+    # An answer that was talked over is not a short answer. Without the mark,
+    # the next turn is built from a record that looks complete, and the agent
+    # starts again from the top of something the person already heard.
+    turns.append(
+        RunnerConversationTurn(
+            role="assistant",
+            content=final_message,
+            metadata={"interrupted": True} if interrupted else {},
+        )
+    )
     return conversation_state.append_turns(tuple(turns), retrieval_evidence=retrieval_evidence).as_dict()
 
 

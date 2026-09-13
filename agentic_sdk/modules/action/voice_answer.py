@@ -120,21 +120,35 @@ class VoiceAnswerAction(GenerativeAction):
     def _speak(self, text: str, state: WorkflowState) -> None:
         """Play the words out, and stop the moment the person talks over them.
 
-        What is reported afterwards is the part that was actually played, not
-        the part that was written. They differ whenever someone interrupts,
-        and keeping the difference is what stops the next turn referring back
-        to a sentence nobody heard.
+        What counts afterwards is the part that was actually heard, not the
+        part that was written. They differ whenever someone interrupts, and
+        keeping the difference is what stops the next turn referring back to a
+        sentence nobody heard.
+
+        Where the words are played decides when that difference is known. A
+        speaker on this machine hands back a piece at a time, so the loop below
+        sees the interruption arrive. A browser plays its own audio, so the
+        words leave here in an instant and are talked over seconds later, with
+        this module long finished. Both cases are settled the same way: report
+        what was said, and leave behind the rule for working out how much of it
+        was heard.
         """
-        interrupted = False
         for _piece in self._speech.speak(text):
             if state.should_stop():
-                interrupted = True
                 break
-        if not interrupted:
-            state.report_delivered(text)
-            return
-        heard_seconds = (state.cancel.payload if state.cancel else {}).get("heard_seconds")
-        state.report_delivered(heard_portion(text, heard_seconds))
+        state.report_delivered(text, cut_short=_what_was_heard)
+
+
+def _what_was_heard(spoken: str, interruption: dict[str, Any]) -> str:
+    """How much of what was said had been heard when it was cut off.
+
+    Speaking takes time and writing does not, which is why the two differ at
+    all. The interruption carries how long the words had been playing;
+    everything after that point was written and heard by nobody. An
+    interruption that reports no timing leaves the answer whole — see
+    ``heard_portion``.
+    """
+    return heard_portion(spoken, interruption.get("heard_seconds"))
 
 
 def _with_two_channel_contract(system_prompt: str | None) -> str:

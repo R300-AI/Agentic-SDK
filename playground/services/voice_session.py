@@ -101,6 +101,19 @@ class VoiceSessionRegistry:
             token = self._tokens.get(str(session_id))
         if token is None:
             return False
+        if (
+            heard_seconds is None
+            and token.cancelled
+            and token.payload.get("heard_seconds") is not None
+        ):
+            # The same interruption, reported twice. The page was playing the
+            # audio and says how far it got; the transcription service heard
+            # someone begin and can only say that it happened. Both arrive
+            # within a tenth of a second, in either order, and the one that
+            # knows nothing must not replace the one that knows. Overwriting
+            # here counts the whole answer as heard, and the next turn talks as
+            # if the person had sat through it.
+            return True
         token.cancel(
             "interjection",
             heard_seconds=None if heard_seconds is None else float(heard_seconds),

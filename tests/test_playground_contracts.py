@@ -643,7 +643,7 @@ def test_runner_commits_conversation_after_stream_completion():
     runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
 
     assert 'postJson("/playground/run/conversation/commit", { conversation_update: update })' in runner_source
-    assert "await commitConversationUpdate(result.conversation_update);" in runner_source
+    assert "await writeToConversation(() => commitConversationUpdate(result.conversation_update));" in runner_source
 
 
 def test_runner_execution_stream_emits_one_final_event(monkeypatch):
@@ -2533,3 +2533,20 @@ def test_the_planning_step_runs_on_the_model_that_answers():
     from playground.services.runner_service import _plan_endpoint_role
 
     assert _plan_endpoint_role({"action": "gpt-54", "retrieve": "embedded-large"}, {"action", "retrieve"}) == "action"
+
+
+def test_the_page_corrects_a_stored_answer_it_stopped_playing():
+    """Playback outlives the run, so the server has nothing left to stop.
+
+    Only the page knows how much of the answer was played, and by then the
+    whole of it has been committed. Without this the record keeps sentences
+    nobody heard, and the next turn is built from them.
+    """
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+    voice_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "voice-conversation.js").read_text(encoding="utf-8")
+
+    assert 'postJson("/playground/run/conversation/interrupted", { heard_seconds: heardSeconds })' in runner_source
+    assert "onCutOffAfterTheRun?.(message.heard_seconds)" in voice_source
+    # Both writes queue behind one another: a correction that overtook the
+    # commit would trim the turn before the one that was interrupted.
+    assert "writeToConversation(() => commitConversationUpdate(result.conversation_update))" in runner_source

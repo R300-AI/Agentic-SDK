@@ -525,6 +525,31 @@ async function executeRunnerStream(requestPayload, runId, onLiveProcess) {
 	return finalResult;
 }
 
+// Two things write to the conversation and they are not in step: a run that
+// finished, and playback of that run's answer being cut off afterwards.
+// Correcting a turn before it has been stored would trim the one before it.
+let conversationWrites = Promise.resolve();
+
+function writeToConversation(write) {
+	conversationWrites = conversationWrites.catch(() => {}).then(write);
+	return conversationWrites;
+}
+
+async function correctInterruptedConversation(heardSeconds) {
+	if (typeof heardSeconds !== "number") {
+		return;
+	}
+	try {
+		await writeToConversation(() =>
+			postJson("/playground/run/conversation/interrupted", { heard_seconds: heardSeconds }),
+		);
+	} catch (error) {
+		// The person has already been answered and has already interrupted.
+		// Telling them the record could not be trimmed helps nobody; the next
+		// turn is built from whatever did get stored.
+	}
+}
+
 async function commitConversationUpdate(update) {
 	if (!update || typeof update !== "object") {
 		return true;
@@ -905,7 +930,7 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		return;
 	}
 	try {
-		await commitConversationUpdate(result.conversation_update);
+		await writeToConversation(() => commitConversationUpdate(result.conversation_update));
 	} catch (error) {
 		showSavePanel(savePanel, error.message || "對話內容無法保存，請重新送出。");
 		if (runStatus) {
@@ -1037,6 +1062,7 @@ const voice = bindVoiceConversation(runnerPage, {
 		}
 	},
 	onState: showVoiceState,
+	onCutOffAfterTheRun: (heardSeconds) => correctInterruptedConversation(heardSeconds),
 	onSpectrum: (bands) => {
 		voiceBars.forEach((bar, index) => {
 			// A floor so the row never collapses into nothing: a flat line reads

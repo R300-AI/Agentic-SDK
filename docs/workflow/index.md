@@ -173,7 +173,7 @@ result = workflow.run("保固多久？", cancel=token)
 
 被打斷的那一輪，記憶留下的不是模型產出的內容，而是**實際到達使用者的內容**。有人在看串流輸出時，`emit_token_delta` 會在送出的當下累積；一段被中斷的文字回覆因此記下使用者已經讀到的那半句，而不是整段，也不是空的。
 
-`result.interrupt_payload["delivered"]` 是同一份內容。這與音訊無關——螢幕會交付，喇叭也會，而核心不被允許知道是哪一種。
+`result.interrupt_payload["delivered"]` 是**實際到達的那一段**，被打斷時它會比 `state.delivered_so_far` 短：後者是交出去的全部，前者是其中落地的部分。這與音訊無關——螢幕會交付，喇叭也會，而核心不被允許知道是哪一種；差多少由交付方自己換算（見 ADR-0008）。
 
 執行途中，模組可以從 `state.delivered_so_far` 讀到目前為止交付了多少，並用 `state.report_delivered(...)` 更正它。透過 `emit_token_delta` 送出的內容會自動累積，所以**只有交付方式不是 delta 的模組**才需要自己回報——例如一個把音訊交給喇叭的模組。
 

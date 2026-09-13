@@ -68,6 +68,10 @@ def test_interrupting_an_answer_that_already_finished_is_explained():
         answer = socket.receive_json()
 
     assert answer["type"] == "nothing_to_interrupt"
+    # Sent back so the page can correct the turn it already committed: the
+    # answer finished before the person talked over the end of it, and only
+    # the page knows how much of it was played.
+    assert answer["heard_seconds"] == 0.5
     assert "已經結束" in answer["message"]
 
 
@@ -300,3 +304,110 @@ def test_the_microphone_is_read_while_the_answer_is_playing(monkeypatch, microph
     registry.close("session-barge")
     assert frame.get("text") is not None, "麥克風被晾在一邊，先送出了下一塊聲音"
     assert json.loads(frame["text"])["type"] == "listening"
+
+
+def test_the_record_is_corrected_when_the_answer_was_cut_off_after_the_run():
+    """Playback outlives the run, so most interruptions have no run to stop.
+
+    The answer is produced in a few seconds and takes half a minute to say. By
+    the time the person talks over it the run is long finished and the whole
+    answer is already in the conversation — including the half nobody heard.
+    """
+    from playground.services.runner_conversation import RunnerConversationState
+
+    written = "保固期是十二個月，延長保固可以再加兩年，另外配件另計"
+    state = RunnerConversationState.start().append_user("保固多久？").append_assistant(written)
+
+    corrected = state.cut_off_after_the_run(heard_seconds=2.0)
+
+    assert [turn.content for turn in corrected.turns] == ["保固多久？", "保固期是十二個月"]
+    assert corrected.turns[-1].metadata.get("interrupted") is True
+    assert corrected.revision == state.revision + 1
+
+
+def test_an_interruption_with_no_timing_leaves_the_record_alone():
+    """Something noticed the interruption without having played a note."""
+    from playground.services.runner_conversation import RunnerConversationState
+
+    written = "保固期是十二個月，延長保固可以再加兩年"
+    state = RunnerConversationState.start().append_assistant(written)
+
+    assert state.cut_off_after_the_run(heard_seconds=None).turns[-1].content == written
+
+
+def test_the_page_can_correct_the_stored_answer_it_stopped_playing():
+    from playground.app import create_app
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from support import build_spec
+
+    app = create_app()
+    app.config.update(TESTING=True)
+    written = "保固期是十二個月，延長保固可以再加兩年，另外配件另計"
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["workflow_spec"] = build_spec()
+            current_session["runner_conversation"] = (
+                RunnerConversationState.start().append_user("保固多久？").append_assistant(written).as_dict()
+            )
+
+        response = client.post("/playground/run/conversation/interrupted", json={"heard_seconds": 2.0})
+
+        assert response.status_code == 200
+        with client.session_transaction() as current_session:
+            stored = RunnerConversationState.from_dict(current_session["runner_conversation"])
+    assert [turn.content for turn in stored.turns] == ["保固多久？", "保固期是十二個月"]
+
+
+def _interrupted_run(monkeypatch, *, delivered: str, heard_seconds: float):
+    """A run stopped while it was answering, as the runner sees it."""
+    from agentic_sdk.core import WorkflowResult
+    from playground.services import runner_service
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from support import build_spec
+
+    class FakeWorkflow:
+        def run(self, *, user_message=None, **kwargs):
+            memory = kwargs["memory"]
+            return WorkflowResult(
+                workflow_id="workflow",
+                final_message=delivered,
+                interrupted=True,
+                interrupt_payload={"delivered": delivered, "heard_seconds": heard_seconds},
+                memory=memory,
+            )
+
+    monkeypatch.setattr(runner_service, "build_workflow", lambda *_a, **_k: FakeWorkflow())
+    return runner_service.run_agent(
+        build_spec(),
+        message="保固多久？",
+        conversation_state=RunnerConversationState.start(),
+    )
+
+
+def test_the_stored_turn_says_it_was_cut_off(monkeypatch):
+    """The next answer carries on only if the record says where it stopped.
+
+    Without the marker the model reads a short answer as a complete one and
+    starts again from the top, repeating what the person already heard.
+    """
+    execution = _interrupted_run(monkeypatch, delivered="保固期是十二個月", heard_seconds=2.0)
+
+    turns = execution["conversation_update"]["turns"]
+    assert turns[-1]["content"] == "保固期是十二個月"
+    assert turns[-1]["metadata"].get("interrupted") is True
+
+
+def test_an_answer_nobody_heard_is_not_replaced_by_something_it_never_said(monkeypatch):
+    """Interrupted before a word landed: there is nothing to record.
+
+    The fallback exists for a run that produced nothing to say. Reaching it
+    here writes a sentence the agent never uttered into the conversation, and
+    the person is then answered as though they had heard it.
+    """
+    execution = _interrupted_run(monkeypatch, delivered="", heard_seconds=0.0)
+
+    assert execution["final_message"] == ""
+    assert [turn["role"] for turn in execution["conversation_update"]["turns"]] == []

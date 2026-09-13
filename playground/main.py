@@ -149,8 +149,17 @@ async def voice_session(socket: WebSocket, session_id: str) -> None:
                 if registry.interject(session_id, heard_seconds=heard):
                     await socket.send_json({"type": "interjected", "heard_seconds": heard})
                 else:
+                    # Playback outlives the run, so this is the ordinary case
+                    # rather than a fault: the answer was finished and stored
+                    # long before the person talked over the tail of it. The
+                    # duration goes back with the reply, because the page is
+                    # what has to correct the record it already committed.
                     await socket.send_json(
-                        {"type": "nothing_to_interrupt", "message": unknown_session_message()}
+                        {
+                            "type": "nothing_to_interrupt",
+                            "heard_seconds": heard,
+                            "message": unknown_session_message(),
+                        }
                     )
             elif kind == "speak":
                 await stream_speech(str(message.get("text") or ""))

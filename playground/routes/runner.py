@@ -178,6 +178,26 @@ def commit_runner_conversation():
     return jsonify({"committed": True, "conversation": candidate.as_dict()})
 
 
+@runner_bp.post("/conversation/interrupted")
+def correct_interrupted_runner_conversation():
+    """Trim the stored answer to the part the page actually played.
+
+    The page reports this after it has stopped, because until then nobody
+    knows how far it got. No agent has to be loaded for it: the correction is
+    about a turn that already happened, not about producing another one.
+    """
+    payload = request.get_json(silent=True) or {}
+    reported = payload.get("heard_seconds")
+    try:
+        heard = None if reported is None else float(reported)
+    except (TypeError, ValueError):
+        heard = None
+    current = _runner_conversation_state()
+    corrected = current.cut_off_after_the_run(heard_seconds=heard)
+    session[CONVERSATION_SESSION_KEY] = corrected.as_dict()
+    return jsonify({"corrected": corrected.as_dict() != current.as_dict(), "conversation": corrected.as_dict()})
+
+
 @runner_bp.post("/initialize/stream")
 def initialize_runner_stream():
     if not has_spec():
