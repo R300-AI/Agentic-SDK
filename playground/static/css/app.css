@@ -2822,6 +2822,19 @@ a { color: inherit; text-decoration: none; }
   display: flex;
 }
 
+/* 語音能做什麼，要在按下去之前就看得到——提示只寫在 tooltip 裡，手機上等於
+   沒有寫。進了語音模式之後這句話就沒有用處了，讓位給狀態列。 */
+.composer-voice-hint {
+  margin: 0.35rem 0.35rem 0;
+  color: rgba(227, 227, 227, 0.55);
+  font-size: 0.8rem;
+  text-align: end;
+}
+
+.runner-page.is-voice-live .composer-voice-hint {
+  display: none;
+}
+
 .runner-page.is-voice-live .skill-chip-row,
 .runner-page.is-voice-live .skill-menu,
 .runner-page.is-voice-live .composer-main-row,
