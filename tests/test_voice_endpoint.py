@@ -692,3 +692,36 @@ def test_two_different_questions_are_not_merged_because_one_starts_the_other():
         response = client.post("/playground/run/conversation/commit", json={"conversation_update": stale})
 
     assert response.status_code == 409
+
+
+def test_the_cut_off_mark_survives_the_next_commit():
+    """標記是下一輪提示知道「話沒講完」的唯一依據。
+
+    截短由更正落下，標記也在那一刻寫上；下一輪的寫回接在它後面時，若把那一則
+    連同標記一起換掉，agent 就會以為對方聽完了整段。
+    """
+    from playground.app import create_app
+    from playground.services.runner_conversation import RunnerConversationState
+
+    from support import build_spec
+
+    app = create_app()
+    app.config.update(TESTING=True)
+    written = "這週六晚上 A 場 20:00-22:00 可訂，B 場 18:00-22:00 可訂。"
+
+    with app.test_client() as client:
+        with client.session_transaction() as current_session:
+            current_session["workflow_spec"] = build_spec()
+            started = RunnerConversationState.start().append_user("這週六還有場地嗎？").append_assistant(written)
+            current_session["runner_conversation"] = started.as_dict()
+
+        client.post("/playground/run/conversation/interrupted", json={"heard_seconds": 2.0})
+        second = {**started.append_user("那費率呢？").append_assistant("尖峰每面每小時 400 元。").as_dict(), "appended": 2}
+        client.post("/playground/run/conversation/commit", json={"conversation_update": second})
+
+        with client.session_transaction() as current_session:
+            stored = RunnerConversationState.from_dict(current_session["runner_conversation"])
+
+    cut_off = [turn for turn in stored.turns if (turn.metadata or {}).get("interrupted")]
+    assert cut_off, "截短過的那一則失去了「被打斷」的標記"
+    assert cut_off[-1].content == "這週六晚上 A 場"
