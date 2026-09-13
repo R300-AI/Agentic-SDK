@@ -77,14 +77,24 @@ class VoiceSessionRegistry:
             return self._listeners.get(str(session_id))
 
     def open(self, session_id: str) -> CancellationToken:
-        """Start a session, replacing any answer still running under that name.
+        """Start an answer, stopping whatever was still running under that name.
 
-        A reload opens the same session again. Leaving the first one registered
-        would strand an answer nobody can reach and nobody is listening to.
+        Two answers at once is not two answers: it is one person being talked
+        at. Measured on the deployment, a second question sent three seconds
+        into a long answer left the first one running to the end — 895
+        characters, produced and spoken, for something the person had already
+        moved on from. A reload does the same thing by opening the session
+        again.
+
+        Replacing the registration was never enough. Whoever asked the first
+        question stopped waiting for it the moment they asked the second.
         """
         token = CancellationToken()
         with self._lock:
+            previous = self._tokens.get(str(session_id))
             self._tokens[str(session_id)] = token
+        if previous is not None and not previous.cancelled:
+            previous.cancel("superseded")
         return token
 
     def interject(self, session_id: str, *, heard_seconds: float | None) -> bool:

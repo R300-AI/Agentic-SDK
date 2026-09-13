@@ -914,6 +914,17 @@ def _process_event_for_workflow_event(config: BuilderSourceConfig, workflow_even
             details=_structured_details_for_finish(workflow_event),
         )
     if phase == "abort":
+        if workflow_event.get("interrupted"):
+            # 被打斷與流程出錯是兩件事。安全限制中止是系統在保護自己，該顯示成
+            # 異常；插話是使用者在主導，對他故意做的事顯示「流程中止」，還把
+            # 內部原因原封搬到畫面上，讀起來像壞掉了。
+            superseded = str(workflow_event.get("reason") or "") == "superseded"
+            return _process_event(
+                "gate",
+                "換了新問題" if superseded else "你插話了",
+                _interruption_trace_text(str(workflow_event.get("reason") or "")),
+                workflow_event=workflow_event,
+            )
         return _process_event(
             "gate",
             "流程中止",
@@ -1483,6 +1494,17 @@ def _execution_status(workflow_result, handoff_reason: str) -> str:
     if getattr(workflow_result, "interrupted", False):
         return "interrupted"
     return "aborted" if workflow_result.aborted or handoff_reason else "completed"
+
+
+def _interruption_trace_text(reason: str) -> str:
+    """為什麼這一輪停在這裡，用當事人看得懂的話講。
+
+    內部原因（interjection、superseded）是給程式分流用的，直接搬到畫面上等於
+    要使用者去讀我們的實作。
+    """
+    if reason == "superseded":
+        return "你問了新的問題，這一輪就停在這裡。"
+    return "回答在這裡停住，下一輪從你聽到的部分接續。"
 
 
 def _interruption_note(workflow_result) -> str:

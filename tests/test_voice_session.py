@@ -51,16 +51,23 @@ def test_closing_a_session_forgets_it():
     assert registry.interject("session-1", heard_seconds=1.0) is False
 
 
-def test_opening_the_same_session_twice_replaces_the_first():
-    """A reload should not leave an orphan nobody can reach."""
+def test_opening_the_same_session_twice_stops_the_first():
+    """A reload, or a second question, should not leave the first answer running.
+
+    Whoever asked the first question stopped waiting for it the moment they
+    asked the second, and nobody is left at the other end of a reloaded page.
+    Only the newest answer is still wanted, and only it can be interrupted.
+    """
     registry = VoiceSessionRegistry()
     first = registry.open("session-1")
     second = registry.open("session-1")
 
     registry.interject("session-1", heard_seconds=1.0)
 
+    assert first.cancelled is True
+    assert first.reason == "superseded"
     assert second.cancelled is True
-    assert first.cancelled is False
+    assert second.reason == "interjection"
 
 
 def test_a_later_report_that_knows_nothing_does_not_erase_the_timing():

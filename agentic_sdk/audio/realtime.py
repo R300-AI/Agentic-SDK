@@ -162,7 +162,12 @@ class RealtimeTranscription:
                 _fan_out(self._speech_started)
             elif kind.endswith("transcription.completed"):
                 text = str(_field(event, "transcript") or "").strip()
-                if text:
+                # The prompt handed back is not something anyone said. A
+                # service given a stretch of audio with no words in it has the
+                # prompt and little else to go on, and returns it; passed on, it
+                # reaches the conversation as the person's own words and gets
+                # answered.
+                if text and text != self._prompt:
                     _fan_out(self._transcript, text)
 
 
