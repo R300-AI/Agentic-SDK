@@ -47,6 +47,7 @@ class RealtimeTranscription:
         api_key: str | None = None,
         base_url: str | None = None,
         language: str = "zh",
+        prompt: str = "",
         turn_detection: Mapping[str, Any] | None = None,
         connect_timeout: float = 30.0,
     ) -> None:
@@ -54,6 +55,10 @@ class RealtimeTranscription:
         self._base_url = base_url
         self._model = model
         self._language = language
+        # A language code says which language, never which script: "zh" comes
+        # back simplified whoever is speaking. The prompt is where a caller
+        # says which Chinese its people actually write.
+        self._prompt = prompt.strip()
         self._turn_detection = dict(turn_detection or DEFAULT_TURN_DETECTION)
 
         self._speech_started: list[Callable[[], None]] = []
@@ -132,6 +137,7 @@ class RealtimeTranscription:
                             "input_audio_transcription": {
                                 "model": self._model,
                                 "language": self._language,
+                                **({"prompt": self._prompt} if self._prompt else {}),
                             },
                             "turn_detection": self._turn_detection,
                         },

@@ -168,7 +168,15 @@ def open_transcription() -> "AudioInputTransport | None":
         from agentic_sdk.audio import FakeAudioInput
 
         return FakeAudioInput()
-    return AzureRealtimeTranscription(endpoint=endpoint)
+    return AzureRealtimeTranscription(endpoint=endpoint, prompt=TRADITIONAL_CHINESE_PROMPT)
+
+
+TRADITIONAL_CHINESE_PROMPT = "請以臺灣慣用的繁體中文輸出，例如「這週六」「兩小時」「時段」「確認」。"
+"""What to write, not what language: without it every utterance comes back simplified.
+
+The people using this Playground write Traditional Chinese, and the language
+code has no way to say so — ``zh`` is the only value the service takes.
+"""
 
 
 def _test_mode() -> bool:
