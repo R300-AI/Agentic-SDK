@@ -517,3 +517,52 @@ def test_the_correction_finds_the_answer_even_after_the_next_question_lands():
         "那延長保固呢？",
     ]
     assert corrected.turns[1].metadata.get("interrupted") is True
+
+
+def test_a_new_question_stops_the_answer_still_running():
+    """Two answers at once is not two answers: it is one person being talked at.
+
+    Measured on the deployment: a second question sent three seconds into a
+    long answer left the first one running to completion — 895 characters,
+    billed and spoken, for a question the person had already moved on from.
+    """
+    from playground.services.voice_session import VoiceSessionRegistry
+
+    registry = VoiceSessionRegistry()
+    first = registry.open("session-1")
+
+    registry.open("session-1")
+
+    assert first.cancelled is True
+    assert first.reason == "superseded"
+
+
+def test_being_interrupted_does_not_read_as_the_flow_breaking():
+    """Talking over an answer is steering, not a fault.
+
+    Seen on the deployment: interrupting left 「流程中止 / cancelled」 on screen —
+    the wording for a safety limit stopping the workflow, with an untranslated
+    reason under it. The person did it on purpose and it reads as a breakage.
+    """
+    from playground.services import runner_service
+
+    config = runner_service.BuilderSourceConfig(workflow_name="羽球館")
+    event = runner_service._process_event_for_workflow_event(
+        config,
+        {
+            "type": "stage",
+            "phase": "abort",
+            "status": "interrupted",
+            "module": "action",
+            "label": "產生回覆",
+            "schema": {"label": "產生回覆", "fields": []},
+            "reason": "interjection",
+            "interrupted": True,
+            "visit_id": "v1",
+        },
+    )
+
+    assert event is not None
+    assert "中止" not in str(event["title"])
+    assert "cancelled" not in str(event["description"]).lower()
+    assert "插話" in str(event["title"]) + str(event["description"])

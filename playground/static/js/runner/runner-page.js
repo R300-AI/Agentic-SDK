@@ -926,7 +926,14 @@ async function runWorkflow(payload, { displayMessage, showUserMessage = true } =
 		}
 	}
 	if (runId !== activeRunId) {
+		// 這一輪已經被下一個問題取代。留著半截的處理過程，畫面看起來像它還在
+		// 跑——而它早就停了，說出口的部分也已經記進對話。
 		assistant.bubble?.classList.remove("is-running");
+		clearProcessEvents(assistant.processTrace);
+		if (assistant.bubble) {
+			assistant.bubble.hidden = true;
+		}
+		setSurfaceBusy(assistant.surface, false);
 		return;
 	}
 	try {

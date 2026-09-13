@@ -2550,3 +2550,15 @@ def test_the_page_corrects_a_stored_answer_it_stopped_playing():
     # Both writes queue behind one another: a correction that overtook the
     # commit would trim the turn before the one that was interrupted.
     assert "writeToConversation(() => commitConversationUpdate(result.conversation_update))" in runner_source
+
+
+def test_an_interruption_has_its_own_words_on_the_trace():
+    """Interrupting is steering, not a fault, and the page says so in its own vocabulary.
+
+    The descriptions are a controlled list on purpose, so a new kind of step
+    needs its own entry rather than server text passed through.
+    """
+    surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
+
+    assert '"你插話了": "回答在這裡停住，下一輪從你聽到的部分接續。",' in surface_source
+    assert '"換了新問題": "你問了新的問題，這一輪就停在這裡。",' in surface_source

@@ -160,3 +160,31 @@ def test_nothing_extra_is_sent_when_there_is_nothing_to_say():
 
     assert "prompt" not in opening["session"]["input_audio_transcription"]
     session.close()
+
+
+def test_the_instruction_we_sent_is_not_something_the_person_said():
+    """The prompt comes back as a transcript, and it was never spoken.
+
+    Seen on the deployment: the Traditional-Chinese instruction the transport
+    sends with every session appeared in the conversation as the customer's own
+    words, and the agent answered it. A service with nothing to transcribe has
+    the prompt and little else to go on, so it hands the prompt back.
+    """
+    prompt = "請以臺灣慣用的繁體中文輸出，例如「這週六」「兩小時」。"
+    client, session = open_session(prompt=prompt)
+    heard = []
+    session.on_transcript(heard.append)
+
+    client.incoming.put(
+        {"type": "conversation.item.input_audio_transcription.completed", "transcript": prompt}
+    )
+    client.incoming.put(
+        {
+            "type": "conversation.item.input_audio_transcription.completed",
+            "transcript": "這週六晚上還有空的場地嗎？",
+        }
+    )
+    settle()
+
+    assert heard == ["這週六晚上還有空的場地嗎？"]
+    session.close()
