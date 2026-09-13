@@ -18,7 +18,7 @@ const FRAME_SAMPLES = 1024;
 
 const SPECTRUM_BANDS = 14;
 
-export function bindVoiceConversation(page, { onTranscript, onStatus, onState, onSpectrum }) {
+export function bindVoiceConversation(page, { onTranscript, onStatus, onState, onSpectrum, onCutOffAfterTheRun }) {
 	if (page?.dataset.voice !== "true") {
 		return null;
 	}
@@ -91,6 +91,14 @@ export function bindVoiceConversation(page, { onTranscript, onStatus, onState, o
 			if (!session.playing.length) {
 				enter("listening");
 			}
+			return;
+		}
+		if (message.type === "nothing_to_interrupt") {
+			// Speaking takes far longer than answering, so by the time someone
+			// talks over the tail of an answer the run is usually finished and
+			// the whole of it is already in the conversation. Nothing on the
+			// server knows how much was played; this page does, and says so.
+			onCutOffAfterTheRun?.(message.heard_seconds);
 			return;
 		}
 		if (message.type === "unavailable") {

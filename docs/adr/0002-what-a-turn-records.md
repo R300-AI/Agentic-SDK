@@ -4,7 +4,12 @@ Date: 2026-09-05
 
 ## Status
 
-Accepted
+Accepted, and extended by ADR-0008. An interruption during a long answer
+reaches the run while it is still going, which this decision did not expect, so
+the trim happens in two places for two moments: inside the run when the
+interruption gets there, and on the Playground's own record when it arrives
+after. What a turn records, and what the core is allowed to know, stand as
+written.
 
 ## Context
 

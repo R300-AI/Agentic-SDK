@@ -333,8 +333,15 @@ class Workflow:
             # the stop reports what they had received. Only the second was
             # there, so it stands where the two disagree, and the first is kept
             # where they do not.
-            requested = cancel.payload if cancel is not None and cancel.cancelled else {}
-            account = {**exc.payload, **requested}
+            # A key reported as nothing is not a report: something noticed the
+            # stop without being in a position to say anything about it, and
+            # letting that land would replace what was known with what was not.
+            stopper = {
+                key: value
+                for key, value in (cancel.payload if cancel is not None and cancel.cancelled else {}).items()
+                if value is not None
+            }
+            account = {**exc.payload, **stopper}
             # Ask whoever delivered how much of it landed, and hand over that
             # account of the interruption. Audio played somewhere else leaves
             # the module whole and is cut off later, so this is the first
@@ -342,7 +349,11 @@ class Workflow:
             # short, never that it was cut short mid-sentence out of a speaker.
             interrupt_payload = {
                 **account,
-                "reason": (cancel.reason if requested and cancel.reason else exc.reason),
+                "reason": (
+                    cancel.reason
+                    if cancel is not None and cancel.cancelled and cancel.reason
+                    else exc.reason
+                ),
                 "delivered": state.delivered_when_cut_short(account),
             }
             # Say so on the trace, and say where. Whoever is tuning how eagerly

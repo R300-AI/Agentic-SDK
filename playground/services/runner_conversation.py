@@ -132,6 +132,48 @@ class RunnerConversationState:
             retrieval_evidence=self.retrieval_evidence,
         )
 
+    def cut_off_after_the_run(self, *, heard_seconds: float | None) -> "RunnerConversationState":
+        """The record as the person heard it, corrected once playback stopped.
+
+        Playback outlives the run. An answer is produced in a few seconds and
+        takes far longer to say, so most interruptions arrive with no run left
+        to stop and the turn already stored whole — including the half nobody
+        heard. Only whatever played the audio knows how far it got, and it can
+        only say so afterwards. See ADR-0008.
+
+        Unknown stays unknown: something can notice an interruption without
+        having played a note, and trimming to nothing there would erase an
+        answer the person did hear.
+        """
+        from agentic_sdk.audio import heard_portion
+
+        if heard_seconds is None or not self.turns or self.turns[-1].role != "assistant":
+            return self
+        last = self.turns[-1]
+        heard = heard_portion(last.content, heard_seconds)
+        if heard == last.content:
+            return self
+        kept = (
+            (*self.turns[:-1],)
+            if not heard
+            # Nothing reached them, so nothing happened for them to refer back
+            # to — the same rule the run itself applies.
+            else (
+                *self.turns[:-1],
+                RunnerConversationTurn(
+                    role="assistant",
+                    content=heard,
+                    metadata={**last.metadata, "interrupted": True},
+                ),
+            )
+        )
+        return RunnerConversationState(
+            conversation_id=self.conversation_id,
+            revision=self.revision + 1,
+            turns=kept,
+            retrieval_evidence=self.retrieval_evidence,
+        )
+
     def update_from_result(self, result: WorkflowResult) -> "RunnerConversationState":
         return self.append_assistant(
             _what_reached_the_person(result), retrieval_evidence=_retrieval_evidence(result)

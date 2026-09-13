@@ -191,8 +191,7 @@ def test_only_what_was_heard_survives_when_the_page_does_the_playing():
     assistant_turns = [t.content for t in workflow.memory.turns if t.role == "assistant"]
     assert assistant_turns, "被打斷的那一輪什麼都沒留下"
     heard = assistant_turns[-1]
-    assert spoken.startswith(heard), f"留下的不是說出口的開頭：{heard}"
-    assert len(heard) <= 12, f"兩秒只講得完約九個字，卻留下 {len(heard)} 字：{heard}"
+    assert heard == "這週六尖峰每面每小", f"留下了 {len(heard)} 字：{heard}"
 
 
 def test_the_stream_noticing_the_stop_does_not_erase_what_the_person_reported():
