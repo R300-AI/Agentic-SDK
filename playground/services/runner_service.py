@@ -1508,9 +1508,17 @@ def _interruption_trace_text(reason: str) -> str:
 
 
 def _interruption_note(workflow_result) -> str:
-    """Say on the trace that the turn was cut short, and that it was on purpose."""
+    """Say on the trace that the turn was cut short, and which of the two ways.
+
+    被打斷與被取代結束的方式一樣，發生的事卻不同：前者聽了一半才開口，後者
+    可能根本沒在聽。兩者共用同一句話，會讓調整這個 agent 的人以為每一次都是
+    有人插話。
+    """
     if not getattr(workflow_result, "interrupted", False):
         return ""
+    reason = str((getattr(workflow_result, "interrupt_payload", None) or {}).get("reason") or "")
+    if reason == "superseded":
+        return "Gate：使用者送出新的問題，這一輪停在這裡。"
     return "Gate：有人插話，回答在這裡停住，下一輪從聽到的部分接續。"
 
 
