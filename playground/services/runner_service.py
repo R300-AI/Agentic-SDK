@@ -143,6 +143,11 @@ def run_agent(
         }
 
     try:
+        # Registered before the workflow is built, not after: the speaking
+        # module is handed its transport at build time, and it only reaches the
+        # person listening if the session is already open. Registering later
+        # left the first answer of every voice session silent.
+        cancel = _register_voice_session(voice_session_id)
         workflow = build_workflow(
             spec,
             endpoint_selections or {},
@@ -165,9 +170,6 @@ def run_agent(
                 execution_workflow_name,
                 parsed_attachments,
             )
-            # Registered under the listening session so that someone speaking
-            # over the answer, on an entirely different connection, can stop it.
-            cancel = _register_voice_session(voice_session_id)
             workflow_result = workflow.run(
                 cancel=cancel,
                 user_message=None if execution_memory else user_message,

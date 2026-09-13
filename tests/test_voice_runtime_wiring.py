@@ -124,3 +124,28 @@ def test_a_spec_naming_a_module_with_no_parameter_table_says_so():
     assert registry_kinds - set(_MODULE_CONFIG_PARAMS) == set()
     with pytest.raises(ValueError):
         build_module(ModuleSpec(kind="something_nobody_registered"))
+
+
+def test_the_first_answer_of_a_voice_session_is_spoken_too():
+    """Nobody opens the session before the first run — the page only attaches a speaker.
+
+    The run itself registers it, so a module built before that registration is
+    handed a transport that plays nowhere, and the first thing the agent ever
+    says is silent.
+    """
+    registry.listen("first-answer", FakeAudioInput())
+    handed_over: list[str] = []
+    registry.attach_speaker("first-answer", handed_over.append)
+
+    with patch(
+        "agentic_sdk.llm.openai_compatible.OpenAI",
+        side_effect=[FoundryOpenAILikeClient(action_text='{"spoken": "十二個月", "displayed": "保固 12 個月"}')],
+    ):
+        run_agent(
+            voice_spec(),
+            message="保固多久？",
+            endpoint_selections={"action": "gpt-54"},
+            voice_session_id="first-answer",
+        )
+
+    assert handed_over == ["十二個月"]
