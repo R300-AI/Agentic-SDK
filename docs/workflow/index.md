@@ -190,6 +190,23 @@ if perceive.pending_input():
 
 這個約定**不是語音專屬**，任何模組都可以實作它——它承認的是「呼叫端不一定是最先知道這一輪要處理什麼的人」。收下的內容用掉就沒了，不會殘留到下一輪。
 
+## 一整段語音對話
+
+`run()` 跑一輪。語音是一來一往，而那個迴圈每個應用寫起來都一樣，錯法也一樣：沿用已經取消的權杖，下一輪會一開始就結束；回答播放期間停止收音，打斷就失效。`converse()` 把這些收進工作流程：
+
+```python
+for result in workflow.converse(audio=microphone()):
+    print(result.final_message)
+    if result.interrupted:
+        print("他只聽到：", result.interrupt_payload["delivered"])
+```
+
+`audio` 是任何會產出 16 位元單聲道音訊塊的東西——麥克風、錄音檔、socket。裝置仍然在外面建立（ADR-0003），工作流程只負責接線：持續把音訊送進感知模組（**包括它正在回答的時候**）、聽到完整一句才跑一輪、每一輪換一個新的取消權杖。
+
+不傳 `audio` 時，由呼叫端自己餵 `perceive.hear(...)`，`converse()` 只負責跑那些輪次。
+
+音訊放完之後還會再等一小段（`tail_seconds`，預設 2 秒）才收工：轉寫服務要聽到靜默才判定一句話結束，所以錄音檔最後一句的文字會在音訊結束之後才到。
+
 ## 執行事件
 
 如果呼叫 `run()` 或 `stream()` 時傳入 `event_callback`，省略 `events_schema` 的 `Workflow` 會對所有執行到的模組，在開始、完成或中止時送出 `stage` event，並送出完整的結構化 JSON 欄位。自訂 `events_schema` 時，則只對列出的模組與 `fields` 送出事件。呼叫端在開始時更新狀態，並在完成時讀取 SDK 依設定整理的欄位：

@@ -1,8 +1,9 @@
 ﻿from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass, field
 from queue import Queue
+import time
 from threading import Thread
 from typing import Any
 import uuid
@@ -425,6 +426,63 @@ class Workflow:
             entities=state.entities.as_dict(),
             memory=state.memory.copy_for_run() if state.memory is not None else None,
         )
+
+    def converse(
+        self,
+        *,
+        audio: "Iterable[bytes] | None" = None,
+        poll_seconds: float = 0.02,
+        tail_seconds: float = 2.0,
+        **run_kwargs: Any,
+    ) -> Iterator[WorkflowResult]:
+        """A spoken conversation: one result for each thing the person says.
+
+        The wiring around a voice turn never varies between applications, and
+        every part of it is easy to get wrong in a way that looks like the
+        agent being broken. A run that reuses a cancelled token ends before it
+        starts. A microphone that stops while the answer plays cannot be
+        interrupted at all. Those belong here rather than in everyone's code.
+
+        What stays outside is the device. ``audio`` is anything that yields
+        16-bit mono chunks — a microphone, a recording, a socket — because
+        audio sources are not interchangeable and the core does not know one
+        from another, which is ADR-0003. Leave it out and whoever holds the
+        microphone keeps feeding the perceive module; this then only runs the
+        turns.
+
+        Ends when the audio runs out and nothing more is said. The wait after
+        it runs out is not politeness: a transcription service decides an
+        utterance is over by hearing silence, so the last sentence of a
+        recording arrives after the recording has finished.
+        """
+        listener = self.modules.get("perceive")
+        if not (hasattr(listener, "hear") and hasattr(listener, "pending_input")):
+            raise TypeError(
+                "converse() needs a perceive module that listens, such as VoiceTextPerceive."
+            )
+
+        ended_at: float | None = None
+
+        def pump() -> None:
+            nonlocal ended_at
+            try:
+                for chunk in audio:
+                    listener.hear(chunk)
+            finally:
+                ended_at = time.monotonic()
+
+        if audio is not None:
+            Thread(target=pump, daemon=True).start()
+
+        while True:
+            if listener.pending_input():
+                # A token belongs to one turn. The one before it is spent —
+                # someone interrupted with it, or it simply ran its course.
+                yield self.run(cancel=CancellationToken(), **run_kwargs)
+                continue
+            if ended_at is not None and time.monotonic() - ended_at > tail_seconds:
+                return
+            time.sleep(poll_seconds)
 
     def stream(
         self,
