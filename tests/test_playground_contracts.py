@@ -2562,3 +2562,41 @@ def test_an_interruption_has_its_own_words_on_the_trace():
 
     assert '"你插話了": "回答在這裡停住，下一輪從你聽到的部分接續。",' in surface_source
     assert '"換了新問題": "你問了新的問題，這一輪就停在這裡。",' in surface_source
+
+
+def test_the_page_asks_for_echo_cancellation_and_checks_it_got_it():
+    """它自己的聲音會被當成有人插話——實測每個漏音音量都觸發了。
+
+    瀏覽器的回音消除是第一層防禦。裸寫 audio: true 是靠平台預設，而規範上那是
+    請求不是保證；明確要求，並讀回實際生效值，才知道手上這台裝置有沒有。
+    """
+    voice_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "voice-conversation.js").read_text(encoding="utf-8")
+
+    assert "echoCancellation: true" in voice_source
+    assert "noiseSuppression: true" in voice_source
+    assert "autoGainControl: true" in voice_source
+    assert "getAudioTracks()[0]?.getSettings?.()" in voice_source
+
+
+def test_a_finished_answer_does_not_leave_a_step_in_progress():
+    """回答已經出現，追蹤列卻還停在「正在整理回覆內容。」——線上實測如此。
+
+    事件清單的最後一筆其實是完成式，是畫面挑錯了那一筆。
+    """
+    surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
+
+    assert 'event?.phase === "finish"' in surface_source
+
+
+def test_a_value_already_known_is_shown_as_text_not_as_a_choice():
+    """姓名與電話做成單選鈕，整張確認單讀起來像問卷。"""
+    surface_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "result-surface.js").read_text(encoding="utf-8")
+
+    assert "createKnownValueControl" in surface_source
+
+
+def test_a_visitor_without_owner_actions_gets_the_width_back():
+    """匿名時側欄只剩一顆徽章，卻仍佔掉四分之一的寬度。"""
+    runner_source = (Path(__file__).parents[1] / "playground" / "static" / "js" / "runner" / "runner-page.js").read_text(encoding="utf-8")
+
+    assert ".runner-sidebar-actions" in runner_source

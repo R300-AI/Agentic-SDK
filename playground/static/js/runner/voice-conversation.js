@@ -114,13 +114,29 @@ export function bindVoiceConversation(page, { onTranscript, onStatus, onState, o
 	async function listen() {
 		let microphone;
 		try {
-			microphone = await navigator.mediaDevices.getUserMedia({ audio: true });
+			microphone = await navigator.mediaDevices.getUserMedia({
+				audio: {
+					// 它自己的聲音會被語音偵測當成有人插話：把這個 Agent 合成的
+					// 回答當成麥克風輸入送進去，音量降到 15% 仍然觸發。瀏覽器的
+					// 回音消除是第一層防禦，而規範上這三項是請求不是保證，所以
+					// 要求之後還要看一次實際拿到什麼。
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true,
+				},
+			});
 		} catch (error) {
 			// A refusal and a missing microphone look the same from here: in both
 			// cases the page would otherwise just sit there being silent.
 			enter("denied");
 			say("這個 Agent 要用麥克風才能聽你說話。請在瀏覽器的網址列允許麥克風權限，然後重新整理頁面。你也可以直接打字。");
 			return;
+		}
+		const applied = microphone.getAudioTracks()[0]?.getSettings?.() || {};
+		if (applied.echoCancellation !== true) {
+			// 沒有回音消除時，開擴音會讓它把自己的聲音當成你在說話。講出來，
+			// 否則使用者看到的是它莫名其妙自己停住。
+			say("這台裝置沒有回音消除，開擴音時它可能把自己的聲音當成你在說話。建議戴耳機。");
 		}
 		open();
 		const context = new AudioContext();

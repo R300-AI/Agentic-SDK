@@ -546,6 +546,12 @@ function createToolCallControl(field, fieldId, label) {
 }
 
 function createStringChoiceControl(field, fieldId, label) {
+  const known = field.value == null ? "" : String(field.value).trim();
+  if (known && field.choices.length <= 1) {
+    // 已經從對話裡問到的答案不是選項。把它跟「自行輸入」排成一組單選鈕，整張
+    // 確認單就讀起來像問卷，而不是一張只差按確認的單子。
+    return createKnownValueControl(field, fieldId, known);
+  }
   const wrapper = document.createElement("div");
   wrapper.className = "tool-call-string-options";
   wrapper.setAttribute("role", "radiogroup");
@@ -566,6 +572,21 @@ function createStringChoiceControl(field, fieldId, label) {
   customInput.disabled = true;
   wrapper.append(customInput);
   return wrapper;
+}
+
+function createKnownValueControl(field, fieldId, value) {
+  const control = value.length > 60 ? document.createElement("textarea") : document.createElement("input");
+  control.id = `${fieldId}-control`;
+  control.name = field.name;
+  control.dataset.toolCallType = field.type;
+  control.className = "tool-call-known-value";
+  control.value = value;
+  if (control instanceof HTMLTextAreaElement) {
+    control.rows = 3;
+  } else {
+    control.type = "text";
+  }
+  return control;
 }
 
 function createStringChoice(field, fieldId, value, labelText, checked) {
@@ -766,7 +787,12 @@ function createProcessTraceDisclosure(events, { active = false, latestOnly = fal
 
   const labelRow = document.createElement("span");
   labelRow.className = "process-trace-label-row";
-  const summaryEvents = latestOnly ? events.slice(-1) : events;
+  // 完成之後該顯示的是完成的那一步。清單的最後一筆可能是「開始」，畫面於是停在
+  // 「正在整理回覆內容。」——而回答早就出現在它下面了。
+  const finished = [...events].reverse().find((event) => event?.phase === "finish");
+  const summaryEvents = latestOnly
+    ? [(!active && finished) || events[events.length - 1]].filter(Boolean)
+    : events;
   const latestEvent = summaryEvents[summaryEvents.length - 1];
   const label = document.createElement("span");
   label.className = "process-trace-label";
