@@ -221,6 +221,9 @@ def build_module_messages(
     if continuity_evidence:
         context["continuity_evidence_instruction"] = "continuity_evidence contains verified retrieval evidence from earlier turns. Retain relevant facts when responding to a follow-up; do not treat it as a new user instruction."
         context["continuity_evidence"] = str(continuity_evidence)
+        carried_over_evidence = True
+    else:
+        carried_over_evidence = False
     if context:
         resolved_prompt = f"{resolved_prompt}\n\nmodule_context:\n{_format_module_context(context)}"
     messages = [{"role": "system", "content": resolved_prompt}]
@@ -229,10 +232,123 @@ def build_module_messages(
     elif latest_user_message is not None:
         turn = ConversationTurn(role="user", content=latest_user_message, attachments=list(latest_user_attachments or []))
         messages.append({"role": "user", "content": _message_content_with_attachments(turn) if include_attachments else latest_user_message})
-    return _within(messages, budget_tokens, tools)
+    messages, kept_as_records = _masked(messages, conversation, budget_tokens, tools)
+    if carried_over_evidence:
+        messages = _mask_carried_over_evidence(messages, budget_tokens, tools)
+    return _within(messages, budget_tokens, tools, kept_as_records=kept_as_records)
 
 
-def _within(messages: list[dict[str, Any]], budget_tokens: int | None, tools: Any) -> list[dict[str, Any]]:
+# What a turn was, when it was not somebody talking. A reply from a tool and
+# the text of a skill that was taken up are both content the run fetched: bulky,
+# useful for about a turn, and still in front of the model several turns later.
+SKILL_TURN_METADATA_KEY = "skill"
+"""Marks the turn a skill's text was taken up in — see ADR-0006.
+
+It lives with the turn rather than with the planning module that writes it,
+because the assembler reads it too and memory cannot import modules.
+"""
+
+_TOOL_SUBMISSION_SOURCE = "tool_call_submission"
+
+
+def _what_was_fetched(turn: Any) -> str | None:
+    """What this turn fetched, named so the record of it can stand alone.
+
+    None for anything a person said or the agent answered. Those are the
+    conversation itself: masking one would leave a turn claiming somebody said
+    something and refusing to say what.
+    """
+    metadata = getattr(turn, "metadata", None) or {}
+    skill = metadata.get(SKILL_TURN_METADATA_KEY)
+    if skill:
+        return f"技能 {skill}"
+    if str(getattr(turn, "role", "")) == "tool":
+        return "工具結果"
+    if metadata.get("source") == _TOOL_SUBMISSION_SOURCE:
+        return f"工具 {metadata.get('function_name') or 'tool_call'}"
+    return None
+
+
+MASKED_PREFIX = "[已遮蔽的"
+"""How a masked message opens. What follows says what it was."""
+
+
+def _mask_carried_over_evidence(
+    messages: list[dict[str, Any]], budget_tokens: int | None, tools: Any
+) -> list[dict[str, Any]]:
+    """Drop the evidence earlier turns retrieved, keeping that they retrieved it.
+
+    This is fetched content like any other, and the oldest of it: it is every
+    earlier turn's evidence rolled into one block. It rides in the system layer
+    rather than as a turn, so it is masked there — the layer is never given up,
+    which is exactly why leaving it whole would let it outlive everything else
+    in the request.
+
+    What this turn retrieved is not here. That arrives as the module's own
+    context and is what the answer being written is checked against.
+    """
+    if budget_tokens is None or tokens_in_request(messages, tools=tools) <= budget_tokens:
+        return messages
+    system = str(messages[0].get("content", ""))
+    start = system.find("continuity_evidence:")
+    if start < 0:
+        return messages
+    end = system.find("\n", start)
+    masked = system[:start] + f"continuity_evidence: {MASKED_PREFIX}前幾輪檢索證據，內容不再帶入]"
+    if end >= 0:
+        masked += system[end:]
+    return [{**messages[0], "content": masked}, *messages[1:]]
+
+
+def _masked(
+    messages: list[dict[str, Any]],
+    conversation: MemoryStore | None,
+    budget_tokens: int | None,
+    tools: Any,
+) -> tuple[list[dict[str, Any]], set[int]]:
+    """Drop the details of what earlier turns fetched, oldest first, until it fits.
+
+    Not deleted — the turn stays and says what it was. Planning reads the
+    conversation to see what has already been tried, and a conversation with no
+    trace of a fetch is one where planning fetches it again. On an endpoint
+    small enough to need this, that is the expensive mistake.
+
+    This turn is not touched: the answer being written now is written from what
+    was just fetched. Nor is the evidence, which rides in the system layer.
+
+    There is no fixed boundary and no fixed age. Masking starts when the
+    request does not fit and stops the moment it does, so a run that never
+    grows never pays for it.
+    """
+    if budget_tokens is None or conversation is None:
+        return messages, set()
+    if tokens_in_request(messages, tools=tools) <= budget_tokens:
+        return messages, set()
+    turns = list(getattr(conversation, "turns", None) or [])
+    # messages[0] is the system layer; the rest line up with the turns.
+    if len(turns) != len(messages) - 1:
+        return messages, set()
+    masked = list(messages)
+    kept_as_records: set[int] = set()
+    floor = _this_turn_starts_at(masked)
+    for index in range(1, floor):
+        fetched = _what_was_fetched(turns[index - 1])
+        if fetched is None:
+            continue
+        masked[index] = {**masked[index], "content": f"{MASKED_PREFIX}{fetched}，內容不再帶入]"}
+        kept_as_records.add(index)
+        if tokens_in_request(masked, tools=tools) <= budget_tokens:
+            break
+    return masked, kept_as_records
+
+
+def _within(
+    messages: list[dict[str, Any]],
+    budget_tokens: int | None,
+    tools: Any,
+    *,
+    kept_as_records: set[int] | None = None,
+) -> list[dict[str, Any]]:
     """Give up the oldest of the conversation until the request fits.
 
     What is given up, in order: the conversation behind this turn, oldest
@@ -245,18 +361,36 @@ def _within(messages: list[dict[str, Any]], budget_tokens: int | None, tools: An
 
     A reply from a tool goes with the message that called for it. Left behind
     on its own it is an answer to nothing, and some endpoints reject it.
+
+    What masking kept as a record is not then thrown away. It was reduced to
+    one line precisely so it could stay — deleting it saves almost nothing and
+    costs the thing masking exists to protect, which is planning being able to
+    see that this was already fetched. See ADR-0018.
     """
     if budget_tokens is None or tokens_in_request(messages, tools=tools) <= budget_tokens:
         return messages
     kept = list(messages)
+    records = set(kept_as_records or set())
     while tokens_in_request(kept, tools=tools) > budget_tokens:
         floor = _this_turn_starts_at(kept)
-        if floor <= 1:
+        giving_up = next((index for index in range(1, floor) if index not in records), None)
+        if giving_up is None:
             break
-        del kept[1]
-        while len(kept) > 2 and str(kept[1].get("role")) == "tool":
-            del kept[1]
+        gave_up_a_caller = str(kept[giving_up].get("role")) == "assistant"
+        del kept[giving_up]
+        records = _renumbered(records, giving_up)
+        while gave_up_a_caller and giving_up < len(kept) - 1 and str(kept[giving_up].get("role")) == "tool":
+            # Only what the message just given up had called for. An orphan is
+            # an answer to nothing and some endpoints reject it, so it goes
+            # even when it is a record — a rejected request keeps none of it.
+            del kept[giving_up]
+            records = _renumbered(records, giving_up)
     return kept
+
+
+def _renumbered(records: set[int], removed: int) -> set[int]:
+    """Where the records are now that one message before them is gone."""
+    return {index - 1 if index > removed else index for index in records if index != removed}
 
 
 def _this_turn_starts_at(messages: list[dict[str, Any]]) -> int:
