@@ -67,6 +67,7 @@ class ToolCallAction:
                     ContextEntry(
                         type=ContextEntryType.ACTION_RESULT,
                         content=f"error:{type(exc).__name__}",
+                        is_error=True,
                         metadata={"ok": False, "error": detail},
                     )
                 ],

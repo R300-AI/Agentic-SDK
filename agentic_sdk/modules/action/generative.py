@@ -44,6 +44,7 @@ def _failed_answer(state, exc: Exception) -> ModuleOutput:
             ContextEntry(
                 type=ContextEntryType.ACTION_RESULT,
                 content=f"error:{type(exc).__name__}",
+                is_error=True,
                 metadata={"ok": False, "error": detail},
             )
         ],
