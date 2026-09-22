@@ -62,6 +62,7 @@ _WHY_IT_STOPPED = {
     "max_revisit": "同一個模組重複太多次",
     "timeout": "這一輪花的時間超過上限",
     "budget_exhausted": "這一輪可用的內容量用完了",
+    "endpoint_unavailable": "推論服務沒有回應",
     "planning_failed": "規劃這一步沒有完成，所以沒有下一步可走",
     "misconfigured": "流程指向一個不存在的模組",
 }

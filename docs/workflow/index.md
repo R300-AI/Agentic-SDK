@@ -170,6 +170,7 @@ result = workflow.run("保固多久？", cancel=token)
 | `max_revisit` | 同一個步驟重複的次數超過上限 |
 | `timeout` | 花的時間超過上限 |
 | `budget_exhausted` | 這一輪可用的內容量用完了（預算功能尚未落地，目前不會出現） |
+| `endpoint_unavailable` | 推論服務不回應，該層重試用完仍然不通 |
 | `planning_failed` | 規劃這一步沒有完成，沒有別的模組可以決定下一步 |
 | `misconfigured` | 指向一個不存在的步驟 |
 

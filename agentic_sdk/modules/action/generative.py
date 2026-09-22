@@ -5,6 +5,7 @@ import json
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_stream, require_model, resolve_openai_client
 from agentic_sdk.core.cancellation import WorkflowInterrupted
+from agentic_sdk.core.failures import EndpointUnavailable
 from agentic_sdk.memory.in_context import build_module_messages
 
 
@@ -97,6 +98,11 @@ class GenerativeAction:
                     metadata={"model": self._model, "structured": False},
                 ),
             )
+        except EndpointUnavailable:
+            # The endpoint is down, so producing an answer is not on the
+            # table at all. The workflow ends the run for it rather than
+            # answering with an apology and carrying on as if it worked.
+            raise
         except WorkflowInterrupted:
             # Being talked over is not a provider failure. Letting it fall into
             # the handler below files the interruption as a model error and

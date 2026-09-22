@@ -40,22 +40,30 @@ def _workflow_whose_provider_fails(failed_stage: str):
     return workflow
 
 
-def test_a_provider_failure_before_planning_is_handed_to_planning():
+def test_an_endpoint_that_will_not_answer_perception_ends_the_run():
+    """The endpoint is down, so the next module would fail against it too.
+
+    Handing this to planning spends the same call again while the person waits.
+    What one module could not make sense of is a different matter — that still
+    goes to planning; see tests/test_two_kinds_of_failure.py.
+    """
     result = _workflow_whose_provider_fails("perceive").run("測試 provider failure")
 
-    assert result.stop_reason == "end_turn", "the endpoint wobbled; the run did not fail"
+    assert result.stop_reason == "endpoint_unavailable"
+    assert result.visit_counts.get("plan", 0) == 0, "planning is not asked about an endpoint being down"
     failure = next(entry for entry in result.entries if entry.is_error)
     assert failure.type == ContextEntryType.PERCEIVED
     assert failure.content == "Unable to understand the input right now."
     assert failure.metadata["stage"] == "perceive"
-    assert failure.metadata["error_type"] == "RuntimeError"
     assert "provider connection unavailable" not in result.final_message
 
 
 def test_planning_own_provider_failure_ends_the_run_with_a_plain_message():
     result = _workflow_whose_provider_fails("plan").run("測試 provider failure")
 
-    assert result.stop_reason == "planning_failed", "nothing else decides what to do next"
+    assert result.stop_reason == "endpoint_unavailable", (
+        "the endpoint being down is more specific than there being nobody left to decide"
+    )
     assert result.final_message == "[workflow ended with error] Unable to plan the next step right now."
     assert "provider connection unavailable" not in result.final_message
 

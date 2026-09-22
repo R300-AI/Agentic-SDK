@@ -12,6 +12,7 @@ from agentic_sdk.core.cancellation import CancellationToken, WorkflowInterrupted
 from agentic_sdk.core.entities import ContextEntry, ContextEntryType
 from agentic_sdk.core.events import ALL_STRUCTURED_FIELDS, normalize_events_schema, resolve_events_schema
 from agentic_sdk.core.gates import Gates
+from agentic_sdk.core.failures import EndpointUnavailable
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
 from agentic_sdk.defaults import DEFAULT_MODULE_FAILURE_MESSAGES
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
@@ -588,6 +589,12 @@ class Workflow:
                 },
             )
         )
+        if isinstance(exc, EndpointUnavailable):
+            # The endpoint layer has already retried. Handing this to
+            # planning would spend the same call again against a service
+            # that is down, and the person waits through every one of them.
+            state.last_workflow_error = {"stage": module_name, "message": message}
+            raise WorkflowAborted(message, "endpoint_unavailable") from exc
         if module_name == "plan":
             # Nobody else decides where the run goes, so it ends. The abort
             # branch announces that; announcing it here too reads as two faults.

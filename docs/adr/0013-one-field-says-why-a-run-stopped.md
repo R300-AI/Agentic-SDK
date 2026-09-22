@@ -28,10 +28,11 @@ Accepted
 | `max_revisit` | 同一個模組重複的次數超過上限 |
 | `timeout` | 花的時間超過上限 |
 | `budget_exhausted` | 這一輪可用的內容量用完了 |
+| `endpoint_unavailable` | 推論服務不回應 |
 | `planning_failed` | 規劃自己失敗，沒有別的模組可以決定下一步 |
 | `misconfigured` | 指向一個不存在的模組 |
 
-工單當初列了六種。後兩種是清點程式時才發現的——`planning_failed` 是 ADR-0010 那一版加進來的，`misconfigured` 一直都在。把它們折進某個上限值會違反工單自己定的原則（一種情況一個值），所以這裡照原則走，值比當初列的多兩個。
+工單當初列了六種。`endpoint_unavailable` 是後來拆開兩種失敗時加的（ADR-0015）；`planning_failed` 與 `misconfigured` 則是清點程式時才發現的——`planning_failed` 是 ADR-0010 那一版加進來的，`misconfigured` 一直都在。把它們折進某個上限值會違反工單自己定的原則（一種情況一個值），所以這裡照原則走，值比當初列的多兩個。
 
 `budget_exhausted` 現在沒有任何東西會設它：預算屬於另一份工單。先定好這個值，是為了那份工單落地時不必再改一次公開契約；文件上標明它目前不會出現。
 

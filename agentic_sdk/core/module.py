@@ -307,6 +307,7 @@ STOP_REASONS = frozenset(
         "timeout",  # it took longer than allowed
         "budget_exhausted",  # it ran out of the tokens it was given
         "planning_failed",  # nothing was left to decide what to do next
+        "endpoint_unavailable",  # the inference service would not answer
         "misconfigured",  # it was pointed at a module that is not there
     }
 )
