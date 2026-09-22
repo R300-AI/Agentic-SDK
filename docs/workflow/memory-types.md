@@ -27,6 +27,8 @@
 目前有兩個實作：
 
 - `FileMemoryStore` 把一則條目寫成一個 markdown 檔，目錄按流程的名字分，同一條流程的各段對話共用。建立時要給 `root`；`raw_retention_seconds` 不填就是永久保留。附件與 embedding 不寫進檔案——兩者都大、都不是人讀得懂的東西，原本有附件的條目會在 front matter 記下它有幾個。理由與部署注意事項見 [ADR-0011](../adr/0011-cross-context-memory-is-kept-as-files.md)。
+
+  設了 `compaction_threshold_tokens` 之後，它會在要把內容交給模組之前把最舊的部分收成主題，收到用量回到門檻以下為止；被收走的原始紀錄留著、搜尋得到，主題補在它們原本的位置。合成要一組自己的 `api_key`、`base_url` 與 `model`——那是比回答容易的工作，可以指到更小的端點。不設門檻就完全不會發生。token 數是估的，要精確就傳一個 `count_tokens`。理由見 [ADR-0012](../adr/0012-the-memory-collects-its-own-oldest-parts.md)。
 - `InMemoryStore` 把條目留在行程裡，跨得了對話但跨不了重啟，適合測試與不需要落地的程式。
 
 **`turns` 只給這一段對話，跨對話要用 `search`。** 模組讀 `turns` 當前文，所以另一段對話的內容不會以前文的身分出現在提示詞裡；要取用先前那幾段留下來的東西走 `search`，它只按流程的名字過濾。

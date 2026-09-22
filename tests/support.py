@@ -24,6 +24,8 @@ class FoundryOpenAILikeClient:
         reflect_reason: str = "test reflect ok",
         reflect_suggestion: str = "",
         action_text: str = "mock action response",
+        synthesis_description: str = "先前談過保固與退貨。",
+        synthesis_content: str = "使用者問過保固期限與退貨條件，助理都回答了。",
         tool_calls: list[dict] | None = None,
         model_id: str = "foundry-openai-like",
     ) -> None:
@@ -36,6 +38,8 @@ class FoundryOpenAILikeClient:
         self._reflect_reason = reflect_reason
         self._reflect_suggestion = reflect_suggestion
         self._action_text = action_text
+        self._synthesis_description = synthesis_description
+        self._synthesis_content = synthesis_content
         self._tool_calls = list(tool_calls or [])
         self._plan_index = 0
         self._model_id = model_id
@@ -60,6 +64,11 @@ class FoundryOpenAILikeClient:
             }
             if self.plan_skill is not None:
                 payload["skill"] = self.plan_skill
+        elif system.startswith("SYNTHESISE"):
+            payload = {
+                "description": self._synthesis_description,
+                "content": self._synthesis_content,
+            }
         elif system.startswith("REFLECT"):
             payload = {
                 "verdict": self._reflect_verdict,
