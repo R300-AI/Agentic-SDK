@@ -361,23 +361,55 @@ class SemanticRetrieve(BaseRetrieve):
         resolved_saved_source_path = str(Path(resolved_saved_path) / SEMANTIC_RETRIEVE_DEFAULT_SOURCE_DIRNAME) if resolved_sources else None
         has_configured_knowledge_source = bool(resolved_sources or index_path or source_path)
         has_saved_index = _index_artifacts_exist(Path(resolved_index_path))
-        should_build_default_kb = self._knowledge_base is None and (has_configured_knowledge_source or (has_saved_index and self._embedder is not None))
-        if should_build_default_kb:
-            if self._embedder is None:
-                raise ValueError(
-                    "SemanticRetrieve requires embedder or embedding_model/api_key/base_url when sources/saved_path is configured."
-                )
-            self._knowledge_base = FaissKnowledgeBase(
-                index_path=str(resolved_index_path),
-                source_path=source_path,
-                source_paths=resolved_sources,
-                saved_source_path=resolved_saved_source_path,
-                embedder=self._embedder,
-                rebuild_if_missing=rebuild_if_missing,
-                rebuild_if_stale=rebuild_if_stale,
-                chunk_size=chunk_size,
-                chunk_overlap=chunk_overlap,
+        # Reading the sources and building the index is the expensive part,
+        # and a run that never looks anything up should not pay for it. The
+        # settings are kept; the index is built the first time it is needed.
+        self._build_knowledge_base_when_needed = self._knowledge_base is None and (
+            has_configured_knowledge_source or (has_saved_index and self._embedder is not None)
+        )
+        if self._build_knowledge_base_when_needed and self._embedder is None:
+            # Checked here, not when the index is built: a missing embedder
+            # is a setting mistake, and whoever wired this agent is still
+            # the one holding it. Found during a turn, it would reach a
+            # person waiting for an answer instead.
+            raise ValueError(
+                "SemanticRetrieve requires embedder or embedding_model/api_key/base_url when sources/saved_path is configured."
             )
+        self._knowledge_base_settings = {
+            "index_path": str(resolved_index_path),
+            "source_path": source_path,
+            "source_paths": resolved_sources,
+            "saved_source_path": resolved_saved_source_path,
+            "rebuild_if_missing": rebuild_if_missing,
+            "rebuild_if_stale": rebuild_if_stale,
+            "chunk_size": chunk_size,
+            "chunk_overlap": chunk_overlap,
+        }
+
+    def _ensure_knowledge_base(self):
+        """Build the index the first time something is actually looked up."""
+        if not self._build_knowledge_base_when_needed:
+            return self._knowledge_base
+        # Only once it has worked. Clearing the flag first would turn a
+        # failed build into a lookup that quietly finds nothing, for the
+        # life of the process.
+        self._knowledge_base = FaissKnowledgeBase(
+            embedder=self._embedder, **self._knowledge_base_settings
+        )
+        self._build_knowledge_base_when_needed = False
+        return self._knowledge_base
+
+    def _memory_hits(self, state: WorkflowState, query: str) -> list[Any]:
+        """The same lookup as every retrieve module makes, with an embedding."""
+        memory = state.cross_context_memory()
+        if memory is None:
+            return []
+        return memory.search(
+            workflow_name=state.workflow_name,
+            query_text=query,
+            query_embedding=self._embedder.embed(query) if self._embedder else None,
+            top_k=self._top_k,
+        )
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         query = str(state.lookup("query") or state.lookup("perceived_input") or state.latest_user_message())
@@ -388,23 +420,14 @@ class SemanticRetrieve(BaseRetrieve):
             metadata["vision_augmented"] = bool(rewritten and rewritten != query)
             if rewritten:
                 query = rewritten
-        if self._knowledge_base is not None:
-            hits = self._knowledge_base.search(query, top_k=self._top_k)
+        knowledge_base = self._ensure_knowledge_base()
+        if knowledge_base is not None:
+            hits = knowledge_base.search(query, top_k=self._top_k)
             metadata["kb_hit_count"] = len(hits)
             if hits:
                 sections.append(_format_knowledge_hits(hits))
-        cross_context_memory = state.cross_context_memory()
-        if cross_context_memory is not None:
-            query_embedding = self._embedder.embed(query) if self._embedder else None
-            results = cross_context_memory.search(
-                workflow_name=state.workflow_name,
-                query_text=query,
-                query_embedding=query_embedding,
-                top_k=self._top_k,
-            )
-            metadata["memory_hit_count"] = len(results)
-            if results:
-                sections.append(_format_memory_hits(results))
+        sections, remembered = self._with_memory(sections, state, query)
+        metadata["memory_hit_count"] = remembered
         snippet = "\n\n".join(sections) if sections else DEFAULT_NO_RETRIEVED_CONTEXT_MESSAGE
         # The count every retrieve module reports the same way, so a reflect
         # module can ask "did this find anything" without knowing which module ran.
@@ -505,17 +528,4 @@ def _format_knowledge_hits(hits: list[Any]) -> str:
             else:
                 lines.append(f"   source: {path}")
         lines.append(f"   content: {content}")
-    return "\n".join(lines)
-
-
-def _format_memory_hits(results: list[Any]) -> str:
-    lines = ["Memory hits:"]
-    for index, result in enumerate(results, start=1):
-        entry = getattr(result, "entry", None)
-        if entry is None:
-            lines.append(f"{index}. {result}")
-            continue
-        role = str(getattr(entry, "role", "") or "memory")
-        content = str(getattr(entry, "content", "") or "")
-        lines.append(f"{index}. {role}: {content}")
     return "\n".join(lines)

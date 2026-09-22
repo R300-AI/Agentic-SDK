@@ -15,13 +15,15 @@
 | 參數 | 型態 | 必填 | 預設值 | 說明 |
 | --- | --- | --- | --- | --- |
 | `items` | `array<object>` | 否 | `[]` | 關鍵字條目清單；每筆通常包含 `keywords` 與 `content`。 |
-| `fallback` | `string` | 否 | `"No matching entries."` | 沒有命中任何條目時寫入取回內容的文字。 |
+| `fallback` | `string` | 否 | `"No matching entries."` | 條目與記憶都沒有命中時寫入取回內容的文字。 |
 
 ## PassThroughRetrieve
 
 ### 原文交接
 
-`PassThroughRetrieve` 會把已整理的使用者輸入交給回覆步驟。它依序使用 `perceived_input`、`query` 與最新使用者訊息，將文字放入 `retrieved_snippet` 和 `latest_retrieved_content`。這個模組不需要建構參數，適合流程要保留查找步驟的位置、但本輪直接使用已讀取的訊息時。
+`PassThroughRetrieve` 會把已整理的使用者輸入交給回覆步驟。它依序使用 `perceived_input`、`query` 與最新使用者訊息，將文字放入 `retrieved_snippet` 和 `latest_retrieved_content`。這個模組不需要建構參數，適合流程不需要查外部來源時。
+
+它仍然會查跨對話記憶——那不是要另外選一個模組才有的能力，是每一個 Retrieve 模組共同的底（見 [ADR-0014](../adr/0014-memory-is-the-floor-every-retrieve-stands-on.md)）。沒有配置跨對話記憶時，它的行為和以前一樣。
 
 ## SemanticRetrieve
 

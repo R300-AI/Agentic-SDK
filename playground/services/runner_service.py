@@ -1637,7 +1637,7 @@ def _retrieve_from_config(
 
 
 def _warm_semantic_retrieve(module) -> None:
-    knowledge_base = getattr(module, "_knowledge_base", None)
+    knowledge_base = module._ensure_knowledge_base()
     ensure_ready = getattr(knowledge_base, "_ensure_ready", None)
     if callable(ensure_ready):
         ensure_ready()
