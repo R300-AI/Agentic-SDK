@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 from agentic_sdk.core.cancellation import WorkflowInterrupted
+from agentic_sdk.core.failures import EndpointUnavailable
 
 import json
 import time
@@ -11,6 +12,23 @@ try:
     from openai import OpenAI
 except Exception:  # pragma: no cover - handled when a client is resolved.
     OpenAI = None  # type: ignore[assignment]
+
+
+def _ask(client, **kwargs):
+    """One call to the endpoint, with its failures named.
+
+    The client has already retried by the time anything reaches here —
+    the SDK's own default stands, because a second retry policy on top
+    of it would be invisible to whoever tuned the first. What is left is
+    an endpoint that will not answer, and saying so here is what lets the
+    workflow tell it apart from a model that answered badly.
+    """
+    try:
+        return client.chat.completions.create(**kwargs)
+    except WorkflowInterrupted:
+        raise
+    except Exception as exc:  # noqa: BLE001 - whatever the provider calls it
+        raise EndpointUnavailable(f"the inference service did not answer: {type(exc).__name__}: {exc}") from exc
 
 
 @dataclass
@@ -243,7 +261,7 @@ def chat_json(
     }
     if temperature is not None:
         kwargs["temperature"] = temperature
-    completion = client.chat.completions.create(**kwargs)
+    completion = _ask(client, **kwargs)
     usage = getattr(completion, "usage", None)
     return OpenAIChatResponse(
         content=completion.choices[0].message.content or "",
@@ -332,7 +350,7 @@ def chat_stream(
         kwargs["tools"] = tools
         if tool_choice is not None:
             kwargs["tool_choice"] = tool_choice
-    stream = client.chat.completions.create(**kwargs)
+    stream = _ask(client, **kwargs)
     chunks: list[str] = []
     resolved_model = model
     last_token_at = time.monotonic()

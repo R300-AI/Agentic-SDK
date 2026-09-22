@@ -9,6 +9,7 @@ from playground.services.aihub_bridge import has_runner_bridge_query, restore_pe
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, verify_handoff_token, verify_identity
 from playground.services import skill_store
 from playground.services.deep_link import apply_aihub_deep_link
+from playground.services.memory_admin import forget, remembered_by
 from playground.services.mode_context import get_mode_context
 from playground.services.runner_conversation import SESSION_KEY as CONVERSATION_SESSION_KEY, RunnerConversationState
 from playground.services.runner_service import SemanticRuntime, get_default_scene_profile, get_runner_demo_result, run_agent, stream_agent_initialization, stream_agent_run
@@ -55,6 +56,10 @@ def runner():
         runner_greeting=_runner_greeting(),
         starter_questions=starter_questions,
         uses_semantic_retrieve=config.retrieve_module == "SemanticRetrieve",
+        # Only an agent that carries things between conversations has
+        # anything to show here. One that does not remembers nothing by
+        # design, and a panel saying so is a panel about nothing.
+        uses_cross_context_memory=config.memory_kind == "cross_context",
         # Either half is enough to need the socket — one carries the microphone
         # up, the other carries the answer back down — but they are not the
         # same choice, and a page that conflates them opens a microphone for
@@ -234,6 +239,33 @@ def initialize_runner_stream():
             yield json.dumps(item, ensure_ascii=False) + "\n"
 
     return Response(stream_with_context(generate()), mimetype="application/x-ndjson")
+
+
+@runner_bp.get("/memory")
+def runner_memory():
+    """What this agent remembers, for somebody who has to look at it."""
+    if not has_spec():
+        return jsonify({"error": "No agent is available."}), 400
+    name = get_workflow_summary(current_spec()).name
+    return jsonify({"remembered": remembered_by(name)})
+
+
+@runner_bp.post("/memory/forget")
+def forget_runner_memory():
+    """Strike one topic out. Reading is open; striking out is not."""
+    if not has_spec():
+        return jsonify({"forgotten": False, "error": "No agent is available."}), 400
+    if not get_mode_context().can_edit:
+        return jsonify({"forgotten": False, "error": "This runner is read-only."}), 403
+    payload = request.get_json(silent=True) or {}
+    name = get_workflow_summary(current_spec()).name
+    try:
+        forget(name, str(payload.get("id", "")))
+    except LookupError:
+        # Whoever struck it out is about to look at the list again, so saying
+        # it worked would be a lie they find out about immediately.
+        return jsonify({"forgotten": False, "error": "No such topic in this memory."}), 404
+    return jsonify({"forgotten": True, "remembered": remembered_by(name)})
 
 
 @runner_bp.post("/name")

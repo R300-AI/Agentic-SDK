@@ -1,10 +1,12 @@
 ﻿from __future__ import annotations
 
 import json
+from typing import Any
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_stream, require_model, resolve_openai_client
 from agentic_sdk.core.cancellation import WorkflowInterrupted
+from agentic_sdk.core.failures import EndpointUnavailable
 from agentic_sdk.memory.in_context import build_module_messages
 
 
@@ -97,6 +99,11 @@ class GenerativeAction:
                     metadata={"model": self._model, "structured": False},
                 ),
             )
+        except EndpointUnavailable:
+            # The endpoint is down, so producing an answer is not on the
+            # table at all. The workflow ends the run for it rather than
+            # answering with an apology and carrying on as if it worked.
+            raise
         except WorkflowInterrupted:
             # Being talked over is not a provider failure. Letting it fall into
             # the handler below files the interruption as a model error and
@@ -156,7 +163,9 @@ def _interrupted_answer(state: WorkflowState) -> dict[str, str]:
     return {}
 
 
-def _build_messages(state: WorkflowState, system_prompt: str | None) -> list[dict[str, str]]:
+def _build_messages(
+    state: WorkflowState, system_prompt: str | None, *, tools: Any = None
+) -> list[dict[str, str]]:
     retrieved = state.lookup("latest_retrieved_content") or state.lookup("retrieved_snippet") or ""
     perceived = _perceived_context(state)
     cut_off = _interrupted_answer(state)
@@ -173,6 +182,8 @@ def _build_messages(state: WorkflowState, system_prompt: str | None) -> list[dic
             **cut_off,
         },
         latest_user_message=state.latest_user_message(),
+        budget_tokens=state.prompt_budget,
+        tools=tools,
     )
 
 

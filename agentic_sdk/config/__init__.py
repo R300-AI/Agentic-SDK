@@ -1,3 +1,3 @@
-﻿from agentic_sdk.config.workflow_config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
+﻿from agentic_sdk.config.workflow_config import GateConfig, MemorySpec, ModuleSpec, WorkflowConfig, build_memory, build_workflow
 
-__all__ = ["GateConfig", "ModuleSpec", "WorkflowConfig", "build_workflow"]
+__all__ = ["GateConfig", "MemorySpec", "ModuleSpec", "WorkflowConfig", "build_memory", "build_workflow"]

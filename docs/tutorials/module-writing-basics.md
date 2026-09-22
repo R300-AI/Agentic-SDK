@@ -18,7 +18,7 @@
 
 所以模組裡不要寫「捕捉例外然後回一個看起來正常的 `ModuleOutput`」。那會讓規劃模組以為這一步成功了。
 
-有兩個例外不要攔：`WorkflowInterrupted` 是有人請它停下來，`WorkflowAborted` 是工作流程自我保護，兩者都不是模組做不到它的工作，攔下來會把它們記成錯誤。
+有三個例外不要攔：`WorkflowInterrupted` 是有人請它停下來，`WorkflowAborted` 是工作流程自我保護，`EndpointUnavailable` 是推論服務根本不回應（那一層已經重試過了）。三者都不是這個模組做得了主的事——攔下來會把它們記成這個模組答得不好，而端點不通時，下一個模組也會失敗（見 [ADR-0015](../adr/0015-an-endpoint-that-will-not-answer-is-not-a-bad-answer.md)）。
 
 ## 會跑很久的模組要看得懂停止訊號
 

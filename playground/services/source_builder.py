@@ -119,6 +119,8 @@ class BuilderSourceConfig:
     max_node_hops: int = 50
     max_revisit: int = 5
     timeout_sec: float = 300.0
+    memory_kind: str = "in_context"
+    memory_compaction_threshold_tokens: int | None = None
 
 
 def get_builder_steps() -> list[BuilderStep]:
@@ -131,9 +133,11 @@ def get_builder_steps() -> list[BuilderStep]:
             "",
             (
                 BuilderChoice("in_context", "即時問答", "只根據目前這次對話內容產生問答，不參考先前互動。"),
-                # Locked on purpose: it shows where CrossContextMemory is going.
-                # Removing it removes the roadmap, not a broken feature.
-                BuilderChoice("workflow_recall_preview", "承接前文問答", "問答時需要接續先前互動內容或狀態。", available=False, badge="預覽中"),
+                # Only the two memory types. Keeping it in the machine's memory
+                # is what a deployment falls back to when it has been told
+                # nowhere to write; offering it here would promise somebody
+                # that what was said survives a restart, and it does not.
+                BuilderChoice("cross_context", "承接前文問答", "問答時需要接續先前互動內容或狀態。"),
             ),
             True,
         ),
@@ -567,7 +571,7 @@ def _build_workflow_source(config: BuilderSourceConfig) -> str:
 {workflow_arguments}
 )"""
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
-    import_lines = [_core_import_line()]
+    import_lines = [_core_import_line(config)]
     if import_block:
         import_lines.append(import_block)
     sections = ["\n".join(import_lines)]
@@ -624,7 +628,7 @@ workflow = Workflow(
 """
     import_block = _format_module_imports(_module_names_for_source(workflow_block))
     import_lines = [
-        _core_import_line(),
+        _core_import_line(config),
         "from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState",
     ]
     if import_block:
@@ -634,8 +638,37 @@ workflow = Workflow(
     return "\n\n".join(sections) + "\n"
 
 
-def _core_import_line() -> str:
-    return "from agentic_sdk import Workflow"
+def _core_import_line(config: BuilderSourceConfig | None = None) -> str:
+    """What the exported script imports from the SDK itself, not from its modules."""
+    names = ["Workflow"]
+    if config is not None and config.memory_kind == "cross_context":
+        names.insert(0, "FileMemoryStore")
+    return "from agentic_sdk import " + ", ".join(names)
+
+
+# Somewhere for an exported agent to keep what it carries over. It is a
+# property of wherever the code ends up running, which the Builder cannot
+# know, so the export names a directory beside the script and says so.
+EXPORTED_MEMORY_ROOT = "./agent-memory"
+
+
+def _memory_line(config: BuilderSourceConfig) -> str:
+    """The memory the agent was built with, written so it survives the export.
+
+    Only when it carries things between conversations. Seeing this conversation
+    only is what a ``Workflow`` does unasked, so naming it would add a line
+    that changes nothing.
+    """
+    if config.memory_kind != "cross_context":
+        return ""
+    arguments = [f"root={json.dumps(EXPORTED_MEMORY_ROOT, ensure_ascii=False)}"]
+    if config.memory_compaction_threshold_tokens:
+        arguments.append(f"compaction_threshold_tokens={config.memory_compaction_threshold_tokens}")
+        # Collecting is a model call of its own, and the endpoint it runs on is
+        # a deployment's answer, not the agent's — so the export leaves it
+        # where whoever runs this has to fill it in rather than guessing.
+        arguments.append('api_key="", base_url="", model=""')
+    return f"    memory_type=FileMemoryStore({', '.join(arguments)}),"
 
 
 def _workflow_argument_lines(
@@ -645,6 +678,9 @@ def _workflow_argument_lines(
     action_expression: str,
 ) -> str:
     lines: list[str] = []
+    memory_line = _memory_line(config)
+    if memory_line:
+        lines.append(memory_line)
     if config.events_schema is not None:
         lines.append(f"    events_schema={_format_python_literal(config.events_schema, 4)},")
     if "perceive" in reachable_roles:

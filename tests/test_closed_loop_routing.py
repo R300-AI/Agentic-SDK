@@ -135,7 +135,7 @@ def test_the_route_ignores_where_other_modules_say_to_go():
     assert _stages(events) == ["perceive", "plan", "retrieve", "plan", "reflect", "plan", "action"]
 
 
-def test_a_failed_action_ends_the_run_without_a_check_after_it():
+def test_an_action_whose_endpoint_is_down_ends_the_run_without_a_check_after_it():
     client = FoundryOpenAILikeClient()
     client.chat.completions.create = _refuse
     with patch("agentic_sdk.llm.openai_compatible.OpenAI", return_value=client):
@@ -152,7 +152,7 @@ def test_a_failed_action_ends_the_run_without_a_check_after_it():
     assert _stages(events)[-1] == "action"
     assert result.visit_counts["reflect"] == 1
     assert result.final_message.startswith("[workflow ended with error]")
-    assert result.stop_reason == "end_turn"
+    assert result.stop_reason == "endpoint_unavailable"
 
 
 @pytest.mark.parametrize("choice", ["perceive", None, "somewhere", "reflect"])

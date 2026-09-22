@@ -70,7 +70,7 @@ def test_restored_bundle_can_be_loaded_by_semantic_retrieve_saved_path(tmp_path,
     (source_dir / "policy.md").write_text("R300_SEMANTIC_RESTORE_TEST appears in this saved policy.", encoding="utf-8")
 
     initial = SemanticRetrieve(sources=[str(source_dir)], saved_path=str(saved_path), embedder=KeywordEmbedder())
-    assert initial._knowledge_base.search("R300_SEMANTIC_RESTORE_TEST", top_k=1)
+    assert initial._ensure_knowledge_base().search("R300_SEMANTIC_RESTORE_TEST", top_k=1)
 
     built = bundle_store.create_agent_bundle_zip(
         python_source="print('semantic')",
@@ -90,7 +90,7 @@ def test_restored_bundle_can_be_loaded_by_semantic_retrieve_saved_path(tmp_path,
     assert restored_index_dir.joinpath("index.faiss").exists()
     restored_retrieve = SemanticRetrieve(saved_path=str(restored_saved_path), embedder=KeywordEmbedder(), rebuild_if_missing=False, rebuild_if_stale=False)
 
-    hits = restored_retrieve._knowledge_base.search("R300_SEMANTIC_RESTORE_TEST", top_k=1)
+    hits = restored_retrieve._ensure_knowledge_base().search("R300_SEMANTIC_RESTORE_TEST", top_k=1)
     assert hits
     assert "R300_SEMANTIC_RESTORE_TEST" in hits[0].content
 

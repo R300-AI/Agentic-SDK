@@ -211,6 +211,10 @@ def test_workflow_stream_preserves_action_error_result() -> None:
     client.chat.completions.create = raise_connection_error
     stream = workflow.stream("測試 action error")
 
-    assert list(stream) == ["[workflow ended with error] connection unavailable"]
-    assert stream.result.final_message == "[workflow ended with error] connection unavailable"
-    assert stream.result.stop_reason == "end_turn"
+    delivered = list(stream)
+    assert delivered == [stream.result.final_message], "the stream says what the result says"
+    assert "Unable to produce an answer right now." in stream.result.final_message, (
+        "the endpoint's own wording is for the trace, not for the person"
+    )
+    assert "connection unavailable" not in stream.result.final_message
+    assert stream.result.stop_reason == "endpoint_unavailable"

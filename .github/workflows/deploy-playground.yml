@@ -202,6 +202,10 @@ jobs:
                 "PYTHONPATH=$DESIRED_PYTHONPATH"
                 "KEY_VAULT_NAME=${{ vars.KEY_VAULT_NAME }}"
                 "PLAYGROUND_SECRET_KEY=$CURRENT_SECRET"
+                # Everything under wwwroot is replaced on every deployment, so
+                # a memory kept there is wiped by the next release. /home
+                # persists. See ADR-0011.
+                "PLAYGROUND_MEMORY_ROOT=/home/agentic-sdk-playground/memory"
               )
               az webapp config appsettings set \
                 --name "${{ vars.AZURE_WEBAPP_NAME }}" \

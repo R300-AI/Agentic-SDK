@@ -48,7 +48,7 @@ def endpoint_options() -> list[dict[str, str]]:
 
 
 def openai_requirements_from_spec(spec: dict) -> list[dict[str, str]]:
-    return [asdict(requirement) for requirement in _openai_requirements(spec_to_config(spec))]
+    return [asdict(requirement) for requirement in _deployment_requirements(spec_to_config(spec))]
 
 
 def endpoint_state(spec: dict, selections: dict[str, str] | None) -> dict[str, object]:
@@ -148,6 +148,12 @@ def _deployment_requirements(config: BuilderSourceConfig) -> list[OpenAIRequirem
         requirements.append(OpenAIRequirement("action", "模型回覆器", config.action_module, "Action"))
     if "reflect" in reachable_llm_roles:
         requirements.append(OpenAIRequirement("reflect", "規劃檢核器", "PlanCheckReflect", "Reflect"))
+    # The memory is not a module and is in no role's path, so reachability says
+    # nothing about it. What decides is whether it collects: carrying things
+    # between conversations needs no model, and collecting the oldest of them
+    # into a topic is a model call like any other.
+    if config.memory_compaction_threshold_tokens:
+        requirements.append(OpenAIRequirement("memory", "記憶合成器", "CrossContextMemory", "Memory"))
     # Listening and speaking are asked for separately because they are separate
     # agents: someone may want to talk and read, or type and listen.
     if config.perceive_module == "VoiceTextPerceive" and "perceive" in reachable_roles:
@@ -202,6 +208,7 @@ def _role_label(role: str) -> str:
         "reflect": "規劃檢核器",
         "transcribe": "語音聽寫",
         "tts": "語音合成",
+        "memory": "記憶合成器",
     }.get(role, role)
 
 

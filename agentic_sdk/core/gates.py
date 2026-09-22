@@ -18,6 +18,21 @@ class Gates:
     # other limits, reaching it does not abort: reflect simply stops being one
     # of planning's choices, and the run carries on to retrieve or act.
     max_reflect_rounds: int = 5
+    # What the conversation is measured against, not a promise about how big
+    # a request gets. Unlike the limits above it is not checked here: the size
+    # is only known once the memory has assembled what it is handing over, so
+    # that is where it bites. It lives here because every limit a run is held
+    # to should be readable in one place.
+    #
+    # A memory that can collect its own oldest parts is pointed at this number
+    # too, unless one was chosen for it when it was built. Collecting comes
+    # first: what the conversation gives up that way it keeps as a topic, and
+    # only what still does not fit is cut. See ADR-0016.
+    #
+    # Off by default. Zero is the strictest ceiling, not an absence. The number
+    # is an estimate either way: an OpenAI-compatible endpoint is not required
+    # to expose a tokenizer, and what an image costs is not counted at all.
+    max_prompt_tokens: int | None = None
 
     def before_visit(self, module_name: str, state: WorkflowState, total_hops: int) -> None:
         if total_hops > self.max_node_hops:

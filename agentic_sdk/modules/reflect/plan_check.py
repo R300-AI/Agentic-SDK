@@ -59,6 +59,7 @@ class PlanCheckReflect:
                 "perceived_input": _excerpt(perceived),
             },
             latest_user_message=state.latest_user_message(),
+            budget_tokens=state.prompt_budget,
         )
         try:
             response = chat_stream_json(

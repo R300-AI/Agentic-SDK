@@ -156,9 +156,18 @@
         {% endif %}
 
         {% if step.key == "memory_type" %}
-        <details class="advanced-disclosure step-advanced" data-visible-choices="in_context" open>
+        <details class="advanced-disclosure step-advanced" data-visible-choices="in_context|cross_context" open>
           <summary>進階設定</summary>
           <form class="module-param-form" data-param-form data-step-key="memory_type">
+            <div data-visible-choices="cross_context">
+              <label for="v3-memory-compaction-enabled">
+                <input type="checkbox" id="v3-memory-compaction-enabled" name="compaction_enabled" value="on">
+                對話變長時，把最舊的內容合成成主題
+              </label>
+              <p class="field-hint">合成過的內容仍然留著，只是不再逐句帶進每一次回答。合成時會呼叫一次模型，使用者正在等回答。</p>
+              <label for="v3-memory-compaction-threshold">對話累積到多少 token 就合成一次？</label>
+              <input type="number" id="v3-memory-compaction-threshold" name="compaction_threshold_tokens" min="1" step="100" placeholder="4000">
+            </div>
             <label for="v3-memory-starter-questions">對話開始前，要先放哪些常用問題？</label>
             {{ list_editor(
               "v3-memory-starter-questions",

@@ -20,5 +20,13 @@ class KeywordRetrieve(BaseRetrieve):
             if any(keyword and keyword in query for keyword in keywords):
                 hits.append(item)
         contents = [str(item.get("content", "")) for item in hits if item.get("content")]
-        snippet = "\n".join(contents) if contents else self._fallback
-        return self._retrieved(snippet, query=query, items=hits, metadata={"hit_count": len(hits)})
+        sections, remembered = self._with_memory(
+            ["\n".join(contents)] if contents else [], state, query
+        )
+        snippet = "\n\n".join(sections) if sections else self._fallback
+        return self._retrieved(
+            snippet,
+            query=query,
+            items=hits,
+            metadata={"hit_count": len(hits) + remembered, "memory_hit_count": remembered},
+        )

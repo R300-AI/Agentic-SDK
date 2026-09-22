@@ -5,6 +5,7 @@ from typing import Any
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_stream, require_model, resolve_openai_client
 from agentic_sdk.core.cancellation import WorkflowInterrupted
+from agentic_sdk.core.failures import EndpointUnavailable
 from agentic_sdk.modules.action.generative import _build_messages, _format_openai_error
 
 
@@ -35,7 +36,7 @@ class ToolCallAction:
         return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        messages = _build_messages(state, self._system_prompt)
+        messages = _build_messages(state, self._system_prompt, tools=self._tools)
         try:
             response = chat_stream(
                 self._client,
@@ -51,6 +52,11 @@ class ToolCallAction:
                     metadata={"model": self._model, "structured": False},
                 ),
             )
+        except EndpointUnavailable:
+            # The endpoint is down, so producing an answer is not on the
+            # table at all. The workflow ends the run for it rather than
+            # answering with an apology and carrying on as if it worked.
+            raise
         except WorkflowInterrupted:
             # Being talked over is not a provider failure. Letting it fall into
             # the handler below files the interruption as a model error and

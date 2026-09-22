@@ -34,6 +34,12 @@
           <span class="runner-sidebar-icon runner-sidebar-icon-info" aria-hidden="true"></span>
           <span class="runner-sidebar-label">基本資料</span>
         </button>
+        {% if uses_cross_context_memory %}
+        <button class="runner-sidebar-action" type="button" aria-label="記憶內容" data-memory-open>
+          <span class="runner-sidebar-icon runner-sidebar-icon-info" aria-hidden="true"></span>
+          <span class="runner-sidebar-label">記憶內容</span>
+        </button>
+        {% endif %}
         <button class="runner-sidebar-action" type="button" aria-label="儲存 Agent" data-save-action>
           <span class="runner-sidebar-icon runner-sidebar-icon-folder" aria-hidden="true"></span>
           <span class="runner-sidebar-label">儲存 Agent</span>
@@ -166,6 +172,25 @@
           <button class="button button-primary" type="submit" data-workflow-info-submit>套用</button>
         </div>
       </form>
+    </div>
+  </section>
+  {% endif %}
+  {% if uses_cross_context_memory %}
+  <section class="code-preview-modal" role="dialog" aria-modal="true" aria-labelledby="runner-memory-title" data-memory-modal hidden>
+    <button class="code-preview-backdrop" type="button" aria-label="關閉記憶內容" data-memory-close></button>
+    <div class="code-preview-window workflow-info-window">
+      <header class="code-preview-header">
+        <div>
+          <span class="eyebrow">記憶內容</span>
+          <h2 id="runner-memory-title">這個 Agent 記住的事</h2>
+        </div>
+        <div class="context-actions">
+          <button class="button button-ghost" type="button" data-memory-close>關閉</button>
+        </div>
+      </header>
+      <p class="field-hint">每一則都會在每一輪出現在模型看得到的範圍裡。記錯的那一則可以刪掉，刪掉之後不會再長回來；當初的對話紀錄留著，仍然搜尋得到。內容不提供修改。</p>
+      <ul class="memory-topic-list" data-memory-list aria-live="polite"></ul>
+      <p class="field-hint" data-memory-empty hidden>目前還沒有記住任何事。</p>
     </div>
   </section>
   {% endif %}

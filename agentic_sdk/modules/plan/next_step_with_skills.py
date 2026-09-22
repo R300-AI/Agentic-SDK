@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from agentic_sdk.core import WorkflowState
+from agentic_sdk.memory.in_context import SKILL_TURN_METADATA_KEY
 from agentic_sdk.modules.plan.next_step import NextStepPlan
 from agentic_sdk.skills import DEFAULT_MAX_SKILL_CHARACTERS, Skill, mount_packages
 
@@ -13,9 +14,6 @@ DEFAULT_MAX_LISTING_CHARACTERS = 8_000
 
 DEFAULT_MAX_LISTING_DESCRIPTION_CHARACTERS = 1_536
 """How much of the listing one skill's description may take."""
-
-SKILL_TURN_METADATA_KEY = "skill"
-"""Marks the conversation turn a skill was taken up in, by the skill's name."""
 
 _PICK_INSTRUCTION = (
     "Besides thought and next_module, also return the field skill. "

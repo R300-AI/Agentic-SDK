@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import copy
 import hashlib
@@ -11,9 +11,12 @@ from typing import Any
 import yaml
 
 from agentic_sdk.llm import chat_json, require_model, resolve_openai_client
+from agentic_sdk.memory.in_context import _is_dense_script, estimate_tokens
 from agentic_sdk.memory.in_memory import InMemoryStore
 from agentic_sdk.memory.protocol import MemoryEntry
 
+
+_UNSAFE_IN_A_FILE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 # Enough of the conversation is always left alone that the agent still knows
 # what was just said, however tight the budget is.
@@ -33,22 +36,6 @@ _SYNTHESISE_SYSTEM_PROMPT = (
     '"content": what happened in that part, in the language it was held in, keeping any fact '
     "a later exchange might depend on. Do not invent anything that was not said."
 )
-
-
-def estimate_tokens(text: str) -> int:
-    """About how many tokens a piece of text costs.
-
-    An OpenAI-compatible endpoint is not required to expose a tokenizer, and
-    this SDK targets many of them, so the count here is an estimate and is
-    named as one. A character in a CJK script is worth roughly a token; other
-    scripts run about four characters to one. A deployment that needs the real
-    number passes its own counter.
-    """
-    cjk = sum(1 for char in text if _is_dense_script(char))
-    return cjk + (len(text) - cjk + 3) // 4
-
-
-_UNSAFE_IN_A_FILE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _as_one_path_component(name: str) -> str:
@@ -210,17 +197,59 @@ class FileMemoryStore(InMemoryStore):
             return self._count_tokens(messages)
         return sum(self._count_tokens(str(message.get("content", ""))) for message in messages)
 
+    def remembered_topics(self) -> list[MemoryEntry]:
+        """Everything this workflow remembers, oldest first.
+
+        The same topics :meth:`index_lines` is read off, as entries rather than
+        as one line each. Somebody reading a list in order to strike one out
+        has to be reading the list the model is shown, or the one they strike
+        out is not the one that was wrong.
+        """
+        return sorted(
+            (entry for entry in self._entries if entry.tier == "topic" and entry.description),
+            key=lambda entry: entry.created_at,
+        )
+
+    def forget_topic(self, entry_id: str) -> None:
+        """Strike one topic out, and stop it being made again.
+
+        Two things, because removing the topic alone is not enough: the raw
+        records it was synthesised from are still there and still eligible, so
+        the next time the memory collects it makes the same topic out of the
+        same records, and striking it out becomes something somebody has to
+        keep doing.
+
+        The records themselves stay, and stay searchable. What is being removed
+        is a claim the memory was making, not what happened. They also stay out
+        of the conversation: they stopped being handed over when they were
+        collected, and striking out the topic does not undo the collecting.
+
+        Only a topic. A raw record is what happened, and this is not for
+        rewriting that. See ADR-0019.
+        """
+        topic = next(
+            (entry for entry in self._entries if entry.entry_id == entry_id and entry.tier == "topic"),
+            None,
+        )
+        if topic is None:
+            raise LookupError(f"no topic with id {entry_id!r} in this memory")
+        for entry in self._entries:
+            if entry.metadata.get("synthesised_into") == entry_id:
+                entry.metadata.pop("synthesised_into", None)
+                entry.metadata["forgotten_topic"] = entry_id
+                self._write(entry)
+        self._entries.remove(topic)
+        self._path_for(topic).unlink(missing_ok=True)
+        if self._on_event is not None:
+            self._on_event({"type": "memory_topic_forgotten", "description": topic.description})
+
     def index_lines(self) -> list[str]:
         """One line per topic, oldest first.
 
         Not stored anywhere: it is read off the topics every time, so it cannot
         drift away from what the topics actually say.
         """
-        topics = sorted(
-            (entry for entry in self._entries if entry.tier == "topic" and entry.description),
-            key=lambda entry: entry.created_at,
-        )
-        return [entry.description for entry in topics]
+        return [topic.description for topic in self.remembered_topics()]
 
     def as_openai_messages(self, *, include_attachments: bool = False) -> list[dict[str, Any]]:
         """The memory's exit, and so where it checks whether it still fits."""
@@ -263,6 +292,7 @@ class FileMemoryStore(InMemoryStore):
             for entry in self._entries
             if entry.tier == "raw"
             and not entry.metadata.get("synthesised_into")
+            and not entry.metadata.get("forgotten_topic")
             and entry.role in {"user", "assistant", "tool"}
             and (entry.session_id is None or entry.session_id == self.session_id)
         ]
@@ -359,7 +389,11 @@ class FileMemoryStore(InMemoryStore):
 
     def _conversation_turns(self):
         """What was collected into a topic stops being handed over as itself."""
-        hidden = {entry.entry_id for entry in self._entries if entry.metadata.get("synthesised_into")}
+        hidden = {
+            entry.entry_id
+            for entry in self._entries
+            if entry.metadata.get("synthesised_into") or entry.metadata.get("forgotten_topic")
+        }
         return [turn for turn in super()._conversation_turns() if turn.turn_id not in hidden]
 
     def _write(self, entry: MemoryEntry) -> None:
@@ -449,15 +483,6 @@ class FileMemoryStore(InMemoryStore):
         super().clear(workflow_name)
         for entry in going:
             self._path_for(entry).unlink(missing_ok=True)
-
-
-def _is_dense_script(char: str) -> bool:
-    """Scripts where one character carries about as much as one token."""
-    return (
-        "\u3000" <= char <= "\u9fff"
-        or "\uac00" <= char <= "\ud7a3"
-        or "\uff00" <= char <= "\uffef"
-    )
 
 
 def _comparable_pieces(text: str) -> set[str]:

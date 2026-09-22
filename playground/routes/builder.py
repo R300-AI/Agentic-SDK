@@ -140,8 +140,6 @@ def update_builder_state():
         pres["starter_questions"] = list(string_items_from_lines(str(choice_label.get("starter_questions", ""))))
         session["runner_presentation"] = pres
         choice_label = {k: v for k, v in choice_label.items() if k != "starter_questions"}
-        if not choice_label:
-            choice_label = "in_context"
 
     spec = apply_builder_step(spec, step_key, choice_label)
     _record_answered_step(step_key)

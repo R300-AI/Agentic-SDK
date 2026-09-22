@@ -541,6 +541,13 @@ function setFieldValue(field, value) {
     setPairEditorValue(field, value);
     return;
   }
+  if (field.type === "checkbox") {
+    // A checkbox carries its answer in .checked; .value is the string it posts
+    // when ticked. Setting .value here left every saved switch rendering off,
+    // and the next form sync posted that back as off.
+    field.checked = ["on", "true", "1", "yes"].includes(String(value ?? "").trim().toLowerCase());
+    return;
+  }
   field.value = String(value ?? "");
   if (field.matches("[data-range-control]")) {
     updateRangeOutput(field);
