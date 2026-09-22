@@ -166,7 +166,7 @@ def main() -> int:
     print(f"這一輪用到的技能：{taken_up[-1] if taken_up else '（沒有）'}")
     print(f"畫面上顯示：{result.final_message}")
     print(f"說出口的：{spoken_to}（{spoken_to.stat().st_size} 位元組）")
-    if result.interrupted:
+    if result.stop_reason == "interrupted":
         # 被打斷時，留在對話裡的是對方真正聽到的那一段，不是整段產生出來的話。
         print(f"被打斷了，對方只聽到：{result.interrupt_payload.get('delivered', '')}")
     return 0

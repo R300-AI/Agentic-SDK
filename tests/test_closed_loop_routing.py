@@ -152,7 +152,7 @@ def test_a_failed_action_ends_the_run_without_a_check_after_it():
     assert _stages(events)[-1] == "action"
     assert result.visit_counts["reflect"] == 1
     assert result.final_message.startswith("[workflow ended with error]")
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
 
 
 @pytest.mark.parametrize("choice", ["perceive", None, "somewhere", "reflect"])
@@ -165,7 +165,7 @@ def test_a_choice_planning_cannot_make_becomes_action(choice):
 
     assert _stages(events) == ["perceive", "plan", "action"]
     assert _finish(events, "plan")[0]["next_module"] == "action"
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
 
 
 def test_planning_is_offered_reflect_only_when_a_reflect_module_is_mounted():
@@ -197,7 +197,7 @@ def test_planning_is_not_held_to_the_revisit_limit():
 
     result = workflow.run("保固多久？")
 
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
     assert result.visit_counts["plan"] == 4
 
 
@@ -213,8 +213,7 @@ def test_other_steps_are_still_held_to_the_revisit_limit():
 
     result = workflow.run("保固多久？")
 
-    assert result.aborted is True
-    assert result.abort_reason == "module 'retrieve' exceeded revisit limit 2"
+    assert result.stop_reason == "max_revisit"
 
 
 def test_next_step_plan_can_send_the_lookup_to_reflect():
@@ -311,7 +310,7 @@ def test_planning_and_reflect_exchange_at_most_five_times():
 
     result = workflow.run("保固多久？")
 
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
     assert result.visit_counts["reflect"] == 5
     assert result.final_message == "本產品保固十二個月。"
     assert plan.offered[-1] == ["retrieve", "action"]
@@ -329,7 +328,7 @@ def test_the_reflect_round_limit_can_be_changed():
 
     result = workflow.run("保固多久？")
 
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
     assert result.visit_counts["reflect"] == 2
 
 
@@ -345,7 +344,7 @@ def test_a_raised_reflect_round_limit_is_not_cut_short_by_the_revisit_limit():
 
     result = workflow.run("保固多久？")
 
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
     assert result.visit_counts["reflect"] == 7
 
 

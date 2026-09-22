@@ -134,7 +134,7 @@ def main() -> int:
 
     print(f"畫面上顯示：{result.final_message}")
     print(f"說出口的：{spoken_to} ({spoken_to.stat().st_size} bytes)")
-    if result.interrupted:
+    if result.stop_reason == "interrupted":
         print(f"被打斷了，對方只聽到：{result.interrupt_payload.get('heard', '')}")
     return 0
 

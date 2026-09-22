@@ -43,7 +43,7 @@ def _workflow_whose_provider_fails(failed_stage: str):
 def test_a_provider_failure_before_planning_is_handed_to_planning():
     result = _workflow_whose_provider_fails("perceive").run("測試 provider failure")
 
-    assert result.aborted is False, "the endpoint wobbled; the run did not fail"
+    assert result.stop_reason == "end_turn", "the endpoint wobbled; the run did not fail"
     failure = next(entry for entry in result.entries if entry.is_error)
     assert failure.type == ContextEntryType.PERCEIVED
     assert failure.content == "Unable to understand the input right now."
@@ -55,8 +55,7 @@ def test_a_provider_failure_before_planning_is_handed_to_planning():
 def test_planning_own_provider_failure_ends_the_run_with_a_plain_message():
     result = _workflow_whose_provider_fails("plan").run("測試 provider failure")
 
-    assert result.aborted is True, "nothing else decides what to do next"
-    assert result.abort_reason == "Unable to plan the next step right now."
+    assert result.stop_reason == "planning_failed", "nothing else decides what to do next"
     assert result.final_message == "[workflow ended with error] Unable to plan the next step right now."
     assert "provider connection unavailable" not in result.final_message
 
@@ -103,7 +102,7 @@ ENTRY_TYPE_FOR = {
 def test_a_raising_module_does_not_abort_the_run(failing):
     result = _workflow_with_failing(failing).run("保固多久？")
 
-    assert result.aborted is False, "one module failing is not the workflow protecting itself"
+    assert result.stop_reason == "end_turn", "one module failing is not the workflow protecting itself"
 
 
 @pytest.mark.parametrize("failing", ["perceive", "retrieve", "reflect"])

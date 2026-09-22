@@ -204,7 +204,7 @@ def _what_reached_the_person(result: WorkflowResult) -> str:
     ADR-0002.
     """
     payload = getattr(result, "interrupt_payload", None) or {}
-    if not getattr(result, "interrupted", False):
+    if getattr(result, "stop_reason", "end_turn") != "interrupted":
         return result.final_message
     delivered = str(payload.get("delivered") or result.final_message or "")
     heard_seconds = payload.get("heard_seconds")

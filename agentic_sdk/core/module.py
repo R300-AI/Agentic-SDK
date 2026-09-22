@@ -279,10 +279,13 @@ class WorkflowResult:
     workflow_id: str
     final_message: str
     session_id: str = "default"
-    aborted: bool = False
-    abort_reason: str | None = None
-    # Told apart from aborted so a caller can resume rather than apologise.
-    interrupted: bool = False
+    # One field, always set, saying why this run stopped. Replaces the
+    # three flags a caller used to have to read together — and which
+    # could disagree with each other.
+    stop_reason: str = "end_turn"
+    # How much of the answer reached the person. Not why it stopped:
+    # an interrupted run and a finished one can both have delivered
+    # everything, or nothing.
     interrupt_payload: dict[str, Any] = field(default_factory=dict)
     entries: list[ContextEntry] = field(default_factory=list)
     visit_counts: dict[str, int] = field(default_factory=dict)
@@ -291,7 +294,38 @@ class WorkflowResult:
     memory: MemoryStore | None = None
 
 
+# Why a run stopped. Closed, so a caller can switch on it and know the
+# switch is exhaustive. One value per situation: a run going round is not
+# the same fault as a slow endpoint, and neither reads like a setup
+# mistake, so they do not share a value.
+STOP_REASONS = frozenset(
+    {
+        "end_turn",  # the run finished
+        "interrupted",  # somebody asked it to stop
+        "max_hops",  # it went round more times than allowed
+        "max_revisit",  # one module was visited more often than allowed
+        "timeout",  # it took longer than allowed
+        "budget_exhausted",  # it ran out of the tokens it was given
+        "planning_failed",  # nothing was left to decide what to do next
+        "misconfigured",  # it was pointed at a module that is not there
+    }
+)
+
+
+# The reasons that mean the workflow stopped itself rather than finishing
+# or being stopped by somebody. Named because four places asked the same
+# question of the same two exceptions.
+STOPPED_ITSELF = frozenset(STOP_REASONS - {"end_turn", "interrupted"})
+
+
 class WorkflowAborted(RuntimeError):
-    def __init__(self, reason: str) -> None:
+    def __init__(self, reason: str, stop_reason: str) -> None:
+        if stop_reason not in STOPPED_ITSELF:
+            raise ValueError(
+                f"{stop_reason!r} is not a reason a workflow stops itself; use one of {sorted(STOPPED_ITSELF)}"
+            )
         super().__init__(reason)
         self.reason = reason
+        # The wording above is for whoever reads the trace; this is what
+        # the caller switches on.
+        self.stop_reason = stop_reason
