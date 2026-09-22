@@ -121,7 +121,7 @@ print(result.final_message)
 | 最長執行時間 | `timeout_sec` | `300.0` | 一次執行可使用的最長秒數。 |
 | 規劃與反思來回次數 | `max_reflect_rounds` | `5` | 一次執行最多送反思的次數。 |
 
-達到前三項上限時，SDK 會結束本次執行，並在結果中提供中止原因。`max_reflect_rounds` 是唯一不中止執行的上限：達到後，反思從規劃模組的可選步驟中移除，執行照常往檢索或行動走。
+達到前三項上限時，SDK 會結束本次執行，`result.stop_reason` 說明是哪一項，交付出去的內容照樣交出。上限的原始措辭（哪一個模組、第幾次）在事件流的中止事件上。`max_reflect_rounds` 是唯一不中止執行的上限：達到後，反思從規劃模組的可選步驟中移除，執行照常往檢索或行動走。
 
 規劃模組與反思不計入 `max_revisit`。反思的次數由 `max_reflect_rounds` 限制，調高它不需要同時調高 `max_revisit`；規劃模組在每次檢索與每次反思之後各被造訪一次，造訪次數等於 1 加檢索次數加反思次數，已經被另外兩項限制住。預設值下最長路徑是感知 1、檢索 5、反思 5、規劃 11、行動 1，共 23 步，低於 `max_node_hops` 的 50。一般應用程式可保留預設值；當流程有明確的外部等待或重試需求時，再依實際執行紀錄調整。
 
@@ -160,14 +160,22 @@ token = CancellationToken()
 result = workflow.run("保固多久？", cancel=token)
 ```
 
-| 欄位 | 中止（上限） | 被打斷 |
-| --- | --- | --- |
-| `result.aborted` | `True` | `False` |
-| `result.abort_reason` | 中止原因 | `None` |
-| `result.interrupted` | `False` | `True` |
-| `result.interrupt_payload` | `{}` | 含 `reason` 與 `delivered` |
+`result.stop_reason` 每一次執行都有值，說明它為什麼停下來：
 
-分開的理由是呈現：上限是流程保護自己，該顯示錯誤；被打斷是使用者在主導，**對一件他故意做的事顯示錯誤是荒謬的**。
+| 值 | 什麼情況 |
+| --- | --- |
+| `end_turn` | 正常跑完 |
+| `interrupted` | 有人請它停下來 |
+| `max_hops` | 在步驟之間繞的次數超過上限 |
+| `max_revisit` | 同一個步驟重複的次數超過上限 |
+| `timeout` | 花的時間超過上限 |
+| `budget_exhausted` | 這一輪可用的內容量用完了（預算功能尚未落地，目前不會出現） |
+| `planning_failed` | 規劃這一步沒有完成，沒有別的模組可以決定下一步 |
+| `misconfigured` | 指向一個不存在的步驟 |
+
+`result.interrupt_payload` 是另一件事：它說**交付出去多少**，被打斷時含 `reason` 與 `delivered`，其餘情況是 `{}`。停止的原因與交付的數量分開，因為一次跑完的執行與一次被打斷的執行都可能交付了全部或什麼都沒交付。
+
+把被打斷單獨列一個值的理由是呈現：上限是流程保護自己，該顯示錯誤；被打斷是使用者在主導，**對一件他故意做的事顯示錯誤是荒謬的**。
 
 ### 這一輪記下的是已交付的內容
 
@@ -197,7 +205,7 @@ if perceive.pending_input():
 ```python
 for result in workflow.converse(audio=microphone()):
     print(result.final_message)
-    if result.interrupted:
+    if result.stop_reason == "interrupted":
         print("他只聽到：", result.interrupt_payload["delivered"])
 ```
 

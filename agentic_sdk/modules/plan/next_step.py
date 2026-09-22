@@ -2,9 +2,8 @@
 
 from typing import Callable
 
-from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowAborted, WorkflowState
+from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_stream_json, require_model, resolve_openai_client
-from agentic_sdk.core.cancellation import WorkflowInterrupted
 from agentic_sdk.memory.in_context import build_module_messages
 
 
@@ -83,33 +82,24 @@ class NextStepPlan:
             },
             latest_user_message=state.latest_user_message(),
         )
-        try:
-            response = chat_stream_json(
-                self._client,
-                model=self._model,
-                messages=messages,
-                should_stop=state.should_stop,
-                on_delta=lambda content: state.emit_token_delta(
-                    self.name,
-                    content,
-                    metadata={"model": self._model, "structured": True},
-                ),
-                structured_fields=state.structured_fields_for(self.name),
-                on_field=lambda field, value: state.emit_structured_field(
-                    self.name,
-                    field,
-                    value,
-                    metadata={"model": self._model, "structured": True},
-                ),
-            )
-        except WorkflowInterrupted:
-            # Being talked over is not a provider failure. Letting it fall into
-            # the handler below files the interruption as a model error and
-            # answers the person with an apology for something they did on
-            # purpose.
-            raise
-        except Exception as exc:
-            _abort_for_provider_failure(state, self.name, exc)
+        response = chat_stream_json(
+            self._client,
+            model=self._model,
+            messages=messages,
+            should_stop=state.should_stop,
+            on_delta=lambda content: state.emit_token_delta(
+                self.name,
+                content,
+                metadata={"model": self._model, "structured": True},
+            ),
+            structured_fields=state.structured_fields_for(self.name),
+            on_field=lambda field, value: state.emit_structured_field(
+                self.name,
+                field,
+                value,
+                metadata={"model": self._model, "structured": True},
+            ),
+        )
         parsed = response.as_json()
         thought = str(parsed.get("thought", ""))
         next_module = parsed.get("next_module")
@@ -173,14 +163,4 @@ def _reflect_report(entry: ContextEntry | None) -> str | None:
     return "; ".join(parts) or str(entry.content or "") or None
 
 
-def _abort_for_provider_failure(state: WorkflowState, stage: str, exc: Exception) -> None:
-    message = "Unable to plan the next step right now."
-    state.last_workflow_error = {"stage": stage, "message": message}
-    state.append(
-        ContextEntry(
-            type=ContextEntryType.PLAN_DECISION,
-            content=f"error:{type(exc).__name__}",
-            metadata={"ok": False, "stage": stage, "error_type": type(exc).__name__},
-        )
-    )
-    raise WorkflowAborted(message) from exc
+

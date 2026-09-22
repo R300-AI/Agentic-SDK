@@ -13,7 +13,7 @@ from urllib.parse import urlparse
 
 import httpx
 
-from agentic_sdk.core import Attachment, ContextEntry, ContextEntryType, Gates, InContextMemory, Workflow, WorkflowResult, WorkflowState
+from agentic_sdk.core import STOPPED_ITSELF, Attachment, ContextEntry, ContextEntryType, Gates, InContextMemory, Workflow, WorkflowResult, WorkflowState
 from agentic_sdk.core.events import WORKFLOW_MODULE_NAMES, default_event_label
 
 from playground.models import RunnerSceneProfile
@@ -55,6 +55,28 @@ def get_default_scene_profile() -> RunnerSceneProfile:
     """
     return RunnerSceneProfile()
 
+
+
+_WHY_IT_STOPPED = {
+    "max_hops": "流程在模組之間繞太多次",
+    "max_revisit": "同一個模組重複太多次",
+    "timeout": "這一輪花的時間超過上限",
+    "budget_exhausted": "這一輪可用的內容量用完了",
+    "planning_failed": "規劃這一步沒有完成，所以沒有下一步可走",
+    "misconfigured": "流程指向一個不存在的模組",
+}
+
+
+def _why_it_stopped(stop_reason: str) -> str:
+    """Say it the way the person on the floor reads it.
+
+    The SDK's own wording names a limit and a number, which is written for
+    whoever reads the trace. This is what goes on screen.
+    """
+    if stop_reason in ("end_turn", "interrupted"):
+        # Nothing went wrong, so there is nothing to explain.
+        return ""
+    return _WHY_IT_STOPPED.get(stop_reason, "未提供原因")
 
 def get_runner_demo_result(scene_profile: RunnerSceneProfile) -> dict[str, object]:
     return {
@@ -270,7 +292,7 @@ def run_agent(
         "tool_calls": tool_calls,
         "tool_call_panels": tool_call_panels,
         "panel_decision": panel_decision,
-        "adoption_level": "建議人工確認" if workflow_result.aborted or handoff_reason else "可供採用",
+        "adoption_level": "建議人工確認" if workflow_result.stop_reason in STOPPED_ITSELF or handoff_reason else "可供採用",
         "scene_profile": scene_profile,
         "evidence": [
             "來源：目前輸入內容。",
@@ -290,14 +312,14 @@ def run_agent(
         "scene_profile": asdict(scene_profile),
         "workflow_id": workflow_result.workflow_id,
         "visit_counts": workflow_result.visit_counts,
-        "abort_reason": handoff_reason or workflow_result.abort_reason,
+        "abort_reason": handoff_reason or _why_it_stopped(workflow_result.stop_reason),
         "source_execution": source_execution,
         "conversation_update": _conversation_update(
             conversation_state,
             final_message,
             retrieval_evidence=_retrieval_evidence_from_result(workflow_result),
             tool_submission_context=tool_submission_context,
-            interrupted=bool(getattr(workflow_result, "interrupted", False)),
+            interrupted=bool(getattr(workflow_result, "stop_reason", "end_turn") == "interrupted"),
         ),
     }
 
@@ -649,7 +671,7 @@ def _run_tool_submission_continuation(
     state.entities.update({"tool_call_submission": context, "perceived_input": user_message, "query": user_message})
     action = workflow.modules.get("action")
     if action is None:
-        raise WorkflowAborted("unknown module 'action'")
+        raise WorkflowAborted("unknown module 'action'", "misconfigured")
     action_visit_count = state.visit_counts.get("action", 0) + 1
     action_visit = {
         "module": "action",
@@ -793,8 +815,8 @@ def _debug_messages_for_execution(config: BuilderSourceConfig, workflow_result: 
             suffix = f"，原因：{reason}" if reason else ""
             messages.append(f"Reflect：{config.reflect_module or 'Reflect'} 判定 {verdict}{suffix}。")
 
-    if workflow_result.aborted:
-        messages.append(f"Gate：流程中止，{workflow_result.abort_reason or '未提供原因'}。")
+    if workflow_result.stop_reason in STOPPED_ITSELF:
+        messages.append(f"Gate：流程中止，{_why_it_stopped(workflow_result.stop_reason)}。")
     if note := _interruption_note(workflow_result):
         messages.append(note)
 
@@ -1495,9 +1517,9 @@ def _execution_status(workflow_result, handoff_reason: str) -> str:
     gets its own status rather than borrowing the one that means the workflow
     stopped itself.
     """
-    if getattr(workflow_result, "interrupted", False):
+    if getattr(workflow_result, "stop_reason", "end_turn") == "interrupted":
         return "interrupted"
-    return "aborted" if workflow_result.aborted or handoff_reason else "completed"
+    return "aborted" if workflow_result.stop_reason in STOPPED_ITSELF or handoff_reason else "completed"
 
 
 def _interruption_trace_text(reason: str) -> str:
@@ -1518,7 +1540,7 @@ def _interruption_note(workflow_result) -> str:
     可能根本沒在聽。兩者共用同一句話，會讓調整這個 agent 的人以為每一次都是
     有人插話。
     """
-    if not getattr(workflow_result, "interrupted", False):
+    if getattr(workflow_result, "stop_reason", "end_turn") != "interrupted":
         return ""
     reason = str((getattr(workflow_result, "interrupt_payload", None) or {}).get("reason") or "")
     if reason == "superseded":

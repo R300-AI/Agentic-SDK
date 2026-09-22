@@ -760,9 +760,8 @@ def test_a_cancelled_workflow_leaves_no_half_written_state():
 
     result = workflow.run("hello", cancel=token)
 
-    assert result.interrupted is True
+    assert result.stop_reason == "interrupted"
     # Why it stopped still belongs on the result — but not on the flag that
     # means the workflow stopped itself, which is shown as an error.
-    assert result.abort_reason is None
     assert result.interrupt_payload["reason"] == "interjection"
     assert [getattr(e.type, "value", e.type) for e in result.entries] == ["user_input"]

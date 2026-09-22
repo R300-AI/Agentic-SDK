@@ -213,4 +213,4 @@ def test_workflow_stream_preserves_action_error_result() -> None:
 
     assert list(stream) == ["[workflow ended with error] connection unavailable"]
     assert stream.result.final_message == "[workflow ended with error] connection unavailable"
-    assert stream.result.aborted is False
+    assert stream.result.stop_reason == "end_turn"

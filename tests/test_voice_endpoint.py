@@ -216,8 +216,8 @@ def test_the_person_who_interrupted_is_not_shown_an_error():
     """They did it on purpose. An error for that is absurd."""
     from playground.services.runner_service import _execution_status, _interruption_note
 
-    interrupted = SimpleNamespace(aborted=False, interrupted=True, abort_reason=None)
-    hop_limit = SimpleNamespace(aborted=True, interrupted=False, abort_reason="hop limit")
+    interrupted = SimpleNamespace(stop_reason="interrupted")
+    hop_limit = SimpleNamespace(stop_reason="max_hops")
 
     assert _execution_status(interrupted, handoff_reason="") == "interrupted"
     assert _execution_status(hop_limit, handoff_reason="") == "aborted"
@@ -268,7 +268,7 @@ def test_the_playground_keeps_only_what_the_page_played():
     written = "保固期是十二個月，延長保固可以再加兩年，另外配件另計"
     interrupted = SimpleNamespace(
         final_message=written,
-        interrupted=True,
+        stop_reason="interrupted",
         interrupt_payload={"delivered": written, "heard_seconds": 2.0},
         entities={},
         entries=[],
@@ -386,7 +386,7 @@ def _interrupted_run(monkeypatch, *, delivered: str, heard_seconds: float):
             return WorkflowResult(
                 workflow_id="workflow",
                 final_message=delivered,
-                interrupted=True,
+                stop_reason="interrupted",
                 interrupt_payload={"delivered": delivered, "heard_seconds": heard_seconds},
                 memory=memory,
             )
@@ -580,7 +580,7 @@ def test_a_run_dropped_for_a_new_question_does_not_claim_someone_talked_over_it(
 
     from playground.services import runner_service
 
-    superseded = SimpleNamespace(interrupted=True, interrupt_payload={"reason": "superseded"})
+    superseded = SimpleNamespace(stop_reason="interrupted", interrupt_payload={"reason": "superseded"})
 
     note = runner_service._interruption_note(superseded)
 

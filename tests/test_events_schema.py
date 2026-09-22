@@ -256,7 +256,7 @@ def test_default_schema_emits_an_abort_stage_event() -> None:
 
     result = workflow.run("請協助測試", event_callback=events.append)
 
-    assert result.aborted is True
+    assert result.stop_reason not in ("end_turn", "interrupted")
     assert [
         (event["module"], event["phase"], event["label"])
         for event in events

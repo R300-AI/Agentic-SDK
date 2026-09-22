@@ -21,6 +21,10 @@ class ContextEntry:
     type: ContextEntryType | str
     content: str
     metadata: dict[str, Any] = field(default_factory=dict)
+    # A module reporting that it could not do its job. Kept out of the
+    # metadata dict so that reading it never depends on a convention a
+    # module might spell differently.
+    is_error: bool = False
     entry_id: str = field(default_factory=lambda: uuid.uuid4().hex)
     created_at: float = field(default_factory=time.time)
     last_accessed_at: float = field(default_factory=time.time)

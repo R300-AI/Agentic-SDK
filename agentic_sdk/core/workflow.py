@@ -13,6 +13,7 @@ from agentic_sdk.core.entities import ContextEntry, ContextEntryType
 from agentic_sdk.core.events import ALL_STRUCTURED_FIELDS, normalize_events_schema, resolve_events_schema
 from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
+from agentic_sdk.defaults import DEFAULT_MODULE_FAILURE_MESSAGES
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
 from agentic_sdk.memory.in_memory import InMemoryStore
 from agentic_sdk.memory.protocol import CrossContextMemory
@@ -20,6 +21,17 @@ from agentic_sdk.memory.protocol import CrossContextMemory
 
 _STREAM_COMPLETED = object()
 _PLANNING_CHOICES = ("retrieve", "reflect", "action")
+
+# What a module's failure is filed as: the entry type that module would have
+# written had it succeeded, so planning can tell which module is missing its
+# result without a type of its own for failure.
+_FAILURE_ENTRY_TYPE = {
+    "perceive": ContextEntryType.PERCEIVED,
+    "plan": ContextEntryType.PLAN_DECISION,
+    "retrieve": ContextEntryType.RETRIEVED,
+    "action": ContextEntryType.ACTION_RESULT,
+    "reflect": ContextEntryType.REFLECTION,
+}
 
 
 class WorkflowStream(Iterator[str]):
@@ -252,7 +264,7 @@ class Workflow:
         state.append(ContextEntry(type=ContextEntryType.USER_INPUT, content=latest_user_turn.content))
         current: str | None = self.entry_module
         total_hops = 0
-        aborted = False
+        stop_reason = "end_turn"
         abort_reason: str | None = None
         interrupted = False
         interrupt_payload: dict[str, Any] = {}
@@ -269,7 +281,7 @@ class Workflow:
 
                 module = self.modules.get(current)
                 if module is None:
-                    raise WorkflowAborted(f"unknown module '{current}'")
+                    raise WorkflowAborted(f"unknown module '{current}'", "misconfigured")
                 if current == "plan":
                     state.plan_options = _plan_options(self.modules, state, self.gates)
 
@@ -285,7 +297,17 @@ class Workflow:
                             events_schema=active_events_schema,
                         )
                     )
-                raw_output = module(state)
+                try:
+                    raw_output = module(state)
+                except (WorkflowInterrupted, WorkflowAborted):
+                    # Steering and self-protection, not a module failing at its
+                    # job. Both already say what they are.
+                    raise
+                except Exception as exc:  # noqa: BLE001 - filed below, whatever it was
+                    current = self._module_failed(
+                        current, exc, state, event_callback, active_events_schema
+                    )
+                    continue
                 output = _normalize_output(current, raw_output, state)
                 state.apply(output)
                 next_module = _next_module_after(current, output, state)
@@ -329,6 +351,7 @@ class Workflow:
             # steering, and everything downstream reads the abort flag to
             # decide which of those to show.
             interrupted = True
+            stop_reason = "interrupted"
             # One interruption, two accounts of it. A stream that sees the stop
             # flag reports how much it had produced by then; whoever asked for
             # the stop reports what they had received. Only the second was
@@ -376,7 +399,7 @@ class Workflow:
                 event["interrupted"] = True
                 event_callback(event)
         except WorkflowAborted as exc:
-            aborted = True
+            stop_reason = exc.stop_reason
             abort_reason = exc.reason
             if current is not None and self._should_emit_stage_event(current, event_callback, active_events_schema):
                 module = self.modules.get(current)
@@ -397,6 +420,11 @@ class Workflow:
             # What reached the person is the only part of this turn that
             # happened to them. The rest was written and received by nobody.
             final_message = interrupt_payload.get("delivered", state.delivered_so_far)
+        elif stop_reason != "end_turn" and not final_message:
+            # A limit stopped the run part-way. Whatever had already been
+            # delivered is still what happened to the person; the limit's
+            # own wording is for the trace.
+            final_message = state.delivered_so_far
         if final_message and state.memory is not None:
             latest_assistant = state.memory.latest_assistant_turn()
             if latest_assistant is None or latest_assistant.content != final_message:
@@ -416,9 +444,7 @@ class Workflow:
             workflow_id=state.workflow_id,
             final_message=final_message,
             session_id=state.session_id,
-            aborted=aborted,
-            abort_reason=abort_reason,
-            interrupted=interrupted,
+            stop_reason=stop_reason,
             interrupt_payload=interrupt_payload,
             entries=list(state.entries),
             visit_counts=dict(state.visit_counts),
@@ -527,6 +553,67 @@ class Workflow:
             event_callback,
             resolved_yield_action_deltas,
         )
+
+    def _module_failed(
+        self,
+        module_name: str,
+        exc: Exception,
+        state: WorkflowState,
+        event_callback: Callable[[dict[str, Any]], None],
+        events_schema: dict[str, dict[str, Any]],
+    ) -> str | None:
+        """File one module's failure and say where the run goes next.
+
+        A failure does not change where the run goes, only what is on record.
+        Perception, retrieval and reflection hand back to planning whether or
+        not they worked, and the action ends the run either way — the routing
+        ADR-0005 fixed. What changes is that the failure is written onto the
+        context for planning to read, instead of a module ending the run from
+        the inside. Planning failing is the one case with nowhere to go: nobody
+        else decides, so the run ends.
+        """
+        message = DEFAULT_MODULE_FAILURE_MESSAGES[module_name]
+        state.append(
+            ContextEntry(
+                type=_FAILURE_ENTRY_TYPE[module_name],
+                content=message,
+                is_error=True,
+                metadata={
+                    # "ok" repeats is_error because the modules that catch their
+                    # own failures have always written it, and the trace reads it.
+                    "ok": False,
+                    "stage": module_name,
+                    "error_type": type(exc).__name__,
+                    "error_message": str(exc),
+                },
+            )
+        )
+        if module_name == "plan":
+            # Nobody else decides where the run goes, so it ends. The abort
+            # branch announces that; announcing it here too reads as two faults.
+            state.last_workflow_error = {"stage": module_name, "message": message}
+            raise WorkflowAborted(message, "planning_failed") from exc
+        if self._should_emit_stage_event(module_name, event_callback, events_schema):
+            event = self._stage_event(
+                phase="finish",
+                status="error",
+                module_name=module_name,
+                module=self.modules.get(module_name),
+                state=state,
+                visit_count=state.visit_counts.get(module_name, 1),
+                events_schema=events_schema,
+            )
+            event["reason"] = message
+            event["error_type"] = type(exc).__name__
+            event["error_message"] = str(exc)
+            event_callback(event)
+        if module_name == "action":
+            # The action ends the run whether or not it worked — ADR-0005. The
+            # person gets the plain sentence instead of silence, and a run is
+            # not retried into five calls against an endpoint that is down.
+            state.last_action_error = {"type": type(exc).__name__, "message": message}
+            return None
+        return "plan"
 
     def _stage_event(
         self,

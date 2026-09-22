@@ -253,7 +253,7 @@ def test_a_retrying_agent_looks_again_at_most_once_and_checks_each_lookup():
     assert stages == [
         "perceive", "plan", "retrieve", "plan", "reflect", "plan", "retrieve", "plan", "reflect", "plan", "action",
     ]
-    assert result.aborted is False
+    assert result.stop_reason == "end_turn"
 
 
 def _fake_run(monkeypatch, entries, final_message="沒有命中任何條目。"):

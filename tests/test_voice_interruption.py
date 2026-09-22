@@ -53,7 +53,7 @@ def test_speaking_over_the_answer_stops_it():
     audio.transcribe("保固多久？")
     result = workflow.run(cancel=CancellationToken())
 
-    assert result.interrupted is True
+    assert result.stop_reason == "interrupted"
     assert action.finished is False
 
 
@@ -70,9 +70,7 @@ def test_being_interrupted_is_not_an_error():
     audio.transcribe("保固多久？")
     result = workflow.run(cancel=CancellationToken())
 
-    assert result.interrupted is True
-    assert result.aborted is False
-    assert result.abort_reason is None
+    assert result.stop_reason == "interrupted", "being talked over is not a fault"
 
 
 def test_the_trace_says_which_module_was_interrupted():
@@ -97,7 +95,7 @@ def test_nobody_speaking_lets_the_answer_finish():
     audio.transcribe("保固多久？")
     result = workflow.run(cancel=CancellationToken())
 
-    assert result.interrupted is False
+    assert result.stop_reason != "interrupted"
     assert action.finished is True
 
 
@@ -108,7 +106,7 @@ def test_interrupting_turn_after_turn_does_not_wear_the_workflow_down():
     for _ in range(3):
         audio.transcribe("保固多久？")
         result = workflow.run(cancel=CancellationToken())
-        assert result.interrupted is True
+        assert result.stop_reason == "interrupted"
     assert result.visit_counts.get("action", 0) == 1
 
 
@@ -192,8 +190,7 @@ def test_an_interjection_inside_a_module_is_not_reported_as_a_model_error():
 
     result = workflow.run("保固多久？", cancel=token)
 
-    assert result.interrupted is True
-    assert result.aborted is False
+    assert result.stop_reason == "interrupted", "being talked over is not a fault"
     assert "error" not in (result.final_message or "")
     assert [entry for entry in result.entries if entry.content.startswith("error:")] == []
 
@@ -233,7 +230,7 @@ def test_what_the_reader_saw_is_what_the_turn_records():
     seen = "".join(stream)
     result = stream.result
 
-    assert result.interrupted is True
+    assert result.stop_reason == "interrupted"
     assert seen != "", "使用者什麼都沒看到，那就不是這個情境"
     assert result.interrupt_payload["delivered"] == seen
     assert [turn.content for turn in workflow.memory.turns if turn.role == "assistant"] == [seen]
@@ -286,7 +283,7 @@ def test_the_record_holds_the_answer_and_not_the_reasoning_around_it():
         events_schema=events_schema,
     )
 
-    assert result.interrupted is True
+    assert result.stop_reason == "interrupted"
     assert result.interrupt_payload["delivered"] == "保固期是十二個月"
 
 
@@ -325,5 +322,5 @@ def test_a_structured_answer_records_the_words_and_not_the_envelope():
         events_schema={"action": {"label": "回答", "description": "回答", "fields": ()}},
     )
 
-    assert result.interrupted is True
+    assert result.stop_reason == "interrupted"
     assert result.interrupt_payload["delivered"] == "保固十二個月"
