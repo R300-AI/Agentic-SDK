@@ -1,25 +1,12 @@
 from __future__ import annotations
 
-from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
+from agentic_sdk.core import ModuleOutput, WorkflowState
+from agentic_sdk.modules.retrieve.base import BaseRetrieve
 
 
-class PassThroughRetrieve:
-    name = "retrieve"
+class PassThroughRetrieve(BaseRetrieve):
+    produced_by = "pass_through_retrieve"
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
         content = str(state.lookup("perceived_input") or state.lookup("query") or state.latest_user_message()).strip()
-        return ModuleOutput(
-            next_module="plan",
-            payload={
-                "retrieved_items": [],
-                "retrieved_snippet": content,
-                "latest_retrieved_content": content,
-            },
-            context_updates=[
-                ContextEntry(
-                    type=ContextEntryType.RETRIEVED,
-                    content=content,
-                    metadata={"source": "pass_through_retrieve"},
-                )
-            ],
-        )
+        return self._retrieved(content, items=[])

@@ -1,5 +1,6 @@
-﻿from agentic_sdk.modules.retrieve.keyword import KeywordRetrieve
-from agentic_sdk.modules.retrieve.pass_through import PassThroughRetrieve
-from agentic_sdk.modules.retrieve.semantic import SemanticRetrieve
-
-__all__ = ["KeywordRetrieve", "PassThroughRetrieve", "SemanticRetrieve"]
+﻿from agentic_sdk.modules.retrieve.base import BaseRetrieve
+from agentic_sdk.modules.retrieve.keyword import KeywordRetrieve
+from agentic_sdk.modules.retrieve.pass_through import PassThroughRetrieve
+from agentic_sdk.modules.retrieve.semantic import SemanticRetrieve
+
+__all__ = ["BaseRetrieve", "KeywordRetrieve", "PassThroughRetrieve", "SemanticRetrieve"]

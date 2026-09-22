@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Protocol
 
-from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
+from agentic_sdk.core import ModuleOutput, WorkflowState
 from agentic_sdk.defaults import (
     DEFAULT_NO_RETRIEVED_CONTEXT_MESSAGE,
     SEMANTIC_RETRIEVE_DEFAULT_INDEX_DIRNAME,
@@ -15,6 +15,7 @@ from agentic_sdk.defaults import (
     SEMANTIC_RETRIEVE_DEFAULT_TOP_K,
 )
 from agentic_sdk.llm import require_model, resolve_openai_client
+from agentic_sdk.modules.retrieve.base import BaseRetrieve
 
 
 class Embedder(Protocol):
@@ -312,12 +313,12 @@ class FaissKnowledgeBase:
         return faiss, np
 
 
-class SemanticRetrieve:
+class SemanticRetrieve(BaseRetrieve):
     DEFAULT_TOP_K = SEMANTIC_RETRIEVE_DEFAULT_TOP_K
     DEFAULT_CHUNK_SIZE = FaissKnowledgeBase._DEFAULT_CHUNK_SIZE
     DEFAULT_CHUNK_OVERLAP = FaissKnowledgeBase._DEFAULT_CHUNK_OVERLAP
 
-    name = "retrieve"
+    produced_by = "semantic_retrieve"
 
     def __init__(
         self,
@@ -408,12 +409,7 @@ class SemanticRetrieve:
         # The count every retrieve module reports the same way, so a reflect
         # module can ask "did this find anything" without knowing which module ran.
         metadata["hit_count"] = int(metadata.get("kb_hit_count", 0)) + int(metadata.get("memory_hit_count", 0))
-        metadata["source"] = "semantic_retrieve"
-        return ModuleOutput(
-            next_module="plan",
-            payload={"retrieved_snippet": snippet, "latest_retrieved_content": snippet},
-            context_updates=[ContextEntry(type=ContextEntryType.RETRIEVED, content=snippet, metadata=metadata)],
-        )
+        return self._retrieved(snippet, metadata=metadata)
 
 
 def _chunk_text(text: str, *, chunk_size: int, chunk_overlap: int) -> list[str]:
