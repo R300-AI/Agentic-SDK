@@ -31,7 +31,7 @@ from agentic_sdk.core import (
     WorkflowState,
     WorkflowStream,
 )
-from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore, PersistentMemory
+from agentic_sdk.memory import CrossContextMemory, FileMemoryStore, InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore
 
 _LAZY_MODULE_EXPORTS = {
     "DirectAnswerAction": "agentic_sdk.modules.action",
@@ -68,6 +68,7 @@ __all__ = [
     "ConversationTurn",
     "ContextEntry",
     "ContextEntryType",
+    "CrossContextMemory",
     "DirectAnswerAction",
     "default_events_schema",
     "DEFAULT_NO_MATCHING_ENTRIES_MESSAGE",
@@ -78,6 +79,7 @@ __all__ = [
     "DEFAULT_WORKFLOW_NAME",
     "Entities",
     "EvidenceCheckReflect",
+    "FileMemoryStore",
     "GateConfig",
     "Gates",
     "GenerativeAction",
@@ -87,7 +89,6 @@ __all__ = [
     "MemoryEntry",
     "MemorySearchResult",
     "MemoryStore",
-    "PersistentMemory",
     "Module",
     "ModuleOutput",
     "ModuleSpec",

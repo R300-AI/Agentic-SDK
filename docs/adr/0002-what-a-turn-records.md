@@ -37,7 +37,7 @@ whether the workflow is still alive when someone interrupts depends on how long
 the answer was against how long the reflect module took.
 
 The second is that memory is an extension point. `InContextMemory` exists
-today; cross-session memory is on the roadmap and already visible as a locked
+today; cross-context memory is on the roadmap and already visible as a locked
 choice in the Builder; hierarchical memory follows. Every kind implements the
 same `MemoryStore` protocol.
 
@@ -63,7 +63,7 @@ timeline, and the same rule that keeps microphones out of the core keeps
 playback out of its clock.
 
 **`MemoryStore`'s contract does not change.** Revising a past turn is not
-something every kind of memory can honour: an append-only cross-session store
+something every kind of memory can honour: an append-only cross-context store
 has no such operation, and a hierarchical store may have folded the turn into a
 summary already. The core may only require of an extension point what every
 implementation can do.

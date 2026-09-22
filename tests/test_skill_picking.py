@@ -134,7 +134,7 @@ def test_a_name_the_model_invents_is_ignored(tmp_path) -> None:
     assert _skill_turns(result) == []
 
 
-@pytest.mark.parametrize("memory_type", ["in_context", "persistent"])
+@pytest.mark.parametrize("memory_type", ["in_context", "cross_context", "persistent"])
 def test_a_skill_taken_up_stays_for_the_rest_of_the_conversation(tmp_path, memory_type) -> None:
     plan_client = FoundryOpenAILikeClient(plan_sequence=["action"], plan_skill="write")
     action_client = FoundryOpenAILikeClient(action_text="好的。")

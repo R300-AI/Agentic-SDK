@@ -1,6 +1,6 @@
 # Perceive
 
-Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的四個標準模組。每個模組會先列出建立物件時使用的初始化參數，再列出 workflow 執行時接收的標準輸入參數；整理後寫入 `Entities` 的欄位，會回到 [Module Family](index.md) 的中央定義理解。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。需要模型的 Perceive 模組會讀取 `MemoryStore` 的完整對話歷史；實際採用的記憶類型可以是 `InContextMemory`，也可以是同層可互換的 `PersistentMemory`，但仍以最新 user turn 當成本輪要整理的焦點。
+Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消費的感知結果。這一頁先定義 Perceive 家族處理哪些輸入型態，再依序展開目前文件採用的四個標準模組。每個模組會先列出建立物件時使用的初始化參數，再列出 workflow 執行時接收的標準輸入參數；整理後寫入 `Entities` 的欄位，會回到 [Module Family](index.md) 的中央定義理解。輸入來源包含純文字、結構化欄位與圖片檔，圖片格式支援 `image/png`、`image/jpeg`、`image/webp`。需要模型的 Perceive 模組會讀取 `MemoryStore` 的完整對話歷史；實際採用的記憶類型可以是 `InContextMemory`，也可以是同層可互換的 `CrossContextMemory`，但仍以最新 user turn 當成本輪要整理的焦點。
 
 ## PassThroughPerceive
 
@@ -19,7 +19,7 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `string` | `"請介紹 Agentic SDK"` | 本輪最新的使用者文字。 |
-| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模組讀取完整對話歷史的共同抽象；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
+| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模組讀取完整對話歷史的共同抽象；實際型別可以是 `InContextMemory` 或 `CrossContextMemory`。 |
 
 ## TextPerceive
 
@@ -45,7 +45,7 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `string` | `"我無法登入後台，請幫我整理問題重點"` | 本輪最新的使用者文字。 |
-| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
+| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `CrossContextMemory`。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
 | `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
@@ -75,7 +75,7 @@ Perceive 模組負責把原始輸入整理成 workflow 後續節點可直接消�
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `string` | `"請根據這張截圖整理錯誤訊息"` | 本輪最新的使用者文字。 |
-| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
+| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `CrossContextMemory`。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
 | `input_images` | `array<object>` | `[{"mime_type":"image/png","name":"error-screen.png","content_ref":"blob://error-screen.png"}]` | 圖片清單；只允許 `image/png`、`image/jpeg`、`image/webp`。 |
@@ -141,7 +141,7 @@ class MyTranscription(RealtimeTranscription):
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `string` | `"請介紹 Agentic SDK"` | 本輪最新的使用者文字。 |
-| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模組讀取完整對話歷史的共同抽象；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
+| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模組讀取完整對話歷史的共同抽象；實際型別可以是 `InContextMemory` 或 `CrossContextMemory`。 |
 
 ## TextPerceive
 
@@ -167,7 +167,7 @@ class MyTranscription(RealtimeTranscription):
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `string` | `"我無法登入後台，請幫我整理問題重點"` | 本輪最新的使用者文字。 |
-| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
+| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `CrossContextMemory`。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
 | `input_images` | `array<object>` | `[]` | 圖片清單；沒有圖片時固定 `[]`。 |
@@ -197,7 +197,7 @@ class MyTranscription(RealtimeTranscription):
 | 參數 | 型態 | 格式 | 說明 |
 | --- | --- | --- | --- |
 | `user_message` | `string` | `"請根據這張截圖整理錯誤訊息"` | 本輪最新的使用者文字。 |
-| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `PersistentMemory`。 |
+| `memory` | `MemoryStore` | `user -> assistant -> user ...` | 模型會直接讀取的完整對話歷史；實際型別可以是 `InContextMemory` 或 `CrossContextMemory`。 |
 | `input_options` | `array<object>` | `[]` | 可選項目；沒有選項時固定 `[]`。 |
 | `input_fields` | `object` | `{}` | 結構化欄位；沒有欄位時固定 `{}`。 |
 | `input_images` | `array<object>` | `[{"mime_type":"image/png","name":"error-screen.png","content_ref":"blob://error-screen.png"}]` | 圖片清單；只允許 `image/png`、`image/jpeg`、`image/webp`。 |

@@ -61,7 +61,7 @@
 3. 來源文件先從 `sources` 複製到 `saved_path/source-files/`，再從這份 copy 掃描。
 4. 文件內容會先切成較小的 chunk，再以 chunk 為單位建立索引與回傳結果。
 5. 可讀文字會直接使用；文件需要先轉成文字，才能建立索引。
-6. 若 workflow 同時配置 persistent memory，retriever 會再把語意查詢結果與 memory 搜尋結果一起整合。
+6. 若 workflow 同時配置 cross-context memory，retriever 會再把語意查詢結果與 memory 搜尋結果一起整合。
 
 ### 使用方式
 

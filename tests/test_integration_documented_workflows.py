@@ -329,7 +329,7 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
         self.assertEqual("第一輪回答", client.last_create_kwargs["messages"][2]["content"])
         self.assertEqual("第二輪追問", client.last_create_kwargs["messages"][3]["content"])
 
-    def test_workflow_run_accepts_primary_persistent_memory(self) -> None:
+    def test_workflow_run_accepts_primary_cross_context_memory(self) -> None:
         client = FoundryOpenAILikeClient(action_text="第二輪回答")
         primary_memory = InMemoryStore(workflow_name="default", workflow_id="wf-0", session_id="session-77")
         primary_memory.append_message("user", "第一輪問題")
@@ -371,10 +371,10 @@ class DocumentedWorkflowIntegrationTests(unittest.TestCase):
 
     def test_workflow_memory_type_accepts_named_memory_strategy(self) -> None:
         in_context_workflow = Workflow(memory_type="in_context")
-        persistent_workflow = Workflow(memory_type="persistent")
+        cross_context_workflow = Workflow(memory_type="cross_context")
 
         self.assertIsInstance(in_context_workflow._memory_factory(), InContextMemory)
-        self.assertIsInstance(persistent_workflow._memory_factory(), InMemoryStore)
+        self.assertIsInstance(cross_context_workflow._memory_factory(), InMemoryStore)
 
 
 if __name__ == "__main__":
