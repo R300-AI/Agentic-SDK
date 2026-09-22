@@ -73,7 +73,7 @@ print(result.final_message)
 執行期間有四層資料分工：
 
 - `MemoryStore`：模組可讀的共同 memory 抽象。
-- `InContextMemory` / `CrossContextMemory`：同層、可互換的 memory 類型；前者偏重對話承接，後者偏重持久化與回查。
+- `InContextMemory` / `CrossContextMemory`：同層、可互換的 memory 類型；前者偏重對話承接，後者偏重跨對話留存與回查。
 - `WorkflowState`：本次 run 的執行狀態，持有 `entities`、`entries`、`visit_counts`、`attachments` 與 `memory`。
 - `Entities`：節點間交換的結構化中繼結果，例如 `perceived_intent`、`retrieved_snippet`、`latest_final_message`。
 
@@ -138,7 +138,7 @@ workflow = build_workflow(config)
 | --- | --- | --- |
 | `user_message` | `str \| None` | 這一輪的輸入。模組已透過 `pending_input()` 收取輸入時可省略。 |
 | `memory` | `MemoryStore \| None` | 這一輪使用的對話記憶；省略時使用工作流自己持有的那一份。 |
-| `memory_store` | `CrossContextMemory \| None` | 跨 session 的持久化記憶。 |
+| `memory_store` | `CrossContextMemory \| None` | 跨越多段對話留存的記憶。 |
 | `session_id` | `str \| None` | 對話識別碼，寫入每一則回合。 |
 | `workflow_id` | `str \| None` | 工作流識別碼，寫入每一則回合。 |
 | `attachments` | `list \| None` | 這一輪的附件。 |

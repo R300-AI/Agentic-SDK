@@ -52,7 +52,7 @@
 | workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 策略或 memory 物件承接對話歷史；可用 `"in_context"`、`"persistent"`、memory class 或 memory 物件 |
 | module-facing memory abstraction | `MemoryStore` | 模組讀取完整對話與 turn 歷史時依賴的共同抽象 |
 | conversation-oriented memory | `InContextMemory` | 偏重 session 內完整對話承接的 `MemoryStore` 實作 |
-| durable memory | `CrossContextMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
+| cross-context memory | `CrossContextMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
 
 這套文件站把 `MemoryStore` 視為共同抽象，`InContextMemory` 與 `CrossContextMemory` 則是同層記憶類型。
 
