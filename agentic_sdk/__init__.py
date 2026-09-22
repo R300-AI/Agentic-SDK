@@ -2,7 +2,7 @@
 
 __version__ = "0.3.0"
 
-from agentic_sdk.config import GateConfig, ModuleSpec, WorkflowConfig, build_workflow
+from agentic_sdk.config import GateConfig, MemorySpec, ModuleSpec, WorkflowConfig, build_memory, build_workflow
 from agentic_sdk.core.events import ALL_STRUCTURED_FIELDS, DEFAULT_EVENTS_SCHEMA, default_events_schema
 from agentic_sdk.defaults import (
     DEFAULT_NO_MATCHING_ENTRIES_MESSAGE,
@@ -88,6 +88,7 @@ __all__ = [
     "KeywordRetrieve",
     "MemoryEntry",
     "MemorySearchResult",
+    "MemorySpec",
     "MemoryStore",
     "Module",
     "ModuleOutput",
@@ -112,6 +113,7 @@ __all__ = [
     "WorkflowResult",
     "WorkflowState",
     "WorkflowStream",
+    "build_memory",
     "build_workflow",
     "__version__",
 ]

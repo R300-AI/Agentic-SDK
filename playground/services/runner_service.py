@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import re
+import tempfile
 from collections.abc import Callable, Iterator
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -13,6 +15,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from agentic_sdk import MemorySpec, MemoryStore, build_memory
 from agentic_sdk.core import STOPPED_ITSELF, Attachment, ContextEntry, ContextEntryType, Gates, InContextMemory, Workflow, WorkflowResult, WorkflowState
 from agentic_sdk.core.events import WORKFLOW_MODULE_NAMES, default_event_label
 
@@ -1281,19 +1284,42 @@ def _to_attachment(raw: dict) -> Attachment:
     )
 
 
-_MEMORY_KINDS = {"in_context": InContextMemory}
+def memory_root() -> Path:
+    """Where this machine keeps what its agents carry between conversations.
 
-
-def _memory_from_spec(spec: dict[str, Any]) -> InContextMemory:
-    """Build the conversation memory the spec asks for.
-
-    A run gets its own store, so two requests never share one.
+    A property of the machine, not of the agent: the person answering Q1 is not
+    at the server and could not name a directory on it. An agent built here and
+    run somewhere else finds that machine's directory, not this one's.
     """
-    kind = str((spec.get("memory") or {}).get("kind") or "in_context")
-    try:
-        return _MEMORY_KINDS[kind]()
-    except KeyError:
-        raise ValueError(f"unknown memory kind {kind!r}; supported: {', '.join(sorted(_MEMORY_KINDS))}") from None
+    configured = os.environ.get("PLAYGROUND_MEMORY_ROOT", "").strip()
+    if configured:
+        return Path(configured)
+    # On App Service everything under wwwroot is replaced on every deployment,
+    # so a memory kept there is wiped by the next release — the one place it
+    # must not be. /home persists across deployments. See ADR-0011.
+    persistent_home = Path("/home")
+    if persistent_home.is_dir():
+        return persistent_home / "agentic-sdk-playground" / "memory"
+    return Path(tempfile.gettempdir()) / "agentic-sdk-playground" / "memory"
+
+
+def _memory_from_spec(spec: dict[str, Any], endpoint_selections: dict[str, str]) -> MemoryStore | type[MemoryStore]:
+    """Build the memory the spec asks for, set up the way this machine is.
+
+    Seeing only this conversation needs nothing set up, so it is handed back as
+    the class and each run makes its own. Carrying things between conversations
+    is built here because where it writes and which endpoint collects for it
+    are the deployment's answers, not the agent's.
+    """
+    memory = spec.get("memory") or {}
+    params = dict(memory.get("params") or {})
+    if params.get("compaction_threshold_tokens"):
+        params.update(endpoint_params_for_role("memory", endpoint_selections))
+    else:
+        params.pop("compaction_threshold_tokens", None)
+    if str(memory.get("kind") or "in_context") == "cross_context":
+        params["root"] = str(memory_root())
+    return build_memory(MemorySpec(kind=str(memory.get("kind") or "in_context"), params=params))
 
 
 def _gates_from_spec(spec: dict[str, Any]) -> Gates:
@@ -1326,7 +1352,7 @@ def build_workflow(
     return Workflow(
         workflow_name=str(spec.get("workflow_name") or "default"),
         description=config.task_goal or None,
-        memory_type=_memory_from_spec(spec),
+        memory_type=_memory_from_spec(spec, endpoint_selections),
         gates=_gates_from_spec(spec),
         entry_module=config.entry_module,
         events_schema=config.events_schema,

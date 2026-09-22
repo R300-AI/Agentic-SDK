@@ -33,6 +33,18 @@
 
 記憶交出去的內容裡，第一則系統訊息除了模組自己的系統提示，還帶著 `remembered_topics`——所有主題各自那一句話。它讓規劃知道有哪些主題可以查，因此永遠不會被預算裁掉：切掉它等於讓規劃看不見那些主題，也就等於沒有那份記憶。
 
+## 在組裝設定裡宣告
+
+記憶是 `WorkflowConfig` 自己的一個欄位，不在 `modules` 那本字典裡——那本字典是走訪會經過的五格，而記憶是每一格讀寫的那個東西。形狀和模組一樣是種類加參數：
+
+```python
+WorkflowConfig(memory=MemorySpec(kind="cross_context", params={"root": "/var/lib/agent-memory"}))
+```
+
+種類只有 `in_context` 與 `cross_context`，命名的是記憶型態而不是後端，所以換掉後端不必改已經存下來的設定。`cross_context` 給了 `root` 就寫在那裡，沒給就留在行程的記憶體裡——後者跨得了對話、跨不了重啟。其餘可給的參數是合成用的 `api_key`、`base_url`、`model`、`compaction_threshold_tokens` 與 `raw_retention_seconds`；給了別的會被連名字一起退回。理由見 [ADR-0017](../adr/0017-the-memory-is-declared-not-walked-to.md)。
+
+Playground 的 Q1 問的是型態與要不要合成，記憶根目錄讀環境變數 `PLAYGROUND_MEMORY_ROOT`，合成用的端點由部署在審閱頁綁——兩者都是機器的性質，不存進 Agent 的設定。
+
 **`turns` 只給這一段對話，跨對話要用 `search`。** 模組讀 `turns` 當前文，所以另一段對話的內容不會以前文的身分出現在提示詞裡；要取用先前那幾段留下來的東西走 `search`，它只按流程的名字過濾。
 
 ## WorkflowState：本次 run 的執行狀態

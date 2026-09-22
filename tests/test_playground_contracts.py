@@ -2071,16 +2071,19 @@ def test_spec_entry_module_reaches_the_workflow():
 def test_spec_memory_kind_reaches_the_workflow():
     workflow = runner_service.build_workflow(build_spec(), {})
 
-    assert isinstance(workflow.memory_type, InContextMemory)
+    assert workflow.memory_type is InContextMemory
 
 
 def test_each_run_gets_its_own_memory_store():
-    spec = build_spec()
+    """Seeing only this conversation means seeing only this one, run after run."""
+    workflow = runner_service.build_workflow(build_spec(), {})
 
-    first = runner_service.build_workflow(spec, {})
-    second = runner_service.build_workflow(spec, {})
+    workflow.run("第一個問題")
+    second = workflow.run("第二個問題")
 
-    assert first.memory_type is not second.memory_type
+    assert "第一個問題" not in " ".join(
+        str(turn.content) for turn in second.memory.turns
+    ), "a memory that only sees this conversation must not carry the last one into it"
 
 
 def test_unknown_memory_kind_is_rejected_rather_than_ignored():
@@ -2263,19 +2266,19 @@ def test_the_planner_runs_without_a_binding_of_its_own():
     assert workflow.plan is not None
 
 
-def test_the_preview_memory_option_stays_locked_and_visible():
-    """The locked memory choice is a roadmap signal, not dead code.
+def test_the_memory_that_carries_things_over_is_no_longer_a_roadmap():
+    """It was shown and refused for as long as there was nothing behind it.
 
-    It tells people where CrossContextMemory is going. It was once removed for
-    looking like a promise the product could not keep; a choice marked 預覽中
-    and visibly unclickable promises a direction, not a feature.
+    A choice marked 預覽中 and unclickable promises a direction. Once the
+    direction arrives, leaving the badge on promises the wrong thing in the
+    other direction: that the floor still cannot have it.
     """
     memory_step = next(step for step in builder_routes.get_builder_steps() if step.key == "memory_type")
-    preview = next(c for c in memory_step.choices if c.label == "workflow_recall_preview")
+    carrying_over = next(c for c in memory_step.choices if c.label == "cross_context")
 
-    assert preview.available is False
-    assert preview.badge == "預覽中"
-    assert builder_routes._is_locked_builder_choice("memory_type", preview.label) is True
+    assert carrying_over.available is True
+    assert carrying_over.badge == ""
+    assert builder_routes._is_locked_builder_choice("memory_type", carrying_over.label) is False
 
 
 def test_an_agent_saved_before_the_planner_binding_still_runs():

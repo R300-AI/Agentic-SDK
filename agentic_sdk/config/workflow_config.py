@@ -5,6 +5,7 @@ from typing import Any
 
 from agentic_sdk.core import Gates, Module, Workflow
 from agentic_sdk.core.events import resolve_events_schema
+from agentic_sdk.memory import FileMemoryStore, InContextMemory, InMemoryStore, MemoryStore
 
 
 @dataclass
@@ -23,16 +24,51 @@ class ModuleSpec:
 
 
 @dataclass
+class MemorySpec:
+    """Which memory a workflow keeps, and how it is set up.
+
+    Same shape as a module — a kind and its settings — because that is a shape
+    whoever writes one of these already knows. It is not a module: memory has
+    no slot in the walk, it is what every module reads from and writes to, so
+    it gets its own field rather than a sixth entry among the five.
+
+    The kind names what the memory does, never what it writes to. A deployment
+    that moves from files to something else changes what it passes in ``root``;
+    a spec somebody saved a year ago still says ``cross_context``.
+    """
+
+    kind: str = "in_context"
+    params: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
 class WorkflowConfig:
     name: str = "default"
     description: str | None = None
     entry: str = "perceive"
     events_schema: dict[str, dict[str, Any]] | None = None
     gates: GateConfig = field(default_factory=GateConfig)
+    memory: MemorySpec = field(default_factory=MemorySpec)
     modules: dict[str, ModuleSpec] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         self.events_schema = resolve_events_schema(self.events_schema)
+
+
+# What each kind of memory can be set up with. The endpoint three are here
+# because collecting old exchanges into a topic is a model call of its own,
+# and a deployment may point it at a smaller endpoint than the answer uses.
+_MEMORY_CONFIG_PARAMS: dict[str, set[str]] = {
+    "in_context": set(),
+    "cross_context": {
+        "root",
+        "api_key",
+        "base_url",
+        "model",
+        "compaction_threshold_tokens",
+        "raw_retention_seconds",
+    },
+}
 
 
 _MODULE_CONFIG_PARAMS: dict[str, set[str]] = {
@@ -117,11 +153,46 @@ def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module
             max_reflect_rounds=config.gates.max_reflect_rounds,
             max_prompt_tokens=config.gates.max_prompt_tokens,
         ),
+        memory_type=build_memory(config.memory),
         workflow_name=config.name,
         description=config.description,
         entry_module=config.entry,
         events_schema=config.events_schema,
     )
+
+
+def build_memory(spec: MemorySpec) -> MemoryStore | type[MemoryStore]:
+    """Build the memory a config declares.
+
+    Carrying nothing between conversations needs nothing set up, so that kind
+    is handed back as the class and a fresh one is made per run. Carrying
+    things between conversations is set up here, once, because where it keeps
+    them and which endpoint collects them are settings somebody supplied.
+
+    Where it keeps them decides which implementation runs. Told a place, it
+    writes there and what it learnt outlives the process. Told nothing, it
+    keeps everything in memory — a deployment that has said nothing about
+    storage still gets a workflow that starts, and it loses what it learnt
+    when the process ends. See ADR-0017.
+    """
+    if spec.kind not in _MEMORY_CONFIG_PARAMS:
+        known = ", ".join(sorted(_MEMORY_CONFIG_PARAMS))
+        raise ValueError(f"unknown memory kind {spec.kind!r}. Allowed kinds: {known}")
+    unsupported = sorted(set(spec.params) - _MEMORY_CONFIG_PARAMS[spec.kind])
+    if unsupported:
+        allowed = ", ".join(sorted(_MEMORY_CONFIG_PARAMS[spec.kind])) or "none"
+        raise ValueError(f"unsupported params for memory kind {spec.kind!r}: {unsupported}. Allowed params: {allowed}")
+    if spec.kind == "in_context":
+        return InContextMemory
+    params = dict(spec.params)
+    root = params.pop("root", None)
+    if root:
+        return FileMemoryStore(root=str(root), **params)
+    # Nothing is written, so nothing set up for writing applies: how long raw
+    # records are kept is about files on disk, and collecting them is about
+    # what a long conversation costs to hand over — neither survives a restart
+    # here anyway. Dropping them beats refusing a config that named them.
+    return InMemoryStore()
 
 
 def build_module(spec: ModuleSpec) -> Module:

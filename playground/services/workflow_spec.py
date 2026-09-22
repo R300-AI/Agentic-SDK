@@ -1,4 +1,4 @@
-"""v2 Workflow Spec – single source of truth for Builder state.
+﻿"""v2 Workflow Spec – single source of truth for Builder state.
 
 Spec is stored as JSON in the database; Python source is compiled from spec
 and is treated as a read-only export, never parsed back.
@@ -51,7 +51,17 @@ from playground.services.source_builder import (
 _SPEC_VERSION = "2"
 _PRESENTATION_VERSION = "1"
 
-_ALLOWED_MEMORY_KINDS = {"in_context"}
+_ALLOWED_MEMORY_KINDS = {"in_context", "cross_context"}
+# Collecting is a model call while somebody waits, so the number has to be
+# big enough that it is not made every turn. This is what a blank or
+# unreadable answer becomes, never a silent zero.
+_DEFAULT_COMPACTION_THRESHOLD_TOKENS = 4000
+
+
+def _memory_kind(raw: object, *, fallback: str = "in_context") -> str:
+    """A kind this version knows, so a spec from another one still opens."""
+    kind = str(raw or fallback)
+    return kind if kind in _ALLOWED_MEMORY_KINDS else "in_context"
 _ALLOWED_PERCEIVE_MODULES = {"PassThroughPerceive", "TextPerceive", "TextImagePerceive", "VoiceTextPerceive"}
 _ALLOWED_RETRIEVE_MODULES = {"PassThroughRetrieve", "KeywordRetrieve", "SemanticRetrieve"}
 _ALLOWED_ACTION_MODULES = {"DirectAnswerAction", "GenerativeAction", "ToolCallAction", "VoiceAnswerAction"}
@@ -72,7 +82,7 @@ def default_spec(*, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict[str, Any
         "version": _SPEC_VERSION,
         "workflow_name": workflow_name,
         "description": "",
-        "memory": {"kind": "in_context"},
+        "memory": {"kind": "in_context", "params": {}},
         "perceive": {
             "module": "PassThroughPerceive",
             "params": {
@@ -182,8 +192,32 @@ def _apply_str_field(spec: dict, raw: dict, key: str, *, required: bool = True) 
 def _apply_memory(spec: dict, raw: object) -> None:
     if not isinstance(raw, dict):
         return
-    kind = str(raw.get("kind") or "in_context")
-    spec["memory"]["kind"] = kind if kind in _ALLOWED_MEMORY_KINDS else "in_context"
+    kind = _memory_kind(raw.get("kind"))
+    spec["memory"]["kind"] = kind
+    spec["memory"]["params"] = _memory_params(kind, raw.get("params"))
+
+
+def _memory_params(kind: str, raw: object) -> dict[str, Any]:
+    """Only the settings this kind of memory has, and only the ones Q1 asks for.
+
+    Where the memory writes and which endpoint collects for it are supplied by
+    the deployment, not saved in the agent: a spec carried to another machine
+    would otherwise name a directory that machine does not have.
+    """
+    if kind != "cross_context" or not isinstance(raw, dict):
+        return {}
+    threshold = _compaction_threshold(raw.get("compaction_threshold_tokens"))
+    return {"compaction_threshold_tokens": threshold} if threshold else {}
+
+
+def _compaction_threshold(raw: object) -> int | None:
+    if raw is None or raw == "":
+        return None
+    try:
+        threshold = int(str(raw).strip())
+    except ValueError:
+        return _DEFAULT_COMPACTION_THRESHOLD_TOKENS
+    return threshold if threshold > 0 else _DEFAULT_COMPACTION_THRESHOLD_TOKENS
 
 
 def _apply_perceive(spec: dict, raw: object) -> None:
@@ -364,10 +398,17 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
         return {**spec, "description": desc}
 
     if step_key == "memory_type":
-        # memory_type step only concerns memory.kind – starter_questions go to runner_presentation
+        # This step only concerns the memory — starter_questions go to
+        # runner_presentation. The answer arrives as a bare kind when nothing
+        # else was asked, and as a kind plus its settings when it was.
         if isinstance(choice_label, str):
-            kind = choice_label if choice_label in _ALLOWED_MEMORY_KINDS else "in_context"
-            return {**spec, "memory": {**spec.get("memory", {}), "kind": kind}}
+            return {**spec, "memory": {"kind": _memory_kind(choice_label), "params": {}}}
+        if isinstance(choice_label, dict):
+            current = _memory_kind((spec.get("memory") or {}).get("kind"))
+            kind = _memory_kind(choice_label.get("kind"), fallback=current)
+            collecting = _answered_yes(choice_label.get("compaction_enabled"))
+            raw = {"compaction_threshold_tokens": choice_label.get("compaction_threshold_tokens")} if collecting else {}
+            return {**spec, "memory": {"kind": kind, "params": _memory_params(kind, raw)}}
         return spec
 
     if step_key == "input_type":
@@ -516,6 +557,13 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
 _ON_FAILURE_ANSWERS = {"retry_plan": "retry", "end": "handoff"}
 
 
+def _answered_yes(raw: object) -> bool:
+    """A switch answered by a form, where every answer arrives as text."""
+    if isinstance(raw, bool):
+        return raw
+    return str(raw or "").strip().lower() in {"on", "true", "1", "yes"}
+
+
 def saved_before_0_3_0(spec: dict[str, Any]) -> bool:
     """Whether a stored spec was written before 0.3.0 and needs reading anew."""
     return _q5_answer_saved_before_0_3_0(spec) is not None
@@ -623,8 +671,11 @@ def spec_to_config(spec: dict[str, Any]) -> BuilderSourceConfig:
     if skill_package_names:
         plan_module = "NextStepWithSkills"
 
+    memory_kind = _memory_kind(memory.get("kind"))
     config = BuilderSourceConfig(
         workflow_name=str(spec.get("workflow_name") or DEFAULT_WORKFLOW_NAME),
+        memory_kind=memory_kind,
+        memory_compaction_threshold_tokens=_compaction_threshold((memory.get("params") or {}).get("compaction_threshold_tokens")),
         profile_hint=None,
         task_goal=str(spec.get("description") or "") or None,
         input_kind=_perceive_module_to_input_kind(perceive_module),
@@ -718,8 +769,9 @@ def spec_to_form_state(spec: dict[str, Any], runner_presentation: dict[str, Any]
     action_params = action.get("params") or {}
 
     # Q1 choices
-    memory_kind = (spec.get("memory") or {}).get("kind") or "in_context"
-    memory_type_choice = memory_kind if memory_kind in _ALLOWED_MEMORY_KINDS else "in_context"
+    memory = spec.get("memory") or {}
+    memory_type_choice = _memory_kind(memory.get("kind"))
+    memory_threshold = (memory.get("params") or {}).get("compaction_threshold_tokens")
 
     # Q2 choices
     input_type_choice = {"TextPerceive": "text", "TextImagePerceive": "text_image", "VoiceTextPerceive": "voice"}.get(perceive_module, "pass_through")
@@ -778,6 +830,9 @@ def spec_to_form_state(spec: dict[str, Any], runner_presentation: dict[str, Any]
     starter_questions = pres.get("starter_questions") or []
     if starter_questions:
         values["memory_type"] = {"starter_questions": "\n".join(str(q) for q in starter_questions)}
+    if memory_threshold:
+        values.setdefault("memory_type", {})["compaction_enabled"] = "on"
+        values.setdefault("memory_type", {})["compaction_threshold_tokens"] = str(memory_threshold)
 
     # Perceive params
     if perceive_params.get("input_label"):
