@@ -22,7 +22,14 @@
 
 ## CrossContextMemory：跨對話記憶
 
-`CrossContextMemory` 也是 `MemoryStore` 的一種實作，和 `InContextMemory` 同層。它偏重跨執行期保留、搜尋、索引、回查與長期累積。
+`CrossContextMemory` 是 `MemoryStore` 的一個協定，和 `InContextMemory` 同層、由 `memory_type` 擇一。它偏重跨執行期保留、搜尋、索引、回查與長期累積。
+
+目前有兩個實作：
+
+- `FileMemoryStore` 把一則條目寫成一個 markdown 檔，目錄按流程的名字分，同一條流程的各段對話共用。建立時要給 `root`；`raw_retention_seconds` 不填就是永久保留。附件與 embedding 不寫進檔案——兩者都大、都不是人讀得懂的東西，原本有附件的條目會在 front matter 記下它有幾個。理由與部署注意事項見 [ADR-0011](../adr/0011-cross-context-memory-is-kept-as-files.md)。
+- `InMemoryStore` 把條目留在行程裡，跨得了對話但跨不了重啟，適合測試與不需要落地的程式。
+
+**`turns` 只給這一段對話，跨對話要用 `search`。** 模組讀 `turns` 當前文，所以另一段對話的內容不會以前文的身分出現在提示詞裡；要取用先前那幾段留下來的東西走 `search`，它只按流程的名字過濾。
 
 ## WorkflowState：本次 run 的執行狀態
 
@@ -52,7 +59,7 @@
 | workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 策略或 memory 物件承接對話歷史；可用 `"in_context"`、`"cross_context"`、memory class 或 memory 物件 |
 | module-facing memory abstraction | `MemoryStore` | 模組讀取完整對話與 turn 歷史時依賴的共同抽象 |
 | conversation-oriented memory | `InContextMemory` | 偏重一段對話內完整承接的 `MemoryStore` 實作 |
-| cross-context memory | `CrossContextMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
+| cross-context memory | `CrossContextMemory` | 偏重跨執行期保留、搜尋與回查的協定，實作為 `FileMemoryStore` 與 `InMemoryStore` |
 
 這套文件站把 `MemoryStore` 視為共同抽象，`InContextMemory` 與 `CrossContextMemory` 則是同層記憶類型。
 

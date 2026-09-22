@@ -14,6 +14,15 @@ class MemoryEntry:
     content: str
     workflow_name: str = "default"
     entry_type: str = "memory"
+    # Which of the three layers this entry belongs to. "raw" is one exchange
+    # as it happened; "topic" is what the memory layer synthesised from several
+    # of them, which is its own job and not any module's. Kept
+    # apart from entry_type because the layer and the kind of content are
+    # two different questions.
+    tier: str = "raw"
+    # One line naming what this entry is about, short enough that every
+    # topic's line can sit in the prompt together. Raw turns leave it empty.
+    description: str = ""
     role: str | None = None
     workflow_id: str | None = None
     session_id: str | None = None
