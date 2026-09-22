@@ -3533,6 +3533,35 @@ pre.code-block-with-controls {
   overflow-y: auto;
 }
 
+.memory-topic-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.memory-topic {
+  display: grid;
+  gap: 0.35rem;
+  justify-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--border-subtle, rgba(0, 0, 0, 0.12));
+  border-radius: 0.5rem;
+}
+
+.memory-topic-description {
+  margin: 0;
+  font-weight: 600;
+}
+
+.memory-topic-content {
+  margin: 0;
+  font-size: 0.9em;
+  opacity: 0.8;
+}
+
 .save-login-form .lede {
   margin: 0;
   max-width: 32rem;

@@ -45,6 +45,8 @@ WorkflowConfig(memory=MemorySpec(kind="cross_context", params={"root": "/var/lib
 
 Playground 的 Q1 問的是型態與要不要合成，記憶根目錄讀環境變數 `PLAYGROUND_MEMORY_ROOT`，合成用的端點由部署在審閱頁綁——兩者都是機器的性質，不存進 Agent 的設定。
 
+**記錯的主題可以刪掉。** `remembered_topics()` 讀得出這條流程記住的每一則，`forget_topic(entry_id)` 刪掉其中一則並把合成它的那幾筆原始紀錄標記為排除，下次合成略過它們，所以那一則不會自己長回來。原始紀錄本身留著，仍然搜尋得到——被刪掉的是記憶做出的一個判斷，不是發生過的事。不提供編輯，理由見 [ADR-0019](../adr/0019-a-topic-can-be-struck-out-but-not-rewritten.md)。Playground 在承接前文的 Agent 上有一個「記憶內容」面板走同一條路。
+
 **`turns` 只給這一段對話，跨對話要用 `search`。** 模組讀 `turns` 當前文，所以另一段對話的內容不會以前文的身分出現在提示詞裡；要取用先前那幾段留下來的東西走 `search`，它只按流程的名字過濾。
 
 ## WorkflowState：本次 run 的執行狀態

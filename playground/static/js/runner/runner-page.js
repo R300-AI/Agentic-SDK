@@ -25,6 +25,11 @@ const codePreviewToggles = document.querySelectorAll("[data-code-preview-open]")
 const codePreviewModal = document.querySelector("[data-code-preview-modal]");
 const workflowInfoOpen = document.querySelector("[data-workflow-info-open]");
 const workflowInfoModal = document.querySelector("[data-workflow-info-modal]");
+const memoryModal = document.querySelector("[data-memory-modal]");
+const memoryOpen = document.querySelector("[data-memory-open]");
+const memoryCloseButtons = memoryModal?.querySelectorAll("[data-memory-close]") || [];
+const memoryList = memoryModal?.querySelector("[data-memory-list]");
+const memoryEmpty = memoryModal?.querySelector("[data-memory-empty]");
 const workflowInfoCloseButtons = workflowInfoModal?.querySelectorAll("[data-workflow-info-close]") || [];
 const workflowInfoForm = document.querySelector("[data-workflow-info-form]");
 const workflowInfoNameInput = document.querySelector("[data-workflow-info-name-input]");
@@ -720,6 +725,102 @@ function closeWorkflowInfoModal() {
 	lastSaveTrigger?.focus?.();
 }
 
+// 記憶內容 —— 這個 Agent 記住的事，以及刪掉其中一則。
+// 一則主題的那一句話每一輪都在模型看得到的範圍裡，所以記錯的那一則是每
+// 一輪錯一次，要有人看得到才說得出它錯了。
+
+function renderRemembered(remembered) {
+	if (!memoryList || !memoryEmpty) {
+		return;
+	}
+	memoryList.replaceChildren();
+	memoryEmpty.textContent = "目前還沒有記住任何事。";
+	memoryEmpty.hidden = remembered.length > 0;
+	remembered.forEach((topic) => {
+		const item = document.createElement("li");
+		item.className = "memory-topic";
+		const description = document.createElement("p");
+		description.className = "memory-topic-description";
+		description.textContent = topic.description;
+		const body = document.createElement("p");
+		body.className = "memory-topic-content";
+		body.textContent = topic.content;
+		const strike = document.createElement("button");
+		strike.className = "button button-ghost";
+		strike.type = "button";
+		strike.textContent = "刪除";
+		strike.addEventListener("click", () => forgetTopic(topic.id, strike));
+		item.append(description, body, strike);
+		memoryList.append(item);
+	});
+}
+
+async function loadRemembered() {
+	try {
+		const response = await fetch("/playground/run/memory");
+		if (!response.ok) {
+			return;
+		}
+		renderRemembered((await response.json()).remembered || []);
+	} catch (error) {
+		// Nothing to show beats half a list of what an agent believes.
+		renderRemembered([]);
+	}
+}
+
+async function forgetTopic(id, button) {
+	button.disabled = true;
+	try {
+		const response = await fetch("/playground/run/memory/forget", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ id }),
+		});
+		const payload = await response.json();
+		if (response.ok) {
+			// The list comes back with the answer, so the page shows what is
+			// true now rather than what it hoped would happen.
+			renderRemembered(payload.remembered || []);
+			return;
+		}
+		// A click that does nothing and says nothing reads as a broken page.
+		showMemoryProblem(payload.error);
+		button.disabled = false;
+	} catch (error) {
+		showMemoryProblem();
+		button.disabled = false;
+	}
+}
+
+function showMemoryProblem(reason) {
+	if (!memoryEmpty) {
+		return;
+	}
+	memoryEmpty.hidden = false;
+	memoryEmpty.textContent = reason ? `刪不掉：${reason}` : "刪不掉，請再試一次。";
+}
+
+function openMemoryModal() {
+	if (!memoryModal) {
+		return;
+	}
+	lastSaveTrigger = memoryOpen;
+	memoryModal.hidden = false;
+	memoryModal.classList.add("open");
+	memoryModal.dataset.open = "true";
+	loadRemembered();
+}
+
+function closeMemoryModal() {
+	if (!memoryModal) {
+		return;
+	}
+	memoryModal.hidden = true;
+	memoryModal.classList.remove("open");
+	memoryModal.dataset.open = "false";
+	lastSaveTrigger?.focus?.();
+}
+
 async function applyWorkflowInfo() {
 	const nextName = workflowInfoNameInput?.value.trim() || workflowName;
 	const nextDescription = workflowInfoDescriptionInput?.value.trim() || "";
@@ -1214,7 +1315,14 @@ saveLoginForm?.addEventListener("submit", async (event) => {
 	window.location.href = result.redirect_url || "/playground/run";
 });
 
+memoryOpen?.addEventListener("click", openMemoryModal);
+memoryCloseButtons.forEach((button) => button.addEventListener("click", closeMemoryModal));
+
 document.addEventListener("keydown", (event) => {
+	if (event.key === "Escape" && memoryModal && !memoryModal.hidden) {
+		closeMemoryModal();
+		return;
+	}
 	if (event.key === "Escape" && workflowInfoModal && !workflowInfoModal.hidden) {
 		closeWorkflowInfoModal();
 		return;
