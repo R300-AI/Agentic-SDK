@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import copy
 import hashlib
@@ -11,9 +11,12 @@ from typing import Any
 import yaml
 
 from agentic_sdk.llm import chat_json, require_model, resolve_openai_client
+from agentic_sdk.memory.in_context import _is_dense_script, estimate_tokens
 from agentic_sdk.memory.in_memory import InMemoryStore
 from agentic_sdk.memory.protocol import MemoryEntry
 
+
+_UNSAFE_IN_A_FILE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 # Enough of the conversation is always left alone that the agent still knows
 # what was just said, however tight the budget is.
@@ -33,22 +36,6 @@ _SYNTHESISE_SYSTEM_PROMPT = (
     '"content": what happened in that part, in the language it was held in, keeping any fact '
     "a later exchange might depend on. Do not invent anything that was not said."
 )
-
-
-def estimate_tokens(text: str) -> int:
-    """About how many tokens a piece of text costs.
-
-    An OpenAI-compatible endpoint is not required to expose a tokenizer, and
-    this SDK targets many of them, so the count here is an estimate and is
-    named as one. A character in a CJK script is worth roughly a token; other
-    scripts run about four characters to one. A deployment that needs the real
-    number passes its own counter.
-    """
-    cjk = sum(1 for char in text if _is_dense_script(char))
-    return cjk + (len(text) - cjk + 3) // 4
-
-
-_UNSAFE_IN_A_FILE_NAME = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def _as_one_path_component(name: str) -> str:
@@ -449,15 +436,6 @@ class FileMemoryStore(InMemoryStore):
         super().clear(workflow_name)
         for entry in going:
             self._path_for(entry).unlink(missing_ok=True)
-
-
-def _is_dense_script(char: str) -> bool:
-    """Scripts where one character carries about as much as one token."""
-    return (
-        "\u3000" <= char <= "\u9fff"
-        or "\uac00" <= char <= "\ud7a3"
-        or "\uff00" <= char <= "\uffef"
-    )
 
 
 def _comparable_pieces(text: str) -> set[str]:

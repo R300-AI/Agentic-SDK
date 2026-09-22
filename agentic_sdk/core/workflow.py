@@ -270,6 +270,8 @@ class Workflow:
         interrupted = False
         interrupt_payload: dict[str, Any] = {}
 
+        state.prompt_budget = self.gates.max_prompt_tokens
+        _let_memory_collect_itself(state_memory, self.gates.max_prompt_tokens)
         state.cancel = cancel
 
         try:
@@ -740,6 +742,31 @@ class Workflow:
             "visit_count": visit_count,
             "visit_id": _visit_id(state, module_name, visit_count),
         }
+
+
+_UNSET = object()
+
+
+def _let_memory_collect_itself(memory: MemoryStore, ceiling: int | None) -> None:
+    """Point a memory that can collect its own oldest parts at the ceiling.
+
+    Two numbers could say when to collect: the ceiling on a whole request, and
+    a threshold given to the memory when it was built. The one given to the
+    memory wins, because somebody chose it for that memory. Where nobody chose
+    one, the ceiling becomes it — otherwise a run that declares a ceiling gets
+    messages cut at the seam and never gets them collected into topics, which
+    is the difference between losing what was said and keeping it as a topic.
+
+    The conversation is only part of a request, so collecting it down to the
+    ceiling does not on its own make the request fit. It is not meant to: what
+    the conversation gives up here it keeps as a topic, and whatever still does
+    not fit is cut afterwards. Compare the conversation against a fraction of
+    the ceiling instead and the fraction would be a made-up number.
+    """
+    if ceiling is None:
+        return
+    if getattr(memory, "compaction_threshold_tokens", _UNSET) is None:
+        memory.compaction_threshold_tokens = ceiling
 
 
 def _resolve_memory(

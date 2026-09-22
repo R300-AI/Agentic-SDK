@@ -81,6 +81,7 @@ class NextStepPlan:
                 "latest_reflect_report": _reflect_report(reflection),
             },
             latest_user_message=state.latest_user_message(),
+            budget_tokens=state.prompt_budget,
         )
         response = chat_stream_json(
             self._client,

@@ -68,6 +68,7 @@ class TextPerceive:
                 "fields_to_notice": json.dumps(self._options, ensure_ascii=False) if self._options else "",
             },
             latest_user_message=self._user_prompt(state),
+            budget_tokens=state.prompt_budget,
         )
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
@@ -186,6 +187,7 @@ class TextImagePerceive(TextPerceive):
             include_attachments=True,
             latest_user_message=self._user_prompt(state),
             latest_user_attachments=state.attachments,
+            budget_tokens=state.prompt_budget,
         )
 
 

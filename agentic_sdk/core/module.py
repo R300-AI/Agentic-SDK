@@ -51,6 +51,9 @@ class WorkflowState:
     # Carried on the state because that is what every module already receives.
     # A module that streams can offer it to the transport without the workflow
     # having to reach inside the module to wire anything up.
+    # How much one module may send, or None for no ceiling. Read by the
+    # memory's exit, which is the only place the size is known.
+    prompt_budget: int | None = None
     cancel: "CancellationToken | None" = None
     delivered_so_far: str = ""
     _cut_short: Callable[[str, dict[str, Any]], str] | None = field(

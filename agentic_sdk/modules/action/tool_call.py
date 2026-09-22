@@ -36,7 +36,7 @@ class ToolCallAction:
         return self._model
 
     def __call__(self, state: WorkflowState) -> ModuleOutput:
-        messages = _build_messages(state, self._system_prompt)
+        messages = _build_messages(state, self._system_prompt, tools=self._tools)
         try:
             response = chat_stream(
                 self._client,

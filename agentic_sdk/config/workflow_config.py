@@ -13,6 +13,7 @@ class GateConfig:
     max_revisit: int = 5
     timeout_sec: float = 300.0
     max_reflect_rounds: int = 5
+    max_prompt_tokens: int | None = None
 
 
 @dataclass
@@ -114,6 +115,7 @@ def build_workflow(config: WorkflowConfig, *, module_overrides: dict[str, Module
             max_revisit=config.gates.max_revisit,
             timeout_sec=config.gates.timeout_sec,
             max_reflect_rounds=config.gates.max_reflect_rounds,
+            max_prompt_tokens=config.gates.max_prompt_tokens,
         ),
         workflow_name=config.name,
         description=config.description,

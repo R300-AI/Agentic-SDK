@@ -1,6 +1,7 @@
 ﻿from __future__ import annotations
 
 import json
+from typing import Any
 
 from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
 from agentic_sdk.llm import chat_stream, require_model, resolve_openai_client
@@ -162,7 +163,9 @@ def _interrupted_answer(state: WorkflowState) -> dict[str, str]:
     return {}
 
 
-def _build_messages(state: WorkflowState, system_prompt: str | None) -> list[dict[str, str]]:
+def _build_messages(
+    state: WorkflowState, system_prompt: str | None, *, tools: Any = None
+) -> list[dict[str, str]]:
     retrieved = state.lookup("latest_retrieved_content") or state.lookup("retrieved_snippet") or ""
     perceived = _perceived_context(state)
     cut_off = _interrupted_answer(state)
@@ -179,6 +182,8 @@ def _build_messages(state: WorkflowState, system_prompt: str | None) -> list[dic
             **cut_off,
         },
         latest_user_message=state.latest_user_message(),
+        budget_tokens=state.prompt_budget,
+        tools=tools,
     )
 
 
