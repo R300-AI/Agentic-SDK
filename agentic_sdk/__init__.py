@@ -31,7 +31,7 @@ from agentic_sdk.core import (
     WorkflowState,
     WorkflowStream,
 )
-from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore, PersistentMemory
+from agentic_sdk.memory import InMemoryStore, MemoryEntry, MemorySearchResult, MemoryStore, CrossContextMemory
 
 _LAZY_MODULE_EXPORTS = {
     "DirectAnswerAction": "agentic_sdk.modules.action",
@@ -87,7 +87,7 @@ __all__ = [
     "MemoryEntry",
     "MemorySearchResult",
     "MemoryStore",
-    "PersistentMemory",
+    "CrossContextMemory",
     "Module",
     "ModuleOutput",
     "ModuleSpec",

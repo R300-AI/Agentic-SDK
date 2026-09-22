@@ -37,7 +37,7 @@ class MemorySearchResult:
 
 
 @runtime_checkable
-class PersistentMemory(MemoryStore, Protocol):
+class CrossContextMemory(MemoryStore, Protocol):
     def append(self, entry: MemoryEntry) -> None: ...
 
     def search(

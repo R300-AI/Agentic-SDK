@@ -10,7 +10,7 @@ from agentic_sdk.core.entities import Attachment, ContextEntry, ContextEntryType
 if TYPE_CHECKING:
     from agentic_sdk.core.cancellation import CancellationToken
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
-from agentic_sdk.memory.protocol import PersistentMemory
+from agentic_sdk.memory.protocol import CrossContextMemory
 
 
 class ModuleOutput(TypedDict, total=False):
@@ -33,7 +33,7 @@ class WorkflowState:
     workflow_name: str = "default"
     workflow_description: str | None = None
     session_id: str = "default"
-    memory_store: PersistentMemory | None = None
+    memory_store: CrossContextMemory | None = None
     memory: MemoryStore | None = None
     started_monotonic: float = field(default_factory=time.monotonic)
     entities: Entities = field(default_factory=Entities)
@@ -97,7 +97,7 @@ class WorkflowState:
     def __post_init__(self) -> None:
         if self.memory is None and self.memory_store is not None:
             self.memory = self.memory_store
-        if self.memory_store is None and isinstance(self.memory, PersistentMemory):
+        if self.memory_store is None and isinstance(self.memory, CrossContextMemory):
             self.memory_store = self.memory
 
     @property
@@ -145,10 +145,10 @@ class WorkflowState:
         turn = self.memory.latest_assistant_turn()
         return turn.content if turn is not None else None
 
-    def persistent_memory(self) -> PersistentMemory | None:
+    def persistent_memory(self) -> CrossContextMemory | None:
         if self.memory_store is not None:
             return self.memory_store
-        if isinstance(self.memory, PersistentMemory):
+        if isinstance(self.memory, CrossContextMemory):
             return self.memory
         return None
 

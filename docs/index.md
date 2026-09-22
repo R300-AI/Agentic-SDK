@@ -20,7 +20,7 @@
 
 ### 對話記憶
 
-說明 `Workflow` 如何用 `MemoryStore` 保存模組可讀的共同對話資料，並以 `InContextMemory` 與 `PersistentMemory` 提供不同的記憶方式。
+說明 `Workflow` 如何用 `MemoryStore` 保存模組可讀的共同對話資料，並以 `InContextMemory` 與 `CrossContextMemory` 提供不同的記憶方式。
 
 ### 技術 Blog
 
@@ -30,7 +30,7 @@
 
 - [工作流程](workflow/index.md)：先理解公開組裝入口、五大功能角色與資料如何沿流程傳遞。
 - [模組家族](modules/index.md)：查看目前文件涵蓋的模組總表，再分流到各功能頁查規格。
-- [記憶類型](workflow/memory-types.md)：查 `Workflow` 如何分工 `memory_type`、`MemoryStore`、`InContextMemory`、`PersistentMemory` 與 `WorkflowState`。
+- [記憶類型](workflow/memory-types.md)：查 `Workflow` 如何分工 `memory_type`、`MemoryStore`、`InContextMemory`、`CrossContextMemory` 與 `WorkflowState`。
 - [技術 Blog](blog/index.md)：查看 Letta、Fara 與 MatrAIx 的整合設計，理解模型卡、推論服務與工作流程之間的關係。
 
 ## 模組總表

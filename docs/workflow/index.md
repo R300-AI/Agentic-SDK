@@ -73,7 +73,7 @@ print(result.final_message)
 執行期間有四層資料分工：
 
 - `MemoryStore`：模組可讀的共同 memory 抽象。
-- `InContextMemory` / `PersistentMemory`：同層、可互換的 memory 類型；前者偏重對話承接，後者偏重持久化與回查。
+- `InContextMemory` / `CrossContextMemory`：同層、可互換的 memory 類型；前者偏重對話承接，後者偏重持久化與回查。
 - `WorkflowState`：本次 run 的執行狀態，持有 `entities`、`entries`、`visit_counts`、`attachments` 與 `memory`。
 - `Entities`：節點間交換的結構化中繼結果，例如 `perceived_intent`、`retrieved_snippet`、`latest_final_message`。
 
@@ -88,7 +88,7 @@ print(result.final_message)
 `Workflow` 執行時會持續更新共用狀態，讓後續節點可以讀取前一步留下的結果。這份狀態由 `WorkflowState` 與某個 `MemoryStore` 實作共同承接：
 
 - `WorkflowState` 承接本次 run 的中繼結果與觀測資料。
-- `InContextMemory` 或 `PersistentMemory` 承接跨 turn 的完整對話歷史。
+- `InContextMemory` 或 `CrossContextMemory` 承接跨 turn 的完整對話歷史。
 
 這樣的設計讓模型模組可以穩定讀到完整前文，也讓規則式模組專注處理本次 `run()` 的輸入資料與脈絡條目。
 
@@ -138,7 +138,7 @@ workflow = build_workflow(config)
 | --- | --- | --- |
 | `user_message` | `str \| None` | 這一輪的輸入。模組已透過 `pending_input()` 收取輸入時可省略。 |
 | `memory` | `MemoryStore \| None` | 這一輪使用的對話記憶；省略時使用工作流自己持有的那一份。 |
-| `memory_store` | `PersistentMemory \| None` | 跨 session 的持久化記憶。 |
+| `memory_store` | `CrossContextMemory \| None` | 跨 session 的持久化記憶。 |
 | `session_id` | `str \| None` | 對話識別碼，寫入每一則回合。 |
 | `workflow_id` | `str \| None` | 工作流識別碼，寫入每一則回合。 |
 | `attachments` | `list \| None` | 這一輪的附件。 |

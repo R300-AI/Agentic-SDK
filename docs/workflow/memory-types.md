@@ -1,12 +1,12 @@
 # 記憶類型
 
-這一頁說明 `Workflow` 執行時使用的引擎層。分工如下：`Workflow` 負責串接節點，`MemoryStore` 是上層記憶抽象，`InContextMemory` 與 `PersistentMemory` 是同層、可互換的記憶類型，`WorkflowState` 承接本次 `run()` 的中繼狀態。
+這一頁說明 `Workflow` 執行時使用的引擎層。分工如下：`Workflow` 負責串接節點，`MemoryStore` 是上層記憶抽象，`InContextMemory` 與 `CrossContextMemory` 是同層、可互換的記憶類型，`WorkflowState` 承接本次 `run()` 的中繼狀態。
 
 ## MemoryStore：共同 memory 抽象
 
 `MemoryStore` 是模組層依賴的共同記憶抽象。它負責保存模組需要讀取的對話內容與順序，讓不同記憶實作可以使用同一個介面。
 
-模組依賴 `MemoryStore` 介面，就能在 `InContextMemory` 與 `PersistentMemory` 之間切換。
+模組依賴 `MemoryStore` 介面，就能在 `InContextMemory` 與 `CrossContextMemory` 之間切換。
 
 ## InContextMemory：對話工作記憶
 
@@ -20,9 +20,9 @@
 
 `InContextMemory` 的責任是保存完整對話順序；`WorkflowState` 與 `Entities` 則處理單次 `run()` 期間的中繼資料。
 
-## PersistentMemory：持久化記憶
+## CrossContextMemory：跨對話記憶
 
-`PersistentMemory` 也是 `MemoryStore` 的一種實作，和 `InContextMemory` 同層。它偏重跨執行期保留、搜尋、索引、回查與長期累積。
+`CrossContextMemory` 也是 `MemoryStore` 的一種實作，和 `InContextMemory` 同層。它偏重跨執行期保留、搜尋、索引、回查與長期累積。
 
 ## WorkflowState：本次 run 的執行狀態
 
@@ -52,9 +52,9 @@
 | workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 策略或 memory 物件承接對話歷史；可用 `"in_context"`、`"persistent"`、memory class 或 memory 物件 |
 | module-facing memory abstraction | `MemoryStore` | 模組讀取完整對話與 turn 歷史時依賴的共同抽象 |
 | conversation-oriented memory | `InContextMemory` | 偏重 session 內完整對話承接的 `MemoryStore` 實作 |
-| durable memory | `PersistentMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
+| durable memory | `CrossContextMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
 
-這套文件站把 `MemoryStore` 視為共同抽象，`InContextMemory` 與 `PersistentMemory` 則是同層記憶類型。
+這套文件站把 `MemoryStore` 視為共同抽象，`InContextMemory` 與 `CrossContextMemory` 則是同層記憶類型。
 
 ## 什麼時候看這一頁
 

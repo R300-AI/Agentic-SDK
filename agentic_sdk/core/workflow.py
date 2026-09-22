@@ -15,7 +15,7 @@ from agentic_sdk.core.gates import Gates
 from agentic_sdk.core.module import Module, ModuleOutput, WorkflowAborted, WorkflowResult, WorkflowState
 from agentic_sdk.memory.in_context import InContextMemory, MemoryStore
 from agentic_sdk.memory.in_memory import InMemoryStore
-from agentic_sdk.memory.protocol import PersistentMemory
+from agentic_sdk.memory.protocol import CrossContextMemory
 
 
 _STREAM_COMPLETED = object()
@@ -123,7 +123,7 @@ class Workflow:
     action: Module | None = None
     reflect: Module | None = None
     memory_type: str | type[MemoryStore] | MemoryStore = "in_context"
-    memory_store: PersistentMemory | None = None
+    memory_store: CrossContextMemory | None = None
     gates: Gates | None = None
     workflow_name: str = "default"
     description: str | None = None
@@ -166,7 +166,7 @@ class Workflow:
         session_id: str | None = None,
         memory: MemoryStore | None = None,
         attachments: list[Any] | None = None,
-        memory_store: PersistentMemory | None = None,
+        memory_store: CrossContextMemory | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
         events_schema: dict[str, dict[str, Any]] | None = None,
         cancel: "CancellationToken | None" = None,
@@ -203,7 +203,7 @@ class Workflow:
             raise ValueError("Workflow.run requires user_message or a conversation containing a user turn.")
 
         resolved_memory_store = memory_store or self.memory_store
-        if resolved_memory_store is None and isinstance(state_memory, PersistentMemory):
+        if resolved_memory_store is None and isinstance(state_memory, CrossContextMemory):
             resolved_memory_store = state_memory
 
         state = WorkflowState(
@@ -492,7 +492,7 @@ class Workflow:
         session_id: str | None = None,
         memory: MemoryStore | None = None,
         attachments: list[Any] | None = None,
-        memory_store: PersistentMemory | None = None,
+        memory_store: CrossContextMemory | None = None,
         event_callback: Callable[[dict[str, Any]], None] | None = None,
         events_schema: dict[str, dict[str, Any]] | None = None,
         yield_action_deltas: bool | None = None,

@@ -1,6 +1,6 @@
 ﻿from agentic_sdk.memory.in_context import ConversationTurn, InContextMemory, MemoryStore
 from agentic_sdk.memory.in_memory import InMemoryStore
-from agentic_sdk.memory.protocol import MemoryEntry, MemorySearchResult, PersistentMemory
+from agentic_sdk.memory.protocol import MemoryEntry, MemorySearchResult, CrossContextMemory
 
 __all__ = [
 	"ConversationTurn",
@@ -9,5 +9,5 @@ __all__ = [
 	"MemoryEntry",
 	"MemorySearchResult",
 	"MemoryStore",
-	"PersistentMemory",
+	"CrossContextMemory",
 ]
