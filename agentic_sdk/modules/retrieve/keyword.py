@@ -1,11 +1,12 @@
 ﻿from __future__ import annotations
 
-from agentic_sdk.core import ContextEntry, ContextEntryType, ModuleOutput, WorkflowState
+from agentic_sdk.core import ModuleOutput, WorkflowState
 from agentic_sdk.defaults import DEFAULT_NO_MATCHING_ENTRIES_MESSAGE
+from agentic_sdk.modules.retrieve.base import BaseRetrieve
 
 
-class KeywordRetrieve:
-    name = "retrieve"
+class KeywordRetrieve(BaseRetrieve):
+    produced_by = "keyword_retrieve"
 
     def __init__(self, items: list[dict] | None = None, fallback: str = DEFAULT_NO_MATCHING_ENTRIES_MESSAGE) -> None:
         self._items = items or []
@@ -20,19 +21,4 @@ class KeywordRetrieve:
                 hits.append(item)
         contents = [str(item.get("content", "")) for item in hits if item.get("content")]
         snippet = "\n".join(contents) if contents else self._fallback
-        return ModuleOutput(
-            next_module="plan",
-            payload={
-                "query": query,
-                "retrieved_items": hits,
-                "retrieved_snippet": snippet,
-                "latest_retrieved_content": snippet,
-            },
-            context_updates=[
-                ContextEntry(
-                    type=ContextEntryType.RETRIEVED,
-                    content=snippet,
-                    metadata={"hit_count": len(hits), "source": "keyword_retrieve"},
-                )
-            ],
-        )
+        return self._retrieved(snippet, query=query, items=hits, metadata={"hit_count": len(hits)})
