@@ -677,9 +677,11 @@ def _memory_factory_from(memory_type: str | type[MemoryStore] | MemoryStore) -> 
         key = memory_type.strip().lower().replace("-", "_")
         if key in {"in_context", "context"}:
             return InContextMemory
-        if key in {"persistent", "persistant", "in_memory"}:
+        # Spellings this table has always tolerated, kept for the same reason
+        # "persistant" is here: someone typed it and the workflow still ran.
+        if key in {"cross_context", "persistent", "persistant", "in_memory"}:
             return InMemoryStore
-        raise ValueError(f"unknown memory_type {memory_type!r}; use 'in_context', 'persistent', or a MemoryStore instance")
+        raise ValueError(f"unknown memory_type {memory_type!r}; use 'in_context', 'cross_context', or a MemoryStore instance")
     if isinstance(memory_type, type):
         return memory_type
     if _is_memory_store(memory_type):

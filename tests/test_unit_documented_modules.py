@@ -693,7 +693,7 @@ class DocumentedModuleUnitTests(unittest.TestCase):
         self.assertEqual(1, len(entries))
         self.assertEqual("user_input", entries[0].entry_type)
 
-    def test_text_perceive_writes_memory_when_primary_memory_is_persistent(self) -> None:
+    def test_text_perceive_writes_memory_when_primary_memory_is_cross_context(self) -> None:
         store = InMemoryStore(workflow_name="default", workflow_id="wf-1", session_id="session-1")
         store.append_message("user", "幫我找鞋")
         state = WorkflowState(user_message="幫我找鞋", memory=store)

@@ -114,9 +114,9 @@ class TextPerceive:
             metadata["welcome_message"] = self._welcome_message
         if self._options:
             metadata["options"] = self._options
-        persistent_memory = state.persistent_memory()
-        if persistent_memory is not None:
-            persistent_memory.append(
+        cross_context_memory = state.cross_context_memory()
+        if cross_context_memory is not None:
+            cross_context_memory.append(
                 MemoryEntry(
                     workflow_name=state.workflow_name,
                     entry_type="user_input",

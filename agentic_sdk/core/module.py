@@ -145,7 +145,7 @@ class WorkflowState:
         turn = self.memory.latest_assistant_turn()
         return turn.content if turn is not None else None
 
-    def persistent_memory(self) -> CrossContextMemory | None:
+    def cross_context_memory(self) -> CrossContextMemory | None:
         if self.memory_store is not None:
             return self.memory_store
         if isinstance(self.memory, CrossContextMemory):

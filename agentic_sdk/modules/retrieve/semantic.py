@@ -392,10 +392,10 @@ class SemanticRetrieve:
             metadata["kb_hit_count"] = len(hits)
             if hits:
                 sections.append(_format_knowledge_hits(hits))
-        persistent_memory = state.persistent_memory()
-        if persistent_memory is not None:
+        cross_context_memory = state.cross_context_memory()
+        if cross_context_memory is not None:
             query_embedding = self._embedder.embed(query) if self._embedder else None
-            results = persistent_memory.search(
+            results = cross_context_memory.search(
                 workflow_name=state.workflow_name,
                 query_text=query,
                 query_embedding=query_embedding,

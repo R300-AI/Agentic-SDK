@@ -51,7 +51,7 @@
       <td><a href="modules/perceive-modules.md#passthroughperceive">PassThroughPerceive</a></td>
       <td>no</td>
       <td>--</td>
-      <td>保留最新一輪使用者輸入，並把它送進同一個 session 的對話上下文。</td>
+      <td>保留最新一輪使用者輸入，並把它送進同一段對話的上下文。</td>
     </tr>
     <tr>
       <td><a href="modules/perceive-modules.md#textperceive">TextPerceive / TextImagePerceive</a></td>

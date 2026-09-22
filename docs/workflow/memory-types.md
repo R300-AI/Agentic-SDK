@@ -10,7 +10,7 @@
 
 ## InContextMemory：對話工作記憶
 
-`InContextMemory` 是 `MemoryStore` 的一種實作，偏重對話工作記憶。它保存同一個 session 中依時間排序的完整 turn 歷史，讓需要模型的模組可以直接讀取前文。
+`InContextMemory` 是 `MemoryStore` 的一種實作，偏重對話工作記憶。它保存同一段對話中依時間排序的完整 turn 歷史，讓需要模型的模組可以直接讀取前文。
 
 適合把它理解成：
 
@@ -41,7 +41,7 @@
 
 助理回合記下的是**實際交付給使用者的內容**。一般情況下那就是完整回覆；被打斷時則是使用者已經收到的那一段，回合的 metadata 會標上 `interrupted`。
 
-`MemoryStore` 沒有為此增加任何方法。交付在執行結束之前就確定的情況（文字串流、在傳輸迴圈裡播放的音訊），由工作流直接寫入正確內容；交付在執行之後才完成的情況（例如播放發生在瀏覽器），更正屬於**持有那份對話記錄的呼叫端**，各種記憶自行決定怎麼折進去。理由是記憶是擴充點：跨 session 與階層式記憶都得能實作同一份協定，而「修訂過去的回合」不是每一種都做得到的事。詳見 ADR-0002。
+`MemoryStore` 沒有為此增加任何方法。交付在執行結束之前就確定的情況（文字串流、在傳輸迴圈裡播放的音訊），由工作流直接寫入正確內容；交付在執行之後才完成的情況（例如播放發生在瀏覽器），更正屬於**持有那份對話記錄的呼叫端**，各種記憶自行決定怎麼折進去。理由是記憶是擴充點：跨對話與階層式記憶都得能實作同一份協定，而「修訂過去的回合」不是每一種都做得到的事。詳見 ADR-0002。
 
 ## Workflow 可注入的其他引擎層
 
@@ -49,9 +49,9 @@
 
 | 引擎位置 | 目前程式對應 | 角色 |
 | --- | --- | --- |
-| workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 策略或 memory 物件承接對話歷史；可用 `"in_context"`、`"persistent"`、memory class 或 memory 物件 |
+| workflow memory type | `memory_type` | 決定 workflow 以哪一種 memory 策略或 memory 物件承接對話歷史；可用 `"in_context"`、`"cross_context"`、memory class 或 memory 物件 |
 | module-facing memory abstraction | `MemoryStore` | 模組讀取完整對話與 turn 歷史時依賴的共同抽象 |
-| conversation-oriented memory | `InContextMemory` | 偏重 session 內完整對話承接的 `MemoryStore` 實作 |
+| conversation-oriented memory | `InContextMemory` | 偏重一段對話內完整承接的 `MemoryStore` 實作 |
 | cross-context memory | `CrossContextMemory` | 偏重跨執行期保留、搜尋與回查的 `MemoryStore` 實作 |
 
 這套文件站把 `MemoryStore` 視為共同抽象，`InContextMemory` 與 `CrossContextMemory` 則是同層記憶類型。
@@ -60,7 +60,7 @@
 
 - 要理解 workflow 內哪一層保存完整對話時
 - 要判斷只用單輪 `run()`，或建立 `memory = InContextMemory()` 交給 `Workflow(memory_type=memory)` 承接多輪對話時
-- 要替 workflow 指定特定 `MemoryStore` 類型或物件時，例如 `"in_context"`、`"persistent"`、`InContextMemory` 或自訂 memory instance
+- 要替 workflow 指定特定 `MemoryStore` 類型或物件時，例如 `"in_context"`、`"cross_context"`、`InContextMemory` 或自訂 memory instance
 - 要分清楚「workflow 節點規格」與「workflow 執行引擎」兩個層次時
 
 ## 與模組頁的分工
