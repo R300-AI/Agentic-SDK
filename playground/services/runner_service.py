@@ -195,14 +195,17 @@ def run_agent(
                 process_observer=emit_process_event,
             )
         else:
-            execution_memory = _conversation_memory_for_execution(
+            execution_memory = _memory_for_execution(
+                spec,
                 conversation_state,
-                execution_workflow_name,
-                parsed_attachments,
+                workflow_name=execution_workflow_name,
+                attachments=parsed_attachments,
+                endpoint_selections=endpoint_selections or {},
+                user_id=user_id,
             )
             workflow_result = workflow.run(
                 cancel=cancel,
-                user_message=None if execution_memory else user_message,
+                user_message=None if _memory_already_ends_with_the_question(execution_memory, spec) else user_message,
                 memory=execution_memory,
                 session_id=conversation_state.conversation_id if conversation_state else None,
                 user_id=user_id,
@@ -346,14 +349,60 @@ def _configuration_hint(config: BuilderSourceConfig) -> str | None:
     return None
 
 
-def _conversation_memory_for_execution(
+def _memory_for_execution(
+    spec: dict[str, Any],
     conversation_state: RunnerConversationState | None,
+    *,
     workflow_name: str,
     attachments: list[Attachment],
-) -> InContextMemory | None:
+    endpoint_selections: dict[str, str],
+    user_id: str | None,
+) -> MemoryStore | None:
+    """The memory this run reads and writes.
+
+    An agent that carries things between conversations gets the store that
+    writes them down. It is already holding this conversation — it read it
+    back off disk under this conversation's id — so nothing is put into it
+    here; the run appends what is said this turn, the way it would to any
+    memory it was handed.
+
+    An agent that only sees this conversation gets the conversation the page
+    is keeping, rebuilt, and touches no directory.
+
+    Handing the page's conversation over in both cases is what used to happen,
+    and it silently beat the store the agent was built with — ``memory=`` wins
+    over ``memory_type`` — so the store was created, pointed at a directory,
+    and never written to. See #43.
+    """
     if conversation_state is None:
         return None
-    memory = conversation_state.memory(workflow_name=workflow_name)
+    if _memory_kind_of(spec) != "cross_context":
+        return _with_attachments(conversation_state.memory(workflow_name=workflow_name), attachments)
+    carried_over = _memory_from_spec(spec, endpoint_selections)
+    carried_over.workflow_name = workflow_name
+    carried_over.session_id = conversation_state.conversation_id
+    carried_over.user_id = user_id
+    return carried_over
+
+
+def _memory_already_ends_with_the_question(
+    memory: MemoryStore | None, spec: dict[str, Any]
+) -> bool:
+    """Whether what was just asked is already in the memory being handed over.
+
+    The page's conversation is rebuilt from what the page holds, which ends
+    with the question. The store that carries things between conversations
+    holds what it wrote on previous turns and nothing from this one, so this
+    turn's question has to be given to the run.
+    """
+    return memory is not None and _memory_kind_of(spec) != "cross_context"
+
+
+def _memory_kind_of(spec: dict[str, Any]) -> str:
+    return str((spec.get("memory") or {}).get("kind") or "in_context")
+
+
+def _with_attachments(memory: MemoryStore, attachments: list[Attachment]) -> MemoryStore:
     latest_user_turn = memory.latest_user_turn()
     if latest_user_turn is not None:
         latest_user_turn.attachments = list(attachments)

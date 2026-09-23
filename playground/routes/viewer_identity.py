@@ -24,8 +24,7 @@ import uuid
 
 from flask import session
 
-
-VISITOR_KEY = "memory_visitor_id"
+from playground.services.aihub_session import VISITOR_KEY
 
 
 def viewer_id() -> str:

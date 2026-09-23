@@ -262,7 +262,10 @@ def test_runner_execution_memory_keeps_current_image_attachment_transient():
         content="data:image/png;base64,aGVsbG8=",
     )
 
-    memory = runner_service._conversation_memory_for_execution(conversation, "LaNew鞋墊顧問", [attachment])
+    memory = runner_service._memory_for_execution(
+        spec, conversation, workflow_name="LaNew鞋墊顧問", attachments=[attachment],
+        endpoint_selections={}, user_id=None,
+    )
 
     assert memory is not None
     message = memory.as_openai_messages(include_attachments=True)[-1]
