@@ -103,6 +103,10 @@ def run_agent(
     tool_call_submission: dict[str, object] | None = None,
     process_observer: Callable[[dict[str, object]], None] | None = None,
     voice_session_id: str | None = None,
+    # Who this run is for. Supplied by the route, not reached for here:
+    # a service that asks for the current request cannot be called from
+    # anywhere else. See ADR-0020.
+    user_id: str | None = None,
 ) -> dict[str, object]:
     scene_profile = get_default_scene_profile()
     execution_workflow_name = str(spec.get("workflow_name") or "default")
@@ -201,6 +205,7 @@ def run_agent(
                 user_message=None if execution_memory else user_message,
                 memory=execution_memory,
                 session_id=conversation_state.conversation_id if conversation_state else None,
+                user_id=user_id,
                 attachments=parsed_attachments,
                 event_callback=_workflow_event_observer(
                     config,
@@ -365,6 +370,10 @@ def stream_agent_run(
     semantic_runtime: SemanticRuntime | None = None,
     tool_call_submission: dict[str, object] | None = None,
     voice_session_id: str | None = None,
+    # Who this run is for. Supplied by the route, not reached for here:
+    # a service that asks for the current request cannot be called from
+    # anywhere else. See ADR-0020.
+    user_id: str | None = None,
 ) -> Iterator[dict[str, object]]:
     queue: Queue[dict[str, object] | None] = Queue()
 
@@ -383,6 +392,7 @@ def stream_agent_run(
                 tool_call_submission=tool_call_submission,
                 process_observer=publish_process_event,
                 voice_session_id=voice_session_id,
+                user_id=user_id,
             )
             queue.put({"type": "final", "execution": execution})
         except Exception as exc:

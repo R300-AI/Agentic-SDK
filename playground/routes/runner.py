@@ -9,6 +9,7 @@ from playground.services.aihub_bridge import has_runner_bridge_query, restore_pe
 from playground.services.aihub_client import credentials_for_ticket, issue_credential_ticket, verify_handoff_token, verify_identity
 from playground.services import skill_store
 from playground.services.deep_link import apply_aihub_deep_link
+from playground.routes.viewer_identity import viewer_id
 from playground.services.memory_admin import forget, remembered_by
 from playground.services.mode_context import get_mode_context
 from playground.services.runner_conversation import SESSION_KEY as CONVERSATION_SESSION_KEY, RunnerConversationState
@@ -116,6 +117,7 @@ def execute_runner():
         semantic_runtime=semantic_runtime,
         tool_call_submission=payload.get("tool_call_submission") if isinstance(payload.get("tool_call_submission"), dict) else None,
         voice_session_id=str(payload.get("voice_session_id") or ""),
+        user_id=viewer_id(),
     )
     response_payload = _public_execution_payload(execution)
     if execution.get("error"):
@@ -145,6 +147,7 @@ def execute_runner_stream():
             semantic_runtime=semantic_runtime,
             tool_call_submission=payload.get("tool_call_submission") if isinstance(payload.get("tool_call_submission"), dict) else None,
             voice_session_id=str(payload.get("voice_session_id") or ""),
+            user_id=viewer_id(),
         ):
             if item.get("type") == "final":
                 execution = item.get("execution") or {}
@@ -247,7 +250,7 @@ def runner_memory():
     if not has_spec():
         return jsonify({"error": "No agent is available."}), 400
     name = get_workflow_summary(current_spec()).name
-    return jsonify({"remembered": remembered_by(name)})
+    return jsonify({"remembered": remembered_by(name, viewer_id())})
 
 
 @runner_bp.post("/memory/forget")
@@ -260,12 +263,12 @@ def forget_runner_memory():
     payload = request.get_json(silent=True) or {}
     name = get_workflow_summary(current_spec()).name
     try:
-        forget(name, str(payload.get("id", "")))
+        forget(name, str(payload.get("id", "")), viewer_id())
     except LookupError:
         # Whoever struck it out is about to look at the list again, so saying
         # it worked would be a lie they find out about immediately.
         return jsonify({"forgotten": False, "error": "No such topic in this memory."}), 404
-    return jsonify({"forgotten": True, "remembered": remembered_by(name)})
+    return jsonify({"forgotten": True, "remembered": remembered_by(name, viewer_id())})
 
 
 @runner_bp.post("/name")

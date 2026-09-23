@@ -91,6 +91,7 @@ class FileMemoryStore(InMemoryStore):
         workflow_name: str = "default",
         workflow_id: str = "default",
         session_id: str = "default",
+        user_id: str | None = None,
         raw_retention_seconds: float | None = None,
         api_key: str | None = None,
         base_url: str | None = None,
@@ -116,7 +117,7 @@ class FileMemoryStore(InMemoryStore):
         self.root.mkdir(parents=True, exist_ok=True)
         # The base class sets the names first and empties the entries last, so
         # loading during its work would be wiped; load once it has finished.
-        super().__init__(workflow_name=workflow_name, workflow_id=workflow_id, session_id=session_id)
+        super().__init__(workflow_name=workflow_name, workflow_id=workflow_id, session_id=session_id, user_id=user_id)
         self._load()
 
     # --- which workflow's memory this is ----------------------------------
@@ -178,6 +179,7 @@ class FileMemoryStore(InMemoryStore):
             workflow_name=self.workflow_name,
             workflow_id=self.workflow_id,
             session_id=self.session_id,
+            user_id=self.user_id,
             raw_retention_seconds=self.raw_retention_seconds,
             api_key=self._api_key,
             base_url=self._base_url,
@@ -206,7 +208,11 @@ class FileMemoryStore(InMemoryStore):
         out is not the one that was wrong.
         """
         return sorted(
-            (entry for entry in self._entries if entry.tier == "topic" and entry.description),
+            (
+                entry
+                for entry in self.mine()
+                if entry.tier == "topic" and entry.description
+            ),
             key=lambda entry: entry.created_at,
         )
 
@@ -228,12 +234,14 @@ class FileMemoryStore(InMemoryStore):
         rewriting that. See ADR-0019.
         """
         topic = next(
-            (entry for entry in self._entries if entry.entry_id == entry_id and entry.tier == "topic"),
+            (entry for entry in self.mine() if entry.entry_id == entry_id and entry.tier == "topic"),
             None,
         )
         if topic is None:
+            # Somebody else's topic is not found rather than refused: which
+            # ids exist in another person's memory is itself their business.
             raise LookupError(f"no topic with id {entry_id!r} in this memory")
-        for entry in self._entries:
+        for entry in self.mine():
             if entry.metadata.get("synthesised_into") == entry_id:
                 entry.metadata.pop("synthesised_into", None)
                 entry.metadata["forgotten_topic"] = entry_id
@@ -289,7 +297,7 @@ class FileMemoryStore(InMemoryStore):
     def _oldest_uncovered_exchanges(self) -> list[MemoryEntry]:
         live = [
             entry
-            for entry in self._entries
+            for entry in self.mine()
             if entry.tier == "raw"
             and not entry.metadata.get("synthesised_into")
             and not entry.metadata.get("forgotten_topic")
@@ -326,6 +334,7 @@ class FileMemoryStore(InMemoryStore):
                 role="system",
                 workflow_id=self.workflow_id,
                 session_id=self.session_id,
+                user_id=self.user_id,
                 turn_index=covered[0].turn_index,
                 created_at=covered[0].created_at,
             )
@@ -356,7 +365,7 @@ class FileMemoryStore(InMemoryStore):
         wanted = _comparable_pieces(description)
         if not wanted:
             return None
-        for entry in self._entries:
+        for entry in self.mine():
             if entry.tier != "topic" or not entry.description:
                 continue
             if entry.session_id not in (None, self.session_id):
@@ -391,7 +400,7 @@ class FileMemoryStore(InMemoryStore):
         """What was collected into a topic stops being handed over as itself."""
         hidden = {
             entry.entry_id
-            for entry in self._entries
+            for entry in self.mine()
             if entry.metadata.get("synthesised_into") or entry.metadata.get("forgotten_topic")
         }
         return [turn for turn in super()._conversation_turns() if turn.turn_id not in hidden]
@@ -405,6 +414,7 @@ class FileMemoryStore(InMemoryStore):
         fields: dict[str, Any] = {
             "entry_id": entry.entry_id,
             "entry_type": entry.entry_type,
+            "user_id": entry.user_id,
             "tier": entry.tier,
             "created_at": entry.created_at,
             "workflow_id": entry.workflow_id,
@@ -469,6 +479,7 @@ class FileMemoryStore(InMemoryStore):
             # base class reads it: visible to every conversation of this
             # workflow. Anything this store wrote names one.
             session_id=fields.get("session_id"),
+            user_id=fields.get("user_id"),
             turn_index=fields.get("turn_index"),
             metadata=dict(fields.get("metadata") or {}),
             importance=float(fields.get("importance", 1.0)),
@@ -479,7 +490,7 @@ class FileMemoryStore(InMemoryStore):
 
     def clear(self, workflow_name: str | None = None) -> None:
         """Forgetting means the files go too, or they come back on the next load."""
-        going = [entry for entry in self._entries if workflow_name in (None, entry.workflow_name)]
+        going = [entry for entry in self.mine() if workflow_name in (None, entry.workflow_name)]
         super().clear(workflow_name)
         for entry in going:
             self._path_for(entry).unlink(missing_ok=True)

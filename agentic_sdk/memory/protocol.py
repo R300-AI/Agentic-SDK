@@ -26,6 +26,10 @@ class MemoryEntry:
     role: str | None = None
     workflow_id: str | None = None
     session_id: str | None = None
+    # Who this was built from. None means nobody was identified, and an
+    # entry with no owner is never carried to anybody — handing it to an
+    # unidentified run is handing it to a stranger. See ADR-0020.
+    user_id: str | None = None
     turn_index: int | None = None
     attachments: list[Attachment] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)

@@ -24,6 +24,9 @@ from agentic_sdk import FileMemoryStore
 from support import FoundryOpenAILikeClient
 
 
+WHO = "aihub:張先生"
+"""The person the seeded agent remembers on behalf of."""
+
 LLM_PARAMS = {
     "api_key": "test-key",
     "base_url": "https://example.openai.test/v1",
@@ -263,7 +266,7 @@ def _remembering_agent(tmp_path, monkeypatch, patched):
     monkeypatch.setenv("PLAYGROUND_MEMORY_ROOT", str(tmp_path))
     store = FileMemoryStore(
         root=str(tmp_path), workflow_name="default", session_id="s",
-        compaction_threshold_tokens=120, **LLM_PARAMS,
+        user_id=WHO, compaction_threshold_tokens=120, **LLM_PARAMS,
     )
     _said(store, 20)
     store.as_openai_messages()
@@ -276,7 +279,7 @@ def test_the_floor_can_read_what_this_agent_remembers(tmp_path, monkeypatch, pat
 
     _remembering_agent(tmp_path, monkeypatch, patched)
 
-    remembered = remembered_by("default")
+    remembered = remembered_by("default", WHO)
 
     assert [topic["description"] for topic in remembered] == ["先前談過保固與退貨。"]
     assert all(topic["id"] for topic in remembered), "each one needs to be nameable to strike it out"
@@ -287,18 +290,18 @@ def test_the_floor_reads_nothing_from_an_agent_that_carries_nothing(tmp_path, mo
 
     monkeypatch.setenv("PLAYGROUND_MEMORY_ROOT", str(tmp_path))
 
-    assert remembered_by("default") == []
+    assert remembered_by("default", WHO) == []
 
 
 def test_the_floor_can_strike_one_out(tmp_path, monkeypatch, patched):
     from playground.services.memory_admin import forget, remembered_by
 
     _remembering_agent(tmp_path, monkeypatch, patched)
-    topic = remembered_by("default")[0]
+    topic = remembered_by("default", WHO)[0]
 
-    forget("default", topic["id"])
+    forget("default", topic["id"], WHO)
 
-    assert remembered_by("default") == []
+    assert remembered_by("default", WHO) == []
 
 
 def test_striking_out_something_that_is_not_there_is_refused(tmp_path, monkeypatch, patched):
@@ -307,7 +310,7 @@ def test_striking_out_something_that_is_not_there_is_refused(tmp_path, monkeypat
     _remembering_agent(tmp_path, monkeypatch, patched)
 
     with pytest.raises(LookupError):
-        forget("default", "nothing-with-this-id")
+        forget("default", "nothing-with-this-id", WHO)
 
 
 # --- reachable from the page ---------------------------------------------
@@ -323,6 +326,8 @@ def _client(monkeypatch, tmp_path, patched):
     client = app.test_client()
     with client.session_transaction() as flask_session:
         flask_session["workflow_spec"] = build_spec(("memory_type", {"kind": "cross_context"}))
+        # Signed in as the person the seeded agent remembers on behalf of.
+        flask_session["ai_hub_username"] = WHO.removeprefix("aihub:")
     return client
 
 
@@ -373,4 +378,18 @@ def test_the_panel_can_be_opened_and_knows_how_to_strike_one_out():
     assert "編輯" not in page.split("data-memory-modal", 1)[1].split("</section>", 1)[0], (
         "editing is deliberately absent: a line that reads fine and says the wrong thing is "
         "worse than no line, because nothing downstream will question it"
+    )
+
+
+def test_somebody_else_opening_the_same_agent_sees_none_of_it(tmp_path, monkeypatch, patched):
+    """The panel is what this agent remembers about the person reading it."""
+    client = _client(monkeypatch, tmp_path, patched)
+    assert client.get("/playground/run/memory").get_json()["remembered"], "the fixture has to have something"
+
+    with client.session_transaction() as flask_session:
+        flask_session["ai_hub_username"] = "李小姐"
+
+    assert client.get("/playground/run/memory").get_json()["remembered"] == [], (
+        "one person's order numbers are not the next person's business, and the panel is "
+        "where they would be most plainly on display"
     )

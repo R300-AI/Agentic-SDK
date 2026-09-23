@@ -16,7 +16,7 @@ from agentic_sdk import FileMemoryStore
 from playground.services.runner_service import memory_root
 
 
-def remembered_by(workflow_name: str) -> list[dict[str, Any]]:
+def remembered_by(workflow_name: str, user_id: str | None) -> list[dict[str, Any]]:
     """Everything this workflow remembers, oldest first.
 
     The same list the model is shown each turn, so the one somebody strikes out
@@ -30,21 +30,24 @@ def remembered_by(workflow_name: str) -> list[dict[str, Any]]:
             "description": topic.description,
             "content": topic.content,
         }
-        for topic in _memory_of(workflow_name).remembered_topics()
+        for topic in _memory_of(workflow_name, user_id).remembered_topics()
     ]
 
 
-def forget(workflow_name: str, entry_id: str) -> None:
+def forget(workflow_name: str, entry_id: str, user_id: str | None) -> None:
     """Strike one topic out, and stop it being made again.
 
     Raises ``LookupError`` when there is no such topic, rather than reporting
     success for something that did not happen: whoever struck it out is about
     to look at the list again.
     """
-    _memory_of(workflow_name).forget_topic(entry_id)
+    _memory_of(workflow_name, user_id).forget_topic(entry_id)
 
 
-def _memory_of(workflow_name: str) -> FileMemoryStore:
-    # Not scoped to one conversation. Topics belong to the workflow, and
-    # somebody reviewing what it remembers is reviewing all of it.
-    return FileMemoryStore(root=str(memory_root()), workflow_name=workflow_name)
+def _memory_of(workflow_name: str, user_id: str | None) -> FileMemoryStore:
+    # Not scoped to one conversation: somebody reviewing what an agent
+    # remembers about them is reviewing all of it, not one conversation. It is
+    # scoped to them, though — the list is what this agent remembers about the
+    # person reading it, and striking one out strikes out one of theirs. Who
+    # that is comes from the route; this layer does not reach for a request.
+    return FileMemoryStore(root=str(memory_root()), workflow_name=workflow_name, user_id=user_id)

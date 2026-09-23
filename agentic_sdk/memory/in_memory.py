@@ -18,10 +18,12 @@ class InMemoryStore:
         workflow_name: str = "default",
         workflow_id: str = "default",
         session_id: str = "default",
+        user_id: str | None = None,
     ) -> None:
         self.workflow_name = workflow_name
         self.workflow_id = workflow_id
         self.session_id = session_id
+        self.user_id = user_id
         self._entries: list[MemoryEntry] = []
 
     @property
@@ -52,6 +54,7 @@ class InMemoryStore:
                 role=stored.role,
                 workflow_id=stored.workflow_id,
                 session_id=stored.session_id,
+                user_id=self.user_id,
                 turn_index=stored.turn_index,
                 attachments=copy.deepcopy(stored.attachments),
                 metadata=copy.deepcopy(stored.metadata),
@@ -83,13 +86,42 @@ class InMemoryStore:
         )
 
     def clear(self, workflow_name: str | None = None) -> None:
-        if workflow_name is None:
-            self._entries.clear()
-            return
-        self._entries = [entry for entry in self._entries if entry.workflow_name != workflow_name]
+        """Forget what this run can see, and only that.
+
+        Wiping another person's records is the same mistake as reading them,
+        with less to undo it. A run with nobody identified owns everything it
+        wrote, so a program using the SDK on its own clears all of its own.
+        """
+        going = {id(entry) for entry in self.mine() if workflow_name in (None, entry.workflow_name)}
+        self._entries = [entry for entry in self._entries if id(entry) not in going]
+
+    def mine(self) -> list[MemoryEntry]:
+        """Every entry this run may read. The only way in.
+
+        Nothing else reads ``_entries`` — not searching, not the index, not
+        collecting, not striking a topic out. One gate rather than a check at
+        each call site, because a call site that forgets is a leak, and the
+        one that forgot was worth finding: before this, somebody could delete
+        another person's topic by naming its id. See ADR-0020.
+        """
+        return [entry for entry in self._entries if self._belongs_to_this_run(entry)]
 
     def all_for_workflow(self, workflow_name: str) -> list[MemoryEntry]:
-        return [entry for entry in self._entries if entry.workflow_name == workflow_name]
+        """This workflow's entries, among the ones this run may read."""
+        return [entry for entry in self.mine() if entry.workflow_name == workflow_name]
+
+    def _belongs_to_this_run(self, entry: MemoryEntry) -> bool:
+        """Whether this run may reach that entry: same owner, or neither owned.
+
+        Plain equality, which gets the four cases right. Two people who were
+        each identified reach only their own. A run with nobody identified
+        does not reach somebody who was, and what it writes does not reach
+        them either — handing it either way is handing it to a stranger.
+        Entries written before anybody was identified stay with runs that
+        identify nobody, which is where a program using the SDK on its own
+        lives: one owner, spelled None, and everything it wrote is its own.
+        """
+        return entry.user_id == self.user_id
 
     def latest_turn(self, role: str | None = None) -> ConversationTurn | None:
         turns = self._conversation_turns()
@@ -122,6 +154,7 @@ class InMemoryStore:
             workflow_name=self.workflow_name,
             workflow_id=self.workflow_id,
             session_id=self.session_id,
+            user_id=self.user_id,
         )
         copied._entries = copy.deepcopy(self._entries)
         return copied
@@ -165,7 +198,7 @@ class InMemoryStore:
         turns: list[ConversationTurn] = []
         scoped_entries = [
             entry
-            for entry in self._entries
+            for entry in self.mine()
             if entry.workflow_name == self.workflow_name
             and (entry.session_id is None or entry.session_id == self.session_id)
             and entry.role in {"system", "user", "assistant", "tool"}

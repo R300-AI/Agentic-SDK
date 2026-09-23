@@ -177,6 +177,10 @@ class Workflow:
         *,
         workflow_id: str | None = None,
         session_id: str | None = None,
+        # Who this run is for. A memory that carries things between
+        # conversations carries them between this person's, and nobody
+        # else's. None means nobody was identified — see ADR-0020.
+        user_id: str | None = None,
         memory: MemoryStore | None = None,
         attachments: list[Any] | None = None,
         memory_store: CrossContextMemory | None = None,
@@ -196,6 +200,7 @@ class Workflow:
             workflow_id=resolved_workflow_id,
             session_id=resolved_session_id,
             memory=memory,
+            user_id=user_id,
             memory_type=self.memory_type,
             memory_factory=self._memory_factory,
             session_memories=self._session_memories,
@@ -519,6 +524,10 @@ class Workflow:
         *,
         workflow_id: str | None = None,
         session_id: str | None = None,
+        # Who this run is for. A memory that carries things between
+        # conversations carries them between this person's, and nobody
+        # else's. None means nobody was identified — see ADR-0020.
+        user_id: str | None = None,
         memory: MemoryStore | None = None,
         attachments: list[Any] | None = None,
         memory_store: CrossContextMemory | None = None,
@@ -547,6 +556,7 @@ class Workflow:
                 "user_message": user_message,
                 "workflow_id": workflow_id,
                 "session_id": session_id,
+                "user_id": user_id,
                 "memory": memory,
                 "attachments": attachments,
                 "memory_store": memory_store,
@@ -775,6 +785,7 @@ def _resolve_memory(
     workflow_id: str,
     session_id: str,
     memory: MemoryStore | None,
+    user_id: str | None,
     memory_type: str | type[MemoryStore] | MemoryStore,
     memory_factory: type[MemoryStore],
     session_memories: dict[str, MemoryStore],
@@ -790,6 +801,9 @@ def _resolve_memory(
     resolved.workflow_name = workflow_name
     resolved.workflow_id = workflow_id
     resolved.session_id = session_id
+    # Set even when None: a store reused across runs would otherwise keep
+    # whoever the last run was for.
+    resolved.user_id = user_id
     return resolved
 
 
