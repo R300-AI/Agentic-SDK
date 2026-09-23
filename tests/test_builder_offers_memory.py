@@ -294,3 +294,24 @@ def test_a_memory_with_nowhere_to_write_does_not_refuse_a_setting_it_was_offered
     assert memory is not None, (
         "the whitelist accepted that setting, so the build must not then reject it by name"
     )
+
+
+def test_typing_a_starter_question_does_not_turn_collecting_off():
+    spec = _answered(kind="cross_context", compaction_enabled=True, compaction_threshold_tokens=4000)
+
+    # What the page actually posts once the route has taken the starter
+    # question out: a dict that says nothing about the switch.
+    spec = apply_builder_step(spec, "memory_type", {})
+
+    assert spec["memory"]["params"].get("compaction_threshold_tokens") == 4000, (
+        "only the form carrying the switch may turn it off; a post about something else "
+        "under the same question must leave it alone"
+    )
+
+
+def test_switching_memory_kind_does_not_carry_settings_over():
+    spec = _answered(kind="cross_context", compaction_enabled=True, compaction_threshold_tokens=4000)
+
+    spec = apply_builder_step(spec, "memory_type", {"kind": "in_context"})
+
+    assert not spec["memory"]["params"], "a memory that only sees this conversation has nothing to collect"

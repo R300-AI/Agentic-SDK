@@ -404,11 +404,24 @@ def apply_builder_step(spec: dict[str, Any], step_key: str, choice_label: object
         if isinstance(choice_label, str):
             return {**spec, "memory": {"kind": _memory_kind(choice_label), "params": {}}}
         if isinstance(choice_label, dict):
-            current = _memory_kind((spec.get("memory") or {}).get("kind"))
+            memory = spec.get("memory") or {}
+            current = _memory_kind(memory.get("kind"))
             kind = _memory_kind(choice_label.get("kind"), fallback=current)
-            collecting = _answered_yes(choice_label.get("compaction_enabled"))
-            raw = {"compaction_threshold_tokens": choice_label.get("compaction_threshold_tokens")} if collecting else {}
-            return {**spec, "memory": {"kind": kind, "params": _memory_params(kind, raw)}}
+            if "compaction_enabled" in choice_label:
+                # The form that carries the switch is the only thing allowed to
+                # turn it off. A post about something else under this question —
+                # a starter question, say — must leave the settings alone, or
+                # typing one silently stops the memory collecting.
+                collecting = _answered_yes(choice_label.get("compaction_enabled"))
+                raw = {"compaction_threshold_tokens": choice_label.get("compaction_threshold_tokens")} if collecting else {}
+                params = _memory_params(kind, raw)
+            elif kind == current:
+                params = dict(memory.get("params") or {})
+            else:
+                # A different kind has different settings; the old ones do not
+                # carry over.
+                params = {}
+            return {**spec, "memory": {"kind": kind, "params": params}}
         return spec
 
     if step_key == "input_type":
